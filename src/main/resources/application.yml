@@ -1,0 +1,15 @@
+server:
+  servlet:
+    context-path: /api
+  port: 8081
+
+spring:
+  application:
+    name: mio-ai
+  ai:
+    dashscope:
+      api-key: sk-4aef10c11b1e4b10823f7a7a764c230a
+      chat:
+        options:
+          model: qwen-vl-max-latest # 模型名称
+          multi-model: true # 是否启用多模型
