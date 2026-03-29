@@ -1,11 +1,19 @@
 server:
+  port: 8081
   servlet:
     context-path: /api
-  port: 8081
 
 spring:
   application:
     name: mio-ai
+  datasource:
+    username: root
+    password: 20050610
+    url: jdbc:mysql://localhost:3306/mio_ai?characterEncoding=utf8&useSSL=false&serverTimezone=UTC&
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      url: redis://127.0.0.1:8888
   ai:
     dashscope:
       api-key: sk-4aef10c11b1e4b10823f7a7a764c230a
@@ -13,3 +21,39 @@ spring:
         options:
           model: qwen-vl-max-latest # 模型名称
           multi-model: true # 是否启用多模型
+      embedding:
+        options:
+          model: text-embedding-v3
+      rerank:
+        options:
+          topN: 20
+    vectorstore:
+      redis:
+        initialize-schema: true
+        index-name: mio-ai-super-agent
+        prefix: "super-agent-rag:"
+    chat:
+      memory:
+        repository:
+          jdbc:
+            initialize-schema: always
+            schema: classpath:/sql/schema-mysql.sql
+
+mybatis-plus:
+  configuration:
+    # MyBatis 配置
+    map-underscore-to-camel-case: false
+    # 仅在开发环境打印日志
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    enable-sql-runner: true
+    db-config:
+      logic-delete-field: isDelete # 全局逻辑删除的实体字段名
+      logic-delete-value: 1 # 逻辑已删除值（默认为 1）
+      logic-not-delete-value: 0 # 逻辑未删除值（默认为 0）
+
+logging:
+  level:
+    org.springframework.ai.chat.client.advisor: debug
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %5p ${PID:- } --- [%15.15t] %-40.40logger{39} : %m%n%wEx"
