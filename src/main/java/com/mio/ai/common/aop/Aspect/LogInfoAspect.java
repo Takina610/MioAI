@@ -21,7 +21,7 @@ public class LogInfoAspect {
      * 前置通知：方法执行前打印日志
      * 切点：所有添加了 @LogInfo 注解的方法
      */
-    @Before("@annotation(com.mio.ai.aop.annotation.LogInfo)")
+    @Before("@annotation(com.mio.ai.common.aop.annotation.LogInfo)")
     public void logMethodInfo(JoinPoint joinPoint) {
         // 1. 获取方法名
         String methodName = joinPoint.getSignature().getName();
