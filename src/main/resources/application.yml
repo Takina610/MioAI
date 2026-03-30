@@ -31,7 +31,7 @@ spring:
       redis:
         initialize-schema: true
         index-name: mio-ai-super-agent
-        prefix: "super-agent-rag:"
+        prefix: "MioAI:super-agent-rag:"
     chat:
       memory:
         repository:
@@ -57,3 +57,6 @@ logging:
     org.springframework.ai.chat.client.advisor: debug
   pattern:
     console: "%d{HH:mm:ss.SSS} %5p ${PID:- } --- [%15.15t] %-40.40logger{39} : %m%n%wEx"
+
+data:
+  is-load: true
