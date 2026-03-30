@@ -18,6 +18,7 @@ import com.mio.ai.common.constant.UserConstant;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.exception.ThrowUtils;
+import com.mio.ai.common.utils.RedisComponent;
 import com.mio.ai.common.utils.RedisUtil;
 import com.mio.ai.common.utils.ResultUtils;
 import com.mio.ai.user.model.dto.*;
@@ -43,6 +44,10 @@ public class UserController {
 
     @Autowired
     private RedisUtil redisUtil;
+
+    @Autowired
+    private RedisComponent redisComponent;
+
 
     /**
      * 用户注册
@@ -173,11 +178,11 @@ public class UserController {
 
         // 获取 token
         String token = request.getHeader("token");
-        LoginUserVO loginUserVO = userService.getUserInfoByToken(token);
+        LoginUserVO loginUserVO = redisComponent.getUserInfoByToken(token);
         if (null != loginUserVO) {
             // 更新缓存信息
             BeanUtils.copyProperties(userUpdateRequest, loginUserVO);
-            userService.saveTokenUserInfo(loginUserVO);
+            redisComponent.saveTokenUserInfo(loginUserVO);
         }
 
         return ResultUtils.success(true);

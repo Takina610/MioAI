@@ -3,10 +3,10 @@ package com.mio.ai.common.service.impl;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.service.AdminCheckService;
+import com.mio.ai.common.utils.RedisComponent;
 import com.mio.ai.user.model.enums.UserRoleEnum;
 import com.mio.ai.user.model.vo.LoginUserVO;
-import com.mio.ai.user.service.UserService;
-import jakarta.annotation.Resource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -15,12 +15,11 @@ import org.springframework.stereotype.Service;
  * @description:
  */
 
-// 放在 user-auth 模块
 @Service
 public class AdminCheckServiceImpl implements AdminCheckService {
 
-    @Resource(name = "userServiceImpl")
-    UserService userService;
+    @Autowired
+    RedisComponent redisComponent;
 
     @Override
     public void validateUser(String mustRole, String token) {
@@ -32,7 +31,7 @@ public class AdminCheckServiceImpl implements AdminCheckService {
         }
 
         // 根据获取用户信息
-        LoginUserVO loginUser = userService.getUserInfoByToken(token);
+        LoginUserVO loginUser = redisComponent.getUserInfoByToken(token);
 
         if (null == loginUser || null == loginUser.getId()) {
             throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);

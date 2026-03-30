@@ -99,8 +99,4 @@ public interface UserService extends IService<User> {
      * @return
      */
     boolean isAdmin(User user);
-
-    void saveTokenUserInfo(LoginUserVO loginUserVO);
-
-    LoginUserVO getUserInfoByToken(String token);
 }

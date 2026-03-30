@@ -11,6 +11,7 @@ import com.mio.ai.common.constant.SystemConstant;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.utils.JacksonUtil;
+import com.mio.ai.common.utils.RedisComponent;
 import com.mio.ai.common.utils.RedisUtil;
 import com.mio.ai.user.mapper.UserMapper;
 import com.mio.ai.user.model.dto.UserQueryRequest;
@@ -43,6 +44,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
     @Autowired
     RedisUtil redisUtil;
+
+    @Autowired
+    RedisComponent redisComponent;
 
     /**
      * 用户注册
@@ -133,7 +137,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         // 获取 token
         String token = request.getHeader("token");
 
-        LoginUserVO currentUser = getUserInfoByToken(token);
+        LoginUserVO currentUser = redisComponent.getUserInfoByToken(token);
         if (currentUser == null || currentUser.getId() == null) {
             throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
         }
@@ -166,7 +170,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         BeanUtil.copyProperties(user, loginUserVO);
 
         // 缓存新Token
-        saveTokenUserInfo(loginUserVO);
+        redisComponent.saveTokenUserInfo(loginUserVO);
 
         return loginUserVO;
     }
@@ -209,7 +213,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         String token = request.getHeader("token");
 
         // 判断是否已经登录
-        LoginUserVO loginUserVO = getUserInfoByToken(token);
+        LoginUserVO loginUserVO = redisComponent.getUserInfoByToken(token);
         if (loginUserVO == null) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "未登录");
         }
@@ -247,32 +251,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     @Override
     public boolean isAdmin(User user) {
         return user != null && UserRoleEnum.ADMIN.getValue().equals(user.getUserRole());
-    }
-
-    /**
-     * 保存用户信息
-     */
-    @Override
-    public void saveTokenUserInfo(LoginUserVO loginUserVO) {
-        String val = JacksonUtil.writeValueAsString(loginUserVO);
-        redisUtil.set(SystemConstant.REDIS_KEY_TOKEN + loginUserVO.getToken(),
-                val,
-                SystemConstant.REDIS_KEY_EXPIRES_DAY * 2);
-
-        redisUtil.set(SystemConstant.REDIS_KEY_TOKEN_USERID + loginUserVO.getId(),
-                loginUserVO.getToken(),
-                SystemConstant.REDIS_KEY_EXPIRES_DAY * 2);
-    }
-
-    /**
-     * 通过 token 获取用户信息
-     * @param token 用户token
-     * @return 用户信息
-     */
-    @Override
-    public LoginUserVO getUserInfoByToken(String token) {
-        String val = redisUtil.get(SystemConstant.REDIS_KEY_TOKEN + token);
-        return val == null ? null : JacksonUtil.readValue(val, LoginUserVO.class);
     }
 }
 
