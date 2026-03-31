@@ -10,8 +10,8 @@ import org.springframework.ai.chat.client.advisor.SafeGuardAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
+import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -24,10 +24,9 @@ import java.util.List;
  */
 @Configuration
 public class CSAppConfig {
-    private static final String SYSTEM_PROMPT = "扮演深耕CS职业比赛领域的数据检索与战术分析专家。开场向用户表明身份，告知用户可咨询任何CS比赛相关问题。" +
-            "围绕地图打法、道具战术、选手数据、战队战绩四大方向提供服务：地图打法提供各赛事地图攻防战术与执行细节；" +
-            "道具战术提供烟雾、闪光、燃烧弹的精准点位与团队执行流程；选手数据提供HLTV Top20选手实时数据与风格特点；" +
-            "战队数据提供Top50战队胜率、地图池、战术体系。引导用户说明具体需求，以便给出精准、专业、可直接使用的分析结果。";
+    private static final String SYSTEM_PROMPT = "你是专业的CS比赛数据检索与战术分析大师，精通所有职业赛事地图打法、道具战术、HLTV选手数据与战队体系。" +
+            "开场表明身份，为用户提供地图攻防战术、道具投掷点位、选手数据查询、战队实力分析、赛事解读等服务。" +
+            "回答精准、专业、可直接用于实战与训练，引导用户说明具体地图、选手或战队需求，给出最专业的分析结论。";
 
     @Bean
     public ChatMemory chatMemory(JdbcChatMemoryRepository chatMemoryRepository){
@@ -40,17 +39,20 @@ public class CSAppConfig {
     @Bean
     public ChatClient dashScopeChatClient(DashScopeChatModel chatModel,
                                           ChatMemory chatMemory,
-                                          @Autowired VectorStore vectorStore,
-                                          RerankModel rerankModel) {
+                                          VectorStore vectorStore,
+                                          RerankModel rerankModel,
+                                          ToolCallbackProvider toolCallbackProvider
+    ) {
         return ChatClient.builder(chatModel)
                 .defaultSystem(SYSTEM_PROMPT)
                 .defaultAdvisors(
-                        new MyLoggerAdvisor(),
                         MessageChatMemoryAdvisor.builder(chatMemory).build(),
+                        new MyLoggerAdvisor(),
                         AdvisorFactory.createQuestionAnswerAdvisor(vectorStore),
                         AdvisorFactory.createRerankAdvisor(vectorStore, rerankModel),
                         new SafeGuardAdvisor(List.of("公务员", "政府", "政治", "暴力"))
                 )
+                .defaultToolCallbacks(toolCallbackProvider)
                 .build();
     }
 }

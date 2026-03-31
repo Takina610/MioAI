@@ -34,11 +34,6 @@
             <groupId>org.springframework</groupId>
             <artifactId>spring-webflux</artifactId>
         </dependency>
-        <!-- redis -->
-<!--        <dependency>-->
-<!--            <groupId>org.springframework.boot</groupId>-->
-<!--            <artifactId>spring-boot-starter-data-redis</artifactId>-->
-<!--        </dependency>-->
         <!--  mysql驱动 -->
         <dependency>
             <groupId>com.mysql</groupId>
@@ -71,6 +66,7 @@
         <dependency>
             <groupId>com.alibaba.cloud.ai</groupId>
             <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
+            <version>1.1.2.1</version>
         </dependency>
         <!-- markdown文件加载 -->
         <dependency>
@@ -100,14 +96,14 @@
             <dependency>
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-bom</artifactId>
-                <version>1.0.1</version>
+                <version>1.1.4</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
             <dependency>
                 <groupId>com.alibaba.cloud.ai</groupId>
                 <artifactId>spring-ai-alibaba-bom</artifactId>
-                <version>1.0.0.2</version>
+                <version>1.1.2.0</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>

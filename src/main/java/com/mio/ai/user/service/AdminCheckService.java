@@ -1,4 +1,4 @@
-package com.mio.ai.common.service;
+package com.mio.ai.user.service;
 
 /**
  * @author: Takina

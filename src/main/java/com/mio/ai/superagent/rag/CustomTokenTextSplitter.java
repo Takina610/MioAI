@@ -92,11 +92,11 @@ public class CustomTokenTextSplitter extends TextSplitter {
             // Find the last period or punctuation mark in the chunk
             int lastPunctuation = Math.max(chunkText.lastIndexOf('.'),
                     Math.max(chunkText.lastIndexOf('?'),
-                            Math.max(chunkText.lastIndexOf('!'),
-                                    Math.max(chunkText.lastIndexOf('。'),
-                                            Math.max(chunkText.lastIndexOf('？'),
-                                                    Math.max(chunkText.lastIndexOf('！'),
-                                                            chunkText.lastIndexOf('\n')))))));
+                    Math.max(chunkText.lastIndexOf('!'),
+                    Math.max(chunkText.lastIndexOf('。'),
+                    Math.max(chunkText.lastIndexOf('？'),
+                    Math.max(chunkText.lastIndexOf('！'),
+                        chunkText.lastIndexOf('\n')))))));
 
             if (lastPunctuation != -1 && lastPunctuation > this.minChunkSizeChars) {
                 // Truncate the chunk text at the punctuation mark

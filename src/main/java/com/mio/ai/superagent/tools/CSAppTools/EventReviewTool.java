@@ -5,15 +5,14 @@ import org.springframework.stereotype.Component;
 
 /**
  * @author: Takina
- * @date: 2026/3/30 9:05
- * @description: 赛事规则 & 复盘分析
+ * @date: 2026/3/31 15:08
+ * @description: CS赛事复盘与规则解读
  */
-
 @Component
 public class EventReviewTool {
 
     @Tool(
-            name = "CS赛事复盘与规则解读",
+            name = "cs_event_review",
             description = "解读Major/RMR/IEM/BLAST赛事赛制规则、积分体系、晋级逻辑；支持对局复盘、阵容克制、胜负原因专业分析"
     )
     public String reviewMatchAndEvent(String eventOrMatchInfo) {

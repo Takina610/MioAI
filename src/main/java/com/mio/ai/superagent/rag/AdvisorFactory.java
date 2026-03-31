@@ -16,9 +16,9 @@ import org.springframework.ai.vectorstore.VectorStore;
 public class AdvisorFactory {
     public static QuestionAnswerAdvisor createQuestionAnswerAdvisor(VectorStore vectorStore){
         PromptTemplate promptTemplate = new PromptTemplate("""
-                【用户CS问题】
+                【用户问题信息】
                 {query}
-                【CS知识库上下文】
+                【上下文信息】
                 {question_answer_context}
                
                 回答请严格遵循以下规则：
@@ -36,6 +36,11 @@ public class AdvisorFactory {
                 """);
         return QuestionAnswerAdvisor.builder(vectorStore)
                 .promptTemplate(promptTemplate)
+                .searchRequest(SearchRequest
+                        .builder()
+                        .similarityThreshold(0.4)
+                        .topK(5)
+                        .build())
                 .build();
     }
 

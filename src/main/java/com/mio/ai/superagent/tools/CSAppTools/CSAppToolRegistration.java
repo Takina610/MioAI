@@ -1,7 +1,7 @@
 package com.mio.ai.superagent.tools.CSAppTools;
 
-import org.springframework.ai.support.ToolCallbacks;
-import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.ToolCallbackProvider;
+import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -14,17 +14,19 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class CSAppToolRegistration {
     @Bean
-    public ToolCallback[] allTools(EventReviewTool eventReviewTool,
-                                   GrenadeGuideTool grenadeGuideTool,
-                                   MapTacticTool mapTacticTool,
-                                   PlayerStatsTool playerStatsTool,
-                                   TeamAnalyzeTool teamAnalyzeTool) {
-        return ToolCallbacks.from(
-                eventReviewTool,
-                grenadeGuideTool,
-                mapTacticTool,
-                playerStatsTool,
-                teamAnalyzeTool
-        );
+    public ToolCallbackProvider toolCallbackProvider(EventReviewTool eventReviewTool,
+                                                     GrenadeGuideTool grenadeGuideTool,
+                                                     MapTacticTool mapTacticTool,
+                                                     PlayerStatsTool playerStatsTool,
+                                                     TeamAnalyzeTool teamAnalyzeTool
+                                                 ){
+        return MethodToolCallbackProvider.builder()
+                .toolObjects(eventReviewTool,
+                        grenadeGuideTool,
+                        mapTacticTool,
+                        playerStatsTool,
+                        teamAnalyzeTool
+                )
+                .build();
     }
 }

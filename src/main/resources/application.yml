@@ -17,10 +17,6 @@ spring:
   ai:
     dashscope:
       api-key: sk-4aef10c11b1e4b10823f7a7a764c230a
-      chat:
-        options:
-          model: qwen-vl-max-latest # 模型名称
-          multi-model: true # 是否启用多模型
       embedding:
         options:
           model: text-embedding-v3
@@ -29,9 +25,9 @@ spring:
           topN: 20
     vectorstore:
       redis:
-        initialize-schema: true
-        index-name: mio-ai-super-agent
-        prefix: "MioAI:super-agent-rag:"
+        initialize-schema: true    # 是否自动创建索引结构
+        index-name: mio-super-agent   # 向量索引名称
+        prefix: "rag:"     # Redis Key 前缀
     chat:
       memory:
         repository:
@@ -42,7 +38,7 @@ spring:
 mybatis-plus:
   configuration:
     # MyBatis 配置
-    map-underscore-to-camel-case: false
+    map-underscore-to-camel-case: true
     # 仅在开发环境打印日志
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
   global-config:
@@ -59,4 +55,4 @@ logging:
     console: "%d{HH:mm:ss.SSS} %5p ${PID:- } --- [%15.15t] %-40.40logger{39} : %m%n%wEx"
 
 data:
-  is-load: true
+  is-load: false

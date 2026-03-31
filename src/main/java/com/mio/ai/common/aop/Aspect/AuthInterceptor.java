@@ -3,7 +3,7 @@ package com.mio.ai.common.aop.Aspect;
 import com.mio.ai.common.aop.annotation.AuthCheck;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.exception.ThrowUtils;
-import com.mio.ai.common.service.AdminCheckService;
+import com.mio.ai.user.service.AdminCheckService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.annotation.Aspect;

@@ -1,8 +1,8 @@
-package com.mio.ai.common.service.impl;
+package com.mio.ai.user.service.impl;
 
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
-import com.mio.ai.common.service.AdminCheckService;
+import com.mio.ai.user.service.AdminCheckService;
 import com.mio.ai.common.utils.RedisComponent;
 import com.mio.ai.user.model.enums.UserRoleEnum;
 import com.mio.ai.user.model.vo.LoginUserVO;
