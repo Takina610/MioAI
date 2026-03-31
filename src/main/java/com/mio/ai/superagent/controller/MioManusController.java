@@ -10,10 +10,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
@@ -43,7 +40,7 @@ public class MioManusController {
      * @param chatMessageRequest
      * @return
      */
-    @PostMapping("/chat")
+    @GetMapping("/chat")
     public SseEmitter doChatWithManus(@RequestBody ChatMessageRequest chatMessageRequest, HttpServletRequest request) {
         ChatVO chatVO = new ChatVO();
         chatVO.setChatId(chatMessageRequest.getChatId());
@@ -53,6 +50,6 @@ public class MioManusController {
         chatHistoryRepository.save(chatVO);
 
         MioManus mioManus = new MioManus(commonTools, mioManusChatClient);
-        return mioManus.runStream(chatMessageRequest.getContent());
+        return mioManus.runStream(chatMessageRequest.getContent(),chatVO.getChatId());
     }
 }

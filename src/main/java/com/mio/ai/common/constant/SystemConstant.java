@@ -36,6 +36,5 @@ public class SystemConstant {
     /**
      * 文件保存目录
      */
-    @Value("${file.save.dir}")
-    public static String FILE_SAVE_DIR;
+    public static String FILE_SAVE_DIR = "E:\\University Code Learning Journey\\Java IDEA\\JavaWebProject\\mio-ai\\src\\main\\resources\\file";
 }

@@ -1,30 +1,17 @@
 package com.mio.ai.superagent.controller;
 
 import com.mio.ai.common.aop.annotation.LogInfo;
-import com.mio.ai.common.common.BaseResponse;
-import com.mio.ai.common.exception.BusinessException;
-import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.utils.RedisComponent;
-import com.mio.ai.common.utils.ResultUtils;
 import com.mio.ai.superagent.app.CSApp;
 import com.mio.ai.superagent.model.dto.ChatMessageRequest;
-import com.mio.ai.superagent.model.entity.ChatConversationDO;
 import com.mio.ai.superagent.model.vo.ChatVO;
-import com.mio.ai.superagent.model.vo.MessageVO;
-import com.mio.ai.superagent.repository.ChatHistoryRepository;
-import com.mio.ai.user.model.vo.LoginUserVO;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.messages.Message;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.stream.Collectors;
-
 /**
  * @author: Takina
  * @date: 2026/3/29 20:54
@@ -47,7 +34,7 @@ public class CSAppController {
      * @param chatMessageRequest
      * @return
      */
-    @PostMapping("/chat")
+    @GetMapping("/chat")
     @LogInfo
     public SseEmitter doChat(@RequestBody ChatMessageRequest chatMessageRequest, HttpServletRequest request) {
         // 创建 ChatVO

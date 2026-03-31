@@ -14,7 +14,7 @@ import org.springframework.context.annotation.Configuration;
  * @description: 集中的工具注册类
  */
 
-@Configuration
+@Configuration(enforceUniqueMethods = false)
 public class ToolRegistration {
     @Bean(name = "csAppTools")
     public ToolCallback[] csAppTools(EventReviewTool eventReviewTool,
@@ -40,7 +40,9 @@ public class ToolRegistration {
                                       TerminalOperationTool terminalOperationTool,
                                       TerminateTool terminateTool,
                                       WebScrapingTool webScrapingTool,
-                                      WebSearchTool webSearchTool) {
+                                      WebSearchTool webSearchTool,
+                                      ImageSearchTool imageSearchTool
+    ) {
         return ToolCallbacks.from(
                 fileOperationTool,
                 pdfGenerationTool,
@@ -48,7 +50,8 @@ public class ToolRegistration {
                 terminalOperationTool,
                 terminateTool,
                 webScrapingTool,
-                webSearchTool
+                webSearchTool,
+                imageSearchTool
         );
     }
 }

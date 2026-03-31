@@ -21,7 +21,7 @@ import java.util.List;
  * @date: 2026/3/28 21:04
  * @description:
  */
-@Configuration
+@Configuration(enforceUniqueMethods = false)
 public class CommonConfig {
     private static final String SYSTEM_PROMPT = "你是专业的CS比赛数据检索与战术分析大师，精通所有职业赛事地图打法、道具战术、HLTV选手数据与战队体系。" +
             "开场表明身份，为用户提供地图攻防战术、道具投掷点位、选手数据查询、战队实力分析、赛事解读等服务。" +
@@ -31,7 +31,7 @@ public class CommonConfig {
     public ChatMemory chatMemory(JdbcChatMemoryRepository chatMemoryRepository){
         return MessageWindowChatMemory.builder()
                 .chatMemoryRepository(chatMemoryRepository)
-                .maxMessages(10)
+                .maxMessages(30)
                 .build();
     }
 

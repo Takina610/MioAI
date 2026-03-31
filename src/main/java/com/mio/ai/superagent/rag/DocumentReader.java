@@ -36,7 +36,7 @@ public class DocumentReader {
     public List<Document> loadMarkdown(){
         List<Document> allDoc = new ArrayList<>();
         try {
-            Resource[] resources = getResource("classpath:/file/*.md");
+            Resource[] resources = getResource("classpath:/rag/*.md");
             MarkdownDocumentReaderConfig config = MarkdownDocumentReaderConfig.builder()
                     .withHorizontalRuleCreateDocument(true)
                     .withIncludeCodeBlock(false)

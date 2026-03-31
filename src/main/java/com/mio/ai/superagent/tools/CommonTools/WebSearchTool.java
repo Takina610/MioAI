@@ -25,7 +25,7 @@ public class WebSearchTool {
 
     // SearchAPI 的搜索接口地址
     @Value("${web.search.url}")
-    private static String SEARCH_API_URL;
+    private String SEARCH_API_URL;
 
     // SearchAPI 的 apiKey
     @Value("${web.search.api-key}")
