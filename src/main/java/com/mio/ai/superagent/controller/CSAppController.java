@@ -39,12 +39,6 @@ public class CSAppController {
     private CSApp CSApp;
 
     @Autowired
-    ChatHistoryRepository chatHistoryRepository;
-
-    @Autowired
-    private ChatMemory chatMemory;
-
-    @Autowired
     RedisComponent redisComponent;
 
     /**
@@ -61,7 +55,7 @@ public class CSAppController {
         chatVO.setChatId(chatMessageRequest.getChatId());
         chatVO.setMessage(chatMessageRequest.getContent());
         chatVO.setAgentId(chatMessageRequest.getAgentId());
-        chatVO.setUserId(getUserId(request.getHeader("token")));
+        chatVO.setUserId(redisComponent.getUserId(request.getHeader("token")));
 
         // 创建一个超时时间较长的 SseEmitter
         SseEmitter sseEmitter = new SseEmitter(45000L); // 1.5 分钟超时
@@ -76,53 +70,5 @@ public class CSAppController {
                 }, sseEmitter::completeWithError, sseEmitter::complete);
         // 返回
         return sseEmitter;
-    }
-
-    /**
-     * 获取会话列表
-     * @return
-     */
-    @GetMapping("/getChatIds")
-    @LogInfo
-    public BaseResponse<List<ChatConversationDO>> getChatIds(@RequestParam String agentId, HttpServletRequest request){
-        return ResultUtils
-                .success(chatHistoryRepository.getChats(getUserId(request.getHeader("token")), agentId));
-    }
-
-    /**
-     * 获取会话记录
-     * @param chatId
-     */
-    @GetMapping("/getChatHistory")
-    @LogInfo
-    public BaseResponse<List<MessageVO>> getChatHistory(@RequestParam String chatId){
-        List<Message> messages = chatMemory.get(chatId);
-        return ResultUtils
-                .success(messages.stream().map(MessageVO::new).collect(Collectors.toList()));
-    }
-
-    /**
-     * 删除会话
-     * @param chatId
-     * @return
-     */
-    @PostMapping("/deleteChat")
-    @LogInfo
-    public BaseResponse<?> deleteChat(@RequestParam String chatId){
-        try {
-            chatHistoryRepository.clearByChatId(chatId);
-            chatMemory.clear(chatId);
-        } catch (Exception e){
-            return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
-        }
-        return ResultUtils.success(true);
-    }
-
-    private Long getUserId(String token) {
-        LoginUserVO currentUser = redisComponent.getUserInfoByToken(token);
-        if (currentUser == null || currentUser.getId() == null) {
-            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
-        }
-        return currentUser.getId();
     }
 }

@@ -6,7 +6,7 @@ package com.mio.ai.common.constant;
  * @description: 用户常量
  */
 
-public interface UserConstant {
+public class UserConstant {
 
     /**
      * 用户登录态键

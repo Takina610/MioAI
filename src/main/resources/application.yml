@@ -55,4 +55,13 @@ logging:
     console: "%d{HH:mm:ss.SSS} %5p ${PID:- } --- [%15.15t] %-40.40logger{39} : %m%n%wEx"
 
 data:
-  is-load: false
+  is-load: true
+
+file:
+  save:
+    dir: "E:\\University Code Learning Journey\\Java IDEA\\JavaWebProject\\mio-ai\\src\\main\\resources\\file"
+
+web:
+  search:
+    url: "https://www.searchapi.io/api/v1/search"
+    api-key: "BCuc2NW8oxtJfAfJ14GgEhHX"

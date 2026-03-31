@@ -2,9 +2,11 @@ package com.mio.ai.superagent.app;
 
 import com.mio.ai.superagent.model.vo.ChatVO;
 import com.mio.ai.superagent.repository.ChatHistoryRepository;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -22,11 +24,11 @@ public class CSApp {
     @Autowired
     ChatHistoryRepository chatHistoryRepository;
 
-    private final ChatClient chatClient;
+    @Resource(name = "csAppTools")
+    ToolCallback[] csAppTools;
 
-    public CSApp(ChatClient chatClient) {
-        this.chatClient = chatClient;
-    }
+    @Resource(name = "csAppChatClient")
+    private ChatClient chatClient;
 
     public Flux<String> doChat(ChatVO chatVO) {
         chatHistoryRepository.save(chatVO);
@@ -34,6 +36,7 @@ public class CSApp {
                 .prompt()
                 .user(chatVO.getMessage())
                 .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, chatVO.getChatId()))
+                .toolCallbacks(csAppTools)
                 .stream()
                 .content();
     }

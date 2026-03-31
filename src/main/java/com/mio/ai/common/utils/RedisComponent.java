@@ -1,6 +1,8 @@
 package com.mio.ai.common.utils;
 
 import com.mio.ai.common.constant.SystemConstant;
+import com.mio.ai.common.exception.BusinessException;
+import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.user.model.vo.LoginUserVO;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Component;
@@ -39,5 +41,18 @@ public class RedisComponent {
     public LoginUserVO getUserInfoByToken(String token) {
         String val = redisUtil.get(SystemConstant.REDIS_KEY_TOKEN + token);
         return val == null ? null : JacksonUtil.readValue(val, LoginUserVO.class);
+    }
+
+    /**
+     *
+     * @param token
+     * @return
+     */
+    public Long getUserId(String token) {
+        LoginUserVO currentUser = getUserInfoByToken(token);
+        if (currentUser == null || currentUser.getId() == null) {
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
+        }
+        return currentUser.getId();
     }
 }
