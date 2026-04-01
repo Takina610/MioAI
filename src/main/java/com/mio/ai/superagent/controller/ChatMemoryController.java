@@ -55,7 +55,7 @@ public class ChatMemoryController {
      * 获取会话记录
      * @param chatId
      */
-    @GetMapping("/getChatHistory{chatId}")
+    @GetMapping("/getChatHistory/{chatId}")
     @LogInfo
     public BaseResponse<List<MessageVO>> getChatHistory(@PathVariable String chatId){
         List<Message> messages = chatMemory.get(chatId);

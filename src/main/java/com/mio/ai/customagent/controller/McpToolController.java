@@ -1,0 +1,65 @@
+package com.mio.ai.customagent.controller;
+
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.utils.RedisComponent;
+import com.mio.ai.common.utils.ResultUtils;
+import com.mio.ai.customagent.model.dto.mcptool.McpToolAddRequest;
+import com.mio.ai.customagent.model.dto.mcptool.McpToolQueryRequest;
+import com.mio.ai.customagent.model.dto.mcptool.McpToolUpdateRequest;
+import com.mio.ai.customagent.model.vo.McpToolVO;
+import com.mio.ai.customagent.service.McpToolService;
+import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.*;
+
+/**
+ * @author: Takina
+ * @date: 2026/4/1
+ * @description: MCP工具接口
+ */
+@Slf4j
+@RestController
+@RequestMapping("/mcp-tools")
+public class McpToolController {
+
+    @Resource
+    private McpToolService mcpToolService;
+
+    @Resource
+    private RedisComponent redisComponent;
+
+    @PostMapping
+    public BaseResponse<Long> addMcpTool(@RequestBody McpToolAddRequest request, HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        Long id = mcpToolService.addMcpTool(request, userId);
+        return ResultUtils.success(id);
+    }
+
+    @PutMapping
+    public BaseResponse<Boolean> updateMcpTool(@RequestBody McpToolUpdateRequest request, HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        boolean result = mcpToolService.updateMcpTool(request, userId);
+        return ResultUtils.success(result);
+    }
+
+    @DeleteMapping("/{id}")
+    public BaseResponse<Boolean> deleteMcpTool(@PathVariable Long id, HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        boolean result = mcpToolService.deleteMcpTool(id, userId);
+        return ResultUtils.success(result);
+    }
+
+    @GetMapping("/{id}")
+    public BaseResponse<McpToolVO> getMcpTool(@PathVariable Long id) {
+        McpToolVO tool = mcpToolService.getMcpToolById(id);
+        return ResultUtils.success(tool);
+    }
+
+    @PostMapping("/list")
+    public BaseResponse<Page<McpToolVO>> listMcpTools(@RequestBody McpToolQueryRequest request) {
+        Page<McpToolVO> page = mcpToolService.queryMcpTools(request);
+        return ResultUtils.success(page);
+    }
+}

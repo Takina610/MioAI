@@ -1,0 +1,1233 @@
+{
+  "info": {
+    "_postman_id": "d4777fef-aad2-456f-9946-aca95d6816bb",
+    "name": "MioAI",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "40002140",
+    "_collection_link": "https://go.postman.co/collection/40002140-d4777fef-aad2-456f-9946-aca95d6816bb?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "用户管理",
+      "item": [
+        {
+          "name": "用户注册",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"userAccount\": \"testuser\",\n    \"userPassword\": \"12345678\",\n    \"checkPassword\": \"12345678\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/user/register",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "user", "register"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "用户登录",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"userAccount\": \"testuser\",\n    \"userPassword\": \"12345678\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/user/login",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "user", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取当前登录用户",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/user/get/login",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "user", "get", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "用户注销",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/user/logout",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "user", "logout"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "创建用户(管理员)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"userAccount\": \"newuser\",\n    \"userName\": \"新用户\",\n    \"userRole\": \"user\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/user/add",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "user", "add"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "根据ID获取用户(管理员)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/user/get/1",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "user", "get", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "根据ID获取用户VO",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/user/get/vo/1",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "user", "get", "vo", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "删除用户(管理员)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/user/delete/1",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "user", "delete", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "更新用户(管理员)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"id\": 1,\n    \"userName\": \"更新后的用户名\",\n    \"userRole\": \"user\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/user/update",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "user", "update"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "分页获取用户列表(管理员)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"current\": 1,\n    \"pageSize\": 10,\n    \"userName\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/user/list/page/vo",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "user", "list", "page", "vo"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "超级智能体",
+      "item": [
+        {
+          "name": "MioManus对话",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"chatId\": \"22333316\",\n    \"agentId\": 2,\n    \"content\": \"帮我查询今天的天气\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/mio/chat",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "mio", "chat"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "CSApp对话",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"chatId\": \"22363331\",\n    \"agentId\": 1,\n    \"content\": \"CS顶级赛事有哪些\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/cs/chat",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "cs", "chat"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取会话列表",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/memory/getChatIds/1",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "memory", "getChatIds", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取会话记录",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/memory/getChatHistory22333316",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "memory", "getChatHistory22333316"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "删除会话",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/memory/deleteChat/22333316",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "memory", "deleteChat", "22333316"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "智能体管理",
+      "item": [
+        {
+          "name": "创建智能体",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"我的智能体\",\n    \"description\": \"这是一个自定义智能体\",\n    \"type\": 3,\n    \"systemPrompt\": \"你是一个有帮助的AI助手\",\n    \"isPublic\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/agents",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "agents"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "更新智能体",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"id\": 1,\n    \"name\": \"更新后的智能体\",\n    \"description\": \"更新后的描述\",\n    \"status\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/agents",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "agents"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "删除智能体",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/agents/1",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "agents", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取智能体详情",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/agents/1",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "agents", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "分页查询智能体",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"current\": 1,\n    \"pageSize\": 10,\n    \"name\": \"\",\n    \"type\": null,\n    \"status\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/agents/list",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "agents", "list"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "知识库管理",
+      "item": [
+        {
+          "name": "创建知识库",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"我的知识库\",\n    \"description\": \"这是一个知识库\",\n    \"type\": 1,\n    \"embeddingModel\": \"text-embedding-v3\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/knowledge-bases",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "knowledge-bases"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "更新知识库",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"id\": 1,\n    \"name\": \"更新后的知识库\",\n    \"description\": \"更新后的描述\",\n    \"status\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/knowledge-bases",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "knowledge-bases"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "删除知识库",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/knowledge-bases/1",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "knowledge-bases", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取知识库详情",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/knowledge-bases/1",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "knowledge-bases", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "分页查询知识库",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"current\": 1,\n    \"pageSize\": 10,\n    \"name\": \"\",\n    \"type\": null,\n    \"status\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/knowledge-bases/list",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "knowledge-bases", "list"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "文档管理",
+      "item": [
+        {
+          "name": "上传文档",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"knowledgeBaseId\": 1,\n    \"name\": \"文档名称\",\n    \"content\": \"文档内容\",\n    \"type\": 1,\n    \"sourceUrl\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/documents",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "documents"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "删除文档",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/documents/1",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "documents", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取文档详情",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/documents/1",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "documents", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "分页查询文档",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"current\": 1,\n    \"pageSize\": 10,\n    \"knowledgeBaseId\": 1,\n    \"name\": \"\",\n    \"status\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/documents/list",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "documents", "list"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "MCP工具管理",
+      "item": [
+        {
+          "name": "创建MCP工具",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"搜索工具\",\n    \"description\": \"用于搜索互联网信息\",\n    \"serverName\": \"web-search\",\n    \"toolName\": \"search\",\n    \"inputSchema\": \"{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"query\\\":{\\\"type\\\":\\\"string\\\"}}}\",\n    \"isPublic\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/mcp-tools",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "mcp-tools"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "更新MCP工具",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"id\": 1,\n    \"name\": \"更新后的工具名称\",\n    \"description\": \"更新后的描述\",\n    \"status\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/mcp-tools",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "mcp-tools"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "删除MCP工具",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/mcp-tools/1",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "mcp-tools", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取MCP工具详情",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/mcp-tools/1",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "mcp-tools", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "分页查询MCP工具",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"current\": 1,\n    \"pageSize\": 10,\n    \"name\": \"\",\n    \"serverName\": \"\",\n    \"status\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/mcp-tools/list",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "mcp-tools", "list"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "智能体-知识库关联",
+      "item": [
+        {
+          "name": "添加智能体知识库关联",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"agentId\": 1,\n    \"knowledgeBaseId\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/agent-knowledge",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "agent-knowledge"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "删除智能体知识库关联",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/agent-knowledge/1",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "agent-knowledge", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取智能体关联的知识库ID列表",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/agent-knowledge/agent/1",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "agent-knowledge", "agent", "1"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "智能体-MCP关联",
+      "item": [
+        {
+          "name": "添加智能体MCP关联",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"agentId\": 1,\n    \"mcpToolId\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/agent-mcp",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "agent-mcp"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "删除智能体MCP关联",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/agent-mcp/1",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "agent-mcp", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "获取智能体关联的MCP工具ID列表",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/agent-mcp/agent/1",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "agent-mcp", "agent", "1"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "智能体使用日志",
+      "item": [
+        {
+          "name": "分页查询使用日志",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"current\": 1,\n    \"pageSize\": 10,\n    \"agentId\": null,\n    \"userId\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/agent-usage-logs/list",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "agent-usage-logs", "list"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "统计智能体使用次数",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/agent-usage-logs/count/1",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "agent-usage-logs", "count", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "统计智能体Token使用量",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/agent-usage-logs/tokens/1",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "agent-usage-logs", "tokens", "1"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "工具调用日志",
+      "item": [
+        {
+          "name": "分页查询工具调用日志",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"current\": 1,\n    \"pageSize\": 10,\n    \"toolId\": null,\n    \"agentId\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/tool-call-logs/list",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "tool-call-logs", "list"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "统计工具调用次数",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/tool-call-logs/count/1",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "tool-call-logs", "count", "1"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "RAG检索日志",
+      "item": [
+        {
+          "name": "分页查询RAG检索日志",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "token",
+                "value": "{{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"current\": 1,\n    \"pageSize\": 10,\n    \"knowledgeBaseId\": null,\n    \"agentId\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://127.0.0.1:8081/api/rag-retrieval-logs/list",
+              "protocol": "http",
+              "host": ["127", "0", "0", "1"],
+              "port": "8081",
+              "path": ["api", "rag-retrieval-logs", "list"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
