@@ -12,7 +12,6 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mio.ai.common.aop.annotation.AuthCheck;
 import com.mio.ai.common.aop.annotation.LogInfo;
 import com.mio.ai.common.common.BaseResponse;
-import com.mio.ai.common.common.DeleteRequest;
 import com.mio.ai.common.constant.SystemConstant;
 import com.mio.ai.common.constant.UserConstant;
 import com.mio.ai.common.exception.BusinessException;
@@ -119,10 +118,10 @@ public class UserController {
     /**
      * 根据 id 获取用户（仅管理员）
      */
-    @GetMapping("/get")
+    @GetMapping("/get/{id}")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     @LogInfo
-    public BaseResponse<User> getUserById(long id) {
+    public BaseResponse<User> getUserById(@PathVariable long id) {
         ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR);
         User user = userService.getById(id);
         ThrowUtils.throwIf(user == null, ErrorCode.NOT_FOUND_ERROR);
@@ -132,9 +131,9 @@ public class UserController {
     /**
      * 根据 id 获取包装类
      */
-    @GetMapping("/get/vo")
+    @GetMapping("/get/vo/{id}")
     @LogInfo
-    public BaseResponse<UserVO> getUserVOById(long id) {
+    public BaseResponse<UserVO> getUserVOById(@PathVariable long id) {
         BaseResponse<User> response = getUserById(id);
         User user = response.getData();
         return ResultUtils.success(userService.getUserVO(user));
@@ -143,22 +142,22 @@ public class UserController {
     /**
      * 删除用户
      */
-    @PostMapping("/delete")
+    @PostMapping("/delete/{id}")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     @LogInfo
-    public BaseResponse<Boolean> deleteUser(@RequestBody DeleteRequest deleteRequest) {
-        if (deleteRequest == null || deleteRequest.getId() <= 0) {
+    public BaseResponse<Boolean> deleteUser(@PathVariable Long id) {
+        if (id == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        boolean b = userService.removeById(deleteRequest.getId());
+        boolean isRemoved = userService.removeById(id);
 
         // 清理 Token
-        String tmpToken = redisUtil.get(SystemConstant.REDIS_KEY_TOKEN_USERID + deleteRequest.getId());
+        String tmpToken = redisUtil.get(SystemConstant.REDIS_KEY_TOKEN_USERID + id);
         if (StringUtils.hasText(tmpToken)) {
             redisUtil.delete(SystemConstant.REDIS_KEY_TOKEN + tmpToken);
         }
 
-        return ResultUtils.success(b);
+        return ResultUtils.success(isRemoved);
     }
 
     /**

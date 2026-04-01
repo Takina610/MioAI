@@ -11,7 +11,6 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
-import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -57,23 +56,29 @@ public class ToolCallAgent extends ReActAgent {
     }
 
     /**
+     * 当前步骤的助手消息（用于返回给前端）
+     */
+    private AssistantMessage currentStepAssistantMessage;
+
+    /**
+     * 敏感词拦截标识（与 ChineseSafeGuardAdvisor 中的响应消息匹配）
+     */
+    private static final String SENSITIVE_CONTENT_FLAG = "敏感内容";
+
+    /**
      * 处理当前状态并决定下一步行动
      *
      * @return 是否需要执行行动
      */
     @Override
     public boolean think() {
-        // 1、校验提示词，拼接用户提示词
-        if (StrUtil.isNotBlank(getNextStepPrompt())) {
-            UserMessage userMessage = new UserMessage(getNextStepPrompt());
-            getMessageList().add(userMessage);
-        }
-        // 2、调用 AI 大模型，获取工具调用结果
+        // 1、调用 AI 大模型，获取工具调用结果
+        // NEXT_STEP_PROMPT 作为系统内部提示，不添加到消息列表，避免被记录到数据库
         List<Message> messageList = getMessageList();
         Prompt prompt = new Prompt(messageList, this.chatOptions);
         try {
             ChatResponse chatResponse = getChatClient().prompt(prompt)
-                    .system(getSystemPrompt())
+                    .system(getSystemPrompt() + "\n\n" + (StrUtil.isNotBlank(getNextStepPrompt()) ? getNextStepPrompt() : ""))
                     .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, this.getChatId()))
                     .toolCallbacks(availableTools)
                     .call()
@@ -83,11 +88,20 @@ public class ToolCallAgent extends ReActAgent {
             // 3、解析工具调用结果，获取要调用的工具
             // 助手消息
             AssistantMessage assistantMessage = chatResponse.getResult().getOutput();
+            // 保存当前步骤的助手消息（用于返回给前端）
+            this.currentStepAssistantMessage = assistantMessage;
             // 获取要调用的工具列表
             List<AssistantMessage.ToolCall> toolCallList = assistantMessage.getToolCalls();
             // 输出提示信息
             String result = assistantMessage.getText();
             log.info(getName() + "的思考：" + result);
+            // 检测是否被敏感词拦截
+            if (result != null && result.contains(SENSITIVE_CONTENT_FLAG)) {
+                log.warn("检测到敏感词拦截，终止执行");
+                setState(AgentState.FINISHED);
+                getMessageList().add(assistantMessage);
+                return false;
+            }
             log.info(getName() + "选择了 " + toolCallList.size() + " 个工具来使用");
             String toolCallInfo = toolCallList.stream()
                     .map(toolCall -> String.format("工具名称：%s，参数：%s", toolCall.name(), toolCall.arguments()))
@@ -132,11 +146,50 @@ public class ToolCallAgent extends ReActAgent {
             // 任务结束，更改状态
             setState(AgentState.FINISHED);
         }
+        // 优化日志输出，返回更友好的消息
         String results = toolResponseMessage.getResponses().stream()
-                .map(response -> "工具 " + response.name() + " 返回的结果：" + response.responseData())
+                .map(response -> {
+                    String toolName = response.name();
+                    String responseData = response.responseData();
+                    log.info("工具 {} 执行完成", toolName);
+                    return formatToolResult(toolName, responseData);
+                })
                 .collect(Collectors.joining("\n"));
-        log.info(results);
         return results;
+    }
+
+    /**
+     * 格式化工具调用结果，返回更友好的消息
+     */
+    private String formatToolResult(String toolName, String responseData) {
+        if (responseData == null || responseData.isEmpty()) {
+            return "已完成 " + toolName + " 操作。";
+        }
+        if (responseData.length() > 500) {
+            return "已完成 " + toolName + " 操作，获取到相关数据。";
+        }
+        return "已完成 " + toolName + " 操作：" + responseData;
+    }
+
+    /**
+     * 获取当前步骤的助手消息文本（用于返回给前端）
+     */
+    public String getCurrentStepResponse() {
+        if (currentStepAssistantMessage != null) {
+            String text = currentStepAssistantMessage.getText();
+            if (StrUtil.isNotBlank(text)) {
+                return text;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 重写父类方法，返回与数据库存储一致的 AI 回复内容
+     */
+    @Override
+    protected String getCurrentStepAssistantResponse() {
+        return getCurrentStepResponse();
     }
 }
 

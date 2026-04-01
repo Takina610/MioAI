@@ -18,8 +18,9 @@ import java.io.File;
 @Component
 public class ResourceDownloadTool {
 
-    @Tool(description = "Download a resource from a given URL")
-    public String downloadResource(@ToolParam(description = "URL of the resource to download") String url, @ToolParam(description = "Name of the file to save the downloaded resource") String fileName) {
+    @Tool(description = "从指定URL下载资源")
+    public String downloadResource(@ToolParam(description = "要下载资源的URL") String url,
+                                   @ToolParam(description = "保存下载资源的文件名") String fileName) {
         String fileDir = SystemConstant.FILE_SAVE_DIR + "/download";
         String filePath = fileDir + "/" + fileName;
         try {
@@ -27,9 +28,9 @@ public class ResourceDownloadTool {
             FileUtil.mkdir(fileDir);
             // 使用 Hutool 的 downloadFile 方法下载资源
             HttpUtil.downloadFile(url, new File(filePath));
-            return "Resource downloaded successfully to: " + filePath;
+            return "资源下载成功: " + filePath;
         } catch (Exception e) {
-            return "Error downloading resource: " + e.getMessage();
+            return "下载资源错误: " + e.getMessage();
         }
     }
 }

@@ -2,14 +2,15 @@ package com.mio.ai.superagent.config;
 
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.alibaba.cloud.ai.model.RerankModel;
+import com.mio.ai.superagent.advisor.ChineseSafeGuardAdvisor;
 import com.mio.ai.superagent.advisor.MyLoggerAdvisor;
 import com.mio.ai.superagent.rag.AdvisorFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.client.advisor.SafeGuardAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
+import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -31,7 +32,7 @@ public class CommonConfig {
     public ChatMemory chatMemory(JdbcChatMemoryRepository chatMemoryRepository){
         return MessageWindowChatMemory.builder()
                 .chatMemoryRepository(chatMemoryRepository)
-                .maxMessages(30)
+                .maxMessages(300)
                 .build();
     }
 
@@ -39,29 +40,33 @@ public class CommonConfig {
     public ChatClient dashScopeChatClient(DashScopeChatModel chatModel,
                                           ChatMemory jdbcChatMemory,
                                           VectorStore vectorStore,
-                                          RerankModel rerankModel
+                                          RerankModel rerankModel,
+                                          ToolCallbackProvider toolCallbackProvider
     ) {
         return ChatClient.builder(chatModel)
                 .defaultSystem(SYSTEM_PROMPT)
                 .defaultAdvisors(
                         new MyLoggerAdvisor(),
-                        new SafeGuardAdvisor(List.of("公务员", "政府", "政治", "暴力")),
+                        new ChineseSafeGuardAdvisor(List.of("公务员", "政府", "政治", "暴力")),
                         MessageChatMemoryAdvisor.builder(jdbcChatMemory).build(),
                         AdvisorFactory.createQuestionAnswerAdvisor(vectorStore),
                         AdvisorFactory.createRerankAdvisor(vectorStore, rerankModel)
                 )
+                .defaultToolCallbacks(toolCallbackProvider)
                 .build();
     }
 
     @Bean(name = "mioManusChatClient")
     public ChatClient dashScopeChatClient(DashScopeChatModel chatModel,
-                                          ChatMemory jdbcChatMemory) {
+                                          ChatMemory jdbcChatMemory,
+                                          ToolCallbackProvider toolCallbackProvider) {
         return ChatClient.builder(chatModel)
                 .defaultAdvisors(
                         new MyLoggerAdvisor(),
-                        new SafeGuardAdvisor(List.of("公务员", "政府", "政治", "暴力")),
+                        new ChineseSafeGuardAdvisor(List.of("公务员", "政府", "政治", "暴力")),
                         MessageChatMemoryAdvisor.builder(jdbcChatMemory).build()
                 )
+                .defaultToolCallbacks(toolCallbackProvider)
                 .build();
     }
 }

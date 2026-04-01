@@ -7,6 +7,7 @@ import com.mio.ai.superagent.model.vo.ChatVO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -41,6 +42,7 @@ public class ChatHistoryRepositoryImpl implements ChatHistoryRepository {
             chatConversationDOMapper.insert(newChat);
         } else {
             exist.setTitle(title);
+            exist.setUpdateTime(new Date());
             chatConversationDOMapper.updateById(exist);
         }
     }

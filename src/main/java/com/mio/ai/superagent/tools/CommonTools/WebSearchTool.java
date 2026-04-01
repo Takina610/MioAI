@@ -31,9 +31,9 @@ public class WebSearchTool {
     @Value("${web.search.api-key}")
     private String apiKey;
 
-    @Tool(description = "Search for information from Baidu Search Engine")
+    @Tool(description = "从百度搜索引擎搜索信息")
     public String searchWeb(
-            @ToolParam(description = "Search query keyword") String query) {
+            @ToolParam(description = "搜索查询关键词") String query) {
         Map<String, Object> paramMap = new HashMap<>();
         paramMap.put("q", query);
         paramMap.put("api_key", apiKey);
@@ -51,7 +51,7 @@ public class WebSearchTool {
                 return tmpJSONObject.toString();
             }).collect(Collectors.joining(","));
         } catch (Exception e) {
-            return "Error searching Baidu: " + e.getMessage();
+            return "百度搜索错误: " + e.getMessage();
         }
     }
 }

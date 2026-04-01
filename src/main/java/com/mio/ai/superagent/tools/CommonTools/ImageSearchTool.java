@@ -31,12 +31,12 @@ public class ImageSearchTool {
     @Value("${pexels.search.url}")
     private String API_URL;
 
-    @Tool(description = "search image from web")
-    public String searchImage(@ToolParam(description = "Search query keyword") String query) {
+    @Tool(description = "从互联网中搜索图片")
+    public String searchImage(@ToolParam(description = "搜索关键字") String query) {
         try {
             return String.join(",", searchMediumImages(query));
         } catch (Exception e) {
-            return "Error search image: " + e.getMessage();
+            return "搜索图片出现错误: " + e.getMessage();
         }
     }
 

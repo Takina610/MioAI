@@ -43,9 +43,9 @@ public class ChatMemoryController {
      * 获取会话列表
      * @return
      */
-    @GetMapping("/getChatIds")
+    @GetMapping("/getChatIds/{agentId}")
     @LogInfo
-    public BaseResponse<List<ChatConversationDO>> getChatIds(@RequestParam String agentId, HttpServletRequest request){
+    public BaseResponse<List<ChatConversationDO>> getChatIds(@PathVariable String agentId, HttpServletRequest request){
         return ResultUtils
                 .success(chatHistoryRepository
                         .getChats(redisComponent.getUserId(request.getHeader("token")), agentId));
@@ -55,9 +55,9 @@ public class ChatMemoryController {
      * 获取会话记录
      * @param chatId
      */
-    @GetMapping("/getChatHistory")
+    @GetMapping("/getChatHistory{chatId}")
     @LogInfo
-    public BaseResponse<List<MessageVO>> getChatHistory(@RequestParam String chatId){
+    public BaseResponse<List<MessageVO>> getChatHistory(@PathVariable String chatId){
         List<Message> messages = chatMemory.get(chatId);
         return ResultUtils
                 .success(messages.stream().map(MessageVO::new).collect(Collectors.toList()));
@@ -68,9 +68,9 @@ public class ChatMemoryController {
      * @param chatId
      * @return
      */
-    @PostMapping("/deleteChat")
+    @PostMapping("/deleteChat/{chatId}")
     @LogInfo
-    public BaseResponse<?> deleteChat(@RequestParam String chatId){
+    public BaseResponse<?> deleteChat(@PathVariable String chatId){
         try {
             chatHistoryRepository.clearByChatId(chatId);
             chatMemory.clear(chatId);

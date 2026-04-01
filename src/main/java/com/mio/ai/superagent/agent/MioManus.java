@@ -1,16 +1,9 @@
 package com.mio.ai.superagent.agent;
 
-import com.mio.ai.superagent.advisor.MyLoggerAdvisor;
 import com.mio.ai.superagent.agent.config.ToolCallAgent;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.client.advisor.SafeGuardAdvisor;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Component;
-
-import java.util.List;
 
 /**
  * @author: Takina
@@ -29,15 +22,15 @@ public class MioManus extends ToolCallAgent {
         super(commonTools);
         this.setName("mioManus");
         String SYSTEM_PROMPT = """
-                You are MioManus, an all-capable AI assistant, aimed at solving any task presented by the user.
-                You have various tools at your disposal that you can call upon to efficiently complete complex requests.
+                你是 MioManus，一个全能型 AI 助手，致力于解决用户提出的任何任务。
+                你可以调用各种工具，高效完成复杂需求。
                 """;
         this.setSystemPrompt(SYSTEM_PROMPT);
         String NEXT_STEP_PROMPT = """
-                Based on user needs, proactively select the most appropriate tool or combination of tools.
-                For complex tasks, you can break down the problem and use different tools step by step to solve it.
-                After using each tool, clearly explain the execution results and suggest the next steps.
-                If you want to stop the interaction at any point, use the `terminate` tool/function call.
+                根据用户需求，主动选择最合适的工具或工具组合。
+                对于复杂任务，你可以分解问题，逐步使用不同工具来解决。
+                使用每个工具后，清晰说明执行结果并建议下一步操作。
+                如果需要在任何时候终止交互，请使用 `terminate` 工具/函数调用。
                 """;
         this.setNextStepPrompt(NEXT_STEP_PROMPT);
         this.setMaxSteps(20);

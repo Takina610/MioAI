@@ -1,6 +1,7 @@
 package com.mio.ai.superagent.agent.config;
 
 import cn.hutool.core.util.StrUtil;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mio.ai.superagent.model.enums.AgentState;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -11,7 +12,9 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -48,6 +51,9 @@ public abstract class BaseAgent {
     // 会话ID
     private String chatId;
 
+    // JSON 序列化工具
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+
     /**
      * 运行代理（流式输出）
      *
@@ -63,12 +69,12 @@ public abstract class BaseAgent {
             // 1、基础校验
             try {
                 if (this.state != AgentState.IDLE) {
-                    sseEmitter.send("错误：无法从状态运行代理：" + this.state);
+                    sendSseEvent(sseEmitter, "error", "无法从状态运行代理：" + this.state);
                     sseEmitter.complete();
                     return;
                 }
                 if (StrUtil.isBlank(userPrompt)) {
-                    sseEmitter.send("错误：不能使用空提示词运行代理");
+                    sendSseEvent(sseEmitter, "error", "不能使用空提示词运行代理");
                     sseEmitter.complete();
                     return;
                 }
@@ -79,8 +85,6 @@ public abstract class BaseAgent {
             this.state = AgentState.RUNNING;
             // 记录消息上下文
             messageList.add(new UserMessage(userPrompt));
-            // 保存结果列表
-            List<String> results = new ArrayList<>();
             try {
                 // 执行循环
                 for (int i = 0; i < maxSteps && state != AgentState.FINISHED; i++) {
@@ -89,24 +93,29 @@ public abstract class BaseAgent {
                     log.info("Executing step {} / {}", stepNumber, maxSteps);
                     // 单步执行
                     String stepResult = step();
-                    String result = "Step " + stepNumber + ": " + stepResult;
-                    results.add(result);
-                    // 输出当前每一步的结果到 SSE
-                    sseEmitter.send(result);
+                    // 获取当前步骤的助手回复（与数据库存储一致）
+                    String assistantResponse = getCurrentStepAssistantResponse();
+                    // 发送 SSE 事件，返回 AI 的实际回复
+                    if (StrUtil.isNotBlank(assistantResponse)) {
+                        sendSseEvent(sseEmitter, "message", assistantResponse);
+                    } else if (StrUtil.isNotBlank(stepResult) && !stepResult.equals("思考完成 - 无需行动")) {
+                        // 如果没有助手回复但有步骤结果，发送步骤结果
+                        sendSseEvent(sseEmitter, "action", stepResult);
+                    }
                 }
                 // 检查是否超出步骤限制
                 if (currentStep >= maxSteps) {
                     state = AgentState.FINISHED;
-                    results.add("Terminated: Reached max steps (" + maxSteps + ")");
-                    sseEmitter.send("执行结束：达到最大步骤（" + maxSteps + "）");
+                    sendSseEvent(sseEmitter, "complete", "任务已完成");
                 }
-                // 正常完成
+                // 发送完成事件
+                sendSseEvent(sseEmitter, "done", "任务已完成");
                 sseEmitter.complete();
             } catch (Exception e) {
                 state = AgentState.ERROR;
                 log.error("error executing agent", e);
                 try {
-                    sseEmitter.send("执行错误：" + e.getMessage());
+                    sendSseEvent(sseEmitter, "error", "执行错误：" + e.getMessage());
                     sseEmitter.complete();
                 } catch (IOException ex) {
                     sseEmitter.completeWithError(ex);
@@ -132,6 +141,27 @@ public abstract class BaseAgent {
             log.info("SSE connection completed");
         });
         return sseEmitter;
+    }
+
+    /**
+     * 发送 SSE 事件
+     */
+    protected void sendSseEvent(SseEmitter sseEmitter, String eventType, String content) throws IOException {
+        Map<String, Object> event = new HashMap<>();
+        event.put("type", eventType);
+        event.put("content", content);
+        event.put("timestamp", System.currentTimeMillis());
+        sseEmitter.send(SseEmitter.event()
+                .name("message")
+                .data(objectMapper.writeValueAsString(event)));
+    }
+
+    /**
+     * 获取当前步骤的助手回复（子类可重写）
+     * 返回与数据库存储一致的 AI 回复内容
+     */
+    protected String getCurrentStepAssistantResponse() {
+        return null;
     }
 
     /**
@@ -176,13 +206,18 @@ public abstract class BaseAgent {
                 log.info("Executing step {}/{}", stepNumber, maxSteps);
                 // 单步执行
                 String stepResult = step();
-                String result = "Step " + stepNumber + ": " + stepResult;
-                results.add(result);
+                // 获取当前步骤的助手回复（与数据库存储一致）
+                String assistantResponse = getCurrentStepAssistantResponse();
+                if (StrUtil.isNotBlank(assistantResponse)) {
+                    results.add(assistantResponse);
+                } else if (StrUtil.isNotBlank(stepResult)) {
+                    results.add(stepResult);
+                }
             }
             // 检查是否超出步骤限制
             if (currentStep >= maxSteps) {
                 state = AgentState.FINISHED;
-                results.add("Terminated: Reached max steps (" + maxSteps + ")");
+                results.add("任务已完成");
             }
             return String.join("\n", results);
         } catch (Exception e) {

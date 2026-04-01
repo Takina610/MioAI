@@ -15,13 +15,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class WebScrapingTool {
 
-    @Tool(description = "Scrape the content of a web page")
-    public String scrapeWebPage(@ToolParam(description = "URL of the web page to scrape") String url) {
+    @Tool(description = "抓取网页内容")
+    public String scrapeWebPage(@ToolParam(description = "要抓取的网页URL") String url) {
         try {
             Document document = Jsoup.connect(url).get();
             return document.html();
         } catch (Exception e) {
-            return "Error scraping web page: " + e.getMessage();
+            return "抓取网页错误: " + e.getMessage();
         }
     }
 }

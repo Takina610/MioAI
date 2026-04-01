@@ -15,19 +15,19 @@ import org.springframework.stereotype.Component;
 @Component
 public class FileOperationTool {
 
-    @Tool(description = "Read content from a file")
-    public String readFile(@ToolParam(description = "Name of a file to read") String fileName) {
+    @Tool(description = "从文件中读取内容")
+    public String readFile(@ToolParam(description = "要读取的文件名") String fileName) {
         String filePath = SystemConstant.FILE_SAVE_DIR + "/" + fileName;
         try {
             return FileUtil.readUtf8String(filePath);
         } catch (Exception e) {
-            return "Error reading file: " + e.getMessage();
+            return "读取文件错误: " + e.getMessage();
         }
     }
 
-    @Tool(description = "Write content to a file")
-    public String writeFile(@ToolParam(description = "Name of the file to write") String fileName,
-                            @ToolParam(description = "Content to write to the file") String content
+    @Tool(description = "向文件写入内容")
+    public String writeFile(@ToolParam(description = "要写入的文件名") String fileName,
+                            @ToolParam(description = "要写入文件的内容") String content
     ) {
         String filePath = SystemConstant.FILE_SAVE_DIR + "/" + fileName;
 
@@ -35,9 +35,9 @@ public class FileOperationTool {
             // 创建目录
             FileUtil.mkdir(SystemConstant.FILE_SAVE_DIR);
             FileUtil.writeUtf8String(content, filePath);
-            return "File written successfully to: " + filePath;
+            return "文件写入成功: " + filePath;
         } catch (Exception e) {
-            return "Error writing to file: " + e.getMessage();
+            return "文件写入错误: " + e.getMessage();
         }
     }
 }
