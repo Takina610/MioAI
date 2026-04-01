@@ -44,14 +44,22 @@ public class McpToolController {
         return ResultUtils.success(result);
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/{id:\\d+}")
     public BaseResponse<Boolean> deleteMcpTool(@PathVariable Long id, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         boolean result = mcpToolService.deleteMcpTool(id, userId);
         return ResultUtils.success(result);
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/market")
+    public BaseResponse<Page<McpToolVO>> getMarketMcpTools(
+            @RequestParam(defaultValue = "1") long current,
+            @RequestParam(defaultValue = "10") long size) {
+        Page<McpToolVO> page = mcpToolService.getPublicMcpTools(current, size);
+        return ResultUtils.success(page);
+    }
+
+    @GetMapping("/{id:\\d+}")
     public BaseResponse<McpToolVO> getMcpTool(@PathVariable Long id) {
         McpToolVO tool = mcpToolService.getMcpToolById(id);
         return ResultUtils.success(tool);

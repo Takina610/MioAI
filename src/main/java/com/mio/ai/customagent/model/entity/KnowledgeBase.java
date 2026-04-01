@@ -49,6 +49,11 @@ public class KnowledgeBase implements Serializable {
     private Integer status;
 
     /**
+     * 是否公开（0-私有 1-公开）
+     */
+    private Integer isPublic;
+
+    /**
      * 文档数量
      */
     private Integer documentCount;

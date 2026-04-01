@@ -39,4 +39,9 @@ public interface KnowledgeBaseService extends IService<KnowledgeBase> {
      * 分页查询知识库
      */
     Page<KnowledgeBaseVO> queryKnowledgeBases(KnowledgeBaseQueryRequest request);
+
+    /**
+     * 获取公开的知识库列表（广场）
+     */
+    Page<KnowledgeBaseVO> getPublicKnowledgeBases(long current, long size);
 }

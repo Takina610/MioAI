@@ -1,0 +1,102 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: $font-size-base;
+  color: $text-dark;
+  background-color: #f5f7fa;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+ul, ol {
+  list-style: none;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  outline: none;
+  background: none;
+}
+
+input, textarea {
+  outline: none;
+  border: none;
+}
+
+.clearfix::after {
+  content: '';
+  display: table;
+  clear: both;
+}
+
+.flex-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-container {
+  min-height: 100vh;
+  background-color: #f5f7fa;
+}
+
+.card {
+  background: #fff;
+  border-radius: $border-radius;
+  box-shadow: $shadow-light;
+  padding: $spacing-lg;
+}
+
+.btn-primary {
+  background-color: $primary-color;
+  color: $text-light;
+  padding: 10px 24px;
+  border-radius: $border-radius;
+  font-size: $font-size-base;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background-color: darken($primary-color, 10%);
+  }
+}
+
+.btn-secondary {
+  background-color: $secondary-color;
+  color: $text-light;
+  padding: 10px 24px;
+  border-radius: $border-radius;
+  font-size: $font-size-base;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background-color: darken($secondary-color, 10%);
+  }
+}

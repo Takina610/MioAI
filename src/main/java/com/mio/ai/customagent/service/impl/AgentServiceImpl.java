@@ -100,6 +100,19 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         return voPage;
     }
 
+    @Override
+    public Page<AgentVO> getPublicAgents(long current, long size) {
+        Page<Agent> page = new Page<>(current, size);
+        LambdaQueryWrapper<Agent> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Agent::getIsPublic, 1)
+                .eq(Agent::getStatus, AgentStatusEnum.PUBLISHED.getCode())
+                .orderByDesc(Agent::getCreateTime);
+        Page<Agent> agentPage = this.page(page, wrapper);
+        Page<AgentVO> voPage = new Page<>(agentPage.getCurrent(), agentPage.getSize(), agentPage.getTotal());
+        voPage.setRecords(agentPage.getRecords().stream().map(this::convertToVO).toList());
+        return voPage;
+    }
+
     private AgentVO convertToVO(Agent agent) {
         AgentVO vo = new AgentVO();
         BeanUtil.copyProperties(agent, vo);

@@ -100,6 +100,19 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
         return voPage;
     }
 
+    @Override
+    public Page<KnowledgeBaseVO> getPublicKnowledgeBases(long current, long size) {
+        Page<KnowledgeBase> page = new Page<>(current, size);
+        LambdaQueryWrapper<KnowledgeBase> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(KnowledgeBase::getIsPublic, 1)
+                .eq(KnowledgeBase::getStatus, KnowledgeBaseStatusEnum.ACTIVE.getCode())
+                .orderByDesc(KnowledgeBase::getCreateTime);
+        Page<KnowledgeBase> kbPage = this.page(page, wrapper);
+        Page<KnowledgeBaseVO> voPage = new Page<>(kbPage.getCurrent(), kbPage.getSize(), kbPage.getTotal());
+        voPage.setRecords(kbPage.getRecords().stream().map(this::convertToVO).toList());
+        return voPage;
+    }
+
     private KnowledgeBaseVO convertToVO(KnowledgeBase kb) {
         KnowledgeBaseVO vo = new KnowledgeBaseVO();
         BeanUtil.copyProperties(kb, vo);

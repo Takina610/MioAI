@@ -44,14 +44,22 @@ public class AgentController {
         return ResultUtils.success(result);
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/{id:\\d+}")
     public BaseResponse<Boolean> deleteAgent(@PathVariable Long id, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         boolean result = agentService.deleteAgent(id, userId);
         return ResultUtils.success(result);
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/market")
+    public BaseResponse<Page<AgentVO>> getMarketAgents(
+            @RequestParam(defaultValue = "1") long current,
+            @RequestParam(defaultValue = "12") long size) {
+        Page<AgentVO> page = agentService.getPublicAgents(current, size);
+        return ResultUtils.success(page);
+    }
+
+    @GetMapping("/{id:\\d+}")
     public BaseResponse<AgentVO> getAgent(@PathVariable Long id) {
         AgentVO agent = agentService.getAgentById(id);
         return ResultUtils.success(agent);

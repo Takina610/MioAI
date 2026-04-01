@@ -44,14 +44,22 @@ public class KnowledgeBaseController {
         return ResultUtils.success(result);
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/{id:\\d+}")
     public BaseResponse<Boolean> deleteKnowledgeBase(@PathVariable Long id, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         boolean result = knowledgeBaseService.deleteKnowledgeBase(id, userId);
         return ResultUtils.success(result);
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/market")
+    public BaseResponse<Page<KnowledgeBaseVO>> getMarketKnowledgeBases(
+            @RequestParam(defaultValue = "1") long current,
+            @RequestParam(defaultValue = "12") long size) {
+        Page<KnowledgeBaseVO> page = knowledgeBaseService.getPublicKnowledgeBases(current, size);
+        return ResultUtils.success(page);
+    }
+
+    @GetMapping("/{id:\\d+}")
     public BaseResponse<KnowledgeBaseVO> getKnowledgeBase(@PathVariable Long id) {
         KnowledgeBaseVO kb = knowledgeBaseService.getKnowledgeBaseById(id);
         return ResultUtils.success(kb);

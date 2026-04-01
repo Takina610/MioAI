@@ -44,4 +44,9 @@ public interface McpToolService extends IService<McpTool> {
      * 增加使用次数
      */
     void incrementUsageCount(Long id);
+
+    /**
+     * 获取公开的MCP工具列表（广场）
+     */
+    Page<McpToolVO> getPublicMcpTools(long current, long size);
 }

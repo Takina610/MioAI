@@ -39,4 +39,9 @@ public interface AgentService extends IService<Agent> {
      * 分页查询智能体
      */
     Page<AgentVO> queryAgents(AgentQueryRequest request);
+
+    /**
+     * 获取公开的智能体列表（广场）
+     */
+    Page<AgentVO> getPublicAgents(long current, long size);
 }

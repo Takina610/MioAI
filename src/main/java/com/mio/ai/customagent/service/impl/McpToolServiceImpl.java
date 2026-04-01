@@ -114,6 +114,19 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
         }
     }
 
+    @Override
+    public Page<McpToolVO> getPublicMcpTools(long current, long size) {
+        Page<McpTool> page = new Page<>(current, size);
+        LambdaQueryWrapper<McpTool> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(McpTool::getIsPublic, 1)
+                .eq(McpTool::getStatus, McpToolStatusEnum.ACTIVE.getCode())
+                .orderByDesc(McpTool::getCreateTime);
+        Page<McpTool> toolPage = this.page(page, wrapper);
+        Page<McpToolVO> voPage = new Page<>(toolPage.getCurrent(), toolPage.getSize(), toolPage.getTotal());
+        voPage.setRecords(toolPage.getRecords().stream().map(this::convertToVO).toList());
+        return voPage;
+    }
+
     private McpToolVO convertToVO(McpTool mcpTool) {
         McpToolVO vo = new McpToolVO();
         BeanUtil.copyProperties(mcpTool, vo);
