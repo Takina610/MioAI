@@ -1,11 +1,21 @@
 <template>
   <div class="dashboard-layout">
     <aside class="sidebar" :class="{ collapsed: isCollapsed }">
-      <div class="sidebar-header">
-        <a class="logo-link" @click="refreshPage">
-          <img src="/favicon.svg" alt="Logo" class="logo-img" />
-          <span class="logo-text" v-show="!isCollapsed">MioAI</span>
-        </a>
+      <div class="sidebar-top">
+        <div class="logo-section" v-show="!isCollapsed">
+          <a class="logo-link" @click="refreshPage">
+            <img src="/favicon.svg" alt="Logo" class="logo-img" />
+            <span class="logo-text">MioAI</span>
+          </a>
+        </div>
+        <a-button
+          type="text"
+          class="collapse-btn"
+          @click="toggleCollapse"
+        >
+          <MenuFoldOutlined v-if="!isCollapsed" />
+          <MenuUnfoldOutlined v-else />
+        </a-button>
       </div>
       
       <div class="sidebar-menu">
@@ -89,14 +99,41 @@
       </div>
 
       <div class="sidebar-footer">
-        <a-button
-          type="text"
-          class="collapse-btn"
-          @click="toggleCollapse"
-        >
-          <MenuFoldOutlined v-if="!isCollapsed" />
-          <MenuUnfoldOutlined v-else />
-        </a-button>
+        <template v-if="userStore.isLoggedIn">
+          <a-dropdown :trigger="['click']" placement="topLeft">
+            <div class="user-info" :class="{ collapsed: isCollapsed }">
+              <a-avatar :size="isCollapsed ? 36 : 40" :src="userStore.userAvatar">
+                {{ userStore.userName?.charAt(0)?.toUpperCase() }}
+              </a-avatar>
+              <div class="user-detail" v-show="!isCollapsed">
+                <span class="user-name">{{ userStore.userName }}</span>
+                <span class="user-role">{{ userStore.userInfo?.userRole === 'admin' ? '管理员' : '普通用户' }}</span>
+              </div>
+            </div>
+            <template #overlay>
+              <a-menu>
+                <a-menu-item key="home" @click="goHome">
+                  <HomeOutlined /> 返回首页
+                </a-menu-item>
+                <a-menu-item key="profile" @click="navigateTo('profile')">
+                  <UserOutlined /> 个人中心
+                </a-menu-item>
+                <a-menu-divider />
+                <a-menu-item key="logout" @click="handleLogout">
+                  <LogoutOutlined /> 退出登录
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
+        </template>
+        <template v-else>
+          <a-button type="primary" block @click="showAuthModal" v-show="!isCollapsed">
+            登录
+          </a-button>
+          <a-button type="primary" @click="showAuthModal" v-show="isCollapsed">
+            <UserOutlined />
+          </a-button>
+        </template>
       </div>
     </aside>
 
@@ -104,38 +141,6 @@
       <header class="header">
         <div class="header-left">
           <h1 class="page-title">{{ pageTitle }}</h1>
-        </div>
-        <div class="header-right">
-          <template v-if="userStore.isLoggedIn">
-            <a-dropdown :trigger="['hover']">
-              <div class="user-dropdown">
-                <a-avatar :size="36" :src="userStore.userAvatar">
-                  {{ userStore.userName?.charAt(0)?.toUpperCase() }}
-                </a-avatar>
-                <span class="user-name">{{ userStore.userName }}</span>
-                <DownOutlined />
-              </div>
-              <template #overlay>
-                <a-menu>
-                  <a-menu-item key="home" @click="goHome">
-                    <HomeOutlined /> 返回首页
-                  </a-menu-item>
-                  <a-menu-item key="profile" @click="navigateTo('profile')">
-                    <UserOutlined /> 个人中心
-                  </a-menu-item>
-                  <a-menu-divider />
-                  <a-menu-item key="logout" @click="handleLogout">
-                    <LogoutOutlined /> 退出登录
-                  </a-menu-item>
-                </a-menu>
-              </template>
-            </a-dropdown>
-          </template>
-          <template v-else>
-            <a-button type="primary" @click="showAuthModal">
-              登录
-            </a-button>
-          </template>
         </div>
       </header>
 
@@ -167,7 +172,6 @@ import {
   DatabaseOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  DownOutlined,
   HomeOutlined,
   UserOutlined,
   LogoutOutlined
@@ -279,31 +283,58 @@ async function handleLogout(): Promise<void> {
     width: 64px;
   }
 
-  .sidebar-header {
+  .sidebar-top {
     height: 64px;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
+    padding: 0 16px;
     border-bottom: 1px solid #e8eaed;
 
-    .logo-link {
+    .logo-section {
+      flex: 1;
       display: flex;
       align-items: center;
-      gap: 8px;
-      cursor: pointer;
-      text-decoration: none;
 
-      .logo-img {
-        width: 28px;
-        height: 28px;
-      }
+      .logo-link {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        text-decoration: none;
 
-      .logo-text {
-        font-size: 20px;
-        font-weight: 700;
-        color: $primary-color;
-        white-space: nowrap;
+        .logo-img {
+          width: 28px;
+          height: 28px;
+        }
+
+        .logo-text {
+          font-size: 20px;
+          font-weight: 700;
+          color: $primary-color;
+          white-space: nowrap;
+        }
       }
+    }
+
+    .collapse-btn {
+      color: #5f6368;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+
+      &:hover {
+        color: #2aa1a9;
+        background: rgba(42, 161, 169, 0.08);
+      }
+    }
+  }
+
+  &.collapsed {
+    .sidebar-top {
+      justify-content: center;
+      padding: 0;
     }
   }
 
@@ -365,16 +396,48 @@ async function handleLogout(): Promise<void> {
     padding: 16px;
     border-top: 1px solid #e8eaed;
 
-    .collapse-btn {
-      width: 100%;
-      color: #5f6368;
+    .user-info {
       display: flex;
       align-items: center;
-      justify-content: center;
+      gap: 12px;
+      padding: 8px;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background 0.3s;
 
       &:hover {
-        color: #2aa1a9;
         background: rgba(42, 161, 169, 0.08);
+      }
+
+      .user-detail {
+        display: flex;
+        flex-direction: column;
+
+        .user-name {
+          font-size: 14px;
+          font-weight: 500;
+          color: #202124;
+        }
+
+        .user-role {
+          font-size: 12px;
+          color: #909399;
+        }
+      }
+
+      &.collapsed {
+        justify-content: center;
+        padding: 8px;
+      }
+    }
+
+    :deep(.ant-btn-primary) {
+      background: $primary-color;
+      border-color: $primary-color;
+
+      &:hover {
+        background: darken($primary-color, 10%);
+        border-color: darken($primary-color, 10%);
       }
     }
   }
@@ -393,9 +456,9 @@ async function handleLogout(): Promise<void> {
     }
 
     .sidebar-footer {
-      .collapse-btn {
-        padding: 0;
-      }
+      padding: 8px;
+      display: flex;
+      justify-content: center;
     }
   }
 }
@@ -422,37 +485,6 @@ async function handleLogout(): Promise<void> {
       font-weight: 600;
       color: #202124;
       margin-bottom: 0px;
-    }
-  }
-
-  .header-right {
-    .user-dropdown {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-      padding: 6px 12px;
-      border-radius: 8px;
-      transition: background 0.3s;
-
-      &:hover {
-        background: rgba(42, 161, 169, 0.08);
-      }
-
-      .user-name {
-        font-size: 14px;
-        color: #202124;
-      }
-    }
-
-    :deep(.ant-btn-primary) {
-      background: $primary-color;
-      border-color: $primary-color;
-
-      &:hover {
-        background: darken($primary-color, 10%);
-        border-color: darken($primary-color, 10%);
-      }
     }
   }
 }

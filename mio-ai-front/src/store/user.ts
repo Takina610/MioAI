@@ -22,6 +22,13 @@ export const useUserStore = defineStore('user', () => {
     localStorage.setItem('userInfo', JSON.stringify(info))
   }
 
+  function setUserAvatar(avatar: string): void {
+    if (userInfo.value) {
+      userInfo.value = { ...userInfo.value, userAvatar: avatar }
+      localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
+    }
+  }
+
   async function login(loginData: LoginRequest): Promise<LoginResponse> {
     const res = await userLogin(loginData)
     setToken(res.token)
@@ -80,6 +87,7 @@ export const useUserStore = defineStore('user', () => {
     userAvatar,
     setToken,
     setUserInfo,
+    setUserAvatar,
     login,
     register,
     logout,

@@ -252,6 +252,51 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     public boolean isAdmin(User user) {
         return user != null && UserRoleEnum.ADMIN.getValue().equals(user.getUserRole());
     }
+
+    @Override
+    public boolean updatePassword(Long userId, String oldPassword, String newPassword) {
+        if (userId == null || StrUtil.hasBlank(oldPassword, newPassword)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数错误");
+        }
+        
+        if (newPassword.length() < 8 || newPassword.length() > 20) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "密码长度为8-20个字符");
+        }
+        
+        User user = this.getById(userId);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "用户不存在");
+        }
+        
+        String oldEncryptPassword = getEncryptPassword(oldPassword);
+        if (!user.getUserPassword().equals(oldEncryptPassword)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "原密码错误");
+        }
+        
+        if (oldPassword.equals(newPassword)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "新密码不能与原密码相同");
+        }
+        
+        String newEncryptPassword = getEncryptPassword(newPassword);
+        user.setUserPassword(newEncryptPassword);
+        
+        return this.updateById(user);
+    }
+
+    @Override
+    public boolean updateAvatar(Long userId, String avatarUrl) {
+        if (userId == null || StrUtil.isBlank(avatarUrl)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数错误");
+        }
+        
+        User user = this.getById(userId);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "用户不存在");
+        }
+        
+        user.setUserAvatar(avatarUrl);
+        return this.updateById(user);
+    }
 }
 
 

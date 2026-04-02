@@ -133,9 +133,9 @@ public class R2Util {
 
     /**
      * 构建文件存储路径
-     * 用户头像格式: avatars/user/{userId}.{ext}
-     * 智能体头像格式: avatars/agent/{agentId}.{ext}
-     * 知识库格式: knowledge/{knowledgeId}/{清理后的原始文件名}
+     * 用户头像格式: avatars/user/{userId}_{timestamp}.{ext}
+     * 智能体头像格式: avatars/agent/{agentId}_{timestamp}.{ext}
+     * 知识库格式: knowledge/{knowledgeId}/{清理后的原始文件名}_{timestamp}.{ext}
      */
     public String buildFileKey(MultipartFile file, FileType fileType, String entityId) {
         StringBuilder keyBuilder = new StringBuilder();
@@ -152,21 +152,42 @@ public class R2Util {
         keyBuilder.append("/");
 
         String originalFilename = file.getOriginalFilename();
+        String extension = getFileExtension(originalFilename);
+        String nameWithoutExt = getNameWithoutExtension(originalFilename);
+
+        // 生成时间戳版本号
+        String timestamp = String.valueOf(System.currentTimeMillis());
 
         if (fileType.needEntityFolder()) {
-            // 知识库：使用清理后的原始文件名
-            String cleanedFileName = cleanFileName(originalFilename);
-            keyBuilder.append(cleanedFileName);
+            // 知识库：原始文件名 + 时间戳
+            String cleanedName = cleanFileName(nameWithoutExt);
+            keyBuilder.append(cleanedName).append("_").append(timestamp);
+            if (!extension.isEmpty()) {
+                keyBuilder.append(".").append(extension);
+            }
         } else {
-            // 头像：使用 entityId 作为文件名，实现覆盖
-            String extension = getFileExtension(originalFilename);
-            keyBuilder.append(entityId);
+            // 头像：entityId + 时间戳
+            keyBuilder.append(entityId).append("_").append(timestamp);
             if (!extension.isEmpty()) {
                 keyBuilder.append(".").append(extension);
             }
         }
 
         return keyBuilder.toString();
+    }
+
+    /**
+     * 获取文件名（不含扩展名）
+     */
+    private String getNameWithoutExtension(String fileName) {
+        if (fileName == null || fileName.isEmpty()) {
+            return "file";
+        }
+        int lastDotIndex = fileName.lastIndexOf(".");
+        if (lastDotIndex > 0) {
+            return fileName.substring(0, lastDotIndex);
+        }
+        return fileName;
     }
 
     /**

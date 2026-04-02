@@ -9,9 +9,29 @@ interface RequestConfig extends AxiosRequestConfig {
 }
 
 let isLoggingOut = false
+let lastErrorMessage = ''
+let messageTimer: ReturnType<typeof setTimeout> | null = null
 
 export function setLoggingOut(value: boolean): void {
   isLoggingOut = value
+}
+
+function showErrorMessage(msg: string): void {
+  if (isLoggingOut) return
+  
+  if (messageTimer) {
+    clearTimeout(messageTimer)
+  }
+  
+  if (lastErrorMessage === msg) return
+  lastErrorMessage = msg
+  
+  message.error(msg)
+  
+  messageTimer = setTimeout(() => {
+    lastErrorMessage = ''
+    messageTimer = null
+  }, 2000)
 }
 
 const request: AxiosInstance = axios.create({
@@ -47,10 +67,10 @@ request.interceptors.response.use(
         }
         localStorage.removeItem('token')
         localStorage.removeItem('userInfo')
-        message.error(res.message || '未登录')
-        window.location.href = '/login'
+        showErrorMessage(res.message || '未登录')
+        window.location.href = '/'
       } else {
-        message.error(res.message || '请求失败')
+        showErrorMessage(res.message || '请求失败')
       }
       return Promise.reject(new Error(res.message || '请求失败'))
     }
@@ -60,30 +80,30 @@ request.interceptors.response.use(
       switch (error.response.status) {
         case 401:
           if (!isLoggingOut) {
-            message.error('登录已过期，请重新登录')
+            showErrorMessage('登录已过期，请重新登录')
           }
           localStorage.removeItem('token')
           localStorage.removeItem('userInfo')
           if (!isLoggingOut) {
-            window.location.href = '/login'
+            window.location.href = '/'
           }
           break
         case 403:
-          message.error('没有权限访问')
+          showErrorMessage('没有权限访问')
           break
         case 404:
-          message.error('请求资源不存在')
+          showErrorMessage('请求资源不存在')
           break
         case 500:
-          message.error('服务器错误')
+          showErrorMessage('服务器错误')
           break
         default:
           if (!isLoggingOut) {
-            message.error(error.message || '网络错误')
+            showErrorMessage(error.message || '网络错误')
           }
       }
     } else if (!isLoggingOut) {
-      message.error('网络连接失败')
+      showErrorMessage('网络连接失败')
     }
     return Promise.reject(error)
   }

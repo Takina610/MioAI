@@ -99,4 +99,23 @@ public interface UserService extends IService<User> {
      * @return
      */
     boolean isAdmin(User user);
+
+    /**
+     * 修改用户密码
+     *
+     * @param userId      用户ID
+     * @param oldPassword 原密码
+     * @param newPassword 新密码
+     * @return 是否成功
+     */
+    boolean updatePassword(Long userId, String oldPassword, String newPassword);
+
+    /**
+     * 更新用户头像
+     *
+     * @param userId      用户ID
+     * @param avatarUrl   头像URL
+     * @return 是否成功
+     */
+    boolean updateAvatar(Long userId, String avatarUrl);
 }

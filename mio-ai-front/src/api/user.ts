@@ -4,7 +4,8 @@ import type {
   LoginResponse,
   RegisterRequest,
   UserVO,
-  UpdateUserRequest
+  UpdateUserRequest,
+  PasswordUpdateRequest
 } from '@/types'
 
 export function userRegister(data: RegisterRequest): Promise<unknown> {
@@ -46,8 +47,29 @@ export function getUserVOById(id: number): Promise<UserVO> {
 
 export function updateUser(data: UpdateUserRequest): Promise<boolean> {
   return request({
-    url: '/user/update',
+    url: '/user/update/my',
     method: 'post',
     data
+  })
+}
+
+export function updatePassword(data: PasswordUpdateRequest): Promise<boolean> {
+  return request({
+    url: '/user/password/update',
+    method: 'post',
+    data
+  })
+}
+
+export function uploadAvatar(file: File): Promise<string> {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request({
+    url: '/user/avatar/upload',
+    method: 'post',
+    data: formData,
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
   })
 }

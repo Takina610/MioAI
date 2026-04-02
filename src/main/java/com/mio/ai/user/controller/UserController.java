@@ -12,11 +12,13 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mio.ai.common.aop.annotation.AuthCheck;
 import com.mio.ai.common.aop.annotation.LogInfo;
 import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.common.FileType;
 import com.mio.ai.common.constant.SystemConstant;
 import com.mio.ai.common.constant.UserConstant;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.exception.ThrowUtils;
+import com.mio.ai.common.utils.R2Util;
 import com.mio.ai.common.utils.RedisComponent;
 import com.mio.ai.common.utils.RedisUtil;
 import com.mio.ai.common.utils.ResultUtils;
@@ -31,7 +33,9 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -46,6 +50,9 @@ public class UserController {
 
     @Autowired
     private RedisComponent redisComponent;
+
+    @Autowired
+    private R2Util r2Util;
 
 
     /**
@@ -205,6 +212,83 @@ public class UserController {
         List<UserVO> userVOList = userService.getUserVOList(userPage.getRecords());
         userVOPage.setRecords(userVOList);
         return ResultUtils.success(userVOPage);
+    }
+
+    /**
+     * 修改密码
+     */
+    @PostMapping("/password/update")
+    @LogInfo
+    public BaseResponse<Boolean> updatePassword(@RequestBody UserPasswordUpdateRequest passwordUpdateRequest, HttpServletRequest request) {
+        ThrowUtils.throwIf(passwordUpdateRequest == null, ErrorCode.PARAMS_ERROR);
+        LoginUserVO loginUser = userService.getLoginUser(request);
+        String oldPassword = passwordUpdateRequest.getOldPassword();
+        String newPassword = passwordUpdateRequest.getNewPassword();
+        String confirmPassword = passwordUpdateRequest.getConfirmPassword();
+        
+        if (!newPassword.equals(confirmPassword)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "两次输入的密码不一致");
+        }
+        
+        boolean result = userService.updatePassword(loginUser.getId(), oldPassword, newPassword);
+        return ResultUtils.success(result);
+    }
+
+    /**
+     * 上传头像
+     */
+    @PostMapping("/avatar/upload")
+    @LogInfo
+    public BaseResponse<String> uploadAvatar(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
+        ThrowUtils.throwIf(file == null || file.isEmpty(), ErrorCode.PARAMS_ERROR, "文件不能为空");
+        LoginUserVO loginUser = userService.getLoginUser(request);
+        
+        try {
+            String avatarUrl = r2Util.uploadFile(file, FileType.USER_AVATAR, String.valueOf(loginUser.getId()));
+            userService.updateAvatar(loginUser.getId(), avatarUrl);
+            
+            String token = request.getHeader("token");
+            LoginUserVO cachedUser = redisComponent.getUserInfoByToken(token);
+            if (cachedUser != null) {
+                cachedUser.setUserAvatar(avatarUrl);
+                redisComponent.saveTokenUserInfo(cachedUser);
+            }
+            
+            return ResultUtils.success(avatarUrl);
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "上传头像失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 更新当前用户信息
+     */
+    @PostMapping("/update/my")
+    @LogInfo
+    public BaseResponse<Boolean> updateMyUser(@RequestBody UserUpdateRequest userUpdateRequest, HttpServletRequest request) {
+        if (userUpdateRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        LoginUserVO loginUser = userService.getLoginUser(request);
+        User user = new User();
+        BeanUtils.copyProperties(userUpdateRequest, user);
+        user.setId(loginUser.getId());
+        boolean result = userService.updateById(user);
+        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
+
+        String token = request.getHeader("token");
+        LoginUserVO cachedUser = redisComponent.getUserInfoByToken(token);
+        if (cachedUser != null) {
+            if (userUpdateRequest.getUserName() != null) {
+                cachedUser.setUserName(userUpdateRequest.getUserName());
+            }
+            if (userUpdateRequest.getUserProfile() != null) {
+                cachedUser.setUserProfile(userUpdateRequest.getUserProfile());
+            }
+            redisComponent.saveTokenUserInfo(cachedUser);
+        }
+
+        return ResultUtils.success(true);
     }
 }
 

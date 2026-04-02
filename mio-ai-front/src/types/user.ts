@@ -43,6 +43,11 @@ export interface LoginResponse {
 export interface UpdateUserRequest {
   id?: number
   userName?: string
-  userAvatar?: string
   userProfile?: string
+}
+
+export interface PasswordUpdateRequest {
+  oldPassword: string
+  newPassword: string
+  confirmPassword: string
 }
