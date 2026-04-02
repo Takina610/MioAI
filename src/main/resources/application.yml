@@ -6,6 +6,10 @@ server:
 spring:
   application:
     name: mio-ai
+  servlet:
+    multipart:
+      max-file-size: 50MB # 文件上传限制
+      max-request-size: 50MB
   datasource:
     username: root
     password: 20050610
@@ -62,10 +66,6 @@ logging:
 data:
   is-load: true
 
-file:
-  save:
-    dir:
-
 web:
   search:
     url: "https://www.searchapi.io/api/v1/search"
@@ -75,3 +75,12 @@ pexels:
   search:
     url: "https://api.pexels.com/v1/search"
     api-key: "g2TqHZIjtWP3g55C803NSUrECEyWeDB4HKKWDDSnRoJ5bURlLNKqr0ZR"
+
+# R2 存储配置
+r2:
+  endpoint: https://924ca5acf5609dfbffe277160a64f75c.r2.cloudflarestorage.com
+  access-key-id: e4ef27552e88a0d615d2f22a4c41e6e1
+  secret-access-key: 3331061295227344bb3142de8757e9d024f5365be33580f806e8af009f207624
+  bucket-name: file-bucket
+  cdn-domain: https://cdn.tak1na.cn  # 自定义域名
+
