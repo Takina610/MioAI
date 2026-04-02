@@ -46,7 +46,8 @@
     </div>
 
     <a-modal
-      v-model="modalVisible"
+      :open="modalVisible"
+      @update:open="modalVisible = $event"
       :title="editingAgent ? '编辑智能体' : '创建智能体'"
       :confirm-loading="submitLoading"
       @ok="handleSubmit"
@@ -60,30 +61,32 @@
         layout="vertical"
       >
         <a-form-item name="name" label="名称">
-          <a-input v-model="formData.name" placeholder="请输入智能体名称" />
+          <a-input :value="formData.name" @update:value="formData.name = $event" placeholder="请输入智能体名称" />
         </a-form-item>
         <a-form-item name="description" label="描述">
           <a-textarea
-            v-model="formData.description"
+            :value="formData.description"
+            @update:value="formData.description = $event"
             placeholder="请输入描述"
             :rows="3"
           />
         </a-form-item>
         <a-form-item name="type" label="类型">
-          <a-select v-model="formData.type" placeholder="请选择类型">
+          <a-select :value="formData.type" @update:value="formData.type = $event" placeholder="请选择类型">
             <a-select-option :value="0">内置智能体</a-select-option>
             <a-select-option :value="1">自定义智能体</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item name="systemPrompt" label="系统提示词">
           <a-textarea
-            v-model="formData.systemPrompt"
+            :value="formData.systemPrompt"
+            @update:value="formData.systemPrompt = $event"
             placeholder="请输入系统提示词"
             :rows="5"
           />
         </a-form-item>
         <a-form-item name="isPublic" label="是否公开">
-          <a-switch v-model="formData.isPublic" :checked-value="1" :un-checked-value="0" />
+          <a-switch :checked="formData.isPublic" @update:checked="formData.isPublic = $event" :checked-value="1" :un-checked-value="0" />
         </a-form-item>
       </a-form>
     </a-modal>

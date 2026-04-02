@@ -40,7 +40,8 @@
     </div>
 
     <a-modal
-      v-model="modalVisible"
+      :open="modalVisible"
+      @update:open="modalVisible = $event"
       :title="editingMcp ? '编辑MCP工具' : '添加MCP工具'"
       :confirm-loading="submitLoading"
       @ok="handleSubmit"
@@ -54,30 +55,32 @@
         layout="vertical"
       >
         <a-form-item name="name" label="名称">
-          <a-input v-model="formData.name" placeholder="请输入工具名称" />
+          <a-input :value="formData.name" @update:value="formData.name = $event" placeholder="请输入工具名称" />
         </a-form-item>
         <a-form-item name="description" label="描述">
           <a-textarea
-            v-model="formData.description"
+            :value="formData.description"
+            @update:value="formData.description = $event"
             placeholder="请输入描述"
             :rows="3"
           />
         </a-form-item>
         <a-form-item name="serverName" label="服务名称">
-          <a-input v-model="formData.serverName" placeholder="请输入MCP服务名称" />
+          <a-input :value="formData.serverName" @update:value="formData.serverName = $event" placeholder="请输入MCP服务名称" />
         </a-form-item>
         <a-form-item name="toolName" label="工具名称">
-          <a-input v-model="formData.toolName" placeholder="请输入工具名称" />
+          <a-input :value="formData.toolName" @update:value="formData.toolName = $event" placeholder="请输入工具名称" />
         </a-form-item>
         <a-form-item name="inputSchema" label="输入Schema">
           <a-textarea
-            v-model="formData.inputSchema"
+            :value="formData.inputSchema"
+            @update:value="formData.inputSchema = $event"
             placeholder="请输入JSON格式的输入Schema"
             :rows="4"
           />
         </a-form-item>
         <a-form-item name="isPublic" label="是否公开">
-          <a-switch v-model="formData.isPublic" :checked-value="1" :un-checked-value="0" />
+          <a-switch :checked="formData.isPublic" @update:checked="formData.isPublic = $event" :checked-value="1" :un-checked-value="0" />
         </a-form-item>
       </a-form>
     </a-modal>

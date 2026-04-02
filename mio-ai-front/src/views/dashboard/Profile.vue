@@ -24,12 +24,12 @@
           <a-row :gutter="24">
             <a-col :span="12">
               <a-form-item name="userName" label="昵称">
-                <a-input v-model="formData.userName" placeholder="请输入昵称" />
+                <a-input :value="formData.userName" @update:value="formData.userName = $event" placeholder="请输入昵称" />
               </a-form-item>
             </a-col>
             <a-col :span="12">
               <a-form-item name="userAccount" label="账号">
-                <a-input v-model="formData.userAccount" disabled />
+                <a-input :value="formData.userAccount" @update:value="formData.userAccount = $event" disabled />
               </a-form-item>
             </a-col>
             <a-col :span="12">
@@ -39,7 +39,7 @@
             </a-col>
             <a-col :span="12">
               <a-form-item name="userProfile" label="个人简介">
-                <a-input v-model="formData.userProfile" placeholder="请输入个人简介" />
+                <a-input :value="formData.userProfile" @update:value="formData.userProfile = $event" placeholder="请输入个人简介" />
               </a-form-item>
             </a-col>
           </a-row>
@@ -63,7 +63,8 @@
     </div>
 
     <a-modal
-      v-model="passwordModalVisible"
+      :open="passwordModalVisible"
+      @update:open="passwordModalVisible = $event"
       title="修改密码"
       :confirm-loading="passwordLoading"
       @ok="handlePasswordChange"
@@ -75,13 +76,13 @@
         layout="vertical"
       >
         <a-form-item name="oldPassword" label="原密码">
-          <a-input-password v-model="passwordForm.oldPassword" placeholder="请输入原密码" />
+          <a-input-password :value="passwordForm.oldPassword" @update:value="passwordForm.oldPassword = $event" placeholder="请输入原密码" />
         </a-form-item>
         <a-form-item name="newPassword" label="新密码">
-          <a-input-password v-model="passwordForm.newPassword" placeholder="请输入新密码" />
+          <a-input-password :value="passwordForm.newPassword" @update:value="passwordForm.newPassword = $event" placeholder="请输入新密码" />
         </a-form-item>
         <a-form-item name="confirmPassword" label="确认密码">
-          <a-input-password v-model="passwordForm.confirmPassword" placeholder="请再次输入新密码" />
+          <a-input-password :value="passwordForm.confirmPassword" @update:value="passwordForm.confirmPassword = $event" placeholder="请再次输入新密码" />
         </a-form-item>
       </a-form>
     </a-modal>

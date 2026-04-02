@@ -51,8 +51,9 @@
       <a-empty v-if="!loading && knowledgeList.length === 0" description="暂无知识库" />
     </div>
 
-    <a-modal
-      v-model="modalVisible"
+      <a-modal
+      :open="modalVisible"
+      @update:open="modalVisible = $event"
       :title="editingKb ? '编辑知识库' : '创建知识库'"
       :confirm-loading="submitLoading"
       @ok="handleSubmit"
@@ -66,23 +67,24 @@
         layout="vertical"
       >
         <a-form-item name="name" label="名称">
-          <a-input v-model="formData.name" placeholder="请输入知识库名称" />
+          <a-input :value="formData.name" @update:value="formData.name = $event" placeholder="请输入知识库名称" />
         </a-form-item>
         <a-form-item name="description" label="描述">
           <a-textarea
-            v-model="formData.description"
+            :value="formData.description"
+            @update:value="formData.description = $event"
             placeholder="请输入描述"
             :rows="3"
           />
         </a-form-item>
         <a-form-item name="type" label="类型">
-          <a-select v-model="formData.type" placeholder="请选择类型">
+          <a-select :value="formData.type" @update:value="formData.type = $event" placeholder="请选择类型">
             <a-select-option :value="1">文档型</a-select-option>
             <a-select-option :value="2">问答型</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item name="embeddingModel" label="嵌入模型">
-          <a-input v-model="formData.embeddingModel" placeholder="请输入嵌入模型名称" />
+          <a-input :value="formData.embeddingModel" @update:value="formData.embeddingModel = $event" placeholder="请输入嵌入模型名称" />
         </a-form-item>
       </a-form>
     </a-modal>

@@ -41,7 +41,8 @@
           >
             <a-form-item name="userAccount" label="用户名">
               <a-input
-                v-model="formData.userAccount"
+                :value="formData.userAccount"
+                @update:value="formData.userAccount = $event"
                 placeholder="请输入用户名"
                 size="large"
               >
@@ -53,7 +54,8 @@
 
             <a-form-item v-if="!isLogin" name="userName" label="昵称">
               <a-input
-                v-model="formData.userName"
+                :value="formData.userName"
+                @update:value="formData.userName = $event"
                 placeholder="请输入昵称"
                 size="large"
               >
@@ -65,7 +67,8 @@
 
             <a-form-item name="userPassword" label="密码">
               <a-input-password
-                v-model="formData.userPassword"
+                :value="formData.userPassword"
+                @update:value="formData.userPassword = $event"
                 placeholder="请输入密码"
                 size="large"
               >
@@ -77,7 +80,8 @@
 
             <a-form-item v-if="!isLogin" name="checkPassword" label="确认密码">
               <a-input-password
-                v-model="formData.checkPassword"
+                :value="formData.checkPassword"
+                @update:value="formData.checkPassword = $event"
                 placeholder="请再次输入密码"
                 size="large"
               >

@@ -18,3 +18,13 @@ $spacing-sm: 8px;
 $spacing-md: 16px;
 $spacing-lg: 24px;
 $spacing-xl: 32px;
+
+@use "sass:color";
+
+@function darken($color, $amount) {
+    @return color.scale($color, $lightness: -$amount);
+}
+
+@function lighten($color, $amount) {
+    @return color.scale($color, $lightness: $amount);
+}
