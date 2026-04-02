@@ -29,7 +29,7 @@
       <div class="agent-list">
         <a-row :gutter="[16, 16]">
           <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="agent in agentList" :key="agent.id">
-            <div class="agent-card" @click="handleCardClick(agent)">
+            <div class="agent-card">
               <div class="card-header">
                 <a-avatar :size="48" :src="agent.avatar">
                   {{ agent.name?.charAt(0)?.toUpperCase() }}
@@ -40,6 +40,9 @@
                   </a-button>
                   <template #overlay>
                     <a-menu>
+                      <a-menu-item key="chat" @click="startChat(agent)">
+                        <MessageOutlined /> 开始对话
+                      </a-menu-item>
                       <a-menu-item key="edit" @click="showEditModal(agent)">
                         <EditOutlined /> 编辑
                       </a-menu-item>
@@ -57,6 +60,11 @@
                   {{ getTypeName(agent.type) }}
                 </a-tag>
                 <span class="create-time">{{ formatDate(agent.createTime) }}</span>
+              </div>
+              <div class="card-actions">
+                <a-button type="primary" size="small" @click="startChat(agent)">
+                  开始对话
+                </a-button>
               </div>
             </div>
           </a-col>
@@ -116,6 +124,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { message, Modal, type FormInstance } from 'ant-design-vue'
 import type { Rule } from 'ant-design-vue/es/form'
 import { useUserStore } from '@/store/user'
@@ -125,7 +134,8 @@ import {
   PlusOutlined,
   MoreOutlined,
   EditOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  MessageOutlined
 } from '@ant-design/icons-vue'
 
 defineEmits<{
@@ -141,6 +151,7 @@ interface FormData {
   isPublic: number
 }
 
+const router = useRouter()
 const userStore = useUserStore()
 const loading = ref<boolean>(false)
 const submitLoading = ref<boolean>(false)
@@ -258,8 +269,8 @@ function handleDelete(agent: Agent): void {
   })
 }
 
-function handleCardClick(agent: Agent): void {
-  console.log('click agent:', agent)
+function startChat(agent: Agent): void {
+  router.push(`/chat/${agent.id}`)
 }
 
 onMounted(() => {
@@ -396,6 +407,22 @@ onMounted(() => {
       .create-time {
         font-size: 12px;
         color: #999;
+      }
+    }
+
+    .card-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 12px;
+
+      :deep(.ant-btn-primary) {
+        background: $primary-color;
+        border-color: $primary-color;
+
+        &:hover {
+          background: darken($primary-color, 10%);
+          border-color: darken($primary-color, 10%);
+        }
       }
     }
   }

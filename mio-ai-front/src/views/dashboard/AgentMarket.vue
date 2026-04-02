@@ -9,19 +9,25 @@
     <div class="agent-list">
       <a-row :gutter="[16, 16]">
         <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="agent in agentList" :key="agent.id">
-          <div class="agent-card" @click="viewAgent(agent)">
+          <div class="agent-card">
             <div class="card-header">
               <div class="icon-wrapper">
-                <RobotOutlined />
+                <img v-if="agent.avatar" :src="agent.avatar" alt="avatar" class="agent-avatar" />
+                <RobotOutlined v-else />
               </div>
             </div>
             <h3 class="card-title">{{ agent.name }}</h3>
             <p class="card-desc">{{ agent.description || '暂无描述' }}</p>
             <div class="card-footer">
               <span class="author">
-                <UserOutlined /> {{ agent.userName || '匿名' }}
+                <UserOutlined /> {{ agent.type === 0 ? '官方' : (agent.userName || '匿名') }}
               </span>
               <span class="time">{{ formatTime(agent.createTime) }}</span>
+            </div>
+            <div class="card-actions">
+              <a-button type="primary" size="small" @click="startChat(agent)">
+                开始对话
+              </a-button>
             </div>
           </div>
         </a-col>
@@ -63,8 +69,8 @@ async function fetchAgents(): Promise<void> {
   }
 }
 
-function viewAgent(agent: AgentWithUser): void {
-  router.push(`/dashboard/agents/${agent.id}`)
+function startChat(agent: AgentWithUser): void {
+  router.push(`/chat/${agent.id}`)
 }
 
 function formatTime(time: string): string {
@@ -106,7 +112,6 @@ function formatTime(time: string): string {
     background: #fff;
     border-radius: 12px;
     padding: 20px;
-    cursor: pointer;
     transition: all 0.3s;
     border: 1px solid #f0f0f0;
 
@@ -126,10 +131,17 @@ function formatTime(time: string): string {
         display: flex;
         align-items: center;
         justify-content: center;
+        overflow: hidden;
 
         .anticon {
           font-size: 24px;
           color: $primary-color;
+        }
+
+        .agent-avatar {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
         }
       }
     }
@@ -158,11 +170,27 @@ function formatTime(time: string): string {
       align-items: center;
       font-size: 12px;
       color: #999;
+      margin-bottom: 12px;
 
       .author {
         display: flex;
         align-items: center;
         gap: 4px;
+      }
+    }
+
+    .card-actions {
+      display: flex;
+      justify-content: flex-end;
+
+      :deep(.ant-btn-primary) {
+        background: $primary-color;
+        border-color: $primary-color;
+
+        &:hover {
+          background: darken($primary-color, 10%);
+          border-color: darken($primary-color, 10%);
+        }
       }
     }
   }

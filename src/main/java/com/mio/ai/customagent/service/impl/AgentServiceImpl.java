@@ -93,6 +93,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
                 .eq(request.getStatus() != null, Agent::getStatus, request.getStatus())
                 .eq(request.getIsPublic() != null, Agent::getIsPublic, request.getIsPublic())
                 .eq(request.getUserId() != null, Agent::getUserId, request.getUserId())
+                .ne(Agent::getType, AgentTypeEnum.GENERAL.getCode())
                 .orderByDesc(Agent::getCreateTime);
         Page<Agent> agentPage = this.page(page, wrapper);
         Page<AgentVO> voPage = new Page<>(agentPage.getCurrent(), agentPage.getSize(), agentPage.getTotal());

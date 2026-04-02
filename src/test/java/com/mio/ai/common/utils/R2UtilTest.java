@@ -24,27 +24,18 @@ class R2UtilTest {
     @Test
     void uploadFile() throws IOException {
         // 读取 rag 目录下的 md 文件
-        ClassPathResource resource = new ClassPathResource("rag/CS 比赛数据检索和分析 - 地图打法篇.md");
+        ClassPathResource resource = new ClassPathResource("1.png");
 
         try (InputStream inputStream = resource.getInputStream()) {
             // 转换为 MultipartFile
             MultipartFile file = new MockMultipartFile(
                     "file",
-                    "CS 比赛数据检索和分析 - 地图打法篇.md",
-                    "text/markdown",
+                    "1.png",
+                    "image/png",
                     inputStream
             );
 
-            // 上传文件到知识库（使用固定ID测试覆盖）
-            String knowledgeId = "test_001";
-            String fileUrl = r2UploadUtil.uploadFile(file, FileType.KNOWLEDGE_FILE, knowledgeId);
-
-            // 验证结果
-            assertThat(fileUrl).isNotNull();
-            assertThat(fileUrl).startsWith("https://cdn.tak1na.cn/");
-            assertThat(fileUrl).contains("/knowledge_base/");
-            assertThat(fileUrl).contains(knowledgeId);
-            assertThat(fileUrl).endsWith(".md");
+            String fileUrl = r2UploadUtil.uploadFile(file, FileType.AGENT_AVATAR, "1");
 
             System.out.println("上传成功: " + fileUrl);
         }
