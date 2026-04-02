@@ -3,60 +3,64 @@
     <div class="page-header">
       <h2>MCP广场</h2>
       <p class="desc">探索公开的MCP工具</p>
+      <div class="header-line"></div>
     </div>
 
-    <a-table
-      :columns="columns"
-      :data-source="mcpList"
-      :loading="loading"
-      :pagination="{ pageSize: 10 }"
-      row-key="id"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'name'">
-          <div class="tool-name">
-            <ToolOutlined class="tool-icon" />
-            <span>{{ record.name }}</span>
+    <div class="mcp-list">
+      <a-row :gutter="[16, 16]">
+        <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="mcp in mcpList" :key="mcp.id">
+          <div class="mcp-card" @click="viewTool(mcp)">
+            <div class="card-header">
+              <div class="icon-wrapper">
+                <ToolOutlined />
+              </div>
+            </div>
+            <h3 class="card-title">{{ mcp.name }}</h3>
+            <p class="card-desc">{{ mcp.description || '暂无描述' }}</p>
+            <div class="card-info">
+              <div class="info-item">
+                <span class="label">服务:</span>
+                <span class="value">{{ mcp.serverName || '-' }}</span>
+              </div>
+            </div>
+            <div class="card-footer">
+              <span class="author">{{ mcp.userName || '匿名' }}</span>
+              <a-tag :color="mcp.isPublic === 1 ? 'green' : 'orange'">
+                {{ mcp.isPublic === 1 ? '公开' : '私有' }}
+              </a-tag>
+            </div>
           </div>
-        </template>
-        <template v-if="column.key === 'isPublic'">
-          <a-tag :color="record.isPublic === 1 ? 'green' : 'orange'">
-            {{ record.isPublic === 1 ? '公开' : '私有' }}
-          </a-tag>
-        </template>
-        <template v-if="column.key === 'action'">
-          <a-button type="link" size="small" @click="viewTool(record)">查看详情</a-button>
-        </template>
-      </template>
-    </a-table>
+        </a-col>
+      </a-row>
+
+      <a-empty v-if="!loading && mcpList.length === 0" description="暂无公开MCP工具" />
+    </div>
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ToolOutlined } from '@ant-design/icons-vue'
 import { getPublicMcpTools } from '@/api/mcpTool'
+import type { McpTool, PageResponse } from '@/types'
 
-const loading = ref(false)
-const mcpList = ref([])
+interface McpToolWithUser extends McpTool {
+  userName?: string
+  type?: string
+}
 
-const columns = [
-  { title: '工具名称', key: 'name', dataIndex: 'name' },
-  { title: '描述', dataIndex: 'description', ellipsis: true },
-  { title: '类型', dataIndex: 'type' },
-  { title: '创建者', dataIndex: 'userName' },
-  { title: '操作', key: 'action', width: 120 }
-]
+const loading = ref<boolean>(false)
+const mcpList = ref<McpToolWithUser[]>([])
 
 onMounted(() => {
   fetchMcpTools()
 })
 
-async function fetchMcpTools() {
+async function fetchMcpTools(): Promise<void> {
   loading.value = true
   try {
-    const res = await getPublicMcpTools()
-    mcpList.value = res.data?.records || []
+    const res: PageResponse<McpToolWithUser> = await getPublicMcpTools()
+    mcpList.value = res?.records || []
   } catch (e) {
     console.error(e)
   } finally {
@@ -64,7 +68,7 @@ async function fetchMcpTools() {
   }
 }
 
-function viewTool(tool) {
+function viewTool(tool: McpToolWithUser): void {
   console.log('查看工具:', tool)
 }
 </script>
@@ -84,16 +88,96 @@ function viewTool(tool) {
     .desc {
       color: #5f6368;
       font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    .header-line {
+      height: 1px;
+      background: #e8eaed;
     }
   }
 
-  .tool-name {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  .mcp-list {
+    margin-top: 24px;
+  }
 
-    .tool-icon {
-      color: #2aa1a9;
+  .mcp-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.3s;
+    border: 1px solid #f0f0f0;
+
+    &:hover {
+      transform: translateY(-4px);
+      box-shadow: $shadow-medium;
+    }
+
+    .card-header {
+      margin-bottom: 16px;
+
+      .icon-wrapper {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: rgba($primary-color, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        .anticon {
+          font-size: 24px;
+          color: $primary-color;
+        }
+      }
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: $text-dark;
+      margin-bottom: 8px;
+    }
+
+    .card-desc {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 16px;
+      display: -webkit-box;
+      line-clamp: 2;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .card-info {
+      margin-bottom: 16px;
+
+      .info-item {
+        font-size: 13px;
+        color: #666;
+
+        .label {
+          color: #999;
+          margin-right: 4px;
+        }
+
+        .value {
+          color: $text-dark;
+        }
+      }
+    }
+
+    .card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+
+      .author {
+        font-size: 12px;
+        color: #999;
+      }
     }
   }
 }

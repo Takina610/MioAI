@@ -10,12 +10,12 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
-function goHome() {
+function goHome(): void {
   router.push('/')
 }
 </script>

@@ -1,55 +1,66 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { userLogin, userLogout, getLoginUser, userRegister } from '@/api/user'
+import { setLoggingOut } from '@/utils/request'
+import type { LoginRequest, RegisterRequest, LoginResponse, UserVO } from '@/types'
 
 export const useUserStore = defineStore('user', () => {
-  const token = ref(localStorage.getItem('token') || '')
-  const userInfo = ref(JSON.parse(localStorage.getItem('userInfo') || 'null'))
+  const token = ref<string>(localStorage.getItem('token') || '')
+  const userInfo = ref<UserVO | null>(JSON.parse(localStorage.getItem('userInfo') || 'null'))
 
-  const isLoggedIn = computed(() => !!token.value)
-  const userName = computed(() => userInfo.value?.userName || '用户')
-  const userAvatar = computed(() => userInfo.value?.userAvatar || '')
+  const isLoggedIn = computed<boolean>(() => !!token.value)
+  const userName = computed<string>(() => userInfo.value?.userName || '用户')
+  const userAvatar = computed<string>(() => userInfo.value?.userAvatar || '')
 
-  function setToken(newToken) {
+  function setToken(newToken: string): void {
     token.value = newToken
     localStorage.setItem('token', newToken)
   }
 
-  function setUserInfo(info) {
+  function setUserInfo(info: UserVO): void {
     userInfo.value = info
     localStorage.setItem('userInfo', JSON.stringify(info))
   }
 
-  async function login(loginData) {
+  async function login(loginData: LoginRequest): Promise<LoginResponse> {
     const res = await userLogin(loginData)
     setToken(res.token)
-    setUserInfo(res)
+    setUserInfo({
+      id: res.id,
+      userName: res.userName,
+      userAccount: res.userAccount,
+      userAvatar: res.userAvatar,
+      userRole: res.userRole,
+      createTime: ''
+    })
     return res
   }
 
-  async function register(registerData) {
+  async function register(registerData: RegisterRequest): Promise<unknown> {
     const res = await userRegister(registerData)
     return res
   }
 
-  async function logout() {
+  async function logout(): Promise<void> {
+    setLoggingOut(true)
     try {
       await userLogout()
     } catch (e) {
       console.error('logout error:', e)
     } finally {
       clearUser()
+      setLoggingOut(false)
     }
   }
 
-  function clearUser() {
+  function clearUser(): void {
     token.value = ''
     userInfo.value = null
     localStorage.removeItem('token')
     localStorage.removeItem('userInfo')
   }
 
-  async function fetchUserInfo() {
+  async function fetchUserInfo(): Promise<UserVO | null> {
     if (!token.value) return null
     try {
       const res = await getLoginUser()

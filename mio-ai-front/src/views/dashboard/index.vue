@@ -106,48 +106,58 @@
           <h1 class="page-title">{{ pageTitle }}</h1>
         </div>
         <div class="header-right">
-          <a-dropdown :trigger="['hover']">
-            <div class="user-dropdown">
-              <a-avatar :size="36" :src="userStore.userAvatar">
-                {{ userStore.userName?.charAt(0)?.toUpperCase() }}
-              </a-avatar>
-              <span class="user-name">{{ userStore.userName }}</span>
-              <DownOutlined />
-            </div>
-            <template #overlay>
-              <a-menu>
-                <a-menu-item key="home" @click="goHome">
-                  <HomeOutlined /> 返回首页
-                </a-menu-item>
-                <a-menu-item key="profile" @click="navigateTo('profile')">
-                  <UserOutlined /> 个人中心
-                </a-menu-item>
-                <a-menu-divider />
-                <a-menu-item key="logout" @click="handleLogout">
-                  <LogoutOutlined /> 退出登录
-                </a-menu-item>
-              </a-menu>
-            </template>
-          </a-dropdown>
+          <template v-if="userStore.isLoggedIn">
+            <a-dropdown :trigger="['hover']">
+              <div class="user-dropdown">
+                <a-avatar :size="36" :src="userStore.userAvatar">
+                  {{ userStore.userName?.charAt(0)?.toUpperCase() }}
+                </a-avatar>
+                <span class="user-name">{{ userStore.userName }}</span>
+                <DownOutlined />
+              </div>
+              <template #overlay>
+                <a-menu>
+                  <a-menu-item key="home" @click="goHome">
+                    <HomeOutlined /> 返回首页
+                  </a-menu-item>
+                  <a-menu-item key="profile" @click="navigateTo('profile')">
+                    <UserOutlined /> 个人中心
+                  </a-menu-item>
+                  <a-menu-divider />
+                  <a-menu-item key="logout" @click="handleLogout">
+                    <LogoutOutlined /> 退出登录
+                  </a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
+          </template>
+          <template v-else>
+            <a-button type="primary" @click="showAuthModal">
+              登录
+            </a-button>
+          </template>
         </div>
       </header>
 
       <main class="content">
         <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in">
-            <component :is="Component" />
+            <component :is="Component" @login-required="showAuthModal" />
           </transition>
         </router-view>
       </main>
     </div>
+
+    <AuthModal v-model:visible="authModalVisible" @success="handleAuthSuccess" />
   </div>
 </template>
 
-<script setup>
-import { ref, computed } from 'vue'
+<script setup lang="ts">
+import { ref, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useUserStore } from '@/store/user'
+import AuthModal from '@/components/AuthModal.vue'
 import {
   RobotOutlined,
   AppstoreOutlined,
@@ -163,15 +173,18 @@ import {
   LogoutOutlined
 } from '@ant-design/icons-vue'
 
+type MenuKey = 'agent-market' | 'agents' | 'mcp-market' | 'mcp' | 'public-knowledge' | 'knowledge' | 'profile'
+
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 
-const isCollapsed = ref(false)
-const currentPath = ref('agent-market')
+const isCollapsed = ref<boolean>(false)
+const currentPath = ref<MenuKey>('agent-market')
+const authModalVisible = ref<boolean>(false)
 
-const pageTitle = computed(() => {
-  const titles = {
+const pageTitle = computed<string>(() => {
+  const titles: Record<MenuKey, string> = {
     'agent-market': '应用广场',
     'agents': '应用管理',
     'mcp-market': 'MCP广场',
@@ -183,21 +196,40 @@ const pageTitle = computed(() => {
   return titles[currentPath.value] || '应用广场'
 })
 
-function isActive(key) {
+watch(
+  () => route.path,
+  (path) => {
+    const pathMap: Record<string, MenuKey> = {
+      '/dashboard/agent-market': 'agent-market',
+      '/dashboard/agents': 'agents',
+      '/dashboard/mcp-market': 'mcp-market',
+      '/dashboard/mcp': 'mcp',
+      '/dashboard/public-knowledge': 'public-knowledge',
+      '/dashboard/knowledge': 'knowledge',
+      '/dashboard/profile': 'profile'
+    }
+    if (pathMap[path]) {
+      currentPath.value = pathMap[path]
+    }
+  },
+  { immediate: true }
+)
+
+function isActive(key: MenuKey): boolean {
   return currentPath.value === key
 }
 
-function refreshPage() {
+function refreshPage(): void {
   window.location.reload()
 }
 
-function toggleCollapse() {
+function toggleCollapse(): void {
   isCollapsed.value = !isCollapsed.value
 }
 
-function navigateTo(key) {
+function navigateTo(key: MenuKey): void {
   currentPath.value = key
-  const routes = {
+  const routes: Record<MenuKey, string> = {
     'agent-market': '/dashboard/agent-market',
     'agents': '/dashboard/agents',
     'mcp-market': '/dashboard/mcp-market',
@@ -209,11 +241,19 @@ function navigateTo(key) {
   router.push(routes[key] || '/dashboard/agent-market')
 }
 
-function goHome() {
+function goHome(): void {
   router.push('/')
 }
 
-async function handleLogout() {
+function showAuthModal(): void {
+  authModalVisible.value = true
+}
+
+function handleAuthSuccess(): void {
+  window.location.reload()
+}
+
+async function handleLogout(): Promise<void> {
   await userStore.logout()
   message.success('已退出登录')
   router.push('/')
@@ -381,6 +421,7 @@ async function handleLogout() {
       font-size: 20px;
       font-weight: 600;
       color: #202124;
+      margin-bottom: 0px;
     }
   }
 
@@ -401,6 +442,16 @@ async function handleLogout() {
       .user-name {
         font-size: 14px;
         color: #202124;
+      }
+    }
+
+    :deep(.ant-btn-primary) {
+      background: $primary-color;
+      border-color: $primary-color;
+
+      &:hover {
+        background: darken($primary-color, 10%);
+        border-color: darken($primary-color, 10%);
       }
     }
   }

@@ -89,20 +89,36 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { message } from 'ant-design-vue'
+import { message, type FormInstance } from 'ant-design-vue'
+import type { Rule } from 'ant-design-vue/es/form'
 import { useUserStore } from '@/store/user'
 import { updateUser } from '@/api/user'
+import type { UpdateUserRequest, UserVO } from '@/types'
+
+interface FormData {
+  id: number | null
+  userName: string
+  userAccount: string
+  userRole: string
+  userProfile: string
+}
+
+interface PasswordForm {
+  oldPassword: string
+  newPassword: string
+  confirmPassword: string
+}
 
 const userStore = useUserStore()
-const formRef = ref(null)
-const passwordFormRef = ref(null)
-const loading = ref(false)
-const passwordLoading = ref(false)
-const passwordModalVisible = ref(false)
+const formRef = ref<FormInstance | null>(null)
+const passwordFormRef = ref<FormInstance | null>(null)
+const loading = ref<boolean>(false)
+const passwordLoading = ref<boolean>(false)
+const passwordModalVisible = ref<boolean>(false)
 
-const formData = reactive({
+const formData = reactive<FormData>({
   id: null,
   userName: '',
   userAccount: '',
@@ -110,17 +126,17 @@ const formData = reactive({
   userProfile: ''
 })
 
-const passwordForm = reactive({
+const passwordForm = reactive<PasswordForm>({
   oldPassword: '',
   newPassword: '',
   confirmPassword: ''
 })
 
-const rules = {
+const rules: Record<string, Rule[]> = {
   userName: [{ required: true, message: '请输入昵称', trigger: 'blur' }]
 }
 
-const validateConfirmPassword = async (rule, value) => {
+const validateConfirmPassword = async (_rule: Rule, value: string): Promise<void> => {
   if (!value) {
     return Promise.reject('请确认密码')
   }
@@ -130,7 +146,7 @@ const validateConfirmPassword = async (rule, value) => {
   return Promise.resolve()
 }
 
-const passwordRules = {
+const passwordRules: Record<string, Rule[]> = {
   oldPassword: [{ required: true, message: '请输入原密码', trigger: 'blur' }],
   newPassword: [
     { required: true, message: '请输入新密码', trigger: 'blur' },
@@ -141,22 +157,25 @@ const passwordRules = {
 
 onMounted(() => {
   if (userStore.userInfo) {
+    const info: UserVO = userStore.userInfo
     Object.assign(formData, {
-      id: userStore.userInfo.id,
-      userName: userStore.userInfo.userName,
-      userAccount: userStore.userInfo.userAccount,
-      userRole: userStore.userInfo.userRole,
-      userProfile: userStore.userInfo.userProfile
+      id: info.id,
+      userName: info.userName,
+      userAccount: info.userAccount,
+      userRole: info.userRole,
+      userProfile: info.userProfile || ''
     })
   }
 })
 
-async function handleUpdate() {
+async function handleUpdate(): Promise<void> {
   loading.value = true
   try {
-    await updateUser(formData)
+    await updateUser(formData as UpdateUserRequest)
     message.success('更新成功')
-    userStore.setUserInfo({ ...userStore.userInfo, ...formData })
+    if (userStore.userInfo) {
+      userStore.setUserInfo({ ...userStore.userInfo, ...formData } as UserVO)
+    }
   } catch (e) {
     console.error(e)
   } finally {
@@ -164,12 +183,12 @@ async function handleUpdate() {
   }
 }
 
-function showPasswordModal() {
+function showPasswordModal(): void {
   passwordModalVisible.value = true
   passwordFormRef.value?.resetFields()
 }
 
-async function handlePasswordChange() {
+async function handlePasswordChange(): Promise<void> {
   try {
     await passwordFormRef.value?.validate()
     passwordLoading.value = true

@@ -3,6 +3,7 @@
     <div class="page-header">
       <h2>公共知识库</h2>
       <p class="desc">探索公开的知识库资源</p>
+      <div class="header-line"></div>
     </div>
 
     <a-row :gutter="[16, 16]">
@@ -29,23 +30,29 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { DatabaseOutlined, UserOutlined, FileOutlined } from '@ant-design/icons-vue'
 import { getPublicKnowledgeBases } from '@/api/knowledgeBase'
+import type { KnowledgeBase, PageResponse } from '@/types'
 
-const loading = ref(false)
-const knowledgeList = ref([])
+interface KnowledgeBaseWithUser extends KnowledgeBase {
+  userName?: string
+  docCount?: number
+}
+
+const loading = ref<boolean>(false)
+const knowledgeList = ref<KnowledgeBaseWithUser[]>([])
 
 onMounted(() => {
   fetchKnowledgeBases()
 })
 
-async function fetchKnowledgeBases() {
+async function fetchKnowledgeBases(): Promise<void> {
   loading.value = true
   try {
-    const res = await getPublicKnowledgeBases()
-    knowledgeList.value = res.data?.records || []
+    const res: PageResponse<KnowledgeBaseWithUser> = await getPublicKnowledgeBases()
+    knowledgeList.value = res?.records || []
   } catch (e) {
     console.error(e)
   } finally {
@@ -53,7 +60,7 @@ async function fetchKnowledgeBases() {
   }
 }
 
-function viewKnowledge(kb) {
+function viewKnowledge(kb: KnowledgeBaseWithUser): void {
   console.log('查看知识库:', kb)
 }
 </script>
@@ -73,6 +80,11 @@ function viewKnowledge(kb) {
     .desc {
       color: #5f6368;
       font-size: 14px;
+    }
+
+    .header-line {
+      height: 1px;
+      background: #e8eaed;
     }
   }
 

@@ -1,6 +1,13 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
-const routes = [
+declare module 'vue-router' {
+  interface RouteMeta {
+    title?: string
+    requiresAuth?: boolean
+  }
+}
+
+const routes: RouteRecordRaw[] = [
   {
     path: '/',
     name: 'Home',
@@ -8,53 +15,47 @@ const routes = [
     meta: { title: '首页', requiresAuth: false }
   },
   {
-    path: '/login',
-    name: 'Login',
-    component: () => import('@/views/login/index.vue'),
-    meta: { title: '登录', requiresAuth: false }
-  },
-  {
     path: '/dashboard',
     name: 'Dashboard',
     component: () => import('@/views/dashboard/index.vue'),
-    meta: { title: '总览', requiresAuth: true },
+    meta: { title: '总览', requiresAuth: false },
     redirect: '/dashboard/agent-market',
     children: [
       {
         path: 'agent-market',
         name: 'AgentMarket',
         component: () => import('@/views/dashboard/AgentMarket.vue'),
-        meta: { title: '应用广场', requiresAuth: true }
+        meta: { title: '应用广场', requiresAuth: false }
       },
       {
         path: 'agents',
         name: 'AgentManage',
         component: () => import('@/views/dashboard/AgentManage.vue'),
-        meta: { title: '应用管理', requiresAuth: true }
+        meta: { title: '应用管理', requiresAuth: false }
       },
       {
         path: 'mcp-market',
         name: 'McpMarket',
         component: () => import('@/views/dashboard/McpMarket.vue'),
-        meta: { title: 'MCP广场', requiresAuth: true }
+        meta: { title: 'MCP广场', requiresAuth: false }
       },
       {
         path: 'mcp',
         name: 'McpManage',
         component: () => import('@/views/dashboard/McpManage.vue'),
-        meta: { title: 'MCP管理', requiresAuth: true }
+        meta: { title: 'MCP管理', requiresAuth: false }
       },
       {
         path: 'public-knowledge',
         name: 'PublicKnowledge',
         component: () => import('@/views/dashboard/PublicKnowledge.vue'),
-        meta: { title: '公共知识库', requiresAuth: true }
+        meta: { title: '公共知识库', requiresAuth: false }
       },
       {
         path: 'knowledge',
         name: 'KnowledgeManage',
         component: () => import('@/views/dashboard/KnowledgeManage.vue'),
-        meta: { title: '知识库管理', requiresAuth: true }
+        meta: { title: '知识库管理', requiresAuth: false }
       },
       {
         path: 'profile',
@@ -77,18 +78,9 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   document.title = to.meta.title ? `${to.meta.title} - MioAI` : 'MioAI'
-  
-  const token = localStorage.getItem('token')
-  
-  if (to.meta.requiresAuth && !token) {
-    next({ name: 'Login', query: { redirect: to.fullPath } })
-  } else if (to.name === 'Login' && token) {
-    next({ name: 'Dashboard' })
-  } else {
-    next()
-  }
+  next()
 })
 
 export default router

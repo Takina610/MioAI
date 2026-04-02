@@ -1,100 +1,124 @@
 <template>
   <div class="knowledge-manage">
     <div class="page-header">
-      <a-button type="primary" @click="showCreateModal">
-        <PlusOutlined /> 创建知识库
-      </a-button>
+      <div class="header-content">
+        <div class="header-left">
+          <h2>知识库管理</h2>
+        </div>
+        <div class="header-right" v-if="userStore.isLoggedIn">
+          <a-button type="primary" @click="showCreateModal">
+            <PlusOutlined /> 创建知识库
+          </a-button>
+        </div>
+      </div>
+      <div class="header-line"></div>
     </div>
 
-    <div class="knowledge-list">
-      <a-row :gutter="[16, 16]">
-        <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="kb in knowledgeList" :key="kb.id">
-          <div class="knowledge-card">
-            <div class="card-header">
-              <div class="icon-wrapper">
-                <DatabaseOutlined />
-              </div>
-              <a-dropdown :trigger="['click']">
-                <a-button type="text" class="more-btn">
-                  <MoreOutlined />
-                </a-button>
-                <template #overlay>
-                  <a-menu>
-                    <a-menu-item key="edit" @click="showEditModal(kb)">
-                      <EditOutlined /> 编辑
-                    </a-menu-item>
-                    <a-menu-item key="delete" @click="handleDelete(kb)">
-                      <DeleteOutlined /> 删除
-                    </a-menu-item>
-                  </a-menu>
-                </template>
-              </a-dropdown>
-            </div>
-            <h3 class="card-title">{{ kb.name }}</h3>
-            <p class="card-desc">{{ kb.description || '暂无描述' }}</p>
-            <div class="card-stats">
-              <div class="stat-item">
-                <FileTextOutlined />
-                <span>{{ kb.documentCount || 0 }} 文档</span>
-              </div>
-            </div>
-            <div class="card-footer">
-              <a-tag :color="kb.status === 1 ? 'green' : 'default'">
-                {{ kb.status === 1 ? '启用' : '禁用' }}
-              </a-tag>
-              <span class="create-time">{{ formatDate(kb.createTime) }}</span>
-            </div>
-          </div>
-        </a-col>
-      </a-row>
+    <template v-if="!userStore.isLoggedIn">
+      <div class="login-prompt">
+        <p class="prompt-title">登录以使用</p>
+        <p class="prompt-desc">您当前处于未登录状态，登录后可使用完整服务</p>
+        <a-button type="primary" @click="$emit('login-required')">
+          登录
+        </a-button>
+      </div>
+    </template>
 
-      <a-empty v-if="!loading && knowledgeList.length === 0" description="暂无知识库" />
-    </div>
+    <template v-else>
+
+      <div class="knowledge-list">
+        <a-row :gutter="[16, 16]">
+          <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="kb in knowledgeList" :key="kb.id">
+            <div class="knowledge-card">
+              <div class="card-header">
+                <div class="icon-wrapper">
+                  <DatabaseOutlined />
+                </div>
+                <a-dropdown :trigger="['click']">
+                  <a-button type="text" class="more-btn">
+                    <MoreOutlined />
+                  </a-button>
+                  <template #overlay>
+                    <a-menu>
+                      <a-menu-item key="edit" @click="showEditModal(kb)">
+                        <EditOutlined /> 编辑
+                      </a-menu-item>
+                      <a-menu-item key="delete" @click="handleDelete(kb)">
+                        <DeleteOutlined /> 删除
+                      </a-menu-item>
+                    </a-menu>
+                  </template>
+                </a-dropdown>
+              </div>
+              <h3 class="card-title">{{ kb.name }}</h3>
+              <p class="card-desc">{{ kb.description || '暂无描述' }}</p>
+              <div class="card-stats">
+                <div class="stat-item">
+                  <FileTextOutlined />
+                  <span>{{ kb.documentCount || 0 }} 文档</span>
+                </div>
+              </div>
+              <div class="card-footer">
+                <a-tag :color="kb.status === 1 ? 'green' : 'default'">
+                  {{ kb.status === 1 ? '启用' : '禁用' }}
+                </a-tag>
+                <span class="create-time">{{ formatDate(kb.createTime) }}</span>
+              </div>
+            </div>
+          </a-col>
+        </a-row>
+
+        <a-empty v-if="!loading && knowledgeList.length === 0" description="暂无知识库" />
+      </div>
 
       <a-modal
-      :open="modalVisible"
-      @update:open="modalVisible = $event"
-      :title="editingKb ? '编辑知识库' : '创建知识库'"
-      :confirm-loading="submitLoading"
-      @ok="handleSubmit"
-      @cancel="resetForm"
-      width="600px"
-    >
-      <a-form
-        ref="formRef"
-        :model="formData"
-        :rules="rules"
-        layout="vertical"
+        :open="modalVisible"
+        @update:open="modalVisible = $event"
+        :title="editingKb ? '编辑知识库' : '创建知识库'"
+        :confirm-loading="submitLoading"
+        @ok="handleSubmit"
+        @cancel="resetForm"
+        width="600px"
       >
-        <a-form-item name="name" label="名称">
-          <a-input :value="formData.name" @update:value="formData.name = $event" placeholder="请输入知识库名称" />
-        </a-form-item>
-        <a-form-item name="description" label="描述">
-          <a-textarea
-            :value="formData.description"
-            @update:value="formData.description = $event"
-            placeholder="请输入描述"
-            :rows="3"
-          />
-        </a-form-item>
-        <a-form-item name="type" label="类型">
-          <a-select :value="formData.type" @update:value="formData.type = $event" placeholder="请选择类型">
-            <a-select-option :value="1">文档型</a-select-option>
-            <a-select-option :value="2">问答型</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item name="embeddingModel" label="嵌入模型">
-          <a-input :value="formData.embeddingModel" @update:value="formData.embeddingModel = $event" placeholder="请输入嵌入模型名称" />
-        </a-form-item>
-      </a-form>
-    </a-modal>
+        <a-form
+          ref="formRef"
+          :model="formData"
+          :rules="rules"
+          layout="vertical"
+        >
+          <a-form-item name="name" label="名称">
+            <a-input :value="formData.name" @update:value="formData.name = $event" placeholder="请输入知识库名称" />
+          </a-form-item>
+          <a-form-item name="description" label="描述">
+            <a-textarea
+              :value="formData.description"
+              @update:value="formData.description = $event"
+              placeholder="请输入描述"
+              :rows="3"
+            />
+          </a-form-item>
+          <a-form-item name="type" label="类型">
+            <a-select :value="formData.type" @update:value="formData.type = $event" placeholder="请选择类型">
+              <a-select-option :value="1">文档型</a-select-option>
+              <a-select-option :value="2">问答型</a-select-option>
+            </a-select>
+          </a-form-item>
+          <a-form-item name="embeddingModel" label="嵌入模型">
+            <a-input :value="formData.embeddingModel" @update:value="formData.embeddingModel = $event" placeholder="请输入嵌入模型名称" />
+          </a-form-item>
+        </a-form>
+      </a-modal>
+    </template>
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { message, Modal } from 'ant-design-vue'
+import { message, Modal, type FormInstance } from 'ant-design-vue'
+import type { Rule } from 'ant-design-vue/es/form'
+import { useUserStore } from '@/store/user'
 import { addKnowledgeBase, queryKnowledgeBases, updateKnowledgeBase, deleteKnowledgeBase } from '@/api/knowledgeBase'
+import type { KnowledgeBase, KnowledgeBaseAddRequest, KnowledgeBaseUpdateRequest, PageResponse } from '@/types'
 import {
   PlusOutlined,
   MoreOutlined,
@@ -104,35 +128,49 @@ import {
   FileTextOutlined
 } from '@ant-design/icons-vue'
 
-const loading = ref(false)
-const submitLoading = ref(false)
-const modalVisible = ref(false)
-const editingKb = ref(null)
-const knowledgeList = ref([])
-const formRef = ref(null)
+defineEmits<{
+  (e: 'login-required'): void
+}>()
 
-const formData = reactive({
+interface FormData {
+  id?: number
+  name: string
+  description: string
+  type: number
+  embeddingModel: string
+}
+
+const userStore = useUserStore()
+const loading = ref<boolean>(false)
+const submitLoading = ref<boolean>(false)
+const modalVisible = ref<boolean>(false)
+const editingKb = ref<KnowledgeBase | null>(null)
+const knowledgeList = ref<KnowledgeBase[]>([])
+const formRef = ref<FormInstance | null>(null)
+
+const formData = reactive<FormData>({
   name: '',
   description: '',
   type: 1,
   embeddingModel: 'text-embedding-v3'
 })
 
-const rules = {
+const rules: Record<string, Rule[]> = {
   name: [{ required: true, message: '请输入名称', trigger: 'blur' }],
   type: [{ required: true, message: '请选择类型', trigger: 'change' }]
 }
 
-function formatDate(dateStr) {
+function formatDate(dateStr: string): string {
   if (!dateStr) return ''
   const date = new Date(dateStr)
   return date.toLocaleDateString('zh-CN')
 }
 
-async function fetchKnowledgeBases() {
+async function fetchKnowledgeBases(): Promise<void> {
+  if (!userStore.isLoggedIn) return
   loading.value = true
   try {
-    const res = await queryKnowledgeBases({ current: 1, pageSize: 100 })
+    const res: PageResponse<KnowledgeBase> = await queryKnowledgeBases({ current: 1, pageSize: 100 })
     knowledgeList.value = res.records || []
   } catch (e) {
     console.error(e)
@@ -141,25 +179,25 @@ async function fetchKnowledgeBases() {
   }
 }
 
-function showCreateModal() {
+function showCreateModal(): void {
   editingKb.value = null
   resetForm()
   modalVisible.value = true
 }
 
-function showEditModal(kb) {
+function showEditModal(kb: KnowledgeBase): void {
   editingKb.value = kb
   Object.assign(formData, {
     id: kb.id,
     name: kb.name,
     description: kb.description,
-    type: kb.type,
-    embeddingModel: kb.embeddingModel
+    type: 1,
+    embeddingModel: 'text-embedding-v3'
   })
   modalVisible.value = true
 }
 
-function resetForm() {
+function resetForm(): void {
   formRef.value?.resetFields()
   Object.assign(formData, {
     name: '',
@@ -169,16 +207,16 @@ function resetForm() {
   })
 }
 
-async function handleSubmit() {
+async function handleSubmit(): Promise<void> {
   try {
     await formRef.value?.validate()
     submitLoading.value = true
     
     if (editingKb.value) {
-      await updateKnowledgeBase({ ...formData, id: editingKb.value.id })
+      await updateKnowledgeBase({ ...formData, id: editingKb.value.id } as KnowledgeBaseUpdateRequest)
       message.success('更新成功')
     } else {
-      await addKnowledgeBase(formData)
+      await addKnowledgeBase(formData as KnowledgeBaseAddRequest)
       message.success('创建成功')
     }
     
@@ -192,7 +230,7 @@ async function handleSubmit() {
   }
 }
 
-function handleDelete(kb) {
+function handleDelete(kb: KnowledgeBase): void {
   Modal.confirm({
     title: '确认删除',
     content: `确定要删除知识库「${kb.name}」吗？`,
@@ -215,8 +253,61 @@ onMounted(() => {
 .knowledge-manage {
   .page-header {
     margin-bottom: 24px;
+
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
+
+      .header-left {
+        h2 {
+          font-size: 24px;
+          font-weight: 600;
+          color: #202124;
+          margin-bottom: 8px;
+        }
+      }
+
+      .header-right {
+        :deep(.ant-btn-primary) {
+          background: $primary-color;
+          border-color: $primary-color;
+
+          &:hover {
+            background: darken($primary-color, 10%);
+            border-color: darken($primary-color, 10%);
+          }
+        }
+      }
+    }
+
+    .header-line {
+      height: 1px;
+      background: #e8eaed;
+    }
+  }
+
+  .login-prompt {
     display: flex;
-    justify-content: flex-end;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    text-align: center;
+
+    .prompt-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #202124;
+      margin-bottom: 12px;
+    }
+
+    .prompt-desc {
+      font-size: 14px;
+      color: #5f6368;
+      margin-bottom: 24px;
+    }
 
     :deep(.ant-btn-primary) {
       background: $primary-color;
@@ -227,6 +318,10 @@ onMounted(() => {
         border-color: darken($primary-color, 10%);
       }
     }
+  }
+
+  .knowledge-list {
+    margin-top: 24px;
   }
 
   .knowledge-card {

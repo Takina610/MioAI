@@ -32,7 +32,7 @@
             </a-dropdown>
           </template>
           <template v-else>
-            <a-button type="primary" class="start-btn" @click="goToLogin">
+            <a-button type="primary" class="start-btn" @click="goToDashboard">
               快速开始
             </a-button>
           </template>
@@ -96,9 +96,10 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import type { Component } from 'vue'
 import {
   RobotOutlined,
   DatabaseOutlined,
@@ -114,45 +115,43 @@ import {
 import { useUserStore } from '@/store/user'
 import { message } from 'ant-design-vue'
 
+interface Feature {
+  icon: Component
+  title: string
+  desc: string
+}
+
 const router = useRouter()
 const userStore = useUserStore()
-const featuresRef = ref(null)
+const featuresRef = ref<HTMLElement | null>(null)
 
-function refreshPage() {
+function refreshPage(): void {
   window.location.reload()
 }
 
-function goToLogin() {
-  router.push('/login')
-}
-
-function goToDashboard() {
+function goToDashboard(): void {
   router.push('/dashboard')
 }
 
-function goToProfile() {
+function goToProfile(): void {
   router.push('/dashboard/profile')
 }
 
-function handleStart() {
-  if (userStore.isLoggedIn) {
-    router.push('/dashboard')
-  } else {
-    router.push('/login')
-  }
+function handleStart(): void {
+  router.push('/dashboard')
 }
 
-function scrollToFeatures() {
+function scrollToFeatures(): void {
   featuresRef.value?.scrollIntoView({ behavior: 'smooth' })
 }
 
-async function handleLogout() {
+async function handleLogout(): Promise<void> {
   await userStore.logout()
   message.success('已退出登录')
   router.push('/')
 }
 
-const features = [
+const features: Feature[] = [
   {
     icon: RobotOutlined,
     title: '智能体管理',

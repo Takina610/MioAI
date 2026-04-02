@@ -1,26 +1,36 @@
 import { Modal } from 'ant-design-vue'
 
-const MioConfirm = {
-  confirm: (options) => {
+interface ConfirmOptions {
+  title?: string
+  content?: string
+  okText?: string
+  cancelText?: string
+}
+
+interface MioConfirmInterface {
+  confirm: (options: ConfirmOptions) => Promise<boolean>
+  delete: (options: ConfirmOptions) => Promise<boolean>
+  info: (options: ConfirmOptions) => Promise<boolean>
+  success: (options: ConfirmOptions) => Promise<boolean>
+  error: (options: ConfirmOptions) => Promise<boolean>
+  warning: (options: ConfirmOptions) => Promise<boolean>
+}
+
+const MioConfirm: MioConfirmInterface = {
+  confirm(options: ConfirmOptions): Promise<boolean> {
     return new Promise((resolve, reject) => {
       Modal.confirm({
         title: options.title || '确认',
         content: options.content || '确定要执行此操作吗？',
         okText: options.okText || '确定',
         cancelText: options.cancelText || '取消',
-        okButtonProps: {
-          style: {
-            background: '#2aa1a9',
-            borderColor: '#2aa1a9'
-          }
-        },
         onOk: () => resolve(true),
         onCancel: () => reject(false)
       })
     })
   },
 
-  delete: (options) => {
+  delete(options: ConfirmOptions): Promise<boolean> {
     return new Promise((resolve, reject) => {
       Modal.confirm({
         title: options.title || '确认删除',
@@ -34,7 +44,7 @@ const MioConfirm = {
     })
   },
 
-  info: (options) => {
+  info(options: ConfirmOptions): Promise<boolean> {
     return new Promise((resolve) => {
       Modal.info({
         title: options.title || '提示',
@@ -45,7 +55,7 @@ const MioConfirm = {
     })
   },
 
-  success: (options) => {
+  success(options: ConfirmOptions): Promise<boolean> {
     return new Promise((resolve) => {
       Modal.success({
         title: options.title || '成功',
@@ -56,7 +66,7 @@ const MioConfirm = {
     })
   },
 
-  error: (options) => {
+  error(options: ConfirmOptions): Promise<boolean> {
     return new Promise((resolve) => {
       Modal.error({
         title: options.title || '错误',
@@ -67,7 +77,7 @@ const MioConfirm = {
     })
   },
 
-  warning: (options) => {
+  warning(options: ConfirmOptions): Promise<boolean> {
     return new Promise((resolve) => {
       Modal.warning({
         title: options.title || '警告',

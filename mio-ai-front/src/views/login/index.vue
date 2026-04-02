@@ -120,10 +120,11 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { message, type FormInstance } from 'ant-design-vue'
+import type { Rule } from 'ant-design-vue/es/form'
 import { useUserStore } from '@/store/user'
 import {
   UserOutlined,
@@ -132,22 +133,29 @@ import {
   CheckCircleOutlined
 } from '@ant-design/icons-vue'
 
+interface FormData {
+  userAccount: string
+  userName: string
+  userPassword: string
+  checkPassword: string
+}
+
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 
-const formRef = ref(null)
-const loading = ref(false)
-const isLogin = ref(true)
+const formRef = ref<FormInstance | null>(null)
+const loading = ref<boolean>(false)
+const isLogin = ref<boolean>(true)
 
-const formData = reactive({
+const formData = reactive<FormData>({
   userAccount: '',
   userName: '',
   userPassword: '',
   checkPassword: ''
 })
 
-const validateCheckPassword = async (rule, value) => {
+const validateCheckPassword = async (_rule: Rule, value: string): Promise<void> => {
   if (!isLogin.value) {
     if (!value) {
       return Promise.reject('请确认密码')
@@ -159,7 +167,7 @@ const validateCheckPassword = async (rule, value) => {
   return Promise.resolve()
 }
 
-const rules = {
+const rules: Record<string, Rule[]> = {
   userAccount: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
     { min: 4, max: 20, message: '用户名长度为4-20个字符', trigger: 'blur' }
@@ -176,16 +184,16 @@ const rules = {
   ]
 }
 
-function toggleMode() {
+function toggleMode(): void {
   isLogin.value = !isLogin.value
   formRef.value?.resetFields()
 }
 
-function goHome() {
+function goHome(): void {
   router.push('/')
 }
 
-async function handleSubmit() {
+async function handleSubmit(): Promise<void> {
   loading.value = true
   try {
     if (isLogin.value) {
@@ -207,7 +215,7 @@ async function handleSubmit() {
       return
     }
 
-    const redirect = route.query.redirect || '/dashboard'
+    const redirect = route.query.redirect as string || '/dashboard'
     router.push(redirect)
   } catch (error) {
     console.error(error)
