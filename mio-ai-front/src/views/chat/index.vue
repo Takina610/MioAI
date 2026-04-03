@@ -175,7 +175,7 @@ import { message } from 'ant-design-vue'
 import { marked } from 'marked'
 import { useUserStore } from '@/store/user'
 import { getAgentById } from '@/api/agent'
-import { chatWithCSApp, chatWithMioManus } from '@/api/chat'
+import { chatWithCSApp } from '@/api/chat'
 import { getChatIds, getChatHistory, deleteChat as deleteChatApi } from '@/api/chatMemory'
 import type { Agent, ChatMessageRequest } from '@/types'
 import AuthModal from '@/components/AuthModal.vue'
@@ -221,9 +221,14 @@ const inputMessage = ref<string>('')
 const isLoading = ref<boolean>(false)
 const messagesRef = ref<HTMLElement | null>(null)
 
-let eventSource: AbortController | null = null
+let eventSource: EventSource | null = null
 
 const agentId = ref<number>(0)
+  
+watch(messages, (newMessages, oldMessages) => {
+  console.log('messages 发生变化:', newMessages)
+  // 执行你的逻辑
+}, { deep: true })
 
 const currentChatTitle = computed(() => {
   const chat = chatList.value.find(c => c.id === currentChatId.value)
@@ -370,12 +375,17 @@ function sendMessage(): void {
     currentChatId.value = generateConversationId()
   }
 
+  console.log(messages.value)
+
   messages.value.push({
     id: generateUUID(),
     role: 'user',
     content,
     createTime: new Date()
   })
+
+  console.log(messages.value)
+
   inputMessage.value = ''
 
   const existingChat = chatList.value.find(c => c.id === currentChatId.value)
@@ -398,10 +408,6 @@ function sendMessage(): void {
     scrollToBottom()
   })
 
-  if (eventSource) {
-    eventSource.abort()
-  }
-
   isLoading.value = true
 
   const aiMessageIndex = messages.value.length
@@ -412,47 +418,43 @@ function sendMessage(): void {
     createTime: new Date()
   })
 
-  const requestData: ChatMessageRequest = {
-    chatId: currentChatId.value,
-    agentId: agentId.value,
-    content: content
+  const token : string = localStorage.getItem('token') || ''
+
+  // 连接SSE
+  if (eventSource) {
+    eventSource.close()
   }
 
-  const chatApi = agentId.value === 1 ? chatWithCSApp : chatWithMioManus
+  // eventSource = chatWithCSApp(content, currentChatId.value, agentId.value, token)
 
-  eventSource = chatApi(
-    requestData,
-    (chunk: string) => {
-      if (chunk && chunk !== '[DONE]') {
-        if (aiMessageIndex < messages.value.length) {
-          messages.value[aiMessageIndex].content += chunk
-        }
-        nextTick(() => {
-          scrollToBottom()
-        })
-      }
-    },
-    (error: Error) => {
-      console.error('SSE Error:', error)
-      message.error('发送消息失败')
-      if (aiMessageIndex < messages.value.length) {
-        messages.value.splice(aiMessageIndex, 1)
-      }
-      isLoading.value = false
-    },
-    () => {
-      isLoading.value = false
-      const chat = chatList.value.find(c => c.id === currentChatId.value)
-      if (chat && aiMessageIndex < messages.value.length) {
-        const aiContent = messages.value[aiMessageIndex].content
-        if (aiContent && aiContent.trim()) {
-          chat.title = aiContent.slice(0, 20).replace(/[#*`]/g, '').trim() + (aiContent.length > 20 ? '...' : '')
-          chat.updateTime = new Date()
-          chatList.value.sort((a: ChatSession, b: ChatSession) => b.updateTime.getTime() - a.updateTime.getTime())
-        }
-      }
-    }
-  )
+  // // 监听SSE消息
+  // eventSource.onmessage = (event) => {
+  //   const data = event.data
+  //   if (data && data !== '[DONE]') {
+  //     // 更新最新的AI消息内容，而不是创建新消息
+  //     if (aiMessageIndex < messages.value.length) {
+  //       messages.value[aiMessageIndex].content += data
+  //     }
+  //   }
+    
+  //   if (data === '[DONE]') {
+  //     isLoading.value = false
+  //     if (eventSource) {
+  //       eventSource.close()
+  //     }
+  //   }
+  // }
+  
+  // // 监听SSE错误
+  // eventSource.onerror = (error) => {
+  //   console.error('SSE Error:', error)
+  //   isLoading.value = false
+  //   if (eventSource) {
+  //     eventSource.close()
+  //   }
+  // }
+
+  console.log(messages.value)
 }
 
 function generateConversationId(): string {
@@ -462,16 +464,7 @@ function generateConversationId(): string {
 }
 
 function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0
-    const v = c === 'x' ? r : (r & 0x3 | 0x8)
-    return v.toString(16)
-  })
-}
-
-async function mockAIResponse(content: string): Promise<string> {
-  await new Promise((resolve) => setTimeout(resolve, 1000))
-  return `我是${agentInfo.value?.name || '智能体'}，收到您的消息："${content}"。\n\n这是一个模拟的回复，实际功能需要连接后端AI服务。`
+  return Math.floor(Math.random() * 100000000).toString()
 }
 
 function scrollToBottom(): void {
@@ -535,10 +528,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyboardShortcut)
-  if (eventSource) {
-    eventSource.abort()
-  }
 })
+
+
 </script>
 
 <style lang="scss" scoped>

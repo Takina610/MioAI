@@ -3,7 +3,6 @@ package com.mio.ai.superagent.controller;
 import com.mio.ai.common.aop.annotation.LogInfo;
 import com.mio.ai.common.utils.RedisComponent;
 import com.mio.ai.superagent.app.CSApp;
-import com.mio.ai.superagent.model.dto.ChatMessageRequest;
 import com.mio.ai.superagent.model.vo.ChatVO;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,7 +22,7 @@ import java.io.IOException;
 public class CSAppController {
 
     @Resource
-    private CSApp CSApp;
+    private CSApp csApp;
 
     @Autowired
     RedisComponent redisComponent;
@@ -31,23 +30,22 @@ public class CSAppController {
     /**
      * SSE 流式调用 AI 恋爱大师应用
      *
-     * @param chatMessageRequest
      * @return
      */
-    @PostMapping("/chat")
+    @GetMapping("/chat")
     @LogInfo
-    public SseEmitter doChat(@RequestBody ChatMessageRequest chatMessageRequest, HttpServletRequest request) {
+    public SseEmitter doChat(@RequestParam String chatId, @RequestParam Long agentId, @RequestParam String content, @RequestParam String token) {
         // 创建 ChatVO
         ChatVO chatVO = new ChatVO();
-        chatVO.setChatId(chatMessageRequest.getChatId());
-        chatVO.setMessage(chatMessageRequest.getContent());
-        chatVO.setAgentId(chatMessageRequest.getAgentId());
-        chatVO.setUserId(redisComponent.getUserId(request.getHeader("token")));
+        chatVO.setChatId(chatId);
+        chatVO.setMessage(content);
+        chatVO.setAgentId(agentId);
+        chatVO.setUserId(redisComponent.getUserId(token));
 
         // 创建一个超时时间较长的 SseEmitter
         SseEmitter sseEmitter = new SseEmitter(45000L); // 1.5 分钟超时
         // 获取 Flux 响应式数据流并且直接通过订阅推送给 SseEmitter
-        CSApp.doChat(chatVO)
+        csApp.doChat(chatVO)
                 .subscribe(chunk -> {
                     try {
                         sseEmitter.send(chunk);
