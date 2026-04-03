@@ -1,39 +1,41 @@
 <template>
   <div class="agent-market">
     <div class="page-header">
-      <h2>应用广场</h2>
-      <p class="desc">探索公开的智能体应用</p>
+      <div class="header-content">
+        <h2>应用广场</h2>
+        <p class="desc">探索公开的智能体应用</p>
+      </div>
       <div class="header-line"></div>
     </div>
 
-    <div class="agent-list">
-      <a-row :gutter="[16, 16]">
-        <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="agent in agentList" :key="agent.id">
-          <div class="agent-card">
-            <div class="card-header">
-              <div class="icon-wrapper">
-                <img v-if="agent.avatar" :src="agent.avatar" alt="avatar" class="agent-avatar" />
-                <RobotOutlined v-else />
+    <div class="page-content">
+      <div class="agent-list">
+        <a-row :gutter="[16, 16]">
+          <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="agent in agentList" :key="agent.id">
+            <div class="agent-card">
+              <div class="card-header">
+                <div class="icon-wrapper">
+                  <img v-if="agent.avatar" :src="agent.avatar" alt="avatar" class="agent-avatar" />
+                  <RobotOutlined v-else />
+                </div>
+              </div>
+              <h3 class="card-title">{{ agent.name }}</h3>
+              <p class="card-desc">{{ agent.description || '暂无描述' }}</p>
+              <div class="card-footer">
+                <span class="author">
+                  <UserOutlined /> {{ agent.type === 0 ? '官方' : (agent.userName || '匿名') }}
+                </span>
+                <span class="time">{{ formatTime(agent.createTime) }}</span>
+              </div>
+              <div class="card-actions">
+                <a-button type="primary" size="small" @click="startChat(agent)">
+                  开始对话
+                </a-button>
               </div>
             </div>
-            <h3 class="card-title">{{ agent.name }}</h3>
-            <p class="card-desc">{{ agent.description || '暂无描述' }}</p>
-            <div class="card-footer">
-              <span class="author">
-                <UserOutlined /> {{ agent.type === 0 ? '官方' : (agent.userName || '匿名') }}
-              </span>
-              <span class="time">{{ formatTime(agent.createTime) }}</span>
-            </div>
-            <div class="card-actions">
-              <a-button type="primary" size="small" @click="startChat(agent)">
-                开始对话
-              </a-button>
-            </div>
-          </div>
-        </a-col>
-      </a-row>
-
-      <a-empty v-if="!loading && agentList.length === 0" description="暂无公开应用" />
+          </a-col>
+        </a-row>
+      </div>
     </div>
   </div>
 </template>
@@ -82,30 +84,35 @@ function formatTime(time: string): string {
 
 <style lang="scss" scoped>
 .agent-market {
+  height: 100%;
   .page-header {
-    margin-bottom: 24px;
+    .header-content {
+      padding: 10px 24px;
+      h2 {
+        font-size: 24px;
+        font-weight: 600;
+        color: #202124;
+        margin-bottom: 8px;
+      }
 
-    h2 {
-      font-size: 24px;
-      font-weight: 600;
-      color: #202124;
-      margin-bottom: 8px;
+      .desc {
+        color: #5f6368;
+        font-size: 14px;
+        margin-bottom: 0px;
+      }
     }
-
-    .desc {
-      color: #5f6368;
-      font-size: 14px;
-      margin-bottom: 16px;
-    }
-
     .header-line {
       height: 1px;
       background: #e8eaed;
     }
   }
 
-  .agent-list {
-    margin-top: 24px;
+  .page-content {
+    height: calc(100% - 136px);
+    display: flex;
+    .agent-list {
+      margin: 24px;
+    }
   }
 
   .agent-card {

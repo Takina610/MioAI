@@ -21,6 +21,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '智能体对话', requiresAuth: false }
   },
   {
+    path: '/chat/:id/:conversationId',
+    name: 'ChatConversation',
+    component: () => import('@/views/chat/index.vue'),
+    meta: { title: '智能体对话', requiresAuth: false }
+  },
+  {
     path: '/dashboard',
     name: 'Dashboard',
     component: () => import('@/views/dashboard/index.vue'),

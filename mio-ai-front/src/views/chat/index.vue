@@ -118,24 +118,11 @@
               class="message"
               :class="msg.role"
             >
-              <div class="message-avatar">
-                <a-avatar v-if="msg.role === 'user'" :src="userStore.userAvatar">
-                  {{ userStore.userName?.charAt(0)?.toUpperCase() }}
-                </a-avatar>
-                <a-avatar v-else :src="agentInfo?.avatar" class="agent-avatar-msg">
-                  {{ agentInfo?.name?.charAt(0) }}
-                </a-avatar>
-              </div>
               <div class="message-content">
                 <div class="message-text" v-html="formatMessage(msg.content)"></div>
               </div>
             </div>
             <div v-if="isLoading" class="message assistant">
-              <div class="message-avatar">
-                <a-avatar :src="agentInfo?.avatar" class="agent-avatar-msg">
-                  {{ agentInfo?.name?.charAt(0) }}
-                </a-avatar>
-              </div>
               <div class="message-content">
                 <div class="message-loading">
                   <span></span><span></span><span></span>
@@ -185,9 +172,12 @@
 import { ref, computed, onMounted, nextTick, watch, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import { marked } from 'marked'
 import { useUserStore } from '@/store/user'
 import { getAgentById } from '@/api/agent'
-import type { Agent } from '@/types'
+import { chatWithCSApp, chatWithMioManus } from '@/api/chat'
+import { getChatIds, getChatHistory, deleteChat as deleteChatApi } from '@/api/chatMemory'
+import type { Agent, ChatMessageRequest } from '@/types'
 import AuthModal from '@/components/AuthModal.vue'
 import {
   MenuFoldOutlined,
@@ -231,6 +221,8 @@ const inputMessage = ref<string>('')
 const isLoading = ref<boolean>(false)
 const messagesRef = ref<HTMLElement | null>(null)
 
+let eventSource: AbortController | null = null
+
 const agentId = ref<number>(0)
 
 const currentChatTitle = computed(() => {
@@ -249,48 +241,52 @@ watch(
   { immediate: true }
 )
 
+watch(
+  () => route.params.conversationId,
+  (conversationId) => {
+    if (conversationId && typeof conversationId === 'string') {
+      currentChatId.value = conversationId
+      loadMessages(conversationId)
+    } else {
+      currentChatId.value = ''
+      messages.value = []
+    }
+  },
+  { immediate: true }
+)
+
 async function loadAgentInfo(): Promise<void> {
   try {
     const res = await getAgentById(agentId.value)
     agentInfo.value = res
-    loadChatHistory()
+    await loadChatHistory()
+    
+    if (route.params.conversationId && typeof route.params.conversationId === 'string') {
+      currentChatId.value = route.params.conversationId
+      loadMessages(route.params.conversationId)
+    }
   } catch (e) {
     console.error(e)
     message.error('加载智能体信息失败')
   }
 }
 
-function loadChatHistory(): void {
-  const stored = localStorage.getItem(`chat_history_${agentId.value}`)
-  if (stored) {
-    const allChats: ChatSession[] = JSON.parse(stored)
-    chatList.value = allChats.filter(chat => chat.hasMessage)
-    if (chatList.value.length > 0) {
-      selectChat(chatList.value[0].id)
-    }
-  }
-}
-
-function saveChatHistory(): void {
-  const stored = localStorage.getItem(`chat_history_${agentId.value}`)
-  let allChats: ChatSession[] = []
-  if (stored) {
-    allChats = JSON.parse(stored)
-  }
+async function loadChatHistory(): Promise<void> {
+  if (!userStore.isLoggedIn) return
   
-  const existingIds = new Set(allChats.map(c => c.id))
-  for (const chat of chatList.value) {
-    if (!existingIds.has(chat.id)) {
-      allChats.push(chat)
-    } else {
-      const index = allChats.findIndex(c => c.id === chat.id)
-      if (index !== -1) {
-        allChats[index] = chat
-      }
-    }
+  try {
+    const res = await getChatIds(String(agentId.value))
+    chatList.value = res
+      .map((item: any) => ({
+        id: item.conversationId,
+        title: item.title || '新对话',
+        updateTime: item.updateTime ? new Date(item.updateTime) : new Date(),
+        hasMessage: true
+      }))
+      .sort((a: ChatSession, b: ChatSession) => b.updateTime.getTime() - a.updateTime.getTime())
+  } catch (e) {
+    console.error(e)
   }
-  
-  localStorage.setItem(`chat_history_${agentId.value}`, JSON.stringify(allChats))
 }
 
 function toggleCollapse(): void {
@@ -301,43 +297,48 @@ function createNewChat(): void {
   currentChatId.value = ''
   messages.value = []
   inputMessage.value = ''
+  router.push(`/chat/${agentId.value}`)
 }
 
-function selectChat(chatId: string): void {
-  currentChatId.value = chatId
-  loadMessages(chatId)
+function selectChat(conversationId: string): void {
+  currentChatId.value = conversationId
+  router.push(`/chat/${agentId.value}/${conversationId}`)
+  loadMessages(conversationId)
 }
 
-function loadMessages(chatId: string): void {
-  const stored = localStorage.getItem(`messages_${agentId.value}_${chatId}`)
-  if (stored) {
-    messages.value = JSON.parse(stored)
-  } else {
-    messages.value = []
+async function loadMessages(conversationId: string): Promise<void> {
+  if (!userStore.isLoggedIn) return
+  
+  try {
+    const res = await getChatHistory(conversationId)
+    messages.value = res.map((item: any, index: number) => ({
+      id: `${conversationId}_${index}`,
+      role: item.role,
+      content: item.content,
+      createTime: new Date()
+    }))
+    nextTick(() => {
+      scrollToBottom()
+    })
+  } catch (e) {
+    console.error(e)
+    message.error('加载消息失败')
   }
-  nextTick(() => {
-    scrollToBottom()
-  })
 }
 
-function saveMessages(): void {
-  localStorage.setItem(
-    `messages_${agentId.value}_${currentChatId.value}`,
-    JSON.stringify(messages.value)
-  )
-}
-
-function deleteChat(chatId: string): void {
-  chatList.value = chatList.value.filter((c) => c.id !== chatId)
-  saveChatHistory()
-  localStorage.removeItem(`messages_${agentId.value}_${chatId}`)
-  if (currentChatId.value === chatId) {
-    if (chatList.value.length > 0) {
-      selectChat(chatList.value[0].id)
-    } else {
-      currentChatId.value = ''
-      messages.value = []
+async function deleteChat(conversationId: string): Promise<void> {
+  if (!userStore.isLoggedIn) return
+  
+  try {
+    await deleteChatApi(conversationId)
+    chatList.value = chatList.value.filter(c => c.id !== conversationId)
+    if (currentChatId.value === conversationId) {
+      createNewChat()
     }
+    message.success('删除成功')
+  } catch (e) {
+    console.error(e)
+    message.error('删除失败')
   }
 }
 
@@ -355,63 +356,117 @@ function handleKeyboardShortcut(e: KeyboardEvent): void {
   }
 }
 
-async function sendMessage(): Promise<void> {
+function sendMessage(): void {
   const content = inputMessage.value.trim()
   if (!content || isLoading.value) return
 
-  if (!currentChatId.value) {
-    currentChatId.value = Date.now().toString()
+  if (!userStore.isLoggedIn) {
+    authModalVisible.value = true
+    return
   }
 
-  const userMessage: ChatMessage = {
-    id: Date.now().toString(),
+  const isNewChat = !currentChatId.value
+  if (isNewChat) {
+    currentChatId.value = generateConversationId()
+  }
+
+  messages.value.push({
+    id: generateUUID(),
     role: 'user',
     content,
     createTime: new Date()
-  }
-  messages.value.push(userMessage)
+  })
   inputMessage.value = ''
 
   const existingChat = chatList.value.find(c => c.id === currentChatId.value)
   if (!existingChat) {
-    const newChat: ChatSession = {
+    chatList.value.unshift({
       id: currentChatId.value,
       title: content.slice(0, 20) + (content.length > 20 ? '...' : ''),
       updateTime: new Date(),
       hasMessage: true
-    }
-    chatList.value.unshift(newChat)
+    })
   } else {
     existingChat.updateTime = new Date()
   }
-  
-  saveChatHistory()
-  saveMessages()
+
+  if (isNewChat) {
+    router.push(`/chat/${agentId.value}/${currentChatId.value}`)
+  }
+
   nextTick(() => {
     scrollToBottom()
   })
 
+  if (eventSource) {
+    eventSource.abort()
+  }
+
   isLoading.value = true
 
-  try {
-    const response = await mockAIResponse(content)
-    const assistantMessage: ChatMessage = {
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: response,
-      createTime: new Date()
-    }
-    messages.value.push(assistantMessage)
-    saveMessages()
-    nextTick(() => {
-      scrollToBottom()
-    })
-  } catch (e) {
-    console.error(e)
-    message.error('发送消息失败')
-  } finally {
-    isLoading.value = false
+  const aiMessageIndex = messages.value.length
+  messages.value.push({
+    id: generateUUID(),
+    role: 'assistant',
+    content: '',
+    createTime: new Date()
+  })
+
+  const requestData: ChatMessageRequest = {
+    chatId: currentChatId.value,
+    agentId: agentId.value,
+    content: content
   }
+
+  const chatApi = agentId.value === 1 ? chatWithCSApp : chatWithMioManus
+
+  eventSource = chatApi(
+    requestData,
+    (chunk: string) => {
+      if (chunk && chunk !== '[DONE]') {
+        if (aiMessageIndex < messages.value.length) {
+          messages.value[aiMessageIndex].content += chunk
+        }
+        nextTick(() => {
+          scrollToBottom()
+        })
+      }
+    },
+    (error: Error) => {
+      console.error('SSE Error:', error)
+      message.error('发送消息失败')
+      if (aiMessageIndex < messages.value.length) {
+        messages.value.splice(aiMessageIndex, 1)
+      }
+      isLoading.value = false
+    },
+    () => {
+      isLoading.value = false
+      const chat = chatList.value.find(c => c.id === currentChatId.value)
+      if (chat && aiMessageIndex < messages.value.length) {
+        const aiContent = messages.value[aiMessageIndex].content
+        if (aiContent && aiContent.trim()) {
+          chat.title = aiContent.slice(0, 20).replace(/[#*`]/g, '').trim() + (aiContent.length > 20 ? '...' : '')
+          chat.updateTime = new Date()
+          chatList.value.sort((a: ChatSession, b: ChatSession) => b.updateTime.getTime() - a.updateTime.getTime())
+        }
+      }
+    }
+  )
+}
+
+function generateConversationId(): string {
+  const timestamp = Date.now().toString()
+  const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
+  return timestamp + random
+}
+
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0
+    const v = c === 'x' ? r : (r & 0x3 | 0x8)
+    return v.toString(16)
+  })
 }
 
 async function mockAIResponse(content: string): Promise<string> {
@@ -426,7 +481,17 @@ function scrollToBottom(): void {
 }
 
 function formatMessage(content: string): string {
-  return content.replace(/\n/g, '<br>')
+  if (!content) return ''
+  try {
+    marked.setOptions({
+      breaks: true,
+      gfm: true
+    })
+    return marked.parse(content) as string
+  } catch (e) {
+    console.error('Markdown parse error:', e)
+    return content.replace(/\n/g, '<br>')
+  }
 }
 
 function formatTime(date: Date | string): string {
@@ -470,6 +535,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyboardShortcut)
+  if (eventSource) {
+    eventSource.abort()
+  }
 })
 </script>
 
@@ -823,27 +891,83 @@ onUnmounted(() => {
             font-size: 14px;
             line-height: 1.6;
             word-break: break-word;
+
+            :deep(pre) {
+              background: #f6f8fa;
+              border-radius: 6px;
+              padding: 12px 16px;
+              overflow-x: auto;
+              margin: 8px 0;
+
+              code {
+                font-family: 'Consolas', 'Monaco', monospace;
+                font-size: 13px;
+              }
+            }
+
+            :deep(code) {
+              background: #f6f8fa;
+              padding: 2px 6px;
+              border-radius: 4px;
+              font-family: 'Consolas', 'Monaco', monospace;
+              font-size: 13px;
+            }
+
+            :deep(p) {
+              margin: 0 0 8px 0;
+
+              &:last-child {
+                margin-bottom: 0;
+              }
+            }
+
+            :deep(ul), :deep(ol) {
+              margin: 8px 0;
+              padding-left: 20px;
+            }
+
+            :deep(h1), :deep(h2), :deep(h3), :deep(h4), :deep(h5), :deep(h6) {
+              margin: 12px 0 8px 0;
+              font-weight: 600;
+            }
+
+            :deep(a) {
+              color: $primary-color;
+              text-decoration: none;
+
+              &:hover {
+                text-decoration: underline;
+              }
+            }
+
+            :deep(blockquote) {
+              border-left: 4px solid $primary-color;
+              padding-left: 12px;
+              margin: 8px 0;
+              color: #666;
+            }
           }
 
           .message-loading {
             display: flex;
-            gap: 4px;
-            padding: 12px 16px;
-            background: #f5f5f5;
-            border-radius: 12px;
+            gap: 6px;
+            padding: 8px 0;
 
             span {
               width: 8px;
               height: 8px;
-              background: #909399;
+              background: $primary-color;
               border-radius: 50%;
-              animation: bounce 1.4s infinite ease-in-out;
+              animation: loading-bounce 1.4s infinite ease-in-out both;
 
               &:nth-child(1) {
                 animation-delay: -0.32s;
               }
               &:nth-child(2) {
                 animation-delay: -0.16s;
+              }
+              &:nth-child(3) {
+                animation-delay: 0s;
               }
             }
           }
@@ -852,11 +976,21 @@ onUnmounted(() => {
         &.user .message-text {
           background: $primary-color;
           color: #fff;
+
+          :deep(code) {
+            background: rgba(255, 255, 255, 0.2);
+          }
+
+          :deep(pre) {
+            background: rgba(255, 255, 255, 0.1);
+          }
         }
 
         &.assistant .message-text {
-          background: #f5f5f5;
+          background: transparent;
           color: #202124;
+          max-width: 100%;
+          padding: 0;
         }
       }
     }
@@ -1071,12 +1205,14 @@ onUnmounted(() => {
   }
 }
 
-@keyframes bounce {
+@keyframes loading-bounce {
   0%, 80%, 100% {
     transform: scale(0);
+    opacity: 0.5;
   }
   40% {
     transform: scale(1);
+    opacity: 1;
   }
 }
 </style>

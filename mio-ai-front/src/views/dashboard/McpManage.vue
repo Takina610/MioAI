@@ -14,111 +14,112 @@
       <div class="header-line"></div>
     </div>
 
-    <template v-if="!userStore.isLoggedIn">
-      <div class="login-prompt">
-        <p class="prompt-title">登录以使用</p>
-        <p class="prompt-desc">您当前处于未登录状态，登录后可使用完整服务</p>
-        <a-button type="primary" @click="$emit('login-required')">
-          登录
-        </a-button>
-      </div>
-    </template>
+    <div class="page-content">
+      <template v-if="!userStore.isLoggedIn">
+        <div class="login-prompt">
+          <p class="prompt-title">登录以使用</p>
+          <p class="prompt-desc">您当前处于未登录状态，登录后可使用完整服务</p>
+          <a-button type="primary" @click="$emit('login-required')">
+            登录
+          </a-button>
+        </div>
+      </template>
 
-    <template v-else>
-
-      <div class="mcp-list">
-        <a-row :gutter="[16, 16]">
-          <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="mcp in mcpList" :key="mcp.id">
-            <div class="mcp-card">
-              <div class="card-header">
-                <div class="icon-wrapper">
-                  <ToolOutlined />
+      <template v-else>
+        <div class="mcp-list">
+          <a-row :gutter="[16, 16]">
+            <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="mcp in mcpList" :key="mcp.id">
+              <div class="mcp-card">
+                <div class="card-header">
+                  <div class="icon-wrapper">
+                    <ToolOutlined />
+                  </div>
+                  <a-dropdown :trigger="['click']">
+                    <a-button type="text" class="more-btn">
+                      <MoreOutlined />
+                    </a-button>
+                    <template #overlay>
+                      <a-menu>
+                        <a-menu-item key="edit" @click="showEditModal(mcp)">
+                          <EditOutlined /> 编辑
+                        </a-menu-item>
+                        <a-menu-item key="delete" @click="handleDelete(mcp)">
+                          <DeleteOutlined /> 删除
+                        </a-menu-item>
+                      </a-menu>
+                    </template>
+                  </a-dropdown>
                 </div>
-                <a-dropdown :trigger="['click']">
-                  <a-button type="text" class="more-btn">
-                    <MoreOutlined />
-                  </a-button>
-                  <template #overlay>
-                    <a-menu>
-                      <a-menu-item key="edit" @click="showEditModal(mcp)">
-                        <EditOutlined /> 编辑
-                      </a-menu-item>
-                      <a-menu-item key="delete" @click="handleDelete(mcp)">
-                        <DeleteOutlined /> 删除
-                      </a-menu-item>
-                    </a-menu>
-                  </template>
-                </a-dropdown>
-              </div>
-              <h3 class="card-title">{{ mcp.name }}</h3>
-              <p class="card-desc">{{ mcp.description || '暂无描述' }}</p>
-              <div class="card-info">
-                <div class="info-item">
-                  <span class="label">服务:</span>
-                  <span class="value">{{ mcp.serverName }}</span>
+                <h3 class="card-title">{{ mcp.name }}</h3>
+                <p class="card-desc">{{ mcp.description || '暂无描述' }}</p>
+                <div class="card-info">
+                  <div class="info-item">
+                    <span class="label">服务:</span>
+                    <span class="value">{{ mcp.serverName }}</span>
+                  </div>
+                </div>
+                <div class="card-footer">
+                  <a-tag :color="mcp.status === 1 ? 'green' : 'default'">
+                    {{ mcp.status === 1 ? '启用' : '禁用' }}
+                  </a-tag>
+                  <a-tag :color="mcp.isPublic === 1 ? 'blue' : 'default'">
+                    {{ mcp.isPublic === 1 ? '公开' : '私有' }}
+                  </a-tag>
                 </div>
               </div>
-              <div class="card-footer">
-                <a-tag :color="mcp.status === 1 ? 'green' : 'default'">
-                  {{ mcp.status === 1 ? '启用' : '禁用' }}
-                </a-tag>
-                <a-tag :color="mcp.isPublic === 1 ? 'blue' : 'default'">
-                  {{ mcp.isPublic === 1 ? '公开' : '私有' }}
-                </a-tag>
-              </div>
-            </div>
-          </a-col>
-        </a-row>
+            </a-col>
+          </a-row>
 
-        <a-empty v-if="!loading && mcpList.length === 0" description="暂无MCP工具" />
-      </div>
+          <a-empty v-if="!loading && mcpList.length === 0" description="暂无MCP工具" />
+        </div>
 
-      <a-modal
-        :open="modalVisible"
-        @update:open="modalVisible = $event"
-        :title="editingMcp ? '编辑MCP工具' : '添加MCP工具'"
-        :confirm-loading="submitLoading"
-        @ok="handleSubmit"
-        @cancel="resetForm"
-        width="600px"
-      >
-        <a-form
-          ref="formRef"
-          :model="formData"
-          :rules="rules"
-          layout="vertical"
+        <a-modal
+          :open="modalVisible"
+          @update:open="modalVisible = $event"
+          :title="editingMcp ? '编辑MCP工具' : '添加MCP工具'"
+          :confirm-loading="submitLoading"
+          @ok="handleSubmit"
+          @cancel="resetForm"
+          width="600px"
         >
-          <a-form-item name="name" label="名称">
-            <a-input :value="formData.name" @update:value="formData.name = $event" placeholder="请输入工具名称" />
-          </a-form-item>
-          <a-form-item name="description" label="描述">
-            <a-textarea
-              :value="formData.description"
-              @update:value="formData.description = $event"
-              placeholder="请输入描述"
-              :rows="3"
-            />
-          </a-form-item>
-          <a-form-item name="serverName" label="服务名称">
-            <a-input :value="formData.serverName" @update:value="formData.serverName = $event" placeholder="请输入MCP服务名称" />
-          </a-form-item>
-          <a-form-item name="toolName" label="工具名称">
-            <a-input :value="formData.toolName" @update:value="formData.toolName = $event" placeholder="请输入工具名称" />
-          </a-form-item>
-          <a-form-item name="inputSchema" label="输入Schema">
-            <a-textarea
-              :value="formData.inputSchema"
-              @update:value="formData.inputSchema = $event"
-              placeholder="请输入JSON格式的输入Schema"
-              :rows="4"
-            />
-          </a-form-item>
-          <a-form-item name="isPublic" label="是否公开">
-            <a-switch :checked="formData.isPublic" @update:checked="formData.isPublic = $event" :checked-value="1" :un-checked-value="0" />
-          </a-form-item>
-        </a-form>
-      </a-modal>
-    </template>
+          <a-form
+            ref="formRef"
+            :model="formData"
+            :rules="rules"
+            layout="vertical"
+          >
+            <a-form-item name="name" label="名称">
+              <a-input :value="formData.name" @update:value="formData.name = $event" placeholder="请输入工具名称" />
+            </a-form-item>
+            <a-form-item name="description" label="描述">
+              <a-textarea
+                :value="formData.description"
+                @update:value="formData.description = $event"
+                placeholder="请输入描述"
+                :rows="3"
+              />
+            </a-form-item>
+            <a-form-item name="serverName" label="服务名称">
+              <a-input :value="formData.serverName" @update:value="formData.serverName = $event" placeholder="请输入MCP服务名称" />
+            </a-form-item>
+            <a-form-item name="toolName" label="工具名称">
+              <a-input :value="formData.toolName" @update:value="formData.toolName = $event" placeholder="请输入工具名称" />
+            </a-form-item>
+            <a-form-item name="inputSchema" label="输入Schema">
+              <a-textarea
+                :value="formData.inputSchema"
+                @update:value="formData.inputSchema = $event"
+                placeholder="请输入JSON格式的输入Schema"
+                :rows="4"
+              />
+            </a-form-item>
+            <a-form-item name="isPublic" label="是否公开">
+              <a-switch :checked="formData.isPublic" @update:checked="formData.isPublic = $event" :checked-value="1" :un-checked-value="0" />
+            </a-form-item>
+          </a-form>
+        </a-modal>
+      </template>
+    </div>
   </div>
 </template>
 
@@ -257,14 +258,14 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .mcp-manage {
+  height: 100%;
   .page-header {
-    margin-bottom: 24px;
-
     .header-content {
+      padding: 16px 24px;
+      text-align: center;
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-bottom: 16px;
 
       .header-left {
         h2 {
@@ -292,6 +293,12 @@ onMounted(() => {
       height: 1px;
       background: #e8eaed;
     }
+  }
+
+  .page-content {
+    height: calc(100% - 132px);
+    display: flex;
+    justify-content: center;
   }
 
   .login-prompt {

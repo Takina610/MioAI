@@ -14,101 +14,102 @@
       <div class="header-line"></div>
     </div>
 
-    <template v-if="!userStore.isLoggedIn">
-      <div class="login-prompt">
-        <p class="prompt-title">登录以使用</p>
-        <p class="prompt-desc">您当前处于未登录状态，登录后可使用完整服务</p>
-        <a-button type="primary" @click="$emit('login-required')">
-          登录
-        </a-button>
-      </div>
-    </template>
-
-    <template v-else>
-
-      <div class="knowledge-list">
-        <a-row :gutter="[16, 16]">
-          <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="kb in knowledgeList" :key="kb.id">
-            <div class="knowledge-card">
-              <div class="card-header">
-                <div class="icon-wrapper">
-                  <DatabaseOutlined />
-                </div>
-                <a-dropdown :trigger="['click']">
-                  <a-button type="text" class="more-btn">
-                    <MoreOutlined />
-                  </a-button>
-                  <template #overlay>
-                    <a-menu>
-                      <a-menu-item key="edit" @click="showEditModal(kb)">
-                        <EditOutlined /> 编辑
-                      </a-menu-item>
-                      <a-menu-item key="delete" @click="handleDelete(kb)">
-                        <DeleteOutlined /> 删除
-                      </a-menu-item>
-                    </a-menu>
-                  </template>
-                </a-dropdown>
-              </div>
-              <h3 class="card-title">{{ kb.name }}</h3>
-              <p class="card-desc">{{ kb.description || '暂无描述' }}</p>
-              <div class="card-stats">
-                <div class="stat-item">
-                  <FileTextOutlined />
-                  <span>{{ kb.documentCount || 0 }} 文档</span>
-                </div>
-              </div>
-              <div class="card-footer">
-                <a-tag :color="kb.status === 1 ? 'green' : 'default'">
-                  {{ kb.status === 1 ? '启用' : '禁用' }}
-                </a-tag>
-                <span class="create-time">{{ formatDate(kb.createTime) }}</span>
-              </div>
+    <div class="page-content">
+      <template v-if="!userStore.isLoggedIn">
+            <div class="login-prompt">
+              <p class="prompt-title">登录以使用</p>
+              <p class="prompt-desc">您当前处于未登录状态，登录后可使用完整服务</p>
+              <a-button type="primary" @click="$emit('login-required')">
+                登录
+              </a-button>
             </div>
-          </a-col>
-        </a-row>
+      </template>
 
-        <a-empty v-if="!loading && knowledgeList.length === 0" description="暂无知识库" />
-      </div>
+      <template v-else>
+        <div class="knowledge-list">
+          <a-row :gutter="[16, 16]">
+            <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="kb in knowledgeList" :key="kb.id">
+              <div class="knowledge-card">
+                <div class="card-header">
+                  <div class="icon-wrapper">
+                    <DatabaseOutlined />
+                  </div>
+                  <a-dropdown :trigger="['click']">
+                    <a-button type="text" class="more-btn">
+                      <MoreOutlined />
+                    </a-button>
+                    <template #overlay>
+                      <a-menu>
+                        <a-menu-item key="edit" @click="showEditModal(kb)">
+                          <EditOutlined /> 编辑
+                        </a-menu-item>
+                        <a-menu-item key="delete" @click="handleDelete(kb)">
+                          <DeleteOutlined /> 删除
+                        </a-menu-item>
+                      </a-menu>
+                    </template>
+                  </a-dropdown>
+                </div>
+                <h3 class="card-title">{{ kb.name }}</h3>
+                <p class="card-desc">{{ kb.description || '暂无描述' }}</p>
+                <div class="card-stats">
+                  <div class="stat-item">
+                    <FileTextOutlined />
+                    <span>{{ kb.documentCount || 0 }} 文档</span>
+                  </div>
+                </div>
+                <div class="card-footer">
+                  <a-tag :color="kb.status === 1 ? 'green' : 'default'">
+                    {{ kb.status === 1 ? '启用' : '禁用' }}
+                  </a-tag>
+                  <span class="create-time">{{ formatDate(kb.createTime) }}</span>
+                </div>
+              </div>
+            </a-col>
+          </a-row>
 
-      <a-modal
-        :open="modalVisible"
-        @update:open="modalVisible = $event"
-        :title="editingKb ? '编辑知识库' : '创建知识库'"
-        :confirm-loading="submitLoading"
-        @ok="handleSubmit"
-        @cancel="resetForm"
-        width="600px"
-      >
-        <a-form
-          ref="formRef"
-          :model="formData"
-          :rules="rules"
-          layout="vertical"
+          <a-empty v-if="!loading && knowledgeList.length === 0" description="暂无知识库" />
+        </div>
+
+        <a-modal
+          :open="modalVisible"
+          @update:open="modalVisible = $event"
+          :title="editingKb ? '编辑知识库' : '创建知识库'"
+          :confirm-loading="submitLoading"
+          @ok="handleSubmit"
+          @cancel="resetForm"
+          width="600px"
         >
-          <a-form-item name="name" label="名称">
-            <a-input :value="formData.name" @update:value="formData.name = $event" placeholder="请输入知识库名称" />
-          </a-form-item>
-          <a-form-item name="description" label="描述">
-            <a-textarea
-              :value="formData.description"
-              @update:value="formData.description = $event"
-              placeholder="请输入描述"
-              :rows="3"
-            />
-          </a-form-item>
-          <a-form-item name="type" label="类型">
-            <a-select :value="formData.type" @update:value="formData.type = $event" placeholder="请选择类型">
-              <a-select-option :value="1">文档型</a-select-option>
-              <a-select-option :value="2">问答型</a-select-option>
-            </a-select>
-          </a-form-item>
-          <a-form-item name="embeddingModel" label="嵌入模型">
-            <a-input :value="formData.embeddingModel" @update:value="formData.embeddingModel = $event" placeholder="请输入嵌入模型名称" />
-          </a-form-item>
-        </a-form>
-      </a-modal>
-    </template>
+          <a-form
+            ref="formRef"
+            :model="formData"
+            :rules="rules"
+            layout="vertical"
+          >
+            <a-form-item name="name" label="名称">
+              <a-input :value="formData.name" @update:value="formData.name = $event" placeholder="请输入知识库名称" />
+            </a-form-item>
+            <a-form-item name="description" label="描述">
+              <a-textarea
+                :value="formData.description"
+                @update:value="formData.description = $event"
+                placeholder="请输入描述"
+                :rows="3"
+              />
+            </a-form-item>
+            <a-form-item name="type" label="类型">
+              <a-select :value="formData.type" @update:value="formData.type = $event" placeholder="请选择类型">
+                <a-select-option :value="1">文档型</a-select-option>
+                <a-select-option :value="2">问答型</a-select-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item name="embeddingModel" label="嵌入模型">
+              <a-input :value="formData.embeddingModel" @update:value="formData.embeddingModel = $event" placeholder="请输入嵌入模型名称" />
+            </a-form-item>
+          </a-form>
+        </a-modal>
+      </template>
+    </div>    
   </div>
 </template>
 
@@ -251,14 +252,14 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .knowledge-manage {
+  height: 100%;
   .page-header {
-    margin-bottom: 24px;
-
     .header-content {
+      padding: 16px 24px;
+      text-align: center;
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-bottom: 16px;
 
       .header-left {
         h2 {
@@ -286,6 +287,12 @@ onMounted(() => {
       height: 1px;
       background: #e8eaed;
     }
+  }
+
+  .page-content {
+    height: calc(100% - 132px);
+    display: flex;
+    justify-content: center;
   }
 
   .login-prompt {

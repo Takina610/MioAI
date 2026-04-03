@@ -34,7 +34,7 @@ public class CSAppController {
      * @param chatMessageRequest
      * @return
      */
-    @GetMapping("/chat")
+    @PostMapping("/chat")
     @LogInfo
     public SseEmitter doChat(@RequestBody ChatMessageRequest chatMessageRequest, HttpServletRequest request) {
         // 创建 ChatVO

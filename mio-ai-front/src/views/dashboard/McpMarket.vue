@@ -1,39 +1,43 @@
 <template>
   <div class="mcp-market">
     <div class="page-header">
-      <h2>MCP广场</h2>
-      <p class="desc">探索公开的MCP工具</p>
+      <div class="header-content">
+        <h2>MCP广场</h2>
+        <p class="desc">探索公开的MCP工具</p>
+      </div>
       <div class="header-line"></div>
     </div>
 
+    <div class="page-content" v-if="!loading && mcpList.length === 0">
+      <a-empty  description="暂无公开MCP工具" />
+    </div>
+    
     <div class="mcp-list">
       <a-row :gutter="[16, 16]">
-        <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="mcp in mcpList" :key="mcp.id">
-          <div class="mcp-card" @click="viewTool(mcp)">
-            <div class="card-header">
-              <div class="icon-wrapper">
-                <ToolOutlined />
-              </div>
-            </div>
-            <h3 class="card-title">{{ mcp.name }}</h3>
-            <p class="card-desc">{{ mcp.description || '暂无描述' }}</p>
-            <div class="card-info">
-              <div class="info-item">
-                <span class="label">服务:</span>
-                <span class="value">{{ mcp.serverName || '-' }}</span>
-              </div>
-            </div>
-            <div class="card-footer">
-              <span class="author">{{ mcp.userName || '匿名' }}</span>
-              <a-tag :color="mcp.isPublic === 1 ? 'green' : 'orange'">
-                {{ mcp.isPublic === 1 ? '公开' : '私有' }}
-              </a-tag>
+      <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="mcp in mcpList" :key="mcp.id">
+        <div class="mcp-card" @click="viewTool(mcp)">
+          <div class="card-header">
+            <div class="icon-wrapper">
+              <ToolOutlined />
             </div>
           </div>
-        </a-col>
+          <h3 class="card-title">{{ mcp.name }}</h3>
+          <p class="card-desc">{{ mcp.description || '暂无描述' }}</p>
+          <div class="card-info">
+            <div class="info-item">
+              <span class="label">服务:</span>
+              <span class="value">{{ mcp.serverName || '-' }}</span>
+            </div>
+          </div>
+          <div class="card-footer">
+            <span class="author">{{ mcp.userName || '匿名' }}</span>
+            <a-tag :color="mcp.isPublic === 1 ? 'green' : 'orange'">
+              {{ mcp.isPublic === 1 ? '公开' : '私有' }}
+            </a-tag>
+          </div>
+        </div>
+      </a-col>
       </a-row>
-
-      <a-empty v-if="!loading && mcpList.length === 0" description="暂无公开MCP工具" />
     </div>
   </div>
 </template>
@@ -75,26 +79,34 @@ function viewTool(tool: McpToolWithUser): void {
 
 <style lang="scss" scoped>
 .mcp-market {
+  height: 100%;
   .page-header {
-    margin-bottom: 24px;
+    .header-content {
+      padding: 10px 24px;
+      h2 {
+        font-size: 24px;
+        font-weight: 600;
+        color: #202124;
+        margin-bottom: 8px;
+      }
 
-    h2 {
-      font-size: 24px;
-      font-weight: 600;
-      color: #202124;
-      margin-bottom: 8px;
+      .desc {
+        color: #5f6368;
+        font-size: 14px;
+        margin-bottom: 0px;
+      }
     }
-
-    .desc {
-      color: #5f6368;
-      font-size: 14px;
-      margin-bottom: 16px;
-    }
-
     .header-line {
       height: 1px;
       background: #e8eaed;
     }
+  }
+
+  .page-content {
+    height: calc(100% - 140px);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
   }
 
   .mcp-list {

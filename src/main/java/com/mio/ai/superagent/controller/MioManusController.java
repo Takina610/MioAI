@@ -40,7 +40,7 @@ public class MioManusController {
      * @param chatMessageRequest
      * @return
      */
-    @GetMapping("/chat")
+    @PostMapping("/chat")
     public SseEmitter doChatWithManus(@RequestBody ChatMessageRequest chatMessageRequest, HttpServletRequest request) {
         ChatVO chatVO = new ChatVO();
         chatVO.setChatId(chatMessageRequest.getChatId());

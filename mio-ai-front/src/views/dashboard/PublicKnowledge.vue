@@ -1,32 +1,38 @@
 <template>
   <div class="public-knowledge">
     <div class="page-header">
-      <h2>公共知识库</h2>
-      <p class="desc">探索公开的知识库资源</p>
+      <div class="header-content">
+        <h2>公共知识库</h2>
+        <p class="desc">探索公开的知识库资源</p>
+      </div>
       <div class="header-line"></div>
     </div>
 
-    <a-row :gutter="[16, 16]">
-      <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="kb in knowledgeList" :key="kb.id">
-        <a-card hoverable class="kb-card" @click="viewKnowledge(kb)">
-          <div class="card-header">
-            <DatabaseOutlined class="header-icon" />
-            <h3>{{ kb.name }}</h3>
-          </div>
-          <p class="card-desc">{{ kb.description || '暂无描述' }}</p>
-          <div class="card-footer">
-            <span class="author">
-              <UserOutlined /> {{ kb.userName || '匿名' }}
-            </span>
-            <span class="docs">
-              <FileOutlined /> {{ kb.docCount || 0 }} 文档
-            </span>
-          </div>
-        </a-card>
-      </a-col>
-    </a-row>
+    <div class="page-content">
+      <a-row :gutter="[16, 16]">
+        <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="kb in knowledgeList" :key="kb.id">
+          <a-card hoverable class="kb-card" @click="viewKnowledge(kb)">
+            <div class="card-header">
+              <DatabaseOutlined class="header-icon" />
+              <h3>{{ kb.name }}</h3>
+            </div>
+            <p class="card-desc">{{ kb.description || '暂无描述' }}</p>
+            <div class="card-footer">
+              <span class="author">
+                <UserOutlined /> {{ kb.userName || '匿名' }}
+              </span>
+              <span class="docs">
+                <FileOutlined /> {{ kb.docCount || 0 }} 文档
+              </span>
+            </div>
+          </a-card>
+        </a-col>
+      </a-row>
 
-    <a-empty v-if="!loading && knowledgeList.length === 0" description="暂无公开知识库" />
+      <a-empty v-if="!loading && knowledgeList.length === 0" description="暂无公开知识库" />
+    </div>
+
+
   </div>
 </template>
 
@@ -67,25 +73,33 @@ function viewKnowledge(kb: KnowledgeBaseWithUser): void {
 
 <style lang="scss" scoped>
 .public-knowledge {
+  height: 100%;
   .page-header {
-    margin-bottom: 24px;
+    .header-content {
+      padding: 10px 24px;
+      h2 {
+        font-size: 24px;
+        font-weight: 600;
+        color: #202124;
+      }
 
-    h2 {
-      font-size: 24px;
-      font-weight: 600;
-      color: #202124;
-      margin-bottom: 8px;
+      .desc {
+        color: #5f6368;
+        font-size: 14px;
+        margin-bottom: 0px;
+      }
     }
-
-    .desc {
-      color: #5f6368;
-      font-size: 14px;
-    }
-
     .header-line {
       height: 1px;
       background: #e8eaed;
     }
+  }
+
+  .page-content {
+    height: calc(100% - 140px);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
   }
 
   .kb-card {

@@ -139,9 +139,6 @@
 
     <div class="main-container">
       <header class="header">
-        <div class="header-left">
-          <h1 class="page-title">{{ pageTitle }}</h1>
-        </div>
       </header>
 
       <main class="content">
@@ -478,20 +475,11 @@ async function handleLogout(): Promise<void> {
   display: flex;
   justify-content: space-between;
   align-items: center;
-
-  .header-left {
-    .page-title {
-      font-size: 20px;
-      font-weight: 600;
-      color: #202124;
-      margin-bottom: 0px;
-    }
-  }
 }
 
 .content {
   flex: 1;
-  padding: 24px;
+  // padding: 24px;
   overflow-y: auto;
   background: #ffffff;
 }

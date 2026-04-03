@@ -14,111 +14,112 @@
       <div class="header-line"></div>
     </div>
 
-    <template v-if="!userStore.isLoggedIn">
-      <div class="login-prompt">
-        <p class="prompt-title">登录以使用</p>
-        <p class="prompt-desc">您当前处于未登录状态，登录后可使用完整服务</p>
-        <a-button type="primary" @click="$emit('login-required')">
-          登录
-        </a-button>
-      </div>
-    </template>
+    <div class="page-content">
+      <template v-if="!userStore.isLoggedIn">
+        <div class="login-prompt">
+          <p class="prompt-title">登录以使用</p>
+          <p class="prompt-desc">您当前处于未登录状态，登录后可使用完整服务</p>
+          <a-button type="primary" @click="$emit('login-required')">
+            登录
+          </a-button>
+        </div>
+      </template>
 
-    <template v-else>
-
-      <div class="agent-list">
-        <a-row :gutter="[16, 16]">
-          <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="agent in agentList" :key="agent.id">
-            <div class="agent-card">
-              <div class="card-header">
-                <a-avatar :size="48" :src="agent.avatar">
-                  {{ agent.name?.charAt(0)?.toUpperCase() }}
-                </a-avatar>
-                <a-dropdown :trigger="['click']" @click.stop>
-                  <a-button type="text" class="more-btn">
-                    <MoreOutlined />
+      <template v-else>
+        <div class="agent-list">
+          <a-row :gutter="[16, 16]">
+            <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="agent in agentList" :key="agent.id">
+              <div class="agent-card">
+                <div class="card-header">
+                  <a-avatar :size="48" :src="agent.avatar">
+                    {{ agent.name?.charAt(0)?.toUpperCase() }}
+                  </a-avatar>
+                  <a-dropdown :trigger="['click']" @click.stop>
+                    <a-button type="text" class="more-btn">
+                      <MoreOutlined />
+                    </a-button>
+                    <template #overlay>
+                      <a-menu>
+                        <a-menu-item key="chat" @click="startChat(agent)">
+                          <MessageOutlined /> 开始对话
+                        </a-menu-item>
+                        <a-menu-item key="edit" @click="showEditModal(agent)">
+                          <EditOutlined /> 编辑
+                        </a-menu-item>
+                        <a-menu-item key="delete" @click="handleDelete(agent)">
+                          <DeleteOutlined /> 删除
+                        </a-menu-item>
+                      </a-menu>
+                    </template>
+                  </a-dropdown>
+                </div>
+                <h3 class="card-title">{{ agent.name }}</h3>
+                <p class="card-desc">{{ agent.description || '暂无描述' }}</p>
+                <div class="card-footer">
+                  <a-tag :color="getTypeColor(agent.type)">
+                    {{ getTypeName(agent.type) }}
+                  </a-tag>
+                  <span class="create-time">{{ formatDate(agent.createTime) }}</span>
+                </div>
+                <div class="card-actions">
+                  <a-button type="primary" size="small" @click="startChat(agent)">
+                    开始对话
                   </a-button>
-                  <template #overlay>
-                    <a-menu>
-                      <a-menu-item key="chat" @click="startChat(agent)">
-                        <MessageOutlined /> 开始对话
-                      </a-menu-item>
-                      <a-menu-item key="edit" @click="showEditModal(agent)">
-                        <EditOutlined /> 编辑
-                      </a-menu-item>
-                      <a-menu-item key="delete" @click="handleDelete(agent)">
-                        <DeleteOutlined /> 删除
-                      </a-menu-item>
-                    </a-menu>
-                  </template>
-                </a-dropdown>
+                </div>
               </div>
-              <h3 class="card-title">{{ agent.name }}</h3>
-              <p class="card-desc">{{ agent.description || '暂无描述' }}</p>
-              <div class="card-footer">
-                <a-tag :color="getTypeColor(agent.type)">
-                  {{ getTypeName(agent.type) }}
-                </a-tag>
-                <span class="create-time">{{ formatDate(agent.createTime) }}</span>
-              </div>
-              <div class="card-actions">
-                <a-button type="primary" size="small" @click="startChat(agent)">
-                  开始对话
-                </a-button>
-              </div>
-            </div>
-          </a-col>
-        </a-row>
+            </a-col>
+          </a-row>
 
-        <a-empty v-if="!loading && agentList.length === 0" description="暂无智能体" />
-      </div>
+          <a-empty v-if="!loading && agentList.length === 0" description="暂无智能体" />
+        </div>
 
-      <a-modal
-        :open="modalVisible"
-        @update:open="modalVisible = $event"
-        :title="editingAgent ? '编辑智能体' : '创建智能体'"
-        :confirm-loading="submitLoading"
-        @ok="handleSubmit"
-        @cancel="resetForm"
-        width="600px"
-      >
-        <a-form
-          ref="formRef"
-          :model="formData"
-          :rules="rules"
-          layout="vertical"
+        <a-modal
+          :open="modalVisible"
+          @update:open="modalVisible = $event"
+          :title="editingAgent ? '编辑智能体' : '创建智能体'"
+          :confirm-loading="submitLoading"
+          @ok="handleSubmit"
+          @cancel="resetForm"
+          width="600px"
         >
-          <a-form-item name="name" label="名称">
-            <a-input :value="formData.name" @update:value="formData.name = $event" placeholder="请输入智能体名称" />
-          </a-form-item>
-          <a-form-item name="description" label="描述">
-            <a-textarea
-              :value="formData.description"
-              @update:value="formData.description = $event"
-              placeholder="请输入描述"
-              :rows="3"
-            />
-          </a-form-item>
-          <a-form-item name="type" label="类型">
-            <a-select :value="formData.type" @update:value="formData.type = $event" placeholder="请选择类型">
-              <a-select-option :value="0">内置智能体</a-select-option>
-              <a-select-option :value="1">自定义智能体</a-select-option>
-            </a-select>
-          </a-form-item>
-          <a-form-item name="systemPrompt" label="系统提示词">
-            <a-textarea
-              :value="formData.systemPrompt"
-              @update:value="formData.systemPrompt = $event"
-              placeholder="请输入系统提示词"
-              :rows="5"
-            />
-          </a-form-item>
-          <a-form-item name="isPublic" label="是否公开">
-            <a-switch :checked="formData.isPublic" @update:checked="formData.isPublic = $event" :checked-value="1" :un-checked-value="0" />
-          </a-form-item>
-        </a-form>
-      </a-modal>
-    </template>
+          <a-form
+            ref="formRef"
+            :model="formData"
+            :rules="rules"
+            layout="vertical"
+          >
+            <a-form-item name="name" label="名称">
+              <a-input :value="formData.name" @update:value="formData.name = $event" placeholder="请输入智能体名称" />
+            </a-form-item>
+            <a-form-item name="description" label="描述">
+              <a-textarea
+                :value="formData.description"
+                @update:value="formData.description = $event"
+                placeholder="请输入描述"
+                :rows="3"
+              />
+            </a-form-item>
+            <a-form-item name="type" label="类型">
+              <a-select :value="formData.type" @update:value="formData.type = $event" placeholder="请选择类型">
+                <a-select-option :value="0">内置智能体</a-select-option>
+                <a-select-option :value="1">自定义智能体</a-select-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item name="systemPrompt" label="系统提示词">
+              <a-textarea
+                :value="formData.systemPrompt"
+                @update:value="formData.systemPrompt = $event"
+                placeholder="请输入系统提示词"
+                :rows="5"
+              />
+            </a-form-item>
+            <a-form-item name="isPublic" label="是否公开">
+              <a-switch :checked="formData.isPublic" @update:checked="formData.isPublic = $event" :checked-value="1" :un-checked-value="0" />
+            </a-form-item>
+          </a-form>
+        </a-modal>
+      </template>
+    </div>
   </div>
 </template>
 
@@ -280,14 +281,14 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .agent-manage {
+  height: 100%;
   .page-header {
-    margin-bottom: 24px;
-
     .header-content {
+      padding: 16px 24px;
+      text-align: center;
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-bottom: 16px;
 
       .header-left {
         h2 {
@@ -315,6 +316,12 @@ onMounted(() => {
       height: 1px;
       background: #e8eaed;
     }
+  }
+
+  .page-content {
+    height: calc(100% - 132px);
+    display: flex;
+    justify-content: center;
   }
 
   .login-prompt {

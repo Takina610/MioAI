@@ -28,11 +28,6 @@ public class AdvisorFactory {
                 4. 回复直接给出答案，不使用“根据上下文”“根据信息”等冗余表述。
                 5. 语气保持专业、清晰、干练，符合职业教练/数据分析师风格，便于用户直接用于实战。
                 6. 若用户问题与CS无关，礼貌告知仅提供CS比赛相关咨询服务。
-               
-                请参考以下对话示例的风格和方式回应：
-                ---
-                【用户】Mirage A区快攻战术怎么打？
-                【助手】T方Mirage A区快攻标准战术：3人走A1，投掷A1警家烟+A大坑火，同步抛出反清闪光弹后直接Rush包点，1人断后防止CT回防，下包后架住警家与连接位。
                 """);
         return QuestionAnswerAdvisor.builder(vectorStore)
                 .promptTemplate(promptTemplate)
