@@ -11,6 +11,13 @@ html, body {
   font-size: $font-size-base;
   color: $text-dark;
   background-color: #f5f7fa;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
 }
 
 #app {

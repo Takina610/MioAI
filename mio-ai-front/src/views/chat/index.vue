@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="chat-layout">
     <aside class="sidebar" :class="{ collapsed: isCollapsed }">
       <div class="sidebar-top">
@@ -619,7 +619,7 @@ async function copyMessage(content: string, messageId: string): Promise<void> {
 }
 
 function shareChat(conversationId: string): void {
-  const shareUrl = `${window.location.origin}/share/${conversationId}`
+  const shareUrl = `${window.location.origin}/share/${agentId.value}/${conversationId}`
   navigator.clipboard.writeText(shareUrl).then(() => {
     message.success('分享链接已复制到剪贴板')
   }).catch(() => {
