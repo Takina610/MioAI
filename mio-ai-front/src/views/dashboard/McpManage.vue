@@ -299,6 +299,7 @@ onMounted(() => {
     height: calc(100% - 132px);
     display: flex;
     justify-content: center;
+    flex-direction: column;
   }
 
   .login-prompt {

@@ -24,12 +24,7 @@ public class ChatHistoryRepositoryImpl implements ChatHistoryRepository {
 
     @Override
     public void save(ChatVO chatVO) {
-        // 1. 生成标题（取前10字）
-        String title = chatVO.getMessage().length() > 10
-                ? chatVO.getMessage().substring(0, 10)
-                : chatVO.getMessage();
-
-        // 2. 根据 conversationId 查询是否已存在
+        // 1. 根据 conversationId 查询是否已存在
         QueryWrapper<ChatConversationDO> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("conversation_id", chatVO.getChatId());
         ChatConversationDO exist = chatConversationDOMapper.selectOne(queryWrapper);
@@ -39,10 +34,8 @@ public class ChatHistoryRepositoryImpl implements ChatHistoryRepository {
             newChat.setConversationId(chatVO.getChatId());
             newChat.setUserId(chatVO.getUserId());
             newChat.setAgentId(chatVO.getAgentId());
-            newChat.setTitle(title);
             chatConversationDOMapper.insert(newChat);
         } else {
-            exist.setTitle(title);
             exist.setUpdateTime(new Date());
             chatConversationDOMapper.updateById(exist);
         }

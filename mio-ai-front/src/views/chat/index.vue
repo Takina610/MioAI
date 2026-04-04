@@ -244,7 +244,7 @@ import { message } from 'ant-design-vue'
 import { marked } from 'marked'
 import { useUserStore } from '@/store/user'
 import { getAgentById } from '@/api/agent'
-import { chatWithCSApp } from '@/api/chat'
+import { chatWithCSApp, generateTitle, chatWithDefaultAgent } from '@/api/chat'
 import { getChatIdsPage, getChatHistory, deleteChat as deleteChatApi } from '@/api/chatMemory'
 import type { Agent } from '@/types'
 import AuthModal from '@/components/AuthModal.vue'
@@ -491,16 +491,23 @@ function sendMessage(): void {
   const content = inputMessage.value.trim()
   if (!content || isLoading.value) return
 
-  if (!userStore.isLoggedIn) {
+  const isDefaultAgent = agentId.value === 0
+
+  if (!isDefaultAgent && !userStore.isLoggedIn) {
     authModalVisible.value = true
     return
   }
 
   const isNewChat = !currentChatId.value
-  if (isNewChat) {
+  if (isNewChat && !isDefaultAgent) {
     currentChatId.value = generateConversationId()
   }
+  
+  if (isNewChat && isDefaultAgent) {
+    currentChatId.value = 'temp_' + Date.now()
+  }
 
+  const userMessageIndex = messages.value.length
   messages.value.push({
     id: generateUUID(),
     role: 'user',
@@ -510,25 +517,27 @@ function sendMessage(): void {
 
   inputMessage.value = ''
 
-  const existingChatIndex = chatList.value.findIndex(c => c.id === currentChatId.value)
-  if (existingChatIndex === -1) {
-    chatList.value.unshift({
-      id: currentChatId.value,
-      title: content.slice(0, 20) + (content.length > 20 ? '...' : ''),
-      updateTime: new Date(),
-      hasMessage: true
-    })
-  } else {
-    const existingChat = chatList.value[existingChatIndex]
-    existingChat.updateTime = new Date()
-    if (existingChatIndex > 0) {
-      chatList.value.splice(existingChatIndex, 1)
-      chatList.value.unshift(existingChat)
+  if (!isDefaultAgent) {
+    const existingChatIndex = chatList.value.findIndex(c => c.id === currentChatId.value)
+    if (existingChatIndex === -1) {
+      chatList.value.unshift({
+        id: currentChatId.value,
+        title: '新对话',
+        updateTime: new Date(),
+        hasMessage: true
+      })
+    } else {
+      const existingChat = chatList.value[existingChatIndex]
+      existingChat.updateTime = new Date()
+      if (existingChatIndex > 0) {
+        chatList.value.splice(existingChatIndex, 1)
+        chatList.value.unshift(existingChat)
+      }
     }
-  }
 
-  if (isNewChat) {
-    router.push(`/chat/${agentId.value}/${currentChatId.value}`)
+    if (isNewChat) {
+      router.push(`/chat/${agentId.value}/${currentChatId.value}`)
+    }
   }
 
   nextTick(() => {
@@ -552,7 +561,11 @@ function sendMessage(): void {
     eventSource.close()
   }
 
-  eventSource = chatWithCSApp(content, currentChatId.value, agentId.value, token)
+  if (isDefaultAgent) {
+    eventSource = chatWithDefaultAgent(content, currentChatId.value, agentId.value)
+  } else {
+    eventSource = chatWithCSApp(content, currentChatId.value, agentId.value, token)
+  }
 
   eventSource.onmessage = (event) => {
     const data = event.data
@@ -571,10 +584,29 @@ function sendMessage(): void {
   }
   
   eventSource.onerror = () => {
+    if (!isDefaultAgent && isNewChat) {
+      updateChatTitleWithTypewriter(content, messages.value[aiMessageIndex].content, userMessageIndex)
+    }
     isLoading.value = false
     if (eventSource) {
       eventSource.close()
     }
+  }
+}
+
+async function updateChatTitleWithTypewriter(userContent: string, aiContent: string, chatIndex: number): Promise<void> {
+    console.log(aiContent + userContent)
+
+  const title = await generateTitle(agentId.value, currentChatId.value, userContent + '\n' + aiContent)
+  
+  const chatItem = chatList.value.find(c => c.id === currentChatId.value)
+  if (!chatItem) return
+  
+  chatItem.title = ''
+  
+  for (let i = 0; i < title.length; i++) {
+    chatItem.title += title[i]
+    await new Promise(resolve => setTimeout(resolve, 50))
   }
 }
 

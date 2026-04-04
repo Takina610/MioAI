@@ -96,9 +96,8 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach((to) => {
   document.title = to.meta.title ? `${to.meta.title} - MioAI` : 'MioAI'
-  next()
 })
 
 export default router

@@ -1,4 +1,5 @@
 import type { ChatMessageRequest } from '@/types'
+import axios from 'axios'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -51,11 +52,35 @@ export const connectSSE = (
   return eventSource
 }
 
-export const chatWithCSApp = (content: string, chatId: string, agentId: number, token: string  // 添加 token 参数
+export const chatWithCSApp = (content: string, chatId: string, agentId: number, token: string
 ): EventSource => {
   return connectSSE('/cs/chat', { content, chatId, agentId, token })
 }
 
+export const chatWithDefaultAgent = (content: string, chatId: string, agentId: number
+): EventSource => {
+  return connectSSE('/chat', { content, chatId, agentId })
+}
+
+export const generateTitle = async (agentId: number, conversationId: string, content: string): Promise<string> => {
+  try {
+    console.log(content)
+    const response = await axios.get(`${BASE_URL}/summary`, {
+      params: {
+        agentId,
+        conversationId,
+        content
+      }
+    })
+    return response.data || '新对话'
+  } catch (error) {
+    console.error('Failed to generate title:', error)
+    return '新对话'
+  }
+}
+
 export default {
-  chatWithCSApp
+  chatWithCSApp,
+  chatWithDefaultAgent,
+  generateTitle
 }

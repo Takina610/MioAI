@@ -24,18 +24,18 @@ class R2UtilTest {
     @Test
     void uploadFile() throws IOException {
         // 读取 rag 目录下的 md 文件
-        ClassPathResource resource = new ClassPathResource("1.png");
+        ClassPathResource resource = new ClassPathResource("0.png");
 
         try (InputStream inputStream = resource.getInputStream()) {
             // 转换为 MultipartFile
             MultipartFile file = new MockMultipartFile(
                     "file",
-                    "1.png",
+                    "0.png",
                     "image/png",
                     inputStream
             );
 
-            String fileUrl = r2UploadUtil.uploadFile(file, FileType.AGENT_AVATAR, "1");
+            String fileUrl = r2UploadUtil.uploadFile(file, FileType.AGENT_AVATAR, "0");
 
             System.out.println("上传成功: " + fileUrl);
         }

@@ -28,7 +28,7 @@
                 <span class="time">{{ formatTime(agent.createTime) }}</span>
               </div>
               <div class="card-actions">
-                <a-button type="primary" size="small" @click="startChat(agent)">
+                <a-button class="chat-btn" type="primary" size="small" @click="startChat(agent)">
                   开始对话
                 </a-button>
               </div>
@@ -187,10 +187,16 @@ function formatTime(time: string): string {
     }
 
     .card-actions {
-      display: flex;
-      justify-content: flex-end;
+      .chat-btn {
+        width: 100%;
+        height: 35px;
+        border-radius: 18px;
+        font-size: 14px;
+        font-weight: 600;
+        color: #fff;
+      }
 
-      :deep(.ant-btn-primary) {
+      :deep(.chat-btn) {
         background: $primary-color;
         border-color: $primary-color;
 
