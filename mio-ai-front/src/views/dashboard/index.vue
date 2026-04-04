@@ -20,26 +20,26 @@
       
       <div class="sidebar-menu">
         <div class="menu-group">
-          <div class="menu-group-title" v-show="!isCollapsed">应用</div>
+          <div class="menu-group-title" v-show="!isCollapsed">智能体</div>
           <div class="menu-items">
-            <a-tooltip :title="isCollapsed ? '应用广场' : ''" placement="right">
+            <a-tooltip :title="isCollapsed ? '智能体广场' : ''" placement="right">
               <div 
                 class="menu-item" 
                 :class="{ active: isActive('agent-market') }"
                 @click="navigateTo('agent-market')"
               >
                 <RobotOutlined class="menu-icon" />
-                <span class="menu-text" v-show="!isCollapsed">应用广场</span>
+                <span class="menu-text" v-show="!isCollapsed">智能体广场</span>
               </div>
             </a-tooltip>
-            <a-tooltip :title="isCollapsed ? '应用管理' : ''" placement="right">
+            <a-tooltip :title="isCollapsed ? '智能体管理' : ''" placement="right">
               <div 
                 class="menu-item" 
                 :class="{ active: isActive('agents') }"
                 @click="navigateTo('agents')"
               >
                 <AppstoreOutlined class="menu-icon" />
-                <span class="menu-text" v-show="!isCollapsed">应用管理</span>
+                <span class="menu-text" v-show="!isCollapsed">智能体管理</span>
               </div>
             </a-tooltip>
           </div>
@@ -107,7 +107,7 @@
               </a-avatar>
               <div class="user-detail" v-show="!isCollapsed">
                 <span class="user-name">{{ userStore.userName }}</span>
-                <span class="user-role">{{ userStore.userInfo?.userRole === 'admin' ? '管理员' : '普通用户' }}</span>
+                <span class="user-role">{{ userStore.userInfo?.userProfile }}</span>
               </div>
             </div>
             <template #overlay>
@@ -186,15 +186,15 @@ const authModalVisible = ref<boolean>(false)
 
 const pageTitle = computed<string>(() => {
   const titles: Record<MenuKey, string> = {
-    'agent-market': '应用广场',
-    'agents': '应用管理',
+    'agent-market': '智能体广场',
+    'agents': '智能体管理',
     'mcp-market': 'MCP广场',
     'mcp': 'MCP管理',
     'public-knowledge': '公共知识库',
     'knowledge': '知识库管理',
     'profile': '个人中心'
   }
-  return titles[currentPath.value] || '应用广场'
+  return titles[currentPath.value] || '智能体广场'
 })
 
 watch(
@@ -417,6 +417,7 @@ async function handleLogout(): Promise<void> {
         }
 
         .user-role {
+          margin-top: 4px;
           font-size: 12px;
           color: #909399;
         }

@@ -2,8 +2,8 @@
   <div class="agent-market">
     <div class="page-header">
       <div class="header-content">
-        <h2>应用广场</h2>
-        <p class="desc">探索公开的智能体应用</p>
+        <h2>智能体广场</h2>
+        <p class="desc">探索公开的智能体</p>
       </div>
       <div class="header-line"></div>
     </div>

@@ -1,5 +1,6 @@
 package com.mio.ai.superagent.controller;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mio.ai.common.aop.annotation.LogInfo;
 import com.mio.ai.common.common.BaseResponse;
 import com.mio.ai.common.exception.BusinessException;
@@ -52,6 +53,26 @@ public class ChatMemoryController {
     }
 
     /**
+     * 分页获取会话列表
+     * @param agentId 智能体ID
+     * @param current 当前页
+     * @param size 每页大小
+     * @param request HTTP请求
+     * @return 分页会话列表
+     */
+    @GetMapping("/getChatIdsPage/{agentId}")
+    @LogInfo
+    public BaseResponse<Page<ChatConversationDO>> getChatIdsPage(
+            @PathVariable String agentId,
+            @RequestParam(defaultValue = "1") long current,
+            @RequestParam(defaultValue = "10") long size,
+            HttpServletRequest request) {
+        return ResultUtils
+                .success(chatHistoryRepository
+                        .getChatsPage(redisComponent.getUserId(request.getHeader("token")), agentId, current, size));
+    }
+
+    /**
      * 获取会话记录
      * @param chatId
      */
@@ -59,6 +80,9 @@ public class ChatMemoryController {
     @LogInfo
     public BaseResponse<List<MessageVO>> getChatHistory(@PathVariable String chatId){
         List<Message> messages = chatMemory.get(chatId);
+        if (messages.isEmpty()) {
+            return ResultUtils.success(null);
+        }
         return ResultUtils
                 .success(messages.stream().map(MessageVO::new).collect(Collectors.toList()));
     }

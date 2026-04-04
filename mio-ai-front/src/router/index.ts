@@ -27,6 +27,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '智能体对话', requiresAuth: false }
   },
   {
+    path: '/share/:conversationId',
+    name: 'ShareConversation',
+    component: () => import('@/views/share/index.vue'),
+    meta: { title: '分享对话', requiresAuth: false }
+  },
+  {
     path: '/dashboard',
     name: 'Dashboard',
     component: () => import('@/views/dashboard/index.vue'),

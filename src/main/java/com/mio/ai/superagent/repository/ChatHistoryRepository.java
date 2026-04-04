@@ -1,5 +1,6 @@
 package com.mio.ai.superagent.repository;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mio.ai.superagent.model.entity.ChatConversationDO;
 import com.mio.ai.superagent.model.vo.ChatVO;
 
@@ -17,4 +18,6 @@ public interface ChatHistoryRepository {
     void clearByChatId(String chatId);
 
     List<ChatConversationDO> getChats(Long userId, String agentId);
+
+    Page<ChatConversationDO> getChatsPage(Long userId, String agentId, long current, long size);
 }

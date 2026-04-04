@@ -16,10 +16,26 @@ export interface MessageVO {
   messageType: string
 }
 
+export interface PageResponse<T> {
+  records: T[]
+  total: number
+  size: number
+  current: number
+  pages: number
+}
+
 export function getChatIds(agentId: string): Promise<ChatConversation[]> {
   return request({
     url: `/memory/getChatIds/${agentId}`,
     method: 'get'
+  })
+}
+
+export function getChatIdsPage(agentId: string, current: number = 1, size: number = 10): Promise<PageResponse<ChatConversation>> {
+  return request({
+    url: `/memory/getChatIdsPage/${agentId}`,
+    method: 'get',
+    params: { current, size }
   })
 }
 

@@ -87,6 +87,8 @@
       title="修改密码"
       :confirm-loading="passwordLoading"
       @ok="handlePasswordChange"
+      ok-text="确认"
+      cancel-text="取消"
     >
       <a-form
         ref="passwordFormRef"
@@ -113,6 +115,8 @@
       :confirm-loading="avatarLoading"
       @ok="handleCropConfirm"
       @cancel="handleCropCancel"
+      ok-text="确认"
+      cancel-text="取消"
     >
       <div class="crop-container">
         <div class="crop-wrapper">
@@ -640,6 +644,7 @@ async function handlePasswordChange(): Promise<void> {
   flex-direction: column;
 
   .page-header {
+    margin-top: 20px;
     margin-bottom: 20px;
     flex-shrink: 0;
 

@@ -1,6 +1,7 @@
 package com.mio.ai.superagent.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mio.ai.superagent.mapper.ChatConversationDOMapper;
 import com.mio.ai.superagent.model.entity.ChatConversationDO;
 import com.mio.ai.superagent.model.vo.ChatVO;
@@ -60,5 +61,14 @@ public class ChatHistoryRepositoryImpl implements ChatHistoryRepository {
         queryWrapper.eq("user_id", userId)
                 .eq("agent_id", agentId);
         return chatConversationDOMapper.selectList(queryWrapper);
+    }
+
+    @Override
+    public Page<ChatConversationDO> getChatsPage(Long userId, String agentId, long current, long size) {
+        QueryWrapper<ChatConversationDO> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("user_id", userId)
+                .eq("agent_id", agentId)
+                .orderByDesc("update_time");
+        return chatConversationDOMapper.selectPage(new Page<>(current, size), queryWrapper);
     }
 }

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="chat-layout">
     <aside class="sidebar" :class="{ collapsed: isCollapsed }">
       <div class="sidebar-top">
@@ -17,45 +17,87 @@
       </div>
 
       <div class="sidebar-content">
-        <div class="new-chat-btn-wrapper" v-show="!isCollapsed">
-          <a-button class="new-chat-btn" @click="createNewChat">
-            <PlusSquareOutlined />
-            <span class="btn-text">新对话</span>
-            <div class="shortcut-hint">
-              <span class="key-box">Ctrl</span>
-              <span class="key-box">K</span>
-            </div>
-          </a-button>
-        </div>
-        <div class="new-chat-btn-collapsed" v-show="isCollapsed" @click="createNewChat">
-          <PlusSquareOutlined />
-        </div>
-        <div class="chat-list">
-          <div
-            v-for="chat in chatList"
-            :key="chat.id"
-            class="chat-item"
-            :class="{ active: currentChatId === chat.id }"
-            @click="selectChat(chat.id)"
-          >
-            <MessageOutlined v-if="isCollapsed" />
-            <template v-else>
-              <div class="chat-item-content">
-                <div class="chat-item-title">{{ chat.title }}</div>
-                <div class="chat-item-time">{{ formatTime(chat.updateTime) }}</div>
+        <div class="sidebar-actions">
+          <div class="new-chat-btn-wrapper" v-show="!isCollapsed">
+            <a-button class="new-chat-btn" @click="createNewChat">
+              <FormOutlined />
+              <span class="btn-text">新对话</span>
+              <div class="shortcut-hint">
+                <span class="key-box">Ctrl</span>
+                <span class="key-box">K</span>
               </div>
-              <a-dropdown :trigger="['click']">
-                <a-button type="text" size="small" class="chat-item-more" @click.stop>
-                  <MoreOutlined />
-                </a-button>
-                <template #overlay>
-                  <a-menu>
-                    <a-menu-item key="delete" @click="deleteChat(chat.id)">
-                      <DeleteOutlined /> 删除对话
-                    </a-menu-item>
-                  </a-menu>
-                </template>
-              </a-dropdown>
+            </a-button>
+          </div>
+          <a-tooltip placement="right" v-if="isCollapsed">
+            <template #title>新对话</template>
+            <div class="new-chat-btn-collapsed" @click="createNewChat">
+              <FormOutlined />
+            </div>
+          </a-tooltip>
+
+          <div class="app-square-btn-wrapper" v-show="!isCollapsed">
+            <a-button class="app-square-btn" @click="goDashboard">
+              <RobotOutlined />
+              <span class="btn-text">智能体广场</span>
+            </a-button>
+          </div>
+          <a-tooltip placement="right" v-if="isCollapsed">
+            <template #title>智能体广场</template>
+            <div class="app-square-btn-collapsed" @click="goDashboard">
+              <RobotOutlined />
+            </div>
+          </a-tooltip>
+        </div>
+
+        <div class="chat-list-section">
+          <div class="section-title" v-show="!isCollapsed">历史会话</div>
+          <div class="chat-list" @scroll="handleChatListScroll" ref="chatListRef">
+            <template v-if="chatListLoading && chatList.length === 0">
+              <div v-for="i in 3" :key="'skeleton-' + i" class="chat-item-skeleton">
+                <a-skeleton :paragraph="{ rows: 1 }" :title="false" active />
+              </div>
+            </template>
+            <a-tooltip placement="right" v-if="isCollapsed" v-for="chat in chatList" :key="chat.id">
+              <template #title>{{ chat.title }}</template>
+              <div
+                class="chat-item chat-item-collapsed"
+                :class="{ active: currentChatId === chat.id }"
+                @click="selectChat(chat.id)"
+              >
+                <MessageOutlined />
+              </div>
+            </a-tooltip>
+            <template v-if="!isCollapsed">
+              <div
+                v-for="chat in chatList"
+                :key="chat.id"
+                class="chat-item"
+                :class="{ active: currentChatId === chat.id }"
+                @click="selectChat(chat.id)"
+              >
+                <div class="chat-item-content">
+                  <div class="chat-item-title">{{ chat.title }}</div>
+                  <div class="chat-item-time">{{ formatTime(chat.updateTime) }}</div>
+                </div>
+                <a-dropdown :trigger="['click']">
+                  <a-button type="text" size="small" class="chat-item-more" @click.stop>
+                    <MoreOutlined />
+                  </a-button>
+                  <template #overlay>
+                    <a-menu>
+                      <a-menu-item key="share" @click="shareChat(chat.id)">
+                        <ShareAltOutlined /> 分享对话
+                      </a-menu-item>
+                      <a-menu-item key="delete" class="delete-menu-item" @click="confirmDeleteChat(chat.id)">
+                        <DeleteOutlined /> 删除对话
+                      </a-menu-item>
+                    </a-menu>
+                  </template>
+                </a-dropdown>
+              </div>
+              <div v-if="chatListLoading && chatList.length > 0" class="chat-list-loading">
+                <a-spin size="small" />
+              </div>
             </template>
           </div>
         </div>
@@ -70,7 +112,7 @@
               </a-avatar>
               <div class="user-detail" v-show="!isCollapsed">
                 <span class="user-name">{{ userStore.userName }}</span>
-                <span class="user-role">{{ userStore.userInfo?.userRole === 'admin' ? '管理员' : '普通用户' }}</span>
+                <span class="user-role">{{ userStore.userInfo?.userProfile }}</span>
               </div>
             </div>
             <template #overlay>
@@ -79,7 +121,7 @@
                   <HomeOutlined /> 返回首页
                 </a-menu-item>
                 <a-menu-item key="dashboard" @click="goDashboard">
-                  <AppstoreOutlined /> 控制台
+                  <SettingOutlined /> 控制台
                 </a-menu-item>
                 <a-menu-divider />
                 <a-menu-item key="logout" @click="handleLogout">
@@ -117,9 +159,21 @@
               :key="msg.id"
               class="message"
               :class="msg.role"
+              @mouseenter="handleMouseEnter(msg.id)"
+              @mouseleave="hoverMessageId = ''"
             >
               <div class="message-content">
                 <div class="message-text" v-html="formatMessage(msg.content)"></div>
+                <div class="message-actions">
+                  <div class="copy-area" v-show="hoverMessageId === msg.id && msg.content">
+                    <a-tooltip :title="copiedMessageId === msg.id ? '已复制' : '复制'">
+                      <a-button type="text" size="small" class="copy-btn" :class="{ 'copied': copiedMessageId === msg.id }" @click="copyMessage(msg.content, msg.id)">
+                        <CheckOutlined v-if="copiedMessageId === msg.id" />
+                        <CopyOutlined v-else />
+                      </a-button>
+                    </a-tooltip>
+                  </div>
+                </div>
               </div>
             </div>
             <div v-if="isLoading" class="message assistant">
@@ -165,32 +219,51 @@
     </div>
 
     <AuthModal v-model:visible="authModalVisible" @success="handleAuthSuccess" />
+
+    <a-modal
+      v-model:open="deleteModalVisible"
+      title="⚠️确定删除对话？"
+      ok-text="删除"
+      cancel-text="取消"
+      ok-type="danger"
+      :confirm-loading="deleteLoading"
+      centered
+      :z-index="2000"
+      @ok="handleDeleteConfirm"
+      @cancel="deleteModalVisible = false"
+    >
+      <p style="color: #666;">确定要删除该对话吗？删除后将无法恢复。</p>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, watch, onUnmounted } from 'vue'
+import { ref, computed, onMounted, nextTick, watch, onUnmounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { marked } from 'marked'
 import { useUserStore } from '@/store/user'
 import { getAgentById } from '@/api/agent'
 import { chatWithCSApp } from '@/api/chat'
-import { getChatIds, getChatHistory, deleteChat as deleteChatApi } from '@/api/chatMemory'
-import type { Agent, ChatMessageRequest } from '@/types'
+import { getChatIdsPage, getChatHistory, deleteChat as deleteChatApi } from '@/api/chatMemory'
+import type { Agent } from '@/types'
 import AuthModal from '@/components/AuthModal.vue'
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  PlusSquareOutlined,
   MessageOutlined,
   MoreOutlined,
   DeleteOutlined,
   HomeOutlined,
-  AppstoreOutlined,
+  RobotOutlined,
+  SettingOutlined,
   LogoutOutlined,
   UserOutlined,
-  ArrowUpOutlined
+  ArrowUpOutlined,
+  FormOutlined,
+  CopyOutlined,
+  ShareAltOutlined,
+  CheckOutlined
 } from '@ant-design/icons-vue'
 
 interface ChatMessage {
@@ -216,19 +289,30 @@ const authModalVisible = ref<boolean>(false)
 const agentInfo = ref<Agent | null>(null)
 const currentChatId = ref<string>('')
 const chatList = ref<ChatSession[]>([])
+const chatListLoading = ref<boolean>(false)
+const chatListCurrent = ref<number>(1)
+const chatListPageSize = ref<number>(10)
+const chatListTotal = ref<number>(0)
+const chatListHasMore = ref<boolean>(true)
 const messages = ref<ChatMessage[]>([])
 const inputMessage = ref<string>('')
 const isLoading = ref<boolean>(false)
 const messagesRef = ref<HTMLElement | null>(null)
+const chatListRef = ref<HTMLElement | null>(null)
+const hoverMessageId = ref<string>('')
+const copiedMessageId = ref<string>('')
+const deleteModalVisible = ref<boolean>(false)
+const deleteLoading = ref<boolean>(false)
+const pendingDeleteChatId = ref<string>('')
+
+marked.setOptions({
+  gfm: true,
+  breaks: true
+})
 
 let eventSource: EventSource | null = null
 
 const agentId = ref<number>(0)
-  
-watch(messages, (newMessages, oldMessages) => {
-  console.log('messages 发生变化:', newMessages)
-  // 执行你的逻辑
-}, { deep: true })
 
 const currentChatTitle = computed(() => {
   const chat = chatList.value.find(c => c.id === currentChatId.value)
@@ -276,21 +360,60 @@ async function loadAgentInfo(): Promise<void> {
   }
 }
 
-async function loadChatHistory(): Promise<void> {
+async function loadChatHistory(isLoadMore: boolean = false): Promise<void> {
   if (!userStore.isLoggedIn) return
   
+  if (chatListLoading.value) return
+  if (isLoadMore && !chatListHasMore.value) return
+  
+  chatListLoading.value = true
+  
   try {
-    const res = await getChatIds(String(agentId.value))
-    chatList.value = res
-      .map((item: any) => ({
-        id: item.conversationId,
-        title: item.title || '新对话',
-        updateTime: item.updateTime ? new Date(item.updateTime) : new Date(),
-        hasMessage: true
-      }))
-      .sort((a: ChatSession, b: ChatSession) => b.updateTime.getTime() - a.updateTime.getTime())
+    const current = isLoadMore ? chatListCurrent.value + 1 : 1
+    const res = await getChatIdsPage(String(agentId.value), current, chatListPageSize.value)
+    
+    const newChats = res.records.map((item: any) => ({
+      id: item.conversationId,
+      title: item.title || '新对话',
+      updateTime: item.updateTime ? new Date(item.updateTime) : new Date(),
+      hasMessage: true
+    }))
+    
+    if (isLoadMore) {
+      chatList.value = [...chatList.value, ...newChats]
+    } else {
+      chatList.value = newChats
+    }
+    
+    chatListCurrent.value = res.current
+    chatListTotal.value = res.total
+    chatListHasMore.value = res.current < res.pages
   } catch (e) {
     console.error(e)
+  } finally {
+    chatListLoading.value = false
+    nextTick(() => {
+      checkAndLoadMore()
+    })
+  }
+}
+
+function checkAndLoadMore(): void {
+  if (!chatListRef.value || !chatListHasMore.value || chatListLoading.value) return
+  
+  const { scrollHeight, clientHeight } = chatListRef.value
+  
+  if (scrollHeight <= clientHeight) {
+    loadChatHistory(true)
+  }
+}
+
+function handleChatListScroll(event: Event): void {
+  const target = event.target as HTMLElement
+  const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight
+  
+  if (scrollBottom < 50 && chatListHasMore.value && !chatListLoading.value) {
+    loadChatHistory(true)
   }
 }
 
@@ -316,6 +439,9 @@ async function loadMessages(conversationId: string): Promise<void> {
   
   try {
     const res = await getChatHistory(conversationId)
+    if (!res) {
+      return
+    }
     messages.value = res.map((item: any, index: number) => ({
       id: `${conversationId}_${index}`,
       role: item.role,
@@ -375,8 +501,6 @@ function sendMessage(): void {
     currentChatId.value = generateConversationId()
   }
 
-  console.log(messages.value)
-
   messages.value.push({
     id: generateUUID(),
     role: 'user',
@@ -384,12 +508,10 @@ function sendMessage(): void {
     createTime: new Date()
   })
 
-  console.log(messages.value)
-
   inputMessage.value = ''
 
-  const existingChat = chatList.value.find(c => c.id === currentChatId.value)
-  if (!existingChat) {
+  const existingChatIndex = chatList.value.findIndex(c => c.id === currentChatId.value)
+  if (existingChatIndex === -1) {
     chatList.value.unshift({
       id: currentChatId.value,
       title: content.slice(0, 20) + (content.length > 20 ? '...' : ''),
@@ -397,7 +519,12 @@ function sendMessage(): void {
       hasMessage: true
     })
   } else {
+    const existingChat = chatList.value[existingChatIndex]
     existingChat.updateTime = new Date()
+    if (existingChatIndex > 0) {
+      chatList.value.splice(existingChatIndex, 1)
+      chatList.value.unshift(existingChat)
+    }
   }
 
   if (isNewChat) {
@@ -406,6 +533,7 @@ function sendMessage(): void {
 
   nextTick(() => {
     scrollToBottom()
+    scrollToChatListTop()
   })
 
   isLoading.value = true
@@ -418,44 +546,38 @@ function sendMessage(): void {
     createTime: new Date()
   })
 
-  const token : string = localStorage.getItem('token') || ''
+  const token: string = localStorage.getItem('token') || ''
 
-  // 连接SSE
   if (eventSource) {
     eventSource.close()
   }
 
-  // eventSource = chatWithCSApp(content, currentChatId.value, agentId.value, token)
+  eventSource = chatWithCSApp(content, currentChatId.value, agentId.value, token)
 
-  // // 监听SSE消息
-  // eventSource.onmessage = (event) => {
-  //   const data = event.data
-  //   if (data && data !== '[DONE]') {
-  //     // 更新最新的AI消息内容，而不是创建新消息
-  //     if (aiMessageIndex < messages.value.length) {
-  //       messages.value[aiMessageIndex].content += data
-  //     }
-  //   }
+  eventSource.onmessage = (event) => {
+    const data = event.data
+    if (data && data !== '[DONE]') {
+      if (aiMessageIndex < messages.value.length) {
+        messages.value[aiMessageIndex].content += data
+      }
+    }
     
-  //   if (data === '[DONE]') {
-  //     isLoading.value = false
-  //     if (eventSource) {
-  //       eventSource.close()
-  //     }
-  //   }
-  // }
+    if (data === '[DONE]') {
+      isLoading.value = false
+      if (eventSource) {
+        eventSource.close()
+      }
+    }
+  }
   
-  // // 监听SSE错误
-  // eventSource.onerror = (error) => {
-  //   console.error('SSE Error:', error)
-  //   isLoading.value = false
-  //   if (eventSource) {
-  //     eventSource.close()
-  //   }
-  // }
-
-  console.log(messages.value)
+  eventSource.onerror = () => {
+    isLoading.value = false
+    if (eventSource) {
+      eventSource.close()
+    }
+  }
 }
+
 
 function generateConversationId(): string {
   const timestamp = Date.now().toString()
@@ -470,6 +592,64 @@ function generateUUID(): string {
 function scrollToBottom(): void {
   if (messagesRef.value) {
     messagesRef.value.scrollTop = messagesRef.value.scrollHeight
+  }
+}
+
+function scrollToChatListTop(): void {
+  if (chatListRef.value) {
+    chatListRef.value.scrollTop = 0
+  }
+}
+
+function handleMouseEnter(msgId: string): void {
+  hoverMessageId.value = msgId
+  if (copiedMessageId.value && copiedMessageId.value !== msgId) {
+    copiedMessageId.value = ''
+  }
+}
+
+async function copyMessage(content: string, messageId: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(content)
+    copiedMessageId.value = messageId
+  } catch (e) {
+    console.error(e)
+    message.error('复制失败')
+  }
+}
+
+function shareChat(conversationId: string): void {
+  const shareUrl = `${window.location.origin}/share/${conversationId}`
+  navigator.clipboard.writeText(shareUrl).then(() => {
+    message.success('分享链接已复制到剪贴板')
+  }).catch(() => {
+    message.error('复制失败')
+  })
+}
+
+function confirmDeleteChat(conversationId: string): void {
+  pendingDeleteChatId.value = conversationId
+  deleteModalVisible.value = true
+}
+
+async function handleDeleteConfirm(): Promise<void> {
+  if (!pendingDeleteChatId.value) return
+  
+  deleteLoading.value = true
+  try {
+    await deleteChatApi(pendingDeleteChatId.value)
+    chatList.value = chatList.value.filter(c => c.id !== pendingDeleteChatId.value)
+    if (currentChatId.value === pendingDeleteChatId.value) {
+      createNewChat()
+    }
+    message.success('删除成功')
+    deleteModalVisible.value = false
+  } catch (e) {
+    console.error(e)
+    message.error('删除失败')
+  } finally {
+    deleteLoading.value = false
+    pendingDeleteChatId.value = ''
   }
 }
 
@@ -530,7 +710,12 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyboardShortcut)
 })
 
-
+// 组件销毁前关闭SSE连接
+onBeforeUnmount(() => {
+  if (eventSource) {
+    eventSource.close()
+  }
+})
 </script>
 
 <style lang="scss" scoped>
@@ -611,8 +796,11 @@ onUnmounted(() => {
     flex-direction: column;
     padding: 12px;
 
-    .new-chat-btn-wrapper {
-      margin-bottom: 12px;
+    .sidebar-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 16px;
     }
 
     .new-chat-btn {
@@ -621,20 +809,18 @@ onUnmounted(() => {
       display: flex;
       align-items: center;
       justify-content: flex-start;
-      gap: 10px;
       padding: 0 16px;
-      background: #fff;
-      border: 1px solid #e5e6eb;
-      border-radius: 8px;
-      color: #1d2129;
-      font-size: 14px;
-      font-weight: 500;
-      transition: all 0.2s;
+      background: linear-gradient(135deg, rgba($primary-color, 0.1) 0%, rgba($primary-color, 0.05) 100%);
+      border: 1px solid $primary-color;
+      border-radius: 10px;
+      color: $primary-color;
+      font-size: 15px;
+      font-weight: 600;
 
       &:hover {
-        background: rgba($primary-color, 0.08);
-        border-color: $primary-color;
-        color: $primary-color;
+        background: linear-gradient(135deg, rgba($primary-color, 0.18) 0%, rgba($primary-color, 0.1) 100%);
+        border-color: darken($primary-color, 5%);
+        color: darken($primary-color, 5%);
       }
 
       .btn-text {
@@ -648,11 +834,11 @@ onUnmounted(() => {
 
         .key-box {
           padding: 2px 6px;
-          background: #f2f3f5;
-          border: 1px solid #e5e6eb;
+          background: rgba($primary-color, 0.15);
+          border: 1px solid rgba($primary-color, 0.3);
           border-radius: 4px;
           font-size: 11px;
-          color: #86909c;
+          color: $primary-color;
           font-weight: 500;
         }
       }
@@ -664,12 +850,57 @@ onUnmounted(() => {
       justify-content: center;
       width: 40px;
       height: 40px;
-      margin: 0 auto 12px;
+      margin: 0 auto;
+      background: linear-gradient(135deg, rgba($primary-color, 0.1) 0%, rgba($primary-color, 0.05) 100%);
+      border: 1px solid $primary-color;
+      border-radius: 10px;
+      cursor: pointer;
+      color: $primary-color;
+
+      &:hover {
+        background: linear-gradient(135deg, rgba($primary-color, 0.18) 0%, rgba($primary-color, 0.1) 100%);
+        border-color: darken($primary-color, 5%);
+        color: darken($primary-color, 5%);
+      }
+    }
+
+    .app-square-btn {
+      width: 100%;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 0 16px;
+      background: #fff;
+      border: 1px solid #e5e6eb;
+      border-radius: 8px;
+      color: #5f6368;
+      font-size: 15px;
+      font-weight: 500;
+
+      &:hover {
+        background: rgba($primary-color, 0.08);
+        border-color: $primary-color;
+        color: $primary-color;
+      }
+
+      .btn-text {
+        flex: 1;
+        text-align: left;
+      }
+    }
+
+    .app-square-btn-collapsed {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      margin: 0 auto;
       background: #fff;
       border: 1px solid #e5e6eb;
       border-radius: 8px;
       cursor: pointer;
-      transition: all 0.2s;
 
       &:hover {
         background: rgba($primary-color, 0.08);
@@ -678,9 +909,60 @@ onUnmounted(() => {
       }
     }
 
+    .chat-list-section {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      border-top: 1px solid #e8eaed;
+      padding-top: 12px;
+
+      .section-title {
+        font-size: 12px;
+        color: #86909c;
+        padding: 0 4px;
+        margin-bottom: 8px;
+        font-weight: 500;
+      }
+    }
+
     .chat-list {
       flex: 1;
       overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-width: thin;
+      scrollbar-color: transparent transparent;
+
+      &:hover {
+        scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+      }
+
+      &::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+
+      &::-webkit-scrollbar-button {
+        display: none;
+      }
+
+      &::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        background: transparent;
+        border-radius: 3px;
+        transition: background 0.3s;
+      }
+
+      &:hover::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.15);
+      }
+
+      &:hover::-webkit-scrollbar-thumb:hover {
+        background: rgba(0, 0, 0, 0.25);
+      }
 
       .chat-item {
         display: flex;
@@ -699,6 +981,14 @@ onUnmounted(() => {
         &.active {
           background: rgba(42, 161, 169, 0.12);
           color: $primary-color;
+        }
+
+        &.chat-item-collapsed {
+          justify-content: center;
+          width: 40px;
+          height: 40px;
+          margin: 4px auto;
+          padding: 0;
         }
 
         .chat-item-content {
@@ -727,6 +1017,17 @@ onUnmounted(() => {
         &:hover .chat-item-more {
           opacity: 1;
         }
+      }
+
+      .chat-item-skeleton {
+        padding: 10px 12px;
+        margin: 4px 0;
+      }
+
+      .chat-list-loading {
+        display: flex;
+        justify-content: center;
+        padding: 12px 0;
       }
     }
   }
@@ -759,6 +1060,7 @@ onUnmounted(() => {
         }
 
         .user-role {
+          margin-top: 4px;
           font-size: 12px;
           color: #909399;
         }
@@ -875,6 +1177,7 @@ onUnmounted(() => {
           flex: 1;
           display: flex;
           flex-direction: column;
+          position: relative;
 
           .message-text {
             max-width: 70%;
@@ -960,6 +1263,31 @@ onUnmounted(() => {
               }
               &:nth-child(3) {
                 animation-delay: 0s;
+              }
+            }
+          }
+
+          .message-actions {
+            min-height: 35px;
+            margin-top: 8px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+
+            .copy-btn {
+              color: #86909c;
+              padding: 4px 8px;
+              height: auto;
+              font-size: 14px;
+              transition: all 0.2s;
+
+              &:hover {
+                color: $primary-color;
+                background: rgba($primary-color, 0.08);
+              }
+
+              &.copied {
+                color: #52c41a;
               }
             }
           }
@@ -1205,6 +1533,74 @@ onUnmounted(() => {
   40% {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+:deep(ul), :deep(ol) {
+  list-style: decimal;
+}
+
+:deep(table) {
+  border: 1px solid #ccc;
+}
+:deep(table) td,
+:deep(table) th {
+  border-bottom: 1px solid #ccc;
+  border-right: 1px solid #ccc;
+  padding: 5px 10px;
+}
+:deep(table) th {
+  // border-bottom: 2px solid #ccc;
+  text-align: center;
+  background: #dee8ee;
+}
+:deep(table) th:last-child {
+  border-right: none;
+}
+:deep(table) td:last-child {
+  border-right: none;
+}
+
+:deep(table) tr:last-child td {
+  border-bottom: none;
+}
+:deep(table) tr:nth-child(even) {
+  background: #eff3f5;
+}
+/* blockquote 样式 */
+:deep(blockquote) {
+  display: block;
+  border-left: 8px solid #d0e5f2;
+  padding: 5px 10px;
+  margin: 10px 0;
+  line-height: 1.4;
+  font-size: 100%;
+  background-color: #f1f1f1;
+}
+
+.delete-menu-item {
+  color: #ff4d4f !important;
+
+  &:hover {
+    background-color: #fff1f0 !important;
+    color: #ff4d4f !important;
+  }
+
+  :deep(.ant-dropdown-menu-item-icon) {
+    color: #ff4d4f !important;
+  }
+}
+
+:deep(.delete-menu-item) {
+  color: #ff4d4f !important;
+
+  .ant-dropdown-menu-item-icon {
+    color: #ff4d4f !important;
+  }
+
+  &:hover {
+    background-color: #fff1f0 !important;
+    color: #ff4d4f !important;
   }
 }
 </style>
