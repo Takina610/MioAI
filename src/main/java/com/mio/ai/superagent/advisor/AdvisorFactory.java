@@ -1,4 +1,4 @@
-package com.mio.ai.superagent.rag;
+package com.mio.ai.superagent.advisor;
 
 import com.alibaba.cloud.ai.advisor.RetrievalRerankAdvisor;
 import com.alibaba.cloud.ai.model.RerankModel;

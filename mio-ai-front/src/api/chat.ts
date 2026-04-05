@@ -1,5 +1,5 @@
 import type { ChatMessageRequest } from '@/types'
-import axios from 'axios'
+import request from '@/utils/request'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -57,22 +57,33 @@ export const chatWithCSApp = (content: string, chatId: string, agentId: number, 
   return connectSSE('/cs/chat', { content, chatId, agentId, token })
 }
 
-export const chatWithDefaultAgent = (content: string, chatId: string, agentId: number
+export const chatWithMioManus = (content: string, chatId: string, agentId: number, token: string
 ): EventSource => {
-  return connectSSE('/chat', { content, chatId, agentId })
+  return connectSSE('/mio/chat', { content, chatId, agentId, token })
 }
 
-export const generateTitle = async (agentId: number, conversationId: string, content: string): Promise<string> => {
+export const chatWithDefaultAgent = (content: string, chatId: string, agentId: number, userId: number | null
+): EventSource => {
+  return connectSSE('/chat', { content, chatId, agentId, userId: userId ?? '' })
+}
+
+export const chatWithCustomAgent = (content: string, chatId: string, agentId: number, token: string
+): EventSource => {
+  return connectSSE('/custom/chat', { content, chatId, agentId, token })
+}
+
+export const generateTitle = async (
+  agentId: number,
+  conversationId: string,
+  content: string
+): Promise<string> => {
   try {
-    console.log(content)
-    const response = await axios.get(`${BASE_URL}/summary`, {
-      params: {
-        agentId,
-        conversationId,
-        content
-      }
+    const response = await request.post<string>('/summary', {
+      conversationId,
+      agentId,
+      content
     })
-    return response.data || '新对话'
+    return response || '新对话'
   } catch (error) {
     console.error('Failed to generate title:', error)
     return '新对话'
@@ -82,5 +93,7 @@ export const generateTitle = async (agentId: number, conversationId: string, con
 export default {
   chatWithCSApp,
   chatWithDefaultAgent,
+  chatWithMioManus,
+  chatWithCustomAgent,
   generateTitle
 }

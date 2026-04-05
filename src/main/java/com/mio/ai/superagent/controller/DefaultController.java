@@ -1,7 +1,5 @@
 package com.mio.ai.superagent.controller;
 
-import com.mio.ai.common.aop.annotation.LogInfo;
-import com.mio.ai.common.utils.RedisComponent;
 import com.mio.ai.superagent.app.DefaultApp;
 import com.mio.ai.superagent.model.vo.ChatVO;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,8 +23,10 @@ public class DefaultController {
     DefaultApp defaultApp;
 
     @GetMapping("/chat")
-    @LogInfo
-    public SseEmitter doChat(@RequestParam String chatId, @RequestParam Long agentId, @RequestParam String content, @RequestParam(required = false) Long userId) {
+    public SseEmitter doChat(@RequestParam String chatId,
+                             @RequestParam Long agentId,
+                             @RequestParam String content,
+                             @RequestParam(required = false) Long userId) {
         ChatVO chatVO = new ChatVO();
         chatVO.setChatId(chatId);
         chatVO.setMessage(content);

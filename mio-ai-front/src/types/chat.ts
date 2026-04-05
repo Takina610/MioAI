@@ -1,5 +1,5 @@
 export interface ChatMessageRequest {
-  chatId: string
+  conversationId: string
   agentId: number
   content: string
 }

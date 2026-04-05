@@ -7,7 +7,7 @@
         </div>
         <div class="header-right" v-if="userStore.isLoggedIn">
           <a-button type="primary" @click="showCreateModal">
-            <PlusOutlined /> 添加MCP工具
+            <PlusOutlined /> 添加MCP服务
           </a-button>
         </div>
       </div>
@@ -70,7 +70,11 @@
             </a-col>
           </a-row>
 
-          <a-empty v-if="!loading && mcpList.length === 0" description="暂无MCP工具" />
+          <div class="empty-container" v-if="mcpList.length === 0">
+            <img src="@/assets/mcp.png" alt="empty" class="empty-image" />
+            <p class="empty-desc">创建MCP服务，即刻连接智能</p>
+            <div class="empty-hint">前往右上角创建MCP服务</div>
+          </div>
         </div>
 
         <a-modal
@@ -336,6 +340,32 @@ onMounted(() => {
 
   .mcp-list {
     margin-top: 24px;
+  }
+
+  .empty-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    text-align: center;
+
+    .empty-image {
+      width: 900px;
+      height: auto;
+      object-fit: contain;
+    }
+
+    .empty-desc {
+      font-size: 16px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .empty-hint {
+      font-size: 14px;
+      color: #999;
+    }
   }
 
   .mcp-card {

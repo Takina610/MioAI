@@ -1,15 +1,15 @@
 package com.mio.ai.superagent.controller;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.utils.ResultUtils;
 import com.mio.ai.superagent.mapper.ChatConversationDOMapper;
+import com.mio.ai.superagent.model.dto.ChatMessageRequest;
 import com.mio.ai.superagent.model.entity.ChatConversationDO;
 import jakarta.annotation.Resource;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * @author: Takina
@@ -29,8 +29,8 @@ public class SummaryController {
     /**
      * 输入一段对话文本，返回一句总结标题
      */
-    @GetMapping("/summary")
-    public String generateTitle(@RequestParam Long agentId, @RequestParam String conversationId, @RequestParam String content) {
+    @RequestMapping("/summary")
+    public BaseResponse<String> generateTitle(@RequestBody ChatMessageRequest chatMessageRequest) {
         String prompt = """
             请你给下面这段对话，生成一个简短标题，要求：
             1. 一句话
@@ -39,7 +39,7 @@ public class SummaryController {
             
             对话内容：
             %s
-            """.formatted(content);
+            """.formatted(chatMessageRequest.getContent());
 
         // 调用 AI 生成标题
         String title = chatClient.prompt()
@@ -50,11 +50,11 @@ public class SummaryController {
         // 保存标题到本地
         UpdateWrapper<ChatConversationDO> updateWrapper = new UpdateWrapper<>();
         updateWrapper.lambda()
-                .eq(ChatConversationDO::getAgentId, agentId)
-                .eq(ChatConversationDO::getConversationId, conversationId)
+                .eq(ChatConversationDO::getAgentId, chatMessageRequest.getAgentId())
+                .eq(ChatConversationDO::getConversationId, chatMessageRequest.getConversationId())
                 .set(ChatConversationDO::getTitle, title);
         chatConversationDOMapper.update(updateWrapper);
 
-        return title;
+        return ResultUtils.success(title);
     }
 }

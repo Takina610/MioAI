@@ -68,7 +68,11 @@
             </a-col>
           </a-row>
 
-          <a-empty v-if="!loading && knowledgeList.length === 0" description="暂无知识库" />
+          <div class="empty-container" v-if="knowledgeList.length === 0">
+            <img src="@/assets/agent.png" alt="empty" class="empty-image" />
+            <p class="empty-desc">你还没有知识库</p>
+            <div class="empty-hint">前往右上角创建知识库</div>
+          </div>
         </div>
 
         <a-modal
@@ -330,6 +334,39 @@ onMounted(() => {
 
   .knowledge-list {
     margin-top: 24px;
+  }
+
+  .empty-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    text-align: center;
+
+    .empty-image {
+      width: 400px;
+      height: auto;
+      object-fit: contain;
+      margin-bottom: -80px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .empty-desc {
+      font-size: 16px;
+      color: #666;
+      margin-bottom: 8px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .empty-hint {
+      font-size: 14px;
+      color: #999;
+      position: relative;
+      z-index: 1;
+    }
   }
 
   .knowledge-card {

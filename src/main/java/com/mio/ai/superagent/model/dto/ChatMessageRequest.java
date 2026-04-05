@@ -16,7 +16,7 @@ public class ChatMessageRequest {
     /**
      * 会话ID
      */
-    private String chatId;
+    private String conversationId;
 
     /**
      * 智能体ID

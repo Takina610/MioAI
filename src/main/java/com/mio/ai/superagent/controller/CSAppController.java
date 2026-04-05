@@ -5,7 +5,6 @@ import com.mio.ai.common.utils.RedisComponent;
 import com.mio.ai.superagent.app.CSApp;
 import com.mio.ai.superagent.model.vo.ChatVO;
 import jakarta.annotation.Resource;
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -34,7 +33,10 @@ public class CSAppController {
      */
     @GetMapping("/chat")
     @LogInfo
-    public SseEmitter doChat(@RequestParam String chatId, @RequestParam Long agentId, @RequestParam String content, @RequestParam String token) {
+    public SseEmitter doChat(@RequestParam String chatId,
+                             @RequestParam Long agentId,
+                             @RequestParam String content,
+                             @RequestParam String token) {
         // 创建 ChatVO
         ChatVO chatVO = new ChatVO();
         chatVO.setChatId(chatId);

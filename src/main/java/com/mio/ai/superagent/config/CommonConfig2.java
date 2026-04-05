@@ -38,4 +38,9 @@ public class CommonConfig2 {
                 )
                 .build();
     }
+
+    @Bean
+    public MessageChatMemoryAdvisor messageChatMemoryAdvisor(ChatMemory jdbcChatMemory) {
+        return MessageChatMemoryAdvisor.builder(jdbcChatMemory).build();
+    }
 }

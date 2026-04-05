@@ -4,7 +4,7 @@
       <div class="sidebar-top">
         <div class="logo-section" v-show="!isCollapsed">
           <a class="logo-link" @click="refreshPage">
-            <img src="/favicon.svg" alt="Logo" class="logo-img" />
+            <img src="/favicon.ico" alt="Logo" class="logo-img" />
             <span class="logo-text">MioAI</span>
           </a>
         </div>
@@ -257,7 +257,6 @@ function handleAuthSuccess(): void {
 async function handleLogout(): Promise<void> {
   await userStore.logout()
   message.success('已退出登录')
-  router.push('/')
 }
 </script>
 

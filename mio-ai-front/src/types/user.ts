@@ -37,6 +37,7 @@ export interface LoginResponse {
   userName: string
   userAccount: string
   userAvatar?: string
+  userProfile?: string
   userRole: string
 }
 

@@ -121,6 +121,9 @@ function formatTime(time: string): string {
     padding: 20px;
     transition: all 0.3s;
     border: 1px solid #f0f0f0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
 
     &:hover {
       transform: translateY(-4px);
@@ -169,6 +172,7 @@ function formatTime(time: string): string {
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
+      flex: 1;
     }
 
     .card-footer {
@@ -187,6 +191,7 @@ function formatTime(time: string): string {
     }
 
     .card-actions {
+      margin-top: auto;
       .chat-btn {
         width: 100%;
         height: 35px;

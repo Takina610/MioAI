@@ -3,7 +3,7 @@
     <aside class="sidebar" :class="{ collapsed: isCollapsed }">
       <div class="sidebar-top">
         <div class="logo-section" v-show="!isCollapsed">
-          <img :src="agentInfo?.avatar || '/favicon.svg'" alt="Avatar" class="agent-avatar" />
+          <img :src="agentInfo?.avatar || '/favicon.ico'" alt="Avatar" class="agent-avatar" />
           <span class="agent-name">{{ agentInfo?.name || '智能体' }}</span>
         </div>
         <a-button
@@ -120,6 +120,9 @@
                 <a-menu-item key="home" @click="goHome">
                   <HomeOutlined /> 返回首页
                 </a-menu-item>
+                <a-menu-item key="profile" @click="goProfile">
+                  <UserOutlined /> 个人中心
+                </a-menu-item>
                 <a-menu-item key="dashboard" @click="goDashboard">
                   <SettingOutlined /> 控制台
                 </a-menu-item>
@@ -188,7 +191,7 @@
 
         <div class="chat-center-area" :class="{ 'has-messages': messages.length > 0 }">
           <div class="welcome-section" v-if="messages.length === 0 && !isLoading">
-            <img :src="agentInfo?.avatar || '/favicon.svg'" alt="Agent" class="welcome-avatar" />
+            <img :src="agentInfo?.avatar || '/favicon.ico'" alt="Agent" class="welcome-avatar" />
             <h2 class="welcome-title">今天有什么可以帮到你？</h2>
           </div>
           <div class="chat-input-wrapper">
@@ -244,7 +247,14 @@ import { message } from 'ant-design-vue'
 import { marked } from 'marked'
 import { useUserStore } from '@/store/user'
 import { getAgentById } from '@/api/agent'
-import { chatWithCSApp, generateTitle, chatWithDefaultAgent } from '@/api/chat'
+import {
+  chatWithCSApp,
+  chatWithDefaultAgent,
+  chatWithMioManus,
+  chatWithCustomAgent,
+  generateTitle
+} from '@/api/chat'
+
 import { getChatIdsPage, getChatHistory, deleteChat as deleteChatApi } from '@/api/chatMemory'
 import type { Agent } from '@/types'
 import AuthModal from '@/components/AuthModal.vue'
@@ -356,7 +366,7 @@ async function loadAgentInfo(): Promise<void> {
     }
   } catch (e) {
     console.error(e)
-    message.error('加载智能体信息失败')
+    router.push('/404')
   }
 }
 
@@ -457,22 +467,6 @@ async function loadMessages(conversationId: string): Promise<void> {
   }
 }
 
-async function deleteChat(conversationId: string): Promise<void> {
-  if (!userStore.isLoggedIn) return
-  
-  try {
-    await deleteChatApi(conversationId)
-    chatList.value = chatList.value.filter(c => c.id !== conversationId)
-    if (currentChatId.value === conversationId) {
-      createNewChat()
-    }
-    message.success('删除成功')
-  } catch (e) {
-    console.error(e)
-    message.error('删除失败')
-  }
-}
-
 function handleEnter(e: KeyboardEvent): void {
   if (!e.shiftKey) {
     e.preventDefault()
@@ -491,7 +485,7 @@ function sendMessage(): void {
   const content = inputMessage.value.trim()
   if (!content || isLoading.value) return
 
-  const isDefaultAgent = agentId.value === 0
+  const isDefaultAgent = agentId.value === 1
 
   if (!isDefaultAgent && !userStore.isLoggedIn) {
     authModalVisible.value = true
@@ -499,11 +493,11 @@ function sendMessage(): void {
   }
 
   const isNewChat = !currentChatId.value
-  if (isNewChat && !isDefaultAgent) {
+  if (isNewChat && userStore.isLoggedIn) {
     currentChatId.value = generateConversationId()
   }
   
-  if (isNewChat && isDefaultAgent) {
+  if (isNewChat && !userStore.isLoggedIn) {
     currentChatId.value = 'temp_' + Date.now()
   }
 
@@ -517,7 +511,7 @@ function sendMessage(): void {
 
   inputMessage.value = ''
 
-  if (!isDefaultAgent) {
+  if (userStore.isLoggedIn) {
     const existingChatIndex = chatList.value.findIndex(c => c.id === currentChatId.value)
     if (existingChatIndex === -1) {
       chatList.value.unshift({
@@ -529,15 +523,13 @@ function sendMessage(): void {
     } else {
       const existingChat = chatList.value[existingChatIndex]
       existingChat.updateTime = new Date()
-      if (existingChatIndex > 0) {
-        chatList.value.splice(existingChatIndex, 1)
-        chatList.value.unshift(existingChat)
-      }
+      chatList.value.splice(existingChatIndex, 1)
+      chatList.value.unshift(existingChat)
     }
+  }
 
-    if (isNewChat) {
-      router.push(`/chat/${agentId.value}/${currentChatId.value}`)
-    }
+  if (isNewChat && userStore.isLoggedIn) {
+    router.push(`/chat/${agentId.value}/${currentChatId.value}`)
   }
 
   nextTick(() => {
@@ -556,15 +548,20 @@ function sendMessage(): void {
   })
 
   const token: string = localStorage.getItem('token') || ''
+  const userId = userStore.userInfo?.id || null
 
   if (eventSource) {
     eventSource.close()
   }
 
   if (isDefaultAgent) {
-    eventSource = chatWithDefaultAgent(content, currentChatId.value, agentId.value)
-  } else {
+    eventSource = chatWithDefaultAgent(content, currentChatId.value, agentId.value, userId)
+  } else if (agentId.value === 2) {
     eventSource = chatWithCSApp(content, currentChatId.value, agentId.value, token)
+  } else if (agentId.value === 3) {
+    eventSource = chatWithMioManus(content, currentChatId.value, agentId.value, token)
+  } else {
+    eventSource = chatWithCustomAgent(content, currentChatId.value, agentId.value, token)
   }
 
   eventSource.onmessage = (event) => {
@@ -576,6 +573,9 @@ function sendMessage(): void {
     }
     
     if (data === '[DONE]') {
+      if (isNewChat && userStore.isLoggedIn) {
+      updateChatTitleWithTypewriter(content, messages.value[aiMessageIndex].content, userMessageIndex)
+    }
       isLoading.value = false
       if (eventSource) {
         eventSource.close()
@@ -584,7 +584,7 @@ function sendMessage(): void {
   }
   
   eventSource.onerror = () => {
-    if (!isDefaultAgent && isNewChat) {
+    if (isNewChat && userStore.isLoggedIn) {
       updateChatTitleWithTypewriter(content, messages.value[aiMessageIndex].content, userMessageIndex)
     }
     isLoading.value = false
@@ -717,6 +717,10 @@ function goDashboard(): void {
   router.push('/dashboard')
 }
 
+function goProfile(): void {
+  router.push('/dashboard/profile')
+}
+
 function showAuthModal(): void {
   authModalVisible.value = true
 }
@@ -728,13 +732,9 @@ function handleAuthSuccess(): void {
 async function handleLogout(): Promise<void> {
   await userStore.logout()
   message.success('已退出登录')
-  router.push('/')
 }
 
 onMounted(() => {
-  if (!userStore.isLoggedIn) {
-    authModalVisible.value = true
-  }
   window.addEventListener('keydown', handleKeyboardShortcut)
 })
 

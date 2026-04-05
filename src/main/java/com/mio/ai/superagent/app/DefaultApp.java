@@ -5,6 +5,7 @@ import com.mio.ai.superagent.model.vo.ChatVO;
 import com.mio.ai.superagent.repository.ChatHistoryRepository;
 import jakarta.annotation.Resource;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -24,15 +25,23 @@ public class DefaultApp {
     @Resource(name = "defaultChatClient")
     private ChatClient chatClient;
 
+    @Autowired
+    MessageChatMemoryAdvisor memoryAdvisor;
+
     public Flux<String> doChat(ChatVO chatVO) {
-        if (null != chatVO.getUserId()) {
+        var prompt = chatClient.prompt()
+                .user(chatVO.getMessage());
+
+        // 只有 userId 存在时，才启用记忆
+        if (chatVO.getUserId() != null) {
             chatHistoryRepository.save(chatVO);
+
+            prompt.advisors(memoryAdvisor);
+            prompt.advisors(spec ->
+                    spec.param(ChatMemory.CONVERSATION_ID, chatVO.getChatId())
+            );
         }
-        return chatClient
-                .prompt()
-                .user(chatVO.getMessage())
-                .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, chatVO.getChatId()))
-                .stream()
-                .content();
+
+        return prompt.stream().content();
     }
 }

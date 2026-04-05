@@ -3,7 +3,7 @@
     <header class="header">
       <div class="header-content">
         <a class="logo-link" @click="refreshPage">
-          <img src="/favicon.svg" alt="Logo" class="logo-img" />
+          <img src="/favicon.ico" alt="Logo" class="logo-img" />
           <span class="logo-text">MioAI</span>
         </a>
         <div class="header-right">
@@ -32,7 +32,7 @@
             </a-dropdown>
           </template>
           <template v-else>
-            <a-button type="primary" class="start-btn" @click="goToDashboard">
+            <a-button type="primary" class="start-btn" @click="handleStart">
               快速开始
             </a-button>
           </template>
@@ -138,7 +138,7 @@ function goToProfile(): void {
 }
 
 function handleStart(): void {
-  router.push('/dashboard')
+  router.push('/chat')
 }
 
 function scrollToFeatures(): void {
@@ -148,7 +148,6 @@ function scrollToFeatures(): void {
 async function handleLogout(): Promise<void> {
   await userStore.logout()
   message.success('已退出登录')
-  router.push('/')
 }
 
 const features: Feature[] = [

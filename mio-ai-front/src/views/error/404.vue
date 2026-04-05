@@ -1,11 +1,17 @@
 <template>
   <div class="not-found">
     <div class="content">
-      <h1>404</h1>
-      <p>抱歉，您访问的页面不存在</p>
-      <a-button type="primary" @click="goHome">
-        返回首页
-      </a-button>
+      <img src="/favicon.ico" alt="logo" class="logo" />
+      <h1>未找到页面</h1>
+      <p>页面不存在，请确认网址是否正确。</p>
+      <div class="actions">
+        <a-button type="primary" @click="refreshPage">
+          刷新页面
+        </a-button>
+        <a-button @click="goChat">
+          继续聊天
+        </a-button>
+      </div>
     </div>
   </div>
 </template>
@@ -15,8 +21,12 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
-function goHome(): void {
-  router.push('/')
+function goChat(): void {
+  router.push('/chat')
+}
+
+function refreshPage(): void {
+  window.location.reload()
 }
 </script>
 
@@ -26,32 +36,53 @@ function goHome(): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f7fa;
+  background: #fff;
 
   .content {
     text-align: center;
 
+    .logo {
+      width: 80px;
+      height: 80px;
+      margin-bottom: 24px;
+    }
+
     h1 {
-      font-size: 120px;
-      font-weight: 700;
-      color: $primary-color;
-      margin-bottom: 16px;
-      line-height: 1;
+      font-size: 18px;
+      font-weight: 500;
+      color: #333;
+      margin-bottom: 12px;
     }
 
     p {
-      font-size: 18px;
-      color: #666;
+      font-size: 14px;
+      color: #999;
       margin-bottom: 32px;
     }
 
-    :deep(.ant-btn-primary) {
-      background: $primary-color;
-      border-color: $primary-color;
+    .actions {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
 
-      &:hover {
-        background: darken($primary-color, 10%);
-        border-color: darken($primary-color, 10%);
+      :deep(.ant-btn-primary) {
+        background: $primary-color;
+        border-color: $primary-color;
+
+        &:hover {
+          background: darken($primary-color, 10%);
+          border-color: darken($primary-color, 10%);
+        }
+      }
+
+      :deep(.ant-btn-default) {
+        border-color: #d9d9d9;
+        color: #666;
+
+        &:hover {
+          color: $primary-color;
+          border-color: $primary-color;
+        }
       }
     }
   }
