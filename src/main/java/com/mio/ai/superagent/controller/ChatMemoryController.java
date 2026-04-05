@@ -106,4 +106,19 @@ public class ChatMemoryController {
         }
         return ResultUtils.success(true);
     }
+
+    /**
+     * 根据会话ID获取会话信息
+     * @param conversationId 会话ID
+     * @return 会话信息
+     */
+    @GetMapping("/getConversation/{conversationId}")
+    @LogInfo
+    public BaseResponse<ChatConversationDO> getConversation(@PathVariable String conversationId) {
+        ChatConversationDO conversation = chatHistoryRepository.getChatByConversationId(conversationId);
+        if (conversation == null) {
+            return ResultUtils.success(null);
+        }
+        return ResultUtils.success(conversation);
+    }
 }

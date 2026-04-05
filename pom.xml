@@ -78,6 +78,16 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-markdown-document-reader</artifactId>
         </dependency>
+        <!-- pdf文件加载 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-pdf-document-reader</artifactId>
+        </dependency>
+        <!-- doc、ppt...文件加载 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-tika-document-reader</artifactId>
+        </dependency>
         <!-- QuestionAnswerAdvisor -->
         <dependency>
             <groupId>org.springframework.ai</groupId>

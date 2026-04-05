@@ -20,4 +20,6 @@ public interface ChatHistoryRepository {
     List<ChatConversationDO> getChats(Long userId, String agentId);
 
     Page<ChatConversationDO> getChatsPage(Long userId, String agentId, long current, long size);
+
+    ChatConversationDO getChatByConversationId(String conversationId);
 }

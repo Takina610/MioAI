@@ -5,6 +5,7 @@
     :footer="null"
     :width="400"
     :closable="true"
+    :destroyOnClose="true"  
     class="auth-modal"
   >
     <div class="auth-container">

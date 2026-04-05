@@ -52,3 +52,32 @@ export function getPublicKnowledgeBases(params?: { current?: number; size?: numb
     params
   })
 }
+
+export interface UploadResult {
+  docId: number
+  fileName: string
+  fileUrl: string
+  fileSize: number
+  status: 'success' | 'error'
+  errorMsg?: string
+}
+
+export function uploadKnowledgeFiles(kbId: number, files: File[]): Promise<UploadResult[]> {
+  const formData = new FormData()
+  files.forEach(file => {
+    formData.append('files', file)
+  })
+  return request({
+    url: `/knowledge-bases/create/upload/${kbId}`,
+    method: 'post',
+    data: formData,
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
+export function cancelKnowledgeCreation(kbId: number): Promise<boolean> {
+  return request({
+    url: `/knowledge-bases/create/cancel/${kbId}`,
+    method: 'delete'
+  })
+}

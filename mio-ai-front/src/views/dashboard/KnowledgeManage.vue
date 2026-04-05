@@ -103,6 +103,11 @@
             </a-form-item>
           </a-form>
         </a-modal>
+
+        <KnowledgeBaseModal
+          v-model:visible="createModalVisible"
+          @success="handleCreateSuccess"
+        />
       </template>
     </div>    
   </div>
@@ -123,6 +128,7 @@ import {
   DatabaseOutlined,
   FileTextOutlined
 } from '@ant-design/icons-vue'
+import KnowledgeBaseModal from '@/components/KnowledgeBaseModal.vue'
 
 defineEmits<{
   (e: 'login-required'): void
@@ -138,6 +144,7 @@ const userStore = useUserStore()
 const loading = ref<boolean>(false)
 const submitLoading = ref<boolean>(false)
 const modalVisible = ref<boolean>(false)
+const createModalVisible = ref<boolean>(false)
 const editingKb = ref<KnowledgeBase | null>(null)
 const knowledgeList = ref<KnowledgeBase[]>([])
 const formRef = ref<FormInstance | null>(null)
@@ -172,9 +179,11 @@ async function fetchKnowledgeBases(): Promise<void> {
 }
 
 function showCreateModal(): void {
-  editingKb.value = null
-  resetForm()
-  modalVisible.value = true
+  createModalVisible.value = true
+}
+
+function handleCreateSuccess(): void {
+  fetchKnowledgeBases()
 }
 
 function showEditModal(kb: KnowledgeBase): void {

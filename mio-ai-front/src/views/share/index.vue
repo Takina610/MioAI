@@ -48,7 +48,7 @@
       
       <div class="action-buttons fixed">
         <button class="text-btn" @click="goToChat">
-          <ExportOutlined />
+          <MessageOutlined />
           <div class="text">
             {{ agentInfo?.name || '智能体' }}继续聊
           </div>
@@ -67,10 +67,10 @@ import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { marked } from 'marked'
-import { getChatHistory } from '@/api/chatMemory'
+import { getChatHistory, getConversation } from '@/api/chatMemory'
 import { getAgentById } from '@/api/agent'
 import type { Agent } from '@/types'
-import { CopyOutlined, CheckOutlined, ExportOutlined } from '@ant-design/icons-vue'
+import { CopyOutlined, CheckOutlined, MessageOutlined } from '@ant-design/icons-vue'
 
 interface ChatMessage {
   id: string
@@ -83,7 +83,6 @@ const route = useRoute()
 const router = useRouter()
 
 const messages = ref<ChatMessage[]>([])
-const messagesRef = ref<HTMLElement | null>(null)
 const agentInfo = ref<Agent | null>(null)
 const loading = ref<boolean>(true)
 const conversationTitle = ref<string>('')
@@ -114,6 +113,16 @@ async function loadShareData(agentIdParam: string, conversationId: string): Prom
     const agentRes = await getAgentById(agentId.value)
     agentInfo.value = agentRes
     
+    const conversationRes = await getConversation(conversationId)
+    if (conversationRes && conversationRes.title) {
+      conversationTitle.value = conversationRes.title
+      document.title = `${conversationRes.title} - MioAI`
+    }
+    
+    if (conversationRes && conversationRes.createTime) {
+      conversationDate.value = new Date(conversationRes.createTime)
+    }
+    
     const res = await getChatHistory(conversationId)
 
     if (!res) {
@@ -128,12 +137,10 @@ async function loadShareData(agentIdParam: string, conversationId: string): Prom
         createTime: new Date()
       }))
       
-      if (res[0].content) {
+      if (!conversationTitle.value && res[0].content) {
         conversationTitle.value = res[0].content.slice(0, 30) + (res[0].content.length > 30 ? '...' : '')
         document.title = `${conversationTitle.value} - MioAI`
       }
-      
-      conversationDate.value = new Date()
     }
   } catch (e) {
     console.error('Failed to load share data:', e)

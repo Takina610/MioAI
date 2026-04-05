@@ -52,3 +52,10 @@ export function deleteChat(conversationId: string): Promise<boolean> {
     method: 'post'
   })
 }
+
+export function getConversation(conversationId: string): Promise<ChatConversation> {
+  return request({
+    url: `/memory/getConversation/${conversationId}`,
+    method: 'get'
+  })
+}

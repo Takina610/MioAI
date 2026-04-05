@@ -64,4 +64,11 @@ public class ChatHistoryRepositoryImpl implements ChatHistoryRepository {
                 .orderByDesc("update_time");
         return chatConversationDOMapper.selectPage(new Page<>(current, size), queryWrapper);
     }
+
+    @Override
+    public ChatConversationDO getChatByConversationId(String conversationId) {
+        QueryWrapper<ChatConversationDO> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("conversation_id", conversationId);
+        return chatConversationDOMapper.selectOne(queryWrapper);
+    }
 }
