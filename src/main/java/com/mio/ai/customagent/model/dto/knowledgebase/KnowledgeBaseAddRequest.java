@@ -21,14 +21,4 @@ public class KnowledgeBaseAddRequest implements Serializable {
      * 知识库描述
      */
     private String description;
-
-    /**
-     * 分块大小
-     */
-    private Integer chunkSize;
-
-    /**
-     * 分块重叠大小
-     */
-    private Integer chunkOverlap;
 }

@@ -34,16 +34,6 @@ public class KnowledgeBase implements Serializable {
     private String description;
 
     /**
-     * 分块大小
-     */
-    private Integer chunkSize;
-
-    /**
-     * 分块重叠大小
-     */
-    private Integer chunkOverlap;
-
-    /**
      * 状态（0-创建中 1-正常 2-已禁用）
      */
     private Integer status;
@@ -57,11 +47,6 @@ public class KnowledgeBase implements Serializable {
      * 文档数量
      */
     private Integer documentCount;
-
-    /**
-     * 总分块数
-     */
-    private Integer totalChunks;
 
     /**
      * 存储大小（字节）

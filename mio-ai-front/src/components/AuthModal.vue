@@ -57,6 +57,18 @@
               <LockOutlined />
             </template>
           </a-input-password>
+          <div v-if="!isLogin" class="password-strength">
+            <span class="strength-label">密码强度：</span>
+            <a-progress
+              :percent="passwordStrength.percent"
+              :stroke-color="passwordStrength.color"
+              :show-info="false"
+              size="small"
+            />
+            <span v-if="formData.userPassword" class="strength-text" :style="{ color: passwordStrength.color }">
+              {{ passwordStrength.text }}
+            </span>
+          </div>
         </a-form-item>
 
         <a-form-item v-if="!isLogin" name="checkPassword" label="确认密码">
@@ -100,7 +112,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, computed } from 'vue'
 import { message, type FormInstance } from 'ant-design-vue'
 import type { Rule } from 'ant-design-vue/es/form'
 import { useUserStore } from '@/store/user'
@@ -115,6 +127,12 @@ interface FormData {
   userName: string
   userPassword: string
   checkPassword: string
+}
+
+interface PasswordStrength {
+  percent: number
+  color: string
+  text: string
 }
 
 defineProps<{
@@ -167,6 +185,32 @@ const rules: Record<string, Rule[]> = {
     { validator: validateCheckPassword, trigger: 'blur' }
   ]
 }
+
+const passwordStrength = computed<PasswordStrength>(() => {
+  const password = formData.userPassword
+  if (!password) {
+    return { percent: 0, color: '#d9d9d9', text: '' }
+  }
+
+  let score = 0
+
+  if (password.length >= 8) score += 25
+  if (password.length >= 12) score += 10
+  if (/[a-z]/.test(password)) score += 15
+  if (/[A-Z]/.test(password)) score += 15
+  if (/[0-9]/.test(password)) score += 15
+  if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) score += 20
+
+  if (score <= 30) {
+    return { percent: 25, color: '#ff4d4f', text: '弱' }
+  } else if (score <= 50) {
+    return { percent: 50, color: '#faad14', text: '一般' }
+  } else if (score <= 70) {
+    return { percent: 75, color: '#52c41a', text: '强' }
+  } else {
+    return { percent: 100, color: '#1890ff', text: '非常强' }
+  }
+})
 
 function toggleMode(): void {
   isLogin.value = !isLogin.value
@@ -244,6 +288,29 @@ async function handleSubmit(): Promise<void> {
   :deep(.ant-input-affix-wrapper),
   :deep(.ant-input) {
     border-radius: 8px;
+  }
+
+  .password-strength {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    .strength-label {
+      font-size: 12px;
+      color: #666;
+      white-space: nowrap;
+    }
+
+    :deep(.ant-progress) {
+      flex: 1;
+    }
+
+    .strength-text {
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
   }
 
   :deep(.ant-btn-primary) {

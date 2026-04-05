@@ -35,10 +35,7 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
         kb.setUserId(userId);
         kb.setStatus(KnowledgeBaseStatusEnum.ACTIVE.getCode());
         kb.setDocumentCount(0);
-        kb.setTotalChunks(0);
         kb.setStorageSize(0L);
-        kb.setChunkSize(request.getChunkSize() != null ? request.getChunkSize() : 500);
-        kb.setChunkOverlap(request.getChunkOverlap() != null ? request.getChunkOverlap() : 50);
         this.save(kb);
         return kb.getId();
     }

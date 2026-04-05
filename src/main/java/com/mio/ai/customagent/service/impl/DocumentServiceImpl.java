@@ -35,7 +35,6 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
         Document document = new Document();
         BeanUtil.copyProperties(request, document);
         document.setStatus(DocumentStatusEnum.PENDING.getCode());
-        document.setChunkCount(0);
         this.save(document);
         return document.getId();
     }
@@ -86,12 +85,6 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
             return false;
         }
         document.setStatus(status);
-        if (chunkCount != null) {
-            document.setChunkCount(chunkCount);
-        }
-        if (errorMsg != null) {
-            document.setErrorMsg(errorMsg);
-        }
         return this.updateById(document);
     }
 

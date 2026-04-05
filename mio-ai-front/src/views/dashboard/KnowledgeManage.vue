@@ -101,15 +101,6 @@
                 :rows="3"
               />
             </a-form-item>
-            <a-form-item name="type" label="类型">
-              <a-select :value="formData.type" @update:value="formData.type = $event" placeholder="请选择类型">
-                <a-select-option :value="1">文档型</a-select-option>
-                <a-select-option :value="2">问答型</a-select-option>
-              </a-select>
-            </a-form-item>
-            <a-form-item name="embeddingModel" label="嵌入模型">
-              <a-input :value="formData.embeddingModel" @update:value="formData.embeddingModel = $event" placeholder="请输入嵌入模型名称" />
-            </a-form-item>
           </a-form>
         </a-modal>
       </template>
@@ -141,8 +132,6 @@ interface FormData {
   id?: number
   name: string
   description: string
-  type: number
-  embeddingModel: string
 }
 
 const userStore = useUserStore()
@@ -155,14 +144,12 @@ const formRef = ref<FormInstance | null>(null)
 
 const formData = reactive<FormData>({
   name: '',
-  description: '',
-  type: 1,
-  embeddingModel: 'text-embedding-v3'
+  description: ''
 })
 
 const rules: Record<string, Rule[]> = {
   name: [{ required: true, message: '请输入名称', trigger: 'blur' }],
-  type: [{ required: true, message: '请选择类型', trigger: 'change' }]
+  description: [{ required: true, message: '请输入描述', trigger: 'blur' }]
 }
 
 function formatDate(dateStr: string): string {

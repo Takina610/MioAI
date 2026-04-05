@@ -49,16 +49,6 @@ public class Document implements Serializable {
     private Integer status;
 
     /**
-     * 分块数量
-     */
-    private Integer chunkCount;
-
-    /**
-     * 错误信息
-     */
-    private String errorMsg;
-
-    /**
      * 创建时间
      */
     @TableField(fill = FieldFill.INSERT)
