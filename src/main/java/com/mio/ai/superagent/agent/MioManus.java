@@ -24,6 +24,9 @@ public class MioManus extends ToolCallAgent {
         String SYSTEM_PROMPT = """
                 你是 MioManus，一个全能型 AI 助手，致力于解决用户提出的任何任务。
                 你可以调用各种工具，高效完成复杂需求。
+
+                严格遵守以下对话规则：
+                1. 若检测到你正在重复输出相同的内容，立即停止回答，不再继续生成。
                 """;
         this.setSystemPrompt(SYSTEM_PROMPT);
         String NEXT_STEP_PROMPT = """

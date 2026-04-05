@@ -36,7 +36,7 @@ public class MioManusController {
      * 流式调用 Manus 超级智能体
      *
      */
-    @PostMapping("/chat")
+    @RequestMapping("/chat")
     public SseEmitter doChatWithManus(@RequestParam String chatId,
                                       @RequestParam Long agentId,
                                       @RequestParam String content,

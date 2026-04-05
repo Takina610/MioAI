@@ -153,7 +153,7 @@ public abstract class BaseAgent {
         event.put("timestamp", System.currentTimeMillis());
         sseEmitter.send(SseEmitter.event()
                 .name("message")
-                .data(objectMapper.writeValueAsString(event)));
+                .data(content));
     }
 
     /**
