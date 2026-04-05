@@ -68,8 +68,8 @@ public class ChatMemoryController {
             @RequestParam(defaultValue = "10") long size,
             HttpServletRequest request) {
         return ResultUtils
-                .success(chatHistoryRepository
-                        .getChatsPage(redisComponent.getUserId(request.getHeader("token")), agentId, current, size));
+            .success(chatHistoryRepository
+            .getChatsPage(redisComponent.getUserId(request.getHeader("token")), agentId, current, size));
     }
 
     /**
@@ -84,7 +84,10 @@ public class ChatMemoryController {
             return ResultUtils.success(null);
         }
         return ResultUtils
-                .success(messages.stream().map(MessageVO::new).collect(Collectors.toList()));
+                .success(messages.stream()
+                        .map(MessageVO::new)
+                        .filter(vo -> !vo.isToolMessage())
+                        .collect(Collectors.toList()));
     }
 
     /**

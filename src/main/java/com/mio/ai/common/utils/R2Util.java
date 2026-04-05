@@ -39,13 +39,9 @@ public class R2Util {
      * @throws IOException 上传异常
      */
     public String uploadFile(MultipartFile file, FileType fileType, String entityId) throws IOException {
-        // 1. 验证文件
         validateFile(file, fileType);
-
-        // 2. 构建文件存储路径
         String fileKey = buildFileKey(file, fileType, entityId);
 
-        // 3. 上传文件（直接覆盖，无需检查）
         try {
             PutObjectRequest putRequest = PutObjectRequest.builder()
                     .bucket(bucketName)
@@ -54,8 +50,49 @@ public class R2Util {
                     .build();
 
             r2Client.putObject(putRequest, RequestBody.fromBytes(file.getBytes()));
+            return cdnDomain + "/" + fileKey;
 
-            // 4. 返回CDN访问URL
+        } catch (S3Exception e) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "上传文件到R2失败: " + e.awsErrorDetails().errorMessage());
+        }
+    }
+
+    /**
+     * 上传本地文件
+     * @param filePath 本地文件路径
+     * @param fileType 文件类型枚举
+     * @param entityId 实体ID
+     * @return 文件访问URL
+     * @throws IOException 上传异常
+     */
+    public String uploadLocalFile(String filePath, FileType fileType, String entityId) throws IOException {
+        java.io.File file = new java.io.File(filePath);
+        if (!file.exists()) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件不存在: " + filePath);
+        }
+
+        String fileName = file.getName();
+        String extension = getFileExtension(fileName);
+        String timestamp = String.valueOf(System.currentTimeMillis());
+        String fileKey = fileType.getBasePath() + "/" + entityId + "_" + timestamp + "." + extension;
+
+        String contentType = "application/octet-stream";
+        if ("pdf".equalsIgnoreCase(extension)) {
+            contentType = "application/pdf";
+        } else if ("jpg".equalsIgnoreCase(extension) || "jpeg".equalsIgnoreCase(extension)) {
+            contentType = "image/jpeg";
+        } else if ("png".equalsIgnoreCase(extension)) {
+            contentType = "image/png";
+        }
+
+        try {
+            PutObjectRequest putRequest = PutObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(fileKey)
+                    .contentType(contentType)
+                    .build();
+
+            r2Client.putObject(putRequest, RequestBody.fromFile(file));
             return cdnDomain + "/" + fileKey;
 
         } catch (S3Exception e) {
