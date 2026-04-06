@@ -21,6 +21,11 @@ public class KnowledgeBaseVO implements Serializable {
     private Long userId;
 
     /**
+     * 作者名称
+     */
+    private String userName;
+
+    /**
      * 知识库名称
      */
     private String name;

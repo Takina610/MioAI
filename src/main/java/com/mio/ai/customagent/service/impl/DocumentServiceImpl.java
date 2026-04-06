@@ -20,6 +20,7 @@ import com.mio.ai.customagent.service.KnowledgeBaseService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -32,6 +33,7 @@ import java.util.Set;
 public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> implements DocumentService {
 
     @Resource
+    @Lazy
     private KnowledgeBaseService knowledgeBaseService;
 
     @Resource
@@ -115,9 +117,9 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
 
     @Override
     public DocumentVO getDocumentById(Long id) {
-//        if (id == null) {
-//            throw new BusinessException(ErrorCode.PARAMS_ERROR, "文档ID不能为空");
-//        }
+        if (id == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "文档ID不能为空");
+        }
         Document document = this.getById(id);
 //        if (document == null) {
 //            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "文档不存在");
@@ -154,6 +156,22 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
         }
         document.setStatus(status);
         return this.updateById(document);
+    }
+
+    @Override
+    public boolean deleteDocumentsByKbId(Long kbId, Long userId) {
+        if (kbId == null) {
+            return false;
+        }
+        LambdaQueryWrapper<Document> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Document::getKbId, kbId);
+        List<Document> documents = this.list(wrapper);
+        
+        for (Document document : documents) {
+            deleteDocument(document.getId(), userId);
+        }
+
+        return this.remove(wrapper);
     }
 
     private void updateKnowledgeBaseStats(Long kbId) {

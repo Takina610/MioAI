@@ -14,7 +14,11 @@ import com.mio.ai.customagent.model.dto.knowledgebase.KnowledgeBaseUpdateRequest
 import com.mio.ai.customagent.model.entity.KnowledgeBase;
 import com.mio.ai.customagent.model.enums.KnowledgeBaseStatusEnum;
 import com.mio.ai.customagent.model.vo.KnowledgeBaseVO;
+import com.mio.ai.customagent.service.DocumentService;
 import com.mio.ai.customagent.service.KnowledgeBaseService;
+import com.mio.ai.user.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 /**
@@ -24,6 +28,13 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, KnowledgeBase> implements KnowledgeBaseService {
+
+    @Autowired
+    @Lazy
+    DocumentService documentService;
+
+    @Autowired
+    UserService userService;
 
     @Override
     public Long addKnowledgeBase(KnowledgeBaseAddRequest request, Long userId) {
@@ -68,6 +79,9 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
         if (!kb.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限删除该知识库");
         }
+
+        documentService.deleteDocumentsByKbId(id, userId);
+
         return this.removeById(id);
     }
 
@@ -116,6 +130,14 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
         BeanUtil.copyProperties(kb, vo);
         KnowledgeBaseStatusEnum statusEnum = KnowledgeBaseStatusEnum.getByCode(kb.getStatus());
         vo.setStatusDesc(statusEnum != null ? statusEnum.getDesc() : "未知");
+        if (kb.getUserId() != null) {
+            try {
+                String userName = userService.getUserNameById(kb.getUserId());
+                vo.setUserName(userName != null ? userName : "未知用户");
+            } catch (Exception e) {
+                vo.setUserName("未知用户");
+            }
+        }
         return vo;
     }
 }

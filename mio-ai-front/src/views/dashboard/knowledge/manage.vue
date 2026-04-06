@@ -3,7 +3,7 @@
     <div class="page-header">
       <div class="header-content">
         <div class="header-left">
-          <h2>知识库管理</h2>
+          <h2>知识库管理 {{ knowledgeList.length }}</h2>
         </div>
         <div class="header-right" v-if="userStore.isLoggedIn">
           <a-button type="primary" @click="showCreateModal">
@@ -35,6 +35,9 @@
                     <DatabaseOutlined />
                   </div>
                   <h3 class="card-title">{{ kb.name }}</h3>
+                  <a-button type="link" class="test-btn" @click.stop="goToSimilaritySearch(kb.id)">
+                    命中测试
+                  </a-button>
                 </div>
                 <p class="card-desc">{{ kb.description || '暂无描述' }}</p>
                 <div class="card-stats">
@@ -48,10 +51,10 @@
                 </div>
                 <div class="card-actions">
                   <a-button class="edit-btn" @click="goToDetail(kb.id)">
-                    <EditOutlined /> 编辑
+                    编辑
                   </a-button>
                   <a-button class="delete-btn" @click="confirmDelete(kb)">
-                    <DeleteOutlined /> 删除
+                    删除
                   </a-button>
                 </div>
               </div>
@@ -75,12 +78,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { message, Modal, type FormInstance } from 'ant-design-vue'
-import type { Rule } from 'ant-design-vue/es/form'
+import { ref, onMounted } from 'vue'
+import { message, Modal } from 'ant-design-vue'
 import { useUserStore } from '@/store/user'
-import { addKnowledgeBase, queryKnowledgeBases, deleteKnowledgeBase } from '@/api/knowledgeBase'
-import type { KnowledgeBase, KnowledgeBaseAddRequest, PageResponse } from '@/types'
+import { queryKnowledgeBases, deleteKnowledgeBase } from '@/api/knowledgeBase'
+import type { KnowledgeBase, PageResponse } from '@/types'
 import { useRouter } from 'vue-router'
 import {
   PlusOutlined,
@@ -95,30 +97,11 @@ defineEmits<{
   (e: 'login-required'): void
 }>()
 
-interface FormData {
-  id?: number
-  name: string
-  description: string
-}
-
 const userStore = useUserStore()
 const router = useRouter()
 const loading = ref<boolean>(false)
-const submitLoading = ref<boolean>(false)
-const modalVisible = ref<boolean>(false)
 const createModalVisible = ref<boolean>(false)
 const knowledgeList = ref<KnowledgeBase[]>([])
-const formRef = ref<FormInstance | null>(null)
-
-const formData = reactive<FormData>({
-  name: '',
-  description: ''
-})
-
-const rules: Record<string, Rule[]> = {
-  name: [{ required: true, message: '请输入名称', trigger: 'blur' }],
-  description: [{ required: true, message: '请输入描述', trigger: 'blur' }]
-}
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return ''
@@ -151,6 +134,10 @@ function goToDetail(kbId: number): void {
   router.push(`/dashboard/knowledge/${kbId}`)
 }
 
+function goToSimilaritySearch(kbId: number): void {
+  router.push(`/dashboard/knowledge/similaritySearch/${kbId}`)
+}
+
 function confirmDelete(kb: KnowledgeBase): void {
   Modal.confirm({
     title: '确认删除',
@@ -163,16 +150,6 @@ function confirmDelete(kb: KnowledgeBase): void {
       message.success('删除成功')
       fetchKnowledgeBases()
     }
-  })
-}
-
-function resetForm(): void {
-  formRef.value?.resetFields()
-  Object.assign(formData, {
-    name: '',
-    description: '',
-    type: 1,
-    embeddingModel: 'text-embedding-v3'
   })
 }
 
@@ -349,6 +326,21 @@ onMounted(() => {
         white-space: nowrap;
         flex: 1;
       }
+
+      .test-btn {
+        padding: 0 8px;
+        height: 28px;
+        font-size: 13px;
+        color: $primary-color;
+        flex-shrink: 0;
+        border-radius: 10px;
+        border: 1px solid $primary-color;
+        height: 36px;
+
+        &:hover {
+          background: #e9f5f6;
+        }
+      }
     }
 
     .card-desc {
@@ -413,12 +405,9 @@ onMounted(() => {
       .delete-btn {
         flex: 1;
         height: 36px;
-        font-size: 13px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        font-size: 15px;
         gap: 4px;
-        border-radius: 8px;
+        border-radius: 10px;
       }
 
       .edit-btn {

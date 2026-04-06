@@ -55,4 +55,17 @@ public class RedisComponent {
         }
         return currentUser.getId();
     }
+
+    /**
+     * 通过向量文档ID获取文档名称
+     * @param vectorDocId 向量文档ID，格式如 "doc_15_3"
+     * @return 文档名称
+     */
+    public String getDocumentNameByVectorId(String vectorDocId) {
+        if (vectorDocId == null || vectorDocId.isEmpty()) {
+            return null;
+        }
+        String redisKey = "rag:" + vectorDocId;
+        return redisUtil.hGet(redisKey, "fileName");
+    }
 }

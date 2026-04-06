@@ -118,4 +118,12 @@ public interface UserService extends IService<User> {
      * @return 是否成功
      */
     boolean updateAvatar(Long userId, String avatarUrl);
+
+    /**
+     * 根据用户ID获取用户名
+     *
+     * @param userId 用户ID
+     * @return 用户名
+     */
+    String getUserNameById(Long userId);
 }

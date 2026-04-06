@@ -125,3 +125,18 @@ export function deleteDocument(id: number): Promise<boolean> {
     method: 'delete'
   })
 }
+
+export interface SimilarityResult {
+  id: string
+  text: string
+  score: number
+  fileName: string
+  metadata?: Record<string, unknown>
+}
+
+export function similaritySearch(content: string, threshold: number, topK: number): Promise<SimilarityResult[]> {
+  return request({
+    url: `/documents/similaritySearch/${encodeURIComponent(content)}/${threshold}/${topK}`,
+    method: 'get'
+  })
+}

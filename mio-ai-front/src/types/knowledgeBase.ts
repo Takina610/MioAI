@@ -3,6 +3,7 @@ import type { PaginationParams } from './common'
 export interface KnowledgeBase {
   id: number
   userId: number
+  userName?: string
   name: string
   description?: string
   chunkSize: number

@@ -2,8 +2,7 @@
   <div class="agent-market">
     <div class="page-header">
       <div class="header-content">
-        <h2>智能体广场</h2>
-        <p class="desc">探索公开的智能体</p>
+        <h2>智能体广场 {{ agentList.length }}</h2>
       </div>
       <div class="header-line"></div>
     </div>
@@ -93,12 +92,6 @@ function formatTime(time: string): string {
         font-weight: 600;
         color: #202124;
         margin-bottom: 8px;
-      }
-
-      .desc {
-        color: #5f6368;
-        font-size: 14px;
-        margin-bottom: 0px;
       }
     }
     .header-line {

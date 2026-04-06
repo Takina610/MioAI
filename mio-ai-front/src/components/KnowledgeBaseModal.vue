@@ -83,7 +83,7 @@
             v-model:file-list="fileList"
             :before-upload="beforeUpload"
             :multiple="true"
-            accept=".pdf,.doc,.docx,.md,.txt,.ppt,.pptx"
+            accept=".pdf,.doc,.docx,.md,.txt"
             @remove="handleRemove"
           >
             <p class="ant-upload-drag-icon">
@@ -91,7 +91,7 @@
             </p>
             <p class="ant-upload-text">点击或拖拽文件到此区域上传</p>
             <p class="ant-upload-hint">
-              支持 PDF、DOC、DOCX、MD、TXT、PPT、PPTX 格式，单个文件不超过 50MB
+              支持 PDF、DOC、DOCX、MD、TXT 格式，单个文件不超过 50MB
             </p>
           </a-upload-dragger>
         </div>
@@ -326,7 +326,7 @@ function prevStep(): void {
 }
 
 function beforeUpload(file: any): boolean {
-  const allowedTypes = ['pdf', 'doc', 'docx', 'md', 'txt', 'ppt', 'pptx']
+  const allowedTypes = ['pdf', 'doc', 'docx', 'md', 'txt']
   const extension = file.name.split('.').pop()?.toLowerCase()
   if (!allowedTypes.includes(extension || '')) {
     message.error(`不支持的文件格式: ${extension}`)

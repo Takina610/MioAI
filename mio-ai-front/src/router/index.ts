@@ -74,6 +74,18 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '公共知识库', requiresAuth: false }
       },
       {
+        path: 'public-knowledge/:id',
+        name: 'PublicKnowledgeDetail',
+        component: () => import('@/views/dashboard/knowledge/detail.vue'),
+        meta: { title: '公共知识库详情', requiresAuth: false }
+      },
+      {
+        path: 'public-knowledge/similaritySearch/:id',
+        name: 'PublicSimilaritySearch',
+        component: () => import('@/views/dashboard/knowledge/publicSimilaritySearch.vue'),
+        meta: { title: '命中测试', requiresAuth: false }
+      },
+      {
         path: 'knowledge',
         name: 'KnowledgeManage',
         component: () => import('@/views/dashboard/knowledge/manage.vue'),
@@ -81,9 +93,15 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: 'knowledge/:id',
-        name: 'KnowledgeDetail',
-        component: () => import('@/views/dashboard/knowledge/detail.vue'),
-        meta: { title: '知识库详情', requiresAuth: false }
+        name: 'KnowledgeEdit',
+        component: () => import('@/views/dashboard/knowledge/edit.vue'),
+        meta: { title: '知识库编辑', requiresAuth: false }
+      },
+      {
+        path: 'knowledge/similaritySearch/:id',
+        name: 'SimilaritySearch',
+        component: () => import('@/views/dashboard/knowledge/similaritySearch.vue'),
+        meta: { title: '命中测试', requiresAuth: false }
       },
       {
         path: 'profile',

@@ -2,8 +2,7 @@
   <div class="public-knowledge">
     <div class="page-header">
       <div class="header-content">
-        <h2>公共知识库</h2>
-        <p class="desc">探索公开的知识库资源</p>
+        <h2>公共知识库 {{ knowledgeList.length }}</h2>
       </div>
       <div class="header-line"></div>
     </div>
@@ -12,7 +11,7 @@
       <a-spin :spinning="loading">
         <a-row :gutter="[16, 16]" v-if="knowledgeList.length > 0">
           <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="kb in knowledgeList" :key="kb.id">
-            <a-card hoverable class="kb-card" @click="viewKnowledge(kb)">
+            <div class="kb-card">
               <div class="card-header">
                 <DatabaseOutlined class="header-icon" />
                 <h3>{{ kb.name }}</h3>
@@ -26,7 +25,15 @@
                   {{ formatFileSize(kb.storageSize || 0) }}
                 </span>
               </div>
-            </a-card>
+              <div class="card-actions">
+                <a-button class="detail-btn" @click="goToDetail(kb.id)">
+                  查看详情
+                </a-button>
+                <a-button class="test-btn" @click="goToSimilaritySearch(kb.id)">
+                  命中测试
+                </a-button>
+              </div>
+            </div>
           </a-col>
         </a-row>
 
@@ -38,10 +45,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { DatabaseOutlined, FileOutlined } from '@ant-design/icons-vue'
 import { getPublicKnowledgeBases } from '@/api/knowledgeBase'
 import type { KnowledgeBase, PageResponse } from '@/types'
 
+const router = useRouter()
 const loading = ref<boolean>(false)
 const knowledgeList = ref<KnowledgeBase[]>([])
 
@@ -69,8 +78,12 @@ function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-function viewKnowledge(kb: KnowledgeBase): void {
-  console.log('查看知识库:', kb)
+function goToDetail(kbId: number): void {
+  router.push(`/dashboard/public-knowledge/${kbId}`)
+}
+
+function goToSimilaritySearch(kbId: number): void {
+  router.push(`/dashboard/public-knowledge/similaritySearch/${kbId}`)
 }
 </script>
 
@@ -84,12 +97,6 @@ function viewKnowledge(kb: KnowledgeBase): void {
         font-size: 24px;
         font-weight: 600;
         color: #202124;
-      }
-
-      .desc {
-        color: #5f6368;
-        font-size: 14px;
-        margin-bottom: 0px;
       }
     }
     .header-line {
@@ -105,12 +112,25 @@ function viewKnowledge(kb: KnowledgeBase): void {
   }
 
   .kb-card {
+    background: #fff;
     border-radius: 12px;
+    padding: 20px;
+    border: 1px solid #f0f0f0;
     transition: all 0.3s;
+    position: relative;
 
     &:hover {
       border-color: $primary-color;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+      box-shadow: $shadow-medium;
+
+      .card-footer {
+        opacity: 0;
+      }
+
+      .card-actions {
+        opacity: 1;
+        visibility: visible;
+      }
     }
 
     .card-header {
@@ -121,7 +141,7 @@ function viewKnowledge(kb: KnowledgeBase): void {
 
       .header-icon {
         font-size: 24px;
-        color: #2aa1a9;
+        color: $primary-color;
       }
 
       h3 {
@@ -132,6 +152,7 @@ function viewKnowledge(kb: KnowledgeBase): void {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        flex: 1;
       }
     }
 
@@ -155,6 +176,8 @@ function viewKnowledge(kb: KnowledgeBase): void {
       border-top: 1px solid #f0f0f0;
       font-size: 12px;
       color: #999;
+      height: 36px;
+      transition: opacity 0.3s;
 
       .docs {
         display: flex;
@@ -164,6 +187,51 @@ function viewKnowledge(kb: KnowledgeBase): void {
 
       .storage {
         color: #666;
+      }
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 8px;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s;
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      height: 36px;
+
+      .detail-btn,
+      .test-btn {
+        flex: 1;
+        height: 36px;
+        font-size: 15px;
+        gap: 4px;
+        border-radius: 10px;
+      }
+
+      .detail-btn {
+        background: $primary-color;
+        border: 1px solid $primary-color;
+        color: #fff;
+
+        &:hover {
+          background: darken($primary-color, 10%);
+          border-color: darken($primary-color, 10%);
+          color: #fff;
+        }
+      }
+
+      .test-btn {
+        background: #fff;
+        border: 1px solid #d9d9d9;
+        color: #5f6368;
+
+        &:hover {
+          color: darken($primary-color, 10%);
+          border-color: darken($primary-color, 10%);
+        }
       }
     }
   }

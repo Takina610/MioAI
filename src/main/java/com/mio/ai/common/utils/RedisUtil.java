@@ -190,5 +190,26 @@ public class RedisUtil {
             return false;
         }
     }
+
+    // * --------------- Hash ----------------------
+
+    /**
+     * 获取 Hash 中的字段值
+     * @param key 键
+     * @param field 字段名
+     * @return 字段值
+     */
+    public String hGet(String key, String field) {
+        try {
+            if (!StringUtils.hasText(key) || !StringUtils.hasText(field)) {
+                return null;
+            }
+            Object value = stringRedisTemplate.opsForHash().get(key, field);
+            return value != null ? value.toString() : null;
+        } catch (Exception e) {
+            log.error("RedisUtil error, hGet({}, {})", key, field, e);
+            return null;
+        }
+    }
 }
 

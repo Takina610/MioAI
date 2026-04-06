@@ -3,7 +3,7 @@
     <div class="page-header">
       <div class="header-content">
         <div class="header-left">
-          <h2>MCP管理</h2>
+          <h2>MCP管理 {{ mcpList.length }}</h2>
         </div>
         <div class="header-right" v-if="userStore.isLoggedIn">
           <a-button type="primary" @click="showCreateModal">

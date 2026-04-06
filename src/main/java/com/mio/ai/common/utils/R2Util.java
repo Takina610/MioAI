@@ -38,7 +38,9 @@ public class R2Util {
      * @return 文件访问URL
      * @throws IOException 上传异常
      */
-    public String uploadFile(MultipartFile file, FileType fileType, String entityId) throws IOException {
+    public String uploadFile(MultipartFile file,
+                             FileType fileType,
+                             String entityId) throws IOException {
         validateFile(file, fileType);
         String fileKey = buildFileKey(file, fileType, entityId);
 
@@ -65,7 +67,9 @@ public class R2Util {
      * @return 文件访问URL
      * @throws IOException 上传异常
      */
-    public String uploadLocalFile(String filePath, FileType fileType, String entityId) throws IOException {
+    public String uploadLocalFile(String filePath,
+                                  FileType fileType,
+                                  String entityId) throws IOException {
         java.io.File file = new java.io.File(filePath);
         if (!file.exists()) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件不存在: " + filePath);
@@ -133,6 +137,25 @@ public class R2Util {
             return false;
         } catch (S3Exception e) {
             return false;
+        }
+    }
+
+    /**
+     * 下载文件内容
+     * @param fileUrl 文件URL
+     * @return 文件内容字节数组
+     */
+    public byte[] downloadFile(String fileUrl) {
+        try {
+            String fileKey = extractKeyFromUrl(fileUrl);
+            GetObjectRequest getRequest = GetObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(fileKey)
+                    .build();
+            
+            return r2Client.getObjectAsBytes(getRequest).asByteArray();
+        } catch (S3Exception e) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "下载文件失败: " + e.awsErrorDetails().errorMessage());
         }
     }
 

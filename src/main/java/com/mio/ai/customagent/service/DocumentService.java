@@ -29,4 +29,9 @@ public interface DocumentService extends IService<Document> {
      * 更新文档处理状态
      */
     boolean updateDocumentStatus(Long id, Integer status, Integer chunkCount, String errorMsg);
+
+    /**
+     * 删除知识库下的所有文档
+     */
+    boolean deleteDocumentsByKbId(Long kbId, Long userId);
 }

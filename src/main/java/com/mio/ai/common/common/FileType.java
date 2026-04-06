@@ -20,7 +20,7 @@ public enum FileType {
             20 * 1024 * 1024),
 
     KNOWLEDGE_FILE("knowledge_base", "知识库文件",
-            new String[]{"pdf", "md", "markdown", "txt", "doc", "docx", "ppt", "pptx"},
+            new String[]{"pdf", "md", "markdown", "txt", "doc", "docx"},
             50 * 1024 * 1024), // 50MB
 
     PDF_FILE("pdf_files", "PDF文件",

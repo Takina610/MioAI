@@ -11,6 +11,12 @@ importers:
       '@ant-design/icons-vue':
         specifier: ^7.0.1
         version: 7.0.1(vue@3.5.31(typescript@6.0.2))
+      '@vue-office/docx':
+        specifier: ^1.6.3
+        version: 1.6.3(vue-demi@0.14.10(vue@3.5.31(typescript@6.0.2)))(vue@3.5.31(typescript@6.0.2))
+      '@vue-office/pdf':
+        specifier: ^2.0.10
+        version: 2.0.10(vue-demi@0.14.10(vue@3.5.31(typescript@6.0.2)))(vue@3.5.31(typescript@6.0.2))
       ant-design-vue:
         specifier: ^4.2.6
         version: 4.2.6(vue@3.5.31(typescript@6.0.2))
@@ -352,6 +358,26 @@ packages:
       vue: ^2.7.0 || ^3.2.25
     peerDependenciesMeta:
       vue:
+        optional: true
+
+  '@vue-office/docx@1.6.3':
+    resolution: {integrity: sha512-Cs+3CAaRBOWOiW4XAhTwwxJ0dy8cPIf6DqfNvYcD3YACiLwO4kuawLF2IAXxyijhbuOeoFsfvoVbOc16A/4bZA==}
+    peerDependencies:
+      '@vue/composition-api': ^1.7.1
+      vue: ^2.0.0 || >=3.0.0
+      vue-demi: ^0.14.6
+    peerDependenciesMeta:
+      '@vue/composition-api':
+        optional: true
+
+  '@vue-office/pdf@2.0.10':
+    resolution: {integrity: sha512-yHVLrMAKpMPBkhBwofFyGEtEeJF0Zd7oGmf56Pe5aj/xObdRq3E1CIZqTqhWJNgHV8oLQqaX0vs4p5T1zq+GIA==}
+    peerDependencies:
+      '@vue/composition-api': ^1.7.1
+      vue: ^2.0.0 || >=3.0.0
+      vue-demi: ^0.14.6
+    peerDependenciesMeta:
+      '@vue/composition-api':
         optional: true
 
   '@vue/compiler-core@3.5.31':
@@ -938,6 +964,17 @@ packages:
   vscode-uri@3.1.0:
     resolution: {integrity: sha512-/BpdSx+yCQGnCvecbyXdxHDkuk55/G3xwnC0GqY4gmQ3j+A+g8kzzgB4Nk/SINjqn6+waqw3EgbVF2QKExkRxQ==}
 
+  vue-demi@0.14.10:
+    resolution: {integrity: sha512-nMZBOwuzabUO0nLgIcc6rycZEebF6eeUfaiQx9+WSk8e29IbLvPU9feI6tqW4kTo3hvoYAJkMh8n8D0fuISphg==}
+    engines: {node: '>=12'}
+    hasBin: true
+    peerDependencies:
+      '@vue/composition-api': ^1.0.0-rc.1
+      vue: ^3.0.0-0 || ^2.6.0
+    peerDependenciesMeta:
+      '@vue/composition-api':
+        optional: true
+
   vue-router@5.0.4:
     resolution: {integrity: sha512-lCqDLCI2+fKVRl2OzXuzdSWmxXFLQRxQbmHugnRpTMyYiT+hNaycV0faqG5FBHDXoYrZ6MQcX87BvbY8mQ20Bg==}
     peerDependencies:
@@ -1227,6 +1264,16 @@ snapshots:
       unplugin-utils: 0.3.1
     optionalDependencies:
       vue: 3.5.31(typescript@6.0.2)
+
+  '@vue-office/docx@1.6.3(vue-demi@0.14.10(vue@3.5.31(typescript@6.0.2)))(vue@3.5.31(typescript@6.0.2))':
+    dependencies:
+      vue: 3.5.31(typescript@6.0.2)
+      vue-demi: 0.14.10(vue@3.5.31(typescript@6.0.2))
+
+  '@vue-office/pdf@2.0.10(vue-demi@0.14.10(vue@3.5.31(typescript@6.0.2)))(vue@3.5.31(typescript@6.0.2))':
+    dependencies:
+      vue: 3.5.31(typescript@6.0.2)
+      vue-demi: 0.14.10(vue@3.5.31(typescript@6.0.2))
 
   '@vue/compiler-core@3.5.31':
     dependencies:
@@ -1782,6 +1829,10 @@ snapshots:
       - '@emnapi/runtime'
 
   vscode-uri@3.1.0: {}
+
+  vue-demi@0.14.10(vue@3.5.31(typescript@6.0.2)):
+    dependencies:
+      vue: 3.5.31(typescript@6.0.2)
 
   vue-router@5.0.4(@vue/compiler-sfc@3.5.31)(pinia@3.0.4(typescript@6.0.2)(vue@3.5.31(typescript@6.0.2)))(vue@3.5.31(typescript@6.0.2)):
     dependencies:

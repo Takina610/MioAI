@@ -297,6 +297,18 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         user.setUserAvatar(avatarUrl);
         return this.updateById(user);
     }
+
+    @Override
+    public String getUserNameById(Long userId) {
+        if (userId == null) {
+            return null;
+        }
+        User user = this.getById(userId);
+        if (user == null) {
+            return null;
+        }
+        return user.getUserName();
+    }
 }
 
 
