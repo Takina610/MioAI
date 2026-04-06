@@ -10,7 +10,7 @@
   >
     <div class="modal-header">
       <div class="header-left">
-        <h3>创建知识库</h3>
+        <h3>{{ skipFirstStep ? '上传文档' : '创建知识库' }}</h3>
       </div>
       <a-button type="text" class="close-btn" @click="handleCancel">
         <CloseOutlined />
@@ -80,9 +80,8 @@
       <div v-show="currentStep === 1" class="step-upload">
         <div class="upload-area" @drop.prevent="handleDrop" @dragover.prevent>
           <a-upload-dragger
-            :file-list="fileList"
+            v-model:file-list="fileList"
             :before-upload="beforeUpload"
-            :custom-request="customUpload"
             :multiple="true"
             accept=".pdf,.doc,.docx,.md,.txt,.ppt,.pptx"
             @remove="handleRemove"
@@ -114,12 +113,12 @@
         </div>
 
         <div class="step-actions">
-          <a-button @click="prevStep">上一步</a-button>
+          <a-button @click="skipFirstStep ? handleCancel() : prevStep()">{{ skipFirstStep ? '取消' : '上一步' }}</a-button>
           <a-button
             type="primary"
             @click="handleUploadAndNext"
             :loading="uploading"
-            :disabled="uploadedFiles.length === 0"
+            :disabled="fileList.length === 0"
           >
             开始向量化
           </a-button>
@@ -163,7 +162,7 @@
         </div>
 
         <div class="step-actions">
-          <a-button v-if="!vectorizing" @click="handleCancelCreation">取消</a-button>
+          <a-button v-if="!vectorizing" @click="handleCancelCreation">{{ skipFirstStep ? '关闭' : '取消' }}</a-button>
           <a-button v-if="vectorizeComplete && !vectorizeError" type="primary" @click="handleFinish">
             完成
           </a-button>
@@ -177,7 +176,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, onUnmounted } from 'vue'
+import { ref, reactive, watch, onUnmounted, computed } from 'vue'
 import { message } from 'ant-design-vue'
 import type { FormInstance, Rule } from 'ant-design-vue/es/form'
 import {
@@ -189,18 +188,25 @@ import {
   QuestionCircleOutlined,
   LoadingOutlined
 } from '@ant-design/icons-vue'
-import { addKnowledgeBase, uploadKnowledgeFiles, cancelKnowledgeCreation, type UploadResult } from '@/api/knowledgeBase'
+import { addKnowledgeBase, updateKnowledgeBase, uploadKnowledgeFiles, cancelKnowledgeCreation, vectorizeKnowledgeFiles, type UploadResult } from '@/api/knowledgeBase'
 
 interface Props {
   visible: boolean
+  kbId?: number
+  skipFirstStep?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  kbId: undefined,
+  skipFirstStep: false
+})
 
 const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void
   (e: 'success'): void
 }>()
+
+const skipFirstStep = computed(() => props.skipFirstStep)
 
 const formRef = ref<FormInstance | null>(null)
 const currentStep = ref(0)
@@ -210,6 +216,11 @@ const vectorizing = ref(false)
 const vectorizeComplete = ref(false)
 const vectorizeError = ref(false)
 const kbId = ref<number | null>(null)
+
+const originalFormData = reactive({
+  name: '',
+  description: ''
+})
 
 const formData = reactive({
   name: '',
@@ -238,7 +249,7 @@ const vectorizeResult = reactive({
 let eventSource: EventSource | null = null
 
 function handleCancel(): void {
-  if (kbId.value) {
+  if (kbId.value && !skipFirstStep) {
     cancelKnowledgeCreation(kbId.value).catch(() => {})
   }
   resetState()
@@ -268,14 +279,38 @@ function resetState(): void {
   }
   formData.name = ''
   formData.description = ''
+  originalFormData.name = ''
+  originalFormData.description = ''
 }
 
 async function handleNextStep(): Promise<void> {
   try {
     await formRef.value?.validate()
+    
+    if (kbId.value) {
+      const nameChanged = formData.name !== originalFormData.name
+      const descChanged = formData.description !== originalFormData.description
+      
+      if (nameChanged || descChanged) {
+        creatingKb.value = true
+        await updateKnowledgeBase({
+          id: kbId.value,
+          name: formData.name,
+          description: formData.description
+        })
+        originalFormData.name = formData.name
+        originalFormData.description = formData.description
+        creatingKb.value = false
+      }
+      currentStep.value = 1
+      return
+    }
+    
     creatingKb.value = true
     const id = await addKnowledgeBase({ name: formData.name, description: formData.description })
     kbId.value = id
+    originalFormData.name = formData.name
+    originalFormData.description = formData.description
     currentStep.value = 1
   } catch (e) {
     console.error(e)
@@ -302,14 +337,7 @@ function beforeUpload(file: any): boolean {
     message.error('文件大小不能超过 50MB')
     return false
   }
-  return true
-}
-
-function customUpload(options: any): void {
-  const { file, onSuccess, onError } = options
-  setTimeout(() => {
-    onSuccess({ url: 'temp' }, file)
-  }, 100)
+  return false
 }
 
 function handleRemove(file: any): void {
@@ -324,7 +352,7 @@ function handleDrop(e: DragEvent): void {
 }
 
 async function handleUploadAndNext(): Promise<void> {
-  if (!kbId.value || uploadedFiles.value.length === 0) return
+  if (!kbId.value || fileList.value.length === 0) return
 
   uploading.value = true
   try {
@@ -335,12 +363,26 @@ async function handleUploadAndNext(): Promise<void> {
       }
     })
 
+    if (filesToUpload.length === 0) {
+      message.warning('请选择要上传的文件')
+      return
+    }
+
     const results = await uploadKnowledgeFiles(kbId.value, filesToUpload)
     uploadedFiles.value = results
 
-    const hasError = results.some(r => r.status === 'error')
-    if (hasError) {
-      message.warning('部分文件上传失败，请查看详情')
+    const successCount = results.filter(r => r.status === 'success').length
+    const errorCount = results.filter(r => r.status === 'error').length
+
+    if (errorCount > 0 && successCount === 0) {
+      message.error('所有文件上传失败')
+      return
+    }
+
+    if (errorCount > 0) {
+      message.warning(`成功上传 ${successCount} 个文件，${errorCount} 个文件失败`)
+    } else {
+      message.success(`成功上传 ${successCount} 个文件`)
     }
 
     currentStep.value = 2
@@ -360,12 +402,11 @@ function startVectorization(): void {
   vectorizeComplete.value = false
   vectorizeError.value = false
   errorMsg.value = ''
+  vectorizeStatusTitle.value = '准备向量化'
+  vectorizeStatusMessage.value = '向量化处理可能需要较长时间，请耐心等待...'
 
   const token = localStorage.getItem('token') || ''
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
-  const url = `${baseUrl}/knowledge-bases/create/vectorize/${kbId.value}`
-
-  eventSource = new EventSource(url)
+  eventSource = vectorizeKnowledgeFiles(kbId.value, token)
 
   eventSource.onmessage = (event: MessageEvent) => {
     try {
@@ -377,6 +418,11 @@ function startVectorization(): void {
   }
 
   eventSource.onerror = () => {
+    if (vectorizeComplete.value) {
+      eventSource?.close()
+      eventSource = null
+      return
+    }
     vectorizing.value = false
     vectorizeError.value = true
     errorMsg.value = '连接中断，请重试'
@@ -447,7 +493,7 @@ function handleFinish(): void {
 }
 
 async function handleCancelCreation(): Promise<void> {
-  if (kbId.value) {
+  if (kbId.value && !skipFirstStep) {
     await cancelKnowledgeCreation(kbId.value)
   }
   handleCancel()
@@ -464,6 +510,9 @@ function formatFileSize(bytes: number): string {
 watch(() => props.visible, (newVal) => {
   if (!newVal) {
     resetState()
+  } else if (props.skipFirstStep && props.kbId) {
+    kbId.value = props.kbId
+    currentStep.value = 1
   }
 })
 

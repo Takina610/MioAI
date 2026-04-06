@@ -30,5 +30,5 @@ public class KnowledgeBaseUpdateRequest implements Serializable {
     /**
      * 状态
      */
-    private Integer status;
+    private Integer isPublic;
 }

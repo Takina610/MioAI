@@ -16,13 +16,13 @@
 
     <div class="page-content">
       <template v-if="!userStore.isLoggedIn">
-            <div class="login-prompt">
-              <p class="prompt-title">登录以使用</p>
-              <p class="prompt-desc">您当前处于未登录状态，登录后可使用完整服务</p>
-              <a-button type="primary" @click="$emit('login-required')">
-                登录
-              </a-button>
-            </div>
+        <div class="login-prompt">
+          <p class="prompt-title">登录以使用</p>
+          <p class="prompt-desc">您当前处于未登录状态，登录后可使用完整服务</p>
+          <a-button type="primary" @click="$emit('login-required')">
+            登录
+          </a-button>
+        </div>
       </template>
 
       <template v-else>
@@ -34,23 +34,8 @@
                   <div class="icon-wrapper">
                     <DatabaseOutlined />
                   </div>
-                  <a-dropdown :trigger="['click']">
-                    <a-button type="text" class="more-btn">
-                      <MoreOutlined />
-                    </a-button>
-                    <template #overlay>
-                      <a-menu>
-                        <a-menu-item key="edit" @click="showEditModal(kb)">
-                          <EditOutlined /> 编辑
-                        </a-menu-item>
-                        <a-menu-item key="delete" @click="handleDelete(kb)">
-                          <DeleteOutlined /> 删除
-                        </a-menu-item>
-                      </a-menu>
-                    </template>
-                  </a-dropdown>
+                  <h3 class="card-title">{{ kb.name }}</h3>
                 </div>
-                <h3 class="card-title">{{ kb.name }}</h3>
                 <p class="card-desc">{{ kb.description || '暂无描述' }}</p>
                 <div class="card-stats">
                   <div class="stat-item">
@@ -59,10 +44,15 @@
                   </div>
                 </div>
                 <div class="card-footer">
-                  <a-tag :color="kb.status === 1 ? 'green' : 'default'">
-                    {{ kb.status === 1 ? '启用' : '禁用' }}
-                  </a-tag>
-                  <span class="create-time">{{ formatDate(kb.createTime) }}</span>
+                  <span class="update-time">更新于 {{ formatDate(kb.updateTime || kb.createTime) }}</span>
+                </div>
+                <div class="card-actions">
+                  <a-button class="edit-btn" @click="goToDetail(kb.id)">
+                    <EditOutlined /> 编辑
+                  </a-button>
+                  <a-button class="delete-btn" @click="confirmDelete(kb)">
+                    <DeleteOutlined /> 删除
+                  </a-button>
                 </div>
               </div>
             </a-col>
@@ -74,35 +64,6 @@
             <div class="empty-hint">前往右上角创建知识库</div>
           </div>
         </div>
-
-        <a-modal
-          :open="modalVisible"
-          @update:open="modalVisible = $event"
-          :title="editingKb ? '编辑知识库' : '创建知识库'"
-          :confirm-loading="submitLoading"
-          @ok="handleSubmit"
-          @cancel="resetForm"
-          width="600px"
-        >
-          <a-form
-            ref="formRef"
-            :model="formData"
-            :rules="rules"
-            layout="vertical"
-          >
-            <a-form-item name="name" label="名称">
-              <a-input :value="formData.name" @update:value="formData.name = $event" placeholder="请输入知识库名称" />
-            </a-form-item>
-            <a-form-item name="description" label="描述">
-              <a-textarea
-                :value="formData.description"
-                @update:value="formData.description = $event"
-                placeholder="请输入描述"
-                :rows="3"
-              />
-            </a-form-item>
-          </a-form>
-        </a-modal>
 
         <KnowledgeBaseModal
           v-model:visible="createModalVisible"
@@ -118,11 +79,11 @@ import { ref, reactive, onMounted } from 'vue'
 import { message, Modal, type FormInstance } from 'ant-design-vue'
 import type { Rule } from 'ant-design-vue/es/form'
 import { useUserStore } from '@/store/user'
-import { addKnowledgeBase, queryKnowledgeBases, updateKnowledgeBase, deleteKnowledgeBase } from '@/api/knowledgeBase'
-import type { KnowledgeBase, KnowledgeBaseAddRequest, KnowledgeBaseUpdateRequest, PageResponse } from '@/types'
+import { addKnowledgeBase, queryKnowledgeBases, deleteKnowledgeBase } from '@/api/knowledgeBase'
+import type { KnowledgeBase, KnowledgeBaseAddRequest, PageResponse } from '@/types'
+import { useRouter } from 'vue-router'
 import {
   PlusOutlined,
-  MoreOutlined,
   EditOutlined,
   DeleteOutlined,
   DatabaseOutlined,
@@ -141,11 +102,11 @@ interface FormData {
 }
 
 const userStore = useUserStore()
+const router = useRouter()
 const loading = ref<boolean>(false)
 const submitLoading = ref<boolean>(false)
 const modalVisible = ref<boolean>(false)
 const createModalVisible = ref<boolean>(false)
-const editingKb = ref<KnowledgeBase | null>(null)
 const knowledgeList = ref<KnowledgeBase[]>([])
 const formRef = ref<FormInstance | null>(null)
 
@@ -186,16 +147,23 @@ function handleCreateSuccess(): void {
   fetchKnowledgeBases()
 }
 
-function showEditModal(kb: KnowledgeBase): void {
-  editingKb.value = kb
-  Object.assign(formData, {
-    id: kb.id,
-    name: kb.name,
-    description: kb.description,
-    type: 1,
-    embeddingModel: 'text-embedding-v3'
+function goToDetail(kbId: number): void {
+  router.push(`/dashboard/knowledge/${kbId}`)
+}
+
+function confirmDelete(kb: KnowledgeBase): void {
+  Modal.confirm({
+    title: '确认删除',
+    content: `确定要删除知识库「${kb.name}」吗？删除后将无法恢复。`,
+    okText: '确定',
+    cancelText: '取消',
+    okButtonProps: { danger: true },
+    async onOk() {
+      await deleteKnowledgeBase(kb.id)
+      message.success('删除成功')
+      fetchKnowledgeBases()
+    }
   })
-  modalVisible.value = true
 }
 
 function resetForm(): void {
@@ -205,43 +173,6 @@ function resetForm(): void {
     description: '',
     type: 1,
     embeddingModel: 'text-embedding-v3'
-  })
-}
-
-async function handleSubmit(): Promise<void> {
-  try {
-    await formRef.value?.validate()
-    submitLoading.value = true
-    
-    if (editingKb.value) {
-      await updateKnowledgeBase({ ...formData, id: editingKb.value.id } as KnowledgeBaseUpdateRequest)
-      message.success('更新成功')
-    } else {
-      await addKnowledgeBase(formData as KnowledgeBaseAddRequest)
-      message.success('创建成功')
-    }
-    
-    modalVisible.value = false
-    resetForm()
-    fetchKnowledgeBases()
-  } catch (e) {
-    console.error(e)
-  } finally {
-    submitLoading.value = false
-  }
-}
-
-function handleDelete(kb: KnowledgeBase): void {
-  Modal.confirm({
-    title: '确认删除',
-    content: `确定要删除知识库「${kb.name}」吗？`,
-    okText: '确定',
-    cancelText: '取消',
-    async onOk() {
-      await deleteKnowledgeBase(kb.id)
-      message.success('删除成功')
-      fetchKnowledgeBases()
-    }
   })
 }
 
@@ -291,9 +222,8 @@ onMounted(() => {
 
   .page-content {
     height: calc(100% - 132px);
-    display: flex;
-    justify-content: center;
-    flex-direction: column;
+    overflow-y: auto;
+    padding: 0 24px;
   }
 
   .login-prompt {
@@ -301,7 +231,7 @@ onMounted(() => {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 400px;
+    min-height: calc(100vh - 300px);
     text-align: center;
 
     .prompt-title {
@@ -337,7 +267,7 @@ onMounted(() => {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 400px;
+    min-height: calc(100vh - 300px);
     text-align: center;
 
     .empty-image {
@@ -371,64 +301,75 @@ onMounted(() => {
     padding: 20px;
     border: 1px solid #f0f0f0;
     transition: all 0.3s;
+    position: relative;
 
     &:hover {
-      transform: translateY(-4px);
+      border-color: $primary-color;
       box-shadow: $shadow-medium;
+
+      .card-footer {
+        opacity: 0;
+      }
+
+      .card-actions {
+        opacity: 1;
+        visibility: visible;
+      }
     }
 
     .card-header {
       display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 16px;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
 
       .icon-wrapper {
-        width: 48px;
-        height: 48px;
-        border-radius: 12px;
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
         background: rgba($primary-color, 0.1);
         display: flex;
         align-items: center;
         justify-content: center;
+        flex-shrink: 0;
 
         .anticon {
-          font-size: 24px;
+          font-size: 20px;
           color: $primary-color;
         }
       }
 
-      .more-btn {
-        color: #999;
-
-        &:hover {
-          color: $primary-color;
-        }
+      .card-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: $text-dark;
+        margin: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
       }
-    }
-
-    .card-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: $text-dark;
-      margin-bottom: 8px;
     }
 
     .card-desc {
+      padding-bottom: 12px;
       font-size: 13px;
       color: #666;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
       display: -webkit-box;
       line-clamp: 2;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: wrap;
+      border-bottom: 1px solid #f0f0f0;
     }
 
     .card-stats {
       display: flex;
       gap: 16px;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
 
       .stat-item {
         display: flex;
@@ -445,12 +386,63 @@ onMounted(() => {
 
     .card-footer {
       display: flex;
-      justify-content: space-between;
+      justify-content: flex-start;
       align-items: center;
+      height: 36px;
+      transition: opacity 0.3s;
 
-      .create-time {
+      .update-time {
         font-size: 12px;
         color: #999;
+      }
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 8px;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s;
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      height: 36px;
+
+      .edit-btn,
+      .delete-btn {
+        flex: 1;
+        height: 36px;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        border-radius: 8px;
+      }
+
+      .edit-btn {
+        background: $primary-color;
+        border: 1px solid $primary-color;
+        color: #fff;
+
+        &:hover {
+          background: darken($primary-color, 10%);
+          border-color: darken($primary-color, 10%);
+          color: #fff;
+        }
+      }
+
+      .delete-btn {
+        background: #fff;
+        border: 1px solid #ff4d4f;
+        color: #ff4d4f;
+
+        &:hover {
+          background: #fff1f0;
+          color: #ff4d4f;
+          border-color: #ff4d4f;
+        }
       }
     }
   }

@@ -3,13 +3,11 @@ package com.mio.ai.customagent.rag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.reader.TextReader;
-import org.springframework.ai.reader.markdown.MarkdownDocumentReader;
-import org.springframework.ai.reader.markdown.config.MarkdownDocumentReaderConfig;
-import org.springframework.core.io.Resource;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
-import java.util.ArrayList;
+import java.io.File;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -21,20 +19,13 @@ import java.util.List;
 @Component
 @Slf4j
 public class TxtReader {
-    public List<Document> loadTxt() {
-        List<Document> allDoc = new ArrayList<>();
-
+    public List<Document> loadTxt(File file) {
         try {
-            //对每个resource进行处理
-            for (Resource resource: resources){
-                log.info("load file: " + resource.getFilename());
-                TextReader reader = new TextReader(resources);
-                allDoc.addAll(reader.get());
-            }
-        } catch (IOException e){
-            log.error("文档加载失败, e:", e);
+            TextReader reader = new TextReader(new FileSystemResource(file));
+            return reader.get();
+        } catch (Exception e) {
+            log.error("读取文本文件失败", e);
+            return Collections.emptyList();
         }
-        log.info("文档加载完成");
-        return allDoc;
     }
 }

@@ -66,7 +66,10 @@ public class KnowledgeBaseController {
     }
 
     @PostMapping("/list")
-    public BaseResponse<Page<KnowledgeBaseVO>> listKnowledgeBases(@RequestBody KnowledgeBaseQueryRequest request) {
+    public BaseResponse<Page<KnowledgeBaseVO>> listKnowledgeBases(@RequestBody KnowledgeBaseQueryRequest request,
+                                                                  HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        request.setUserId(userId);
         Page<KnowledgeBaseVO> page = knowledgeBaseService.queryKnowledgeBases(request);
         return ResultUtils.success(page);
     }

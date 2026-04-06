@@ -253,6 +253,10 @@ const features: Feature[] = [
     .user-name {
       font-size: 14px;
       color: $text-dark;
+
+      @media (max-width: 480px) {
+        display: none;
+      }
     }
   }
 
@@ -277,13 +281,26 @@ const features: Feature[] = [
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 80px 24px;
+  padding: 60px 24px;
   max-width: 1200px;
   margin: 0 auto;
   gap: 80px;
 
+  @media (max-width: 992px) {
+    flex-direction: column;
+    text-align: center;
+    gap: 60px;
+    padding: 40px 20px;
+  }
+
   .hero-content {
     flex: 1;
+
+    @media (max-width: 992px) {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
 
     .hero-title {
       font-size: 48px;
@@ -291,6 +308,15 @@ const features: Feature[] = [
       color: $text-dark;
       line-height: 1.2;
       margin-bottom: 24px;
+
+      @media (max-width: 768px) {
+        font-size: 36px;
+      }
+
+      @media (max-width: 480px) {
+        font-size: 28px;
+        margin-bottom: 16px;
+      }
 
       .highlight {
         color: $primary-color;
@@ -303,11 +329,30 @@ const features: Feature[] = [
       color: #666;
       margin-bottom: 40px;
       max-width: 480px;
+
+      @media (max-width: 992px) {
+        max-width: 100%;
+      }
+
+      @media (max-width: 480px) {
+        font-size: 15px;
+        margin-bottom: 32px;
+      }
     }
 
     .hero-actions {
       display: flex;
       gap: 16px;
+
+      @media (max-width: 480px) {
+        flex-direction: column;
+        width: 100%;
+        gap: 12px;
+
+        :deep(.ant-btn) {
+          width: 100%;
+        }
+      }
     }
   }
 
@@ -315,6 +360,13 @@ const features: Feature[] = [
     position: relative;
     width: 400px;
     height: 300px;
+    flex-shrink: 0;
+
+    @media (max-width: 992px) {
+      width: 100%;
+      max-width: 400px;
+      height: 250px;
+    }
 
     .illustration-card {
       position: absolute;
@@ -327,33 +379,58 @@ const features: Feature[] = [
       gap: 12px;
       animation: float 3s ease-in-out infinite;
 
+      @media (max-width: 768px) {
+        padding: 16px 20px;
+      }
+
       .icon {
         font-size: 24px;
         color: $primary-color;
+
+        @media (max-width: 768px) {
+          font-size: 20px;
+        }
       }
 
       span {
         font-size: 14px;
         font-weight: 500;
         color: $text-dark;
+
+        @media (max-width: 768px) {
+          font-size: 13px;
+        }
       }
 
       &.card-1 {
         top: 20px;
         left: 40px;
         animation-delay: 0s;
+
+        @media (max-width: 768px) {
+          left: 20px;
+        }
       }
 
       &.card-2 {
         top: 100px;
         right: 20px;
         animation-delay: 0.5s;
+
+        @media (max-width: 768px) {
+          right: 10px;
+        }
       }
 
       &.card-3 {
         bottom: 40px;
         left: 80px;
         animation-delay: 1s;
+
+        @media (max-width: 768px) {
+          left: 50px;
+          bottom: 30px;
+        }
       }
     }
   }
@@ -372,12 +449,30 @@ const features: Feature[] = [
   padding: 80px 24px;
   background: #f9fafb;
 
+  @media (max-width: 768px) {
+    padding: 60px 20px;
+  }
+
+  @media (max-width: 480px) {
+    padding: 40px 16px;
+  }
+
   .section-title {
     text-align: center;
     font-size: 32px;
     font-weight: 600;
     color: $text-dark;
     margin-bottom: 48px;
+
+    @media (max-width: 768px) {
+      font-size: 26px;
+      margin-bottom: 32px;
+    }
+
+    @media (max-width: 480px) {
+      font-size: 22px;
+      margin-bottom: 24px;
+    }
   }
 
   .features-grid {
@@ -387,12 +482,14 @@ const features: Feature[] = [
     grid-template-columns: repeat(3, 1fr);
     gap: 24px;
 
-    @media (max-width: 768px) {
+    @media (max-width: 992px) {
       grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
     }
 
-    @media (max-width: 480px) {
+    @media (max-width: 576px) {
       grid-template-columns: 1fr;
+      gap: 16px;
     }
   }
 
@@ -402,9 +499,21 @@ const features: Feature[] = [
     padding: 32px;
     transition: all 0.3s;
 
+    @media (max-width: 768px) {
+      padding: 24px;
+    }
+
+    @media (max-width: 480px) {
+      padding: 20px;
+    }
+
     &:hover {
       transform: translateY(-4px);
       box-shadow: $shadow-medium;
+
+      @media (max-width: 768px) {
+        transform: none;
+      }
     }
 
     .feature-icon {
@@ -417,9 +526,19 @@ const features: Feature[] = [
       justify-content: center;
       margin-bottom: 16px;
 
+      @media (max-width: 480px) {
+        width: 40px;
+        height: 40px;
+        margin-bottom: 12px;
+      }
+
       :deep(.anticon) {
         font-size: 24px;
         color: $primary-color;
+
+        @media (max-width: 480px) {
+          font-size: 20px;
+        }
       }
     }
 
@@ -428,12 +547,20 @@ const features: Feature[] = [
       font-weight: 600;
       color: $text-dark;
       margin-bottom: 8px;
+
+      @media (max-width: 480px) {
+        font-size: 16px;
+      }
     }
 
     .feature-desc {
       font-size: 14px;
       color: #666;
       line-height: 1.6;
+
+      @media (max-width: 480px) {
+        font-size: 13px;
+      }
     }
   }
 }
@@ -444,5 +571,10 @@ const features: Feature[] = [
   color: #999;
   font-size: 14px;
   border-top: 1px solid #f0f0f0;
+
+  @media (max-width: 480px) {
+    padding: 20px 16px;
+    font-size: 12px;
+  }
 }
 </style>

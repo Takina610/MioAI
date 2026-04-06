@@ -126,7 +126,7 @@ function formatTime(time: string): string {
     flex-direction: column;
 
     &:hover {
-      transform: translateY(-4px);
+      border-color: $primary-color;
       box-shadow: $shadow-medium;
     }
 

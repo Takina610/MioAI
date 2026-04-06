@@ -78,7 +78,8 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
         }
         KnowledgeBase kb = this.getById(id);
         if (kb == null) {
-            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "知识库不存在");
+//            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "知识库不存在");
+            return null;
         }
         return convertToVO(kb);
     }

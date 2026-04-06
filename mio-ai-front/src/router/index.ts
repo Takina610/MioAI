@@ -46,50 +46,68 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'agent-market',
         name: 'AgentMarket',
-        component: () => import('@/views/dashboard/AgentMarket.vue'),
+        component: () => import('@/views/dashboard/agent/market.vue'),
         meta: { title: '应用广场', requiresAuth: false }
       },
       {
         path: 'agents',
         name: 'AgentManage',
-        component: () => import('@/views/dashboard/AgentManage.vue'),
+        component: () => import('@/views/dashboard/agent/manage.vue'),
         meta: { title: '应用管理', requiresAuth: false }
       },
       {
         path: 'mcp-market',
         name: 'McpMarket',
-        component: () => import('@/views/dashboard/McpMarket.vue'),
+        component: () => import('@/views/dashboard/mcp/market.vue'),
         meta: { title: 'MCP广场', requiresAuth: false }
       },
       {
         path: 'mcp',
         name: 'McpManage',
-        component: () => import('@/views/dashboard/McpManage.vue'),
+        component: () => import('@/views/dashboard/mcp/manage.vue'),
         meta: { title: 'MCP管理', requiresAuth: false }
       },
       {
         path: 'public-knowledge',
         name: 'PublicKnowledge',
-        component: () => import('@/views/dashboard/PublicKnowledge.vue'),
+        component: () => import('@/views/dashboard/knowledge/public.vue'),
         meta: { title: '公共知识库', requiresAuth: false }
       },
       {
         path: 'knowledge',
         name: 'KnowledgeManage',
-        component: () => import('@/views/dashboard/KnowledgeManage.vue'),
+        component: () => import('@/views/dashboard/knowledge/manage.vue'),
         meta: { title: '知识库管理', requiresAuth: false }
+      },
+      {
+        path: 'knowledge/:id',
+        name: 'KnowledgeDetail',
+        component: () => import('@/views/dashboard/knowledge/detail.vue'),
+        meta: { title: '知识库详情', requiresAuth: false }
       },
       {
         path: 'profile',
         name: 'Profile',
-        component: () => import('@/views/dashboard/Profile.vue'),
+        component: () => import('@/views/dashboard/profile/index.vue'),
         meta: { title: '个人中心', requiresAuth: true }
       }
     ]
   },
   {
-    path: '/:pathMatch(.*)*',
+    path: '/403',
+    name: 'Forbidden',
+    component: () => import('@/views/error/403.vue'),
+    meta: { title: '无权访问' }
+  },
+  {
+    path: '/404',
     name: 'NotFound',
+    component: () => import('@/views/error/404.vue'),
+    meta: { title: '页面不存在' }
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFoundCatch',
     component: () => import('@/views/error/404.vue'),
     meta: { title: '页面不存在' }
   }

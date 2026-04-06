@@ -9,46 +9,41 @@
     </div>
 
     <div class="page-content">
-      <a-row :gutter="[16, 16]">
-        <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="kb in knowledgeList" :key="kb.id">
-          <a-card hoverable class="kb-card" @click="viewKnowledge(kb)">
-            <div class="card-header">
-              <DatabaseOutlined class="header-icon" />
-              <h3>{{ kb.name }}</h3>
-            </div>
-            <p class="card-desc">{{ kb.description || '暂无描述' }}</p>
-            <div class="card-footer">
-              <span class="author">
-                <UserOutlined /> {{ kb.userName || '匿名' }}
-              </span>
-              <span class="docs">
-                <FileOutlined /> {{ kb.docCount || 0 }} 文档
-              </span>
-            </div>
-          </a-card>
-        </a-col>
-      </a-row>
+      <a-spin :spinning="loading">
+        <a-row :gutter="[16, 16]" v-if="knowledgeList.length > 0">
+          <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="kb in knowledgeList" :key="kb.id">
+            <a-card hoverable class="kb-card" @click="viewKnowledge(kb)">
+              <div class="card-header">
+                <DatabaseOutlined class="header-icon" />
+                <h3>{{ kb.name }}</h3>
+              </div>
+              <p class="card-desc">{{ kb.description || '暂无描述' }}</p>
+              <div class="card-footer">
+                <span class="docs">
+                  <FileOutlined /> {{ kb.documentCount || 0 }} 文档
+                </span>
+                <span class="storage">
+                  {{ formatFileSize(kb.storageSize || 0) }}
+                </span>
+              </div>
+            </a-card>
+          </a-col>
+        </a-row>
 
-      <a-empty v-if="!loading && knowledgeList.length === 0" description="暂无公开知识库" />
+        <a-empty v-else-if="!loading" description="暂无公开知识库" />
+      </a-spin>
     </div>
-
-
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { DatabaseOutlined, UserOutlined, FileOutlined } from '@ant-design/icons-vue'
+import { DatabaseOutlined, FileOutlined } from '@ant-design/icons-vue'
 import { getPublicKnowledgeBases } from '@/api/knowledgeBase'
 import type { KnowledgeBase, PageResponse } from '@/types'
 
-interface KnowledgeBaseWithUser extends KnowledgeBase {
-  userName?: string
-  docCount?: number
-}
-
 const loading = ref<boolean>(false)
-const knowledgeList = ref<KnowledgeBaseWithUser[]>([])
+const knowledgeList = ref<KnowledgeBase[]>([])
 
 onMounted(() => {
   fetchKnowledgeBases()
@@ -57,7 +52,7 @@ onMounted(() => {
 async function fetchKnowledgeBases(): Promise<void> {
   loading.value = true
   try {
-    const res: PageResponse<KnowledgeBaseWithUser> = await getPublicKnowledgeBases()
+    const res: PageResponse<KnowledgeBase> = await getPublicKnowledgeBases()
     knowledgeList.value = res?.records || []
   } catch (e) {
     console.error(e)
@@ -66,7 +61,15 @@ async function fetchKnowledgeBases(): Promise<void> {
   }
 }
 
-function viewKnowledge(kb: KnowledgeBaseWithUser): void {
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+function viewKnowledge(kb: KnowledgeBase): void {
   console.log('查看知识库:', kb)
 }
 </script>
@@ -97,9 +100,8 @@ function viewKnowledge(kb: KnowledgeBaseWithUser): void {
 
   .page-content {
     height: calc(100% - 140px);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
+    overflow-y: auto;
+    padding: 24px;
   }
 
   .kb-card {
@@ -107,7 +109,7 @@ function viewKnowledge(kb: KnowledgeBaseWithUser): void {
     transition: all 0.3s;
 
     &:hover {
-      transform: translateY(-4px);
+      border-color: $primary-color;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     }
 
@@ -127,6 +129,9 @@ function viewKnowledge(kb: KnowledgeBaseWithUser): void {
         font-size: 16px;
         font-weight: 600;
         color: #202124;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
     }
 
@@ -151,11 +156,14 @@ function viewKnowledge(kb: KnowledgeBaseWithUser): void {
       font-size: 12px;
       color: #999;
 
-      .author,
       .docs {
         display: flex;
         align-items: center;
         gap: 4px;
+      }
+
+      .storage {
+        color: #666;
       }
     }
   }

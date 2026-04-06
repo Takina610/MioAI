@@ -78,6 +78,50 @@ export function uploadKnowledgeFiles(kbId: number, files: File[]): Promise<Uploa
 export function cancelKnowledgeCreation(kbId: number): Promise<boolean> {
   return request({
     url: `/knowledge-bases/create/cancel/${kbId}`,
+    method: 'post'
+  })
+}
+
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
+
+export function vectorizeKnowledgeFiles(kbId: number, token: string): EventSource {
+  const url = `${BASE_URL}/knowledge-bases/create/vectorize/${kbId}?token=${encodeURIComponent(token)}`
+  return new EventSource(url)
+}
+
+export interface Document {
+  id: number
+  kbId: number
+  fileName: string
+  fileType: string
+  fileSize: number
+  filePath: string
+  status: number
+  statusDesc: string
+  createTime: string
+  updateTime: string
+}
+
+export interface DocumentQueryRequest {
+  current: number
+  pageSize: number
+  kbId?: number
+  fileName?: string
+  fileType?: string
+  status?: number
+}
+
+export function queryDocuments(data: DocumentQueryRequest): Promise<PageResponse<Document>> {
+  return request({
+    url: '/documents/list',
+    method: 'post',
+    data
+  })
+}
+
+export function deleteDocument(id: number): Promise<boolean> {
+  return request({
+    url: `/documents/${id}`,
     method: 'delete'
   })
 }

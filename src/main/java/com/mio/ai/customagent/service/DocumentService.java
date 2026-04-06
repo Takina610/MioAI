@@ -14,25 +14,16 @@ import com.mio.ai.customagent.model.vo.DocumentVO;
  */
 public interface DocumentService extends IService<Document> {
 
-    /**
-     * 添加文档
-     */
-    Long addDocument(DocumentAddRequest request);
+    Long addDocument(DocumentAddRequest request, Long userId);
 
-    /**
-     * 删除文档
-     */
-    boolean deleteDocument(Long id);
+    boolean deleteDocument(Long id, Long userId);
 
     /**
      * 根据ID获取文档
      */
     DocumentVO getDocumentById(Long id);
 
-    /**
-     * 分页查询文档
-     */
-    Page<DocumentVO> queryDocuments(DocumentQueryRequest request);
+    Page<DocumentVO> queryDocuments(DocumentQueryRequest request, Long userId);
 
     /**
      * 更新文档处理状态

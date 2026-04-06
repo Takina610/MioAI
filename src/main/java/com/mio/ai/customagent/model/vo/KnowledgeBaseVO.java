@@ -31,16 +31,6 @@ public class KnowledgeBaseVO implements Serializable {
     private String description;
 
     /**
-     * 分块大小
-     */
-    private Integer chunkSize;
-
-    /**
-     * 分块重叠大小
-     */
-    private Integer chunkOverlap;
-
-    /**
      * 状态
      */
     private Integer status;
@@ -56,14 +46,14 @@ public class KnowledgeBaseVO implements Serializable {
     private Integer documentCount;
 
     /**
-     * 总分块数
-     */
-    private Integer totalChunks;
-
-    /**
      * 存储大小（字节）
      */
     private Long storageSize;
+
+    /**
+     * 是否公开
+     */
+    private Integer isPublic;
 
     /**
      * 创建时间

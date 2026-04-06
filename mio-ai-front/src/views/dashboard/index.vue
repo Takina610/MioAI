@@ -211,6 +211,8 @@ watch(
     }
     if (pathMap[path]) {
       currentPath.value = pathMap[path]
+    } else if (path.startsWith('/dashboard/knowledge/')) {
+      currentPath.value = 'knowledge'
     }
   },
   { immediate: true }
@@ -256,6 +258,9 @@ function handleAuthSuccess(): void {
 
 async function handleLogout(): Promise<void> {
   await userStore.logout()
+  if (route.name === 'KnowledgeDetail') {
+    router.push('/dashboard/knowledge')
+  }
   message.success('已退出登录')
 }
 </script>

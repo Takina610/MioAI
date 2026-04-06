@@ -2,12 +2,14 @@ package com.mio.ai.customagent.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.utils.RedisComponent;
 import com.mio.ai.common.utils.ResultUtils;
 import com.mio.ai.customagent.model.dto.document.DocumentAddRequest;
 import com.mio.ai.customagent.model.dto.document.DocumentQueryRequest;
 import com.mio.ai.customagent.model.vo.DocumentVO;
 import com.mio.ai.customagent.service.DocumentService;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,15 +26,20 @@ public class DocumentController {
     @Resource
     private DocumentService documentService;
 
+    @Resource
+    private RedisComponent redisComponent;
+
     @PostMapping
-    public BaseResponse<Long> addDocument(@RequestBody DocumentAddRequest request) {
-        Long id = documentService.addDocument(request);
+    public BaseResponse<Long> addDocument(@RequestBody DocumentAddRequest request, HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        Long id = documentService.addDocument(request, userId);
         return ResultUtils.success(id);
     }
 
     @DeleteMapping("/{id}")
-    public BaseResponse<Boolean> deleteDocument(@PathVariable Long id) {
-        boolean result = documentService.deleteDocument(id);
+    public BaseResponse<Boolean> deleteDocument(@PathVariable Long id, HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        boolean result = documentService.deleteDocument(id, userId);
         return ResultUtils.success(result);
     }
 
@@ -43,8 +50,9 @@ public class DocumentController {
     }
 
     @PostMapping("/list")
-    public BaseResponse<Page<DocumentVO>> listDocuments(@RequestBody DocumentQueryRequest request) {
-        Page<DocumentVO> page = documentService.queryDocuments(request);
+    public BaseResponse<Page<DocumentVO>> listDocuments(@RequestBody DocumentQueryRequest request, HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        Page<DocumentVO> page = documentService.queryDocuments(request, userId);
         return ResultUtils.success(page);
     }
 }
