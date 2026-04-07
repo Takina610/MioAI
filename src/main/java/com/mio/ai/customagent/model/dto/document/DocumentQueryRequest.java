@@ -34,4 +34,9 @@ public class DocumentQueryRequest extends PageRequest implements Serializable {
      * 状态
      */
     private Integer status;
+
+    /**
+     * 用户Id
+     */
+    private Long userId;
 }

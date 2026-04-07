@@ -109,6 +109,7 @@ export interface DocumentQueryRequest {
   fileName?: string
   fileType?: string
   status?: number
+  userId?: number
 }
 
 export function queryDocuments(data: DocumentQueryRequest): Promise<PageResponse<Document>> {

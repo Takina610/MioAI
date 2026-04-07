@@ -147,7 +147,6 @@ import {
 } from '@/api/knowledgeBase'
 import type { KnowledgeBase } from '@/types'
 import {
-  LeftOutlined,
   PlusOutlined,
   DeleteOutlined
 } from '@ant-design/icons-vue'
@@ -233,11 +232,13 @@ async function fetchKnowledgeBase(): Promise<void> {
   loading.value = true
   try {
     const res = await getKnowledgeBaseById(kbId.value)
+    console.log(res)
     if (!res) {
       router.push('/404')
       return
     }
-    if (res.userId !== userStore.userInfo?.id) {
+
+    if (!userStore.isLoggedIn || userStore.userInfo?.id !== res.userId) {
       router.push('/403')
       return
     }
@@ -258,7 +259,8 @@ async function fetchDocuments(): Promise<void> {
     const res = await queryDocuments({
       current: pagination.current,
       pageSize: pagination.pageSize,
-      kbId: kbId.value
+      kbId: kbId.value,
+      userId: userStore.userInfo?.id
     })
     documentList.value = res.records || []
     pagination.total = res.total || 0
@@ -331,10 +333,6 @@ function handleUploadSuccess(): void {
 }
 
 onMounted(() => {
-  if (!userStore.isLoggedIn) {
-    router.push('/dashboard/knowledge')
-    return
-  }
   fetchKnowledgeBase()
   fetchDocuments()
 })

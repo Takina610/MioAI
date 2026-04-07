@@ -7,11 +7,15 @@ import com.mio.ai.common.utils.ResultUtils;
 import com.mio.ai.customagent.model.dto.mcptool.McpToolAddRequest;
 import com.mio.ai.customagent.model.dto.mcptool.McpToolQueryRequest;
 import com.mio.ai.customagent.model.dto.mcptool.McpToolUpdateRequest;
+import com.mio.ai.customagent.model.dto.mcptool.McpValidateRequest;
 import com.mio.ai.customagent.model.vo.McpToolVO;
+import com.mio.ai.customagent.model.vo.McpValidateResultVO;
 import com.mio.ai.customagent.service.McpToolService;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -21,7 +25,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @Slf4j
 @RestController
-@RequestMapping("/mcp-tools")
+@RequestMapping("/mcp")
 public class McpToolController {
 
     @Resource
@@ -31,6 +35,7 @@ public class McpToolController {
     private RedisComponent redisComponent;
 
     @PostMapping
+    @CacheEvict(value = "mcpTools", allEntries = true)
     public BaseResponse<Long> addMcpTool(@RequestBody McpToolAddRequest request, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         Long id = mcpToolService.addMcpTool(request, userId);
@@ -38,6 +43,7 @@ public class McpToolController {
     }
 
     @PutMapping
+    @CacheEvict(value = "mcpTools", allEntries = true)
     public BaseResponse<Boolean> updateMcpTool(@RequestBody McpToolUpdateRequest request, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         boolean result = mcpToolService.updateMcpTool(request, userId);
@@ -45,6 +51,7 @@ public class McpToolController {
     }
 
     @DeleteMapping("/{id:\\d+}")
+    @CacheEvict(value = "mcpTools", allEntries = true)
     public BaseResponse<Boolean> deleteMcpTool(@PathVariable Long id, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         boolean result = mcpToolService.deleteMcpTool(id, userId);
@@ -52,6 +59,7 @@ public class McpToolController {
     }
 
     @GetMapping("/market")
+    @Cacheable(value = "mcpTools")
     public BaseResponse<Page<McpToolVO>> getMarketMcpTools(
             @RequestParam(defaultValue = "1") long current,
             @RequestParam(defaultValue = "10") long size) {
@@ -60,6 +68,7 @@ public class McpToolController {
     }
 
     @GetMapping("/{id:\\d+}")
+    @Cacheable(value = "mcpTools", key = "#id")
     public BaseResponse<McpToolVO> getMcpTool(@PathVariable Long id) {
         McpToolVO tool = mcpToolService.getMcpToolById(id);
         return ResultUtils.success(tool);

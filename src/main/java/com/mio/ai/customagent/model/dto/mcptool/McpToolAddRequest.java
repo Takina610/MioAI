@@ -23,17 +23,12 @@ public class McpToolAddRequest implements Serializable {
     private String description;
 
     /**
-     * 服务器名称
-     */
-    private String serverName;
-
-    /**
      * 配置（JSON格式）
      */
     private String config;
 
     /**
-     * 是否公开
+     * 工具信息：工具列表（JSON格式）
      */
-    private Integer isPublic;
+    private String toolInfo;
 }

@@ -6,6 +6,7 @@ import com.mio.ai.customagent.model.dto.agentmcp.AgentMcpAddRequest;
 import com.mio.ai.customagent.service.AgentMcpService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,12 +25,14 @@ public class AgentMcpController {
     private AgentMcpService agentMcpService;
 
     @PostMapping
+    @CacheEvict(value = "agents", allEntries = true)
     public BaseResponse<Long> addAgentMcp(@RequestBody AgentMcpAddRequest request) {
         Long id = agentMcpService.addAgentMcp(request);
         return ResultUtils.success(id);
     }
 
     @DeleteMapping("/{id}")
+    @CacheEvict(value = "agents", allEntries = true)
     public BaseResponse<Boolean> deleteAgentMcp(@PathVariable Long id) {
         boolean result = agentMcpService.deleteAgentMcp(id);
         return ResultUtils.success(result);

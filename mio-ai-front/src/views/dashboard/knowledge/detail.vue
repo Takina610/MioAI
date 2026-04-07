@@ -196,7 +196,8 @@ async function fetchDocuments(): Promise<void> {
     const res = await queryDocuments({
       current: pagination.current,
       pageSize: pagination.pageSize,
-      kbId: kbId.value
+      kbId: kbId.value,
+      userId: knowledgeBase.value?.userId
     })
     documentList.value = res.records || []
     pagination.total = res.total || 0

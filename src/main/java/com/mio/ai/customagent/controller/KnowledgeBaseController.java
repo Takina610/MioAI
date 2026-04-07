@@ -12,6 +12,8 @@ import com.mio.ai.customagent.service.KnowledgeBaseService;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -31,6 +33,7 @@ public class KnowledgeBaseController {
     private RedisComponent redisComponent;
 
     @PostMapping
+    @CacheEvict(value = "knowledgeBases", allEntries = true)
     public BaseResponse<Long> addKnowledgeBase(@RequestBody KnowledgeBaseAddRequest request, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         Long id = knowledgeBaseService.addKnowledgeBase(request, userId);
@@ -38,6 +41,7 @@ public class KnowledgeBaseController {
     }
 
     @PutMapping
+    @CacheEvict(value = "knowledgeBases", allEntries = true)
     public BaseResponse<Boolean> updateKnowledgeBase(@RequestBody KnowledgeBaseUpdateRequest request, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         boolean result = knowledgeBaseService.updateKnowledgeBase(request, userId);
@@ -45,6 +49,7 @@ public class KnowledgeBaseController {
     }
 
     @DeleteMapping("/{id:\\d+}")
+    @CacheEvict(value = "knowledgeBases", allEntries = true)
     public BaseResponse<Boolean> deleteKnowledgeBase(@PathVariable Long id, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         boolean result = knowledgeBaseService.deleteKnowledgeBase(id, userId);
@@ -52,6 +57,7 @@ public class KnowledgeBaseController {
     }
 
     @GetMapping("/market")
+    @Cacheable(value = "knowledgeBases")
     public BaseResponse<Page<KnowledgeBaseVO>> getMarketKnowledgeBases(
             @RequestParam(defaultValue = "1") long current,
             @RequestParam(defaultValue = "12") long size) {
@@ -60,6 +66,7 @@ public class KnowledgeBaseController {
     }
 
     @GetMapping("/{id:\\d+}")
+    @Cacheable(value = "knowledgeBases", key = "#id")
     public BaseResponse<KnowledgeBaseVO> getKnowledgeBase(@PathVariable Long id) {
         KnowledgeBaseVO kb = knowledgeBaseService.getKnowledgeBaseById(id);
         return ResultUtils.success(kb);

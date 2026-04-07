@@ -28,14 +28,14 @@ public class McpToolUpdateRequest implements Serializable {
     private String description;
 
     /**
-     * 服务器名称
-     */
-    private String serverName;
-
-    /**
      * 配置（JSON格式）
      */
     private String config;
+
+    /**
+     * 工具信息：工具列表（JSON格式）
+     */
+    private String toolInfo;
 
     /**
      * 状态

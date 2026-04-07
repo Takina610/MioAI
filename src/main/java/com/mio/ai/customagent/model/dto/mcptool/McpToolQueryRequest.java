@@ -14,17 +14,6 @@ import java.io.Serializable;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class McpToolQueryRequest extends PageRequest implements Serializable {
-
-    /**
-     * 工具名称（模糊查询）
-     */
-    private String name;
-
-    /**
-     * 服务器名称
-     */
-    private String serverName;
-
     /**
      * 状态
      */

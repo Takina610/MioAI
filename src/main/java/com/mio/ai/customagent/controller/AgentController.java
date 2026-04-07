@@ -12,6 +12,8 @@ import com.mio.ai.customagent.service.AgentService;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -31,6 +33,7 @@ public class AgentController {
     private RedisComponent redisComponent;
 
     @PostMapping
+    @CacheEvict(value = "agents", allEntries = true)
     public BaseResponse<Long> addAgent(@RequestBody AgentAddRequest request, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         Long id = agentService.addAgent(request, userId);
@@ -38,6 +41,7 @@ public class AgentController {
     }
 
     @PutMapping
+    @CacheEvict(value = "agents", allEntries = true)
     public BaseResponse<Boolean> updateAgent(@RequestBody AgentUpdateRequest request, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         boolean result = agentService.updateAgent(request, userId);
@@ -45,6 +49,7 @@ public class AgentController {
     }
 
     @DeleteMapping("/{id:\\d+}")
+    @CacheEvict(value = "agents", allEntries = true)
     public BaseResponse<Boolean> deleteAgent(@PathVariable Long id, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         boolean result = agentService.deleteAgent(id, userId);
@@ -52,6 +57,7 @@ public class AgentController {
     }
 
     @GetMapping("/market")
+    @Cacheable(value = "agents")
     public BaseResponse<Page<AgentVO>> getMarketAgents(
             @RequestParam(defaultValue = "1") long current,
             @RequestParam(defaultValue = "12") long size) {
@@ -60,6 +66,7 @@ public class AgentController {
     }
 
     @GetMapping("/{id:\\d+}")
+    @Cacheable(value = "agents", key = "#id")
     public BaseResponse<AgentVO> getAgent(@PathVariable Long id) {
         AgentVO agent = agentService.getAgentById(id);
         return ResultUtils.success(agent);

@@ -15,6 +15,9 @@ import com.mio.ai.customagent.model.entity.McpTool;
 import com.mio.ai.customagent.model.enums.McpToolStatusEnum;
 import com.mio.ai.customagent.model.vo.McpToolVO;
 import com.mio.ai.customagent.service.McpToolService;
+import com.mio.ai.user.mapper.UserMapper;
+import com.mio.ai.user.model.entity.User;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
@@ -24,23 +27,22 @@ import java.util.Date;
  * @date: 2026/4/1
  * @description: MCP工具服务实现类
  */
+
 @Service
 public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> implements McpToolService {
+
+    @Autowired
+    UserMapper userMapper;
 
     @Override
     public Long addMcpTool(McpToolAddRequest request, Long userId) {
         if (StringUtils.isBlank(request.getName())) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "工具名称不能为空");
         }
-        if (StringUtils.isBlank(request.getServerName())) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "服务器名称不能为空");
-        }
         McpTool mcpTool = new McpTool();
         BeanUtil.copyProperties(request, mcpTool);
         mcpTool.setUserId(userId);
         mcpTool.setStatus(McpToolStatusEnum.ACTIVE.getCode());
-        mcpTool.setUsageCount(0);
-        mcpTool.setIsPublic(request.getIsPublic() != null ? request.getIsPublic() : 0);
         this.save(mcpTool);
         return mcpTool.getId();
     }
@@ -58,6 +60,7 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限修改该工具");
         }
         BeanUtil.copyProperties(request, mcpTool);
+        mcpTool.setUpdateTime(new Date());
         return this.updateById(mcpTool);
     }
 
@@ -83,7 +86,8 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
         }
         McpTool mcpTool = this.getById(id);
         if (mcpTool == null) {
-            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "MCP工具不存在");
+//            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "MCP工具不存在");
+            return null;
         }
         return convertToVO(mcpTool);
     }
@@ -92,26 +96,14 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
     public Page<McpToolVO> queryMcpTools(McpToolQueryRequest request) {
         Page<McpTool> page = new Page<>(request.getCurrent(), request.getPageSize());
         LambdaQueryWrapper<McpTool> wrapper = new LambdaQueryWrapper<>();
-        wrapper.like(StringUtils.isNotBlank(request.getName()), McpTool::getName, request.getName())
-                .eq(StringUtils.isNotBlank(request.getServerName()), McpTool::getServerName, request.getServerName())
-                .eq(request.getStatus() != null, McpTool::getStatus, request.getStatus())
-                .eq(request.getIsPublic() != null, McpTool::getIsPublic, request.getIsPublic())
+        wrapper.eq(request.getStatus() != null, McpTool::getStatus, request.getStatus())
+                .eq(request.getIsPublic() != null, McpTool::getIsPublic, 1)
                 .eq(request.getUserId() != null, McpTool::getUserId, request.getUserId())
                 .orderByDesc(McpTool::getCreateTime);
         Page<McpTool> toolPage = this.page(page, wrapper);
         Page<McpToolVO> voPage = new Page<>(toolPage.getCurrent(), toolPage.getSize(), toolPage.getTotal());
         voPage.setRecords(toolPage.getRecords().stream().map(this::convertToVO).toList());
         return voPage;
-    }
-
-    @Override
-    public void incrementUsageCount(Long id) {
-        McpTool mcpTool = this.getById(id);
-        if (mcpTool != null) {
-            mcpTool.setUsageCount(mcpTool.getUsageCount() + 1);
-            mcpTool.setLastUsedTime(new Date());
-            this.updateById(mcpTool);
-        }
     }
 
     @Override
@@ -128,7 +120,11 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
     }
 
     private McpToolVO convertToVO(McpTool mcpTool) {
+        User user = userMapper.selectById(mcpTool.getUserId());
+
         McpToolVO vo = new McpToolVO();
+        vo.setUserName(user.getUserName());
+
         BeanUtil.copyProperties(mcpTool, vo);
         McpToolStatusEnum statusEnum = McpToolStatusEnum.getByCode(mcpTool.getStatus());
         vo.setStatusDesc(statusEnum != null ? statusEnum.getDesc() : "未知");

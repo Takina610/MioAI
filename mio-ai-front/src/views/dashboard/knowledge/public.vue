@@ -11,7 +11,7 @@
       <a-spin :spinning="loading">
         <a-row :gutter="[16, 16]" v-if="knowledgeList.length > 0">
           <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="kb in knowledgeList" :key="kb.id">
-            <div class="kb-card">
+            <div class="kb-card" @click="goToDetail(kb.id)">
               <div class="card-header">
                 <DatabaseOutlined class="header-icon" />
                 <h3>{{ kb.name }}</h3>
@@ -25,10 +25,7 @@
                   {{ formatFileSize(kb.storageSize || 0) }}
                 </span>
               </div>
-              <div class="card-actions">
-                <a-button class="detail-btn" @click="goToDetail(kb.id)">
-                  查看详情
-                </a-button>
+              <div class="card-actions" @click.stop>
                 <a-button class="test-btn" @click="goToSimilaritySearch(kb.id)">
                   命中测试
                 </a-button>
@@ -118,6 +115,7 @@ function goToSimilaritySearch(kbId: number): void {
     border: 1px solid #f0f0f0;
     transition: all 0.3s;
     position: relative;
+    cursor: pointer;
 
     &:hover {
       border-color: $primary-color;
@@ -200,9 +198,7 @@ function goToSimilaritySearch(kbId: number): void {
       bottom: 20px;
       left: 20px;
       right: 20px;
-      height: 36px;
 
-      .detail-btn,
       .test-btn {
         flex: 1;
         height: 36px;
@@ -211,7 +207,7 @@ function goToSimilaritySearch(kbId: number): void {
         border-radius: 10px;
       }
 
-      .detail-btn {
+      .test-btn {
         background: $primary-color;
         border: 1px solid $primary-color;
         color: #fff;
@@ -220,17 +216,6 @@ function goToSimilaritySearch(kbId: number): void {
           background: darken($primary-color, 10%);
           border-color: darken($primary-color, 10%);
           color: #fff;
-        }
-      }
-
-      .test-btn {
-        background: #fff;
-        border: 1px solid #d9d9d9;
-        color: #5f6368;
-
-        &:hover {
-          color: darken($primary-color, 10%);
-          border-color: darken($primary-color, 10%);
         }
       }
     }

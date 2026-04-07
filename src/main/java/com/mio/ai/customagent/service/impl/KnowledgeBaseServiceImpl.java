@@ -21,6 +21,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
+import java.util.Date;
+
 /**
  * @author: Takina
  * @date: 2026/4/1
@@ -64,6 +66,7 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限修改该知识库");
         }
         BeanUtil.copyProperties(request, kb);
+        kb.setUpdateTime(new Date());
         return this.updateById(kb);
     }
 

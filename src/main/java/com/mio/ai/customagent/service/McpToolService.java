@@ -5,8 +5,10 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.mio.ai.customagent.model.dto.mcptool.McpToolAddRequest;
 import com.mio.ai.customagent.model.dto.mcptool.McpToolQueryRequest;
 import com.mio.ai.customagent.model.dto.mcptool.McpToolUpdateRequest;
+import com.mio.ai.customagent.model.dto.mcptool.McpValidateRequest;
 import com.mio.ai.customagent.model.entity.McpTool;
 import com.mio.ai.customagent.model.vo.McpToolVO;
+import com.mio.ai.customagent.model.vo.McpValidateResultVO;
 
 /**
  * @author: Takina
@@ -39,11 +41,6 @@ public interface McpToolService extends IService<McpTool> {
      * 分页查询MCP工具
      */
     Page<McpToolVO> queryMcpTools(McpToolQueryRequest request);
-
-    /**
-     * 增加使用次数
-     */
-    void incrementUsageCount(Long id);
 
     /**
      * 获取公开的MCP工具列表（广场）

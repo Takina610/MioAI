@@ -6,6 +6,7 @@ import com.mio.ai.customagent.model.dto.agentknowledge.AgentKnowledgeAddRequest;
 import com.mio.ai.customagent.service.AgentKnowledgeService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,12 +25,14 @@ public class AgentKnowledgeController {
     private AgentKnowledgeService agentKnowledgeService;
 
     @PostMapping
+    @CacheEvict(value = "agents", allEntries = true)
     public BaseResponse<Long> addAgentKnowledge(@RequestBody AgentKnowledgeAddRequest request) {
         Long id = agentKnowledgeService.addAgentKnowledge(request);
         return ResultUtils.success(id);
     }
 
     @DeleteMapping("/{id}")
+    @CacheEvict(value = "agents", allEntries = true)
     public BaseResponse<Boolean> deleteAgentKnowledge(@PathVariable Long id) {
         boolean result = agentKnowledgeService.deleteAgentKnowledge(id);
         return ResultUtils.success(result);

@@ -18,6 +18,8 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -49,6 +51,7 @@ public class DocumentController {
     VectorStore vectorStore;
 
     @PostMapping
+    @CacheEvict(value = "knowledgeBases", allEntries = true)
     public BaseResponse<Long> addDocument(@RequestBody DocumentAddRequest request, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         Long id = documentService.addDocument(request, userId);
@@ -56,6 +59,7 @@ public class DocumentController {
     }
 
     @DeleteMapping("/{id}")
+    @CacheEvict(value = "knowledgeBases", allEntries = true)
     public BaseResponse<Boolean> deleteDocument(@PathVariable Long id, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         boolean result = documentService.deleteDocument(id, userId);
@@ -63,6 +67,7 @@ public class DocumentController {
     }
 
     @GetMapping("/{id}")
+    @Cacheable(value = "knowledgeBases", key = "#id")
     public BaseResponse<DocumentVO> getDocument(@PathVariable Long id) {
         DocumentVO document = documentService.getDocumentById(id);
         return ResultUtils.success(document);
@@ -70,8 +75,7 @@ public class DocumentController {
 
     @PostMapping("/list")
     public BaseResponse<Page<DocumentVO>> listDocuments(@RequestBody DocumentQueryRequest request, HttpServletRequest httpRequest) {
-        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
-        Page<DocumentVO> page = documentService.queryDocuments(request, userId);
+        Page<DocumentVO> page = documentService.queryDocuments(request, request.getUserId());
         return ResultUtils.success(page);
     }
 

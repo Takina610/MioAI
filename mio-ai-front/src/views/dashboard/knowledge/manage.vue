@@ -29,15 +29,12 @@
         <div class="knowledge-list">
           <a-row :gutter="[16, 16]">
             <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="kb in knowledgeList" :key="kb.id">
-              <div class="knowledge-card">
+              <div class="knowledge-card" @click="goToDetail(kb.id)">
                 <div class="card-header">
                   <div class="icon-wrapper">
                     <DatabaseOutlined />
                   </div>
                   <h3 class="card-title">{{ kb.name }}</h3>
-                  <a-button type="link" class="test-btn" @click.stop="goToSimilaritySearch(kb.id)">
-                    命中测试
-                  </a-button>
                 </div>
                 <p class="card-desc">{{ kb.description || '暂无描述' }}</p>
                 <div class="card-stats">
@@ -49,9 +46,9 @@
                 <div class="card-footer">
                   <span class="update-time">更新于 {{ formatDate(kb.updateTime || kb.createTime) }}</span>
                 </div>
-                <div class="card-actions">
-                  <a-button class="edit-btn" @click="goToDetail(kb.id)">
-                    编辑
+                <div class="card-actions" @click.stop>
+                  <a-button class="test-btn" @click="goToSimilaritySearch(kb.id)">
+                    命中测试
                   </a-button>
                   <a-button class="delete-btn" @click="confirmDelete(kb)">
                     删除
@@ -86,7 +83,6 @@ import type { KnowledgeBase, PageResponse } from '@/types'
 import { useRouter } from 'vue-router'
 import {
   PlusOutlined,
-  EditOutlined,
   DeleteOutlined,
   DatabaseOutlined,
   FileTextOutlined
@@ -279,6 +275,7 @@ onMounted(() => {
     border: 1px solid #f0f0f0;
     transition: all 0.3s;
     position: relative;
+    cursor: pointer;
 
     &:hover {
       border-color: $primary-color;
@@ -325,21 +322,6 @@ onMounted(() => {
         text-overflow: ellipsis;
         white-space: nowrap;
         flex: 1;
-      }
-
-      .test-btn {
-        padding: 0 8px;
-        height: 28px;
-        font-size: 13px;
-        color: $primary-color;
-        flex-shrink: 0;
-        border-radius: 10px;
-        border: 1px solid $primary-color;
-        height: 36px;
-
-        &:hover {
-          background: #e9f5f6;
-        }
       }
     }
 
@@ -401,7 +383,7 @@ onMounted(() => {
       right: 20px;
       height: 36px;
 
-      .edit-btn,
+      .test-btn,
       .delete-btn {
         flex: 1;
         height: 36px;
@@ -410,7 +392,7 @@ onMounted(() => {
         border-radius: 10px;
       }
 
-      .edit-btn {
+      .test-btn {
         background: $primary-color;
         border: 1px solid $primary-color;
         color: #fff;
@@ -423,14 +405,13 @@ onMounted(() => {
       }
 
       .delete-btn {
-        background: #fff;
-        border: 1px solid #ff4d4f;
-        color: #ff4d4f;
+        border: 1px solid $danger-color;
+        color: $danger-color;
 
         &:hover {
-          background: #fff1f0;
-          color: #ff4d4f;
-          border-color: #ff4d4f;
+          background: #fadada;
+          border-color: darken($danger-color, 20%);
+          color: darken($danger-color, 20%);
         }
       }
     }

@@ -14,7 +14,7 @@
     <div class="mcp-list">
       <a-row :gutter="[16, 16]">
       <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="mcp in mcpList" :key="mcp.id">
-        <div class="mcp-card" @click="viewTool(mcp)">
+        <div class="mcp-card" @click="goToDetail(mcp.id)">
           <div class="card-header">
             <div class="icon-wrapper">
               <ToolOutlined />
@@ -22,15 +22,9 @@
           </div>
           <h3 class="card-title">{{ mcp.name }}</h3>
           <p class="card-desc">{{ mcp.description || '暂无描述' }}</p>
-          <div class="card-info">
-            <div class="info-item">
-              <span class="label">服务:</span>
-              <span class="value">{{ mcp.serverName || '-' }}</span>
-            </div>
-          </div>
           <div class="card-footer">
             <span class="author">{{ mcp.userName || '匿名' }}</span>
-            <a-tag :color="mcp.isPublic === 1 ? 'green' : 'orange'">
+            <a-tag :color="mcp.isPublic === 1 ? 'blue' : 'orange'">
               {{ mcp.isPublic === 1 ? '公开' : '私有' }}
             </a-tag>
           </div>
@@ -43,6 +37,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ToolOutlined } from '@ant-design/icons-vue'
 import { getPublicMcpTools } from '@/api/mcpTool'
 import type { McpTool, PageResponse } from '@/types'
@@ -52,6 +47,7 @@ interface McpToolWithUser extends McpTool {
   type?: string
 }
 
+const router = useRouter()
 const loading = ref<boolean>(false)
 const mcpList = ref<McpToolWithUser[]>([])
 
@@ -71,8 +67,8 @@ async function fetchMcpTools(): Promise<void> {
   }
 }
 
-function viewTool(tool: McpToolWithUser): void {
-  console.log('查看工具:', tool)
+function goToDetail(id: number): void {
+  router.push(`/dashboard/mcp-market/${id}`)
 }
 </script>
 
@@ -103,7 +99,8 @@ function viewTool(tool: McpToolWithUser): void {
   }
 
   .mcp-list {
-    margin-top: 24px;
+    overflow-y: auto;
+    padding: 24px;
   }
 
   .mcp-card {
@@ -115,7 +112,6 @@ function viewTool(tool: McpToolWithUser): void {
     border: 1px solid #f0f0f0;
 
     &:hover {
-      transform: translateY(-4px);
       box-shadow: $shadow-medium;
     }
 
@@ -154,24 +150,6 @@ function viewTool(tool: McpToolWithUser): void {
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
-    }
-
-    .card-info {
-      margin-bottom: 16px;
-
-      .info-item {
-        font-size: 13px;
-        color: #666;
-
-        .label {
-          color: #999;
-          margin-right: 4px;
-        }
-
-        .value {
-          color: $text-dark;
-        }
-      }
     }
 
     .card-footer {

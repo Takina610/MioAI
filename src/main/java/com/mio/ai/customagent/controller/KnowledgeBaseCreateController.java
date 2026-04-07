@@ -7,6 +7,7 @@ import com.mio.ai.common.utils.ResultUtils;
 import com.mio.ai.customagent.service.KnowledgeBaseCreateService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -38,6 +39,7 @@ public class KnowledgeBaseCreateController {
      */
     @PostMapping("/upload/{kbId}")
     @LogInfo
+    @CacheEvict(value = "knowledgeBases", allEntries = true)
     public BaseResponse<List<Map<String, Object>>> uploadFiles(
             @PathVariable Long kbId,
             @RequestParam("files") MultipartFile[] files,
@@ -55,6 +57,7 @@ public class KnowledgeBaseCreateController {
      */
     @GetMapping("/vectorize/{kbId}")
     @LogInfo
+    @CacheEvict(value = "knowledgeBases", allEntries = true)
     public SseEmitter vectorizeFiles(
             @PathVariable Long kbId,
             @RequestParam String token) {

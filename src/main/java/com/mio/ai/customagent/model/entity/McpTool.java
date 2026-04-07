@@ -34,14 +34,14 @@ public class McpTool implements Serializable {
     private String description;
 
     /**
-     * 服务器名称
-     */
-    private String serverName;
-
-    /**
      * 配置（JSON格式）
      */
     private String config;
+
+    /**
+     * 工具信息：工具列表（JSON格式）
+     */
+    private String toolInfo;
 
     /**
      * 状态（0-未激活 1-正常 2-异常）
@@ -52,16 +52,6 @@ public class McpTool implements Serializable {
      * 是否公开（0-私有 1-公开）
      */
     private Integer isPublic;
-
-    /**
-     * 使用次数
-     */
-    private Integer usageCount;
-
-    /**
-     * 最后使用时间
-     */
-    private Date lastUsedTime;
 
     /**
      * 创建时间

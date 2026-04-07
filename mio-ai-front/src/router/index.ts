@@ -68,6 +68,18 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'MCP管理', requiresAuth: false }
       },
       {
+        path: 'mcp/:id',
+        name: 'McpEdit',
+        component: () => import('@/views/dashboard/mcp/edit.vue'),
+        meta: { title: 'MCP编辑', requiresAuth: false }
+      },
+      {
+        path: 'mcp-market/:id',
+        name: 'McpMarketDetail',
+        component: () => import('@/views/dashboard/mcp/detail.vue'),
+        meta: { title: 'MCP广场详情', requiresAuth: false }
+      },
+      {
         path: 'public-knowledge',
         name: 'PublicKnowledge',
         component: () => import('@/views/dashboard/knowledge/public.vue'),

@@ -184,19 +184,6 @@ const isCollapsed = ref<boolean>(false)
 const currentPath = ref<MenuKey>('agent-market')
 const authModalVisible = ref<boolean>(false)
 
-const pageTitle = computed<string>(() => {
-  const titles: Record<MenuKey, string> = {
-    'agent-market': '智能体广场',
-    'agents': '智能体管理',
-    'mcp-market': 'MCP广场',
-    'mcp': 'MCP管理',
-    'public-knowledge': '公共知识库',
-    'knowledge': '知识库管理',
-    'profile': '个人中心'
-  }
-  return titles[currentPath.value] || '智能体广场'
-})
-
 watch(
   () => route.path,
   (path) => {
@@ -213,6 +200,12 @@ watch(
       currentPath.value = pathMap[path]
     } else if (path.startsWith('/dashboard/knowledge/')) {
       currentPath.value = 'knowledge'
+    } else if (path.startsWith('/dashboard/public-knowledge/')) {
+      currentPath.value = 'public-knowledge'
+    } else if (path.startsWith('/dashboard/mcp/')) {
+      currentPath.value = 'mcp'
+    } else if (path.startsWith('/dashboard/mcp-market/')) {
+      currentPath.value = 'mcp-market'
     }
   },
   { immediate: true }
