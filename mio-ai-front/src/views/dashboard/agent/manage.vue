@@ -103,23 +103,6 @@
                 :rows="3"
               />
             </a-form-item>
-            <a-form-item name="type" label="类型">
-              <a-select :value="formData.type" @update:value="formData.type = $event" placeholder="请选择类型">
-                <a-select-option :value="0">内置智能体</a-select-option>
-                <a-select-option :value="1">自定义智能体</a-select-option>
-              </a-select>
-            </a-form-item>
-            <a-form-item name="systemPrompt" label="系统提示词">
-              <a-textarea
-                :value="formData.systemPrompt"
-                @update:value="formData.systemPrompt = $event"
-                placeholder="请输入系统提示词"
-                :rows="5"
-              />
-            </a-form-item>
-            <a-form-item name="isPublic" label="是否公开">
-              <a-switch :checked="formData.isPublic" @update:checked="formData.isPublic = $event" :checked-value="1" :un-checked-value="0" />
-            </a-form-item>
           </a-form>
         </a-modal>
       </template>
@@ -151,9 +134,6 @@ interface FormData {
   id?: number
   name: string
   description: string
-  type: number
-  systemPrompt: string
-  isPublic: number
 }
 
 const router = useRouter()
@@ -167,10 +147,7 @@ const formRef = ref<FormInstance | null>(null)
 
 const formData = reactive<FormData>({
   name: '',
-  description: '',
-  type: 1,
-  systemPrompt: '',
-  isPublic: 0
+  description: ''
 })
 
 const rules: Record<string, Rule[]> = {
@@ -218,10 +195,7 @@ function showEditModal(agent: Agent): void {
   Object.assign(formData, {
     id: agent.id,
     name: agent.name,
-    description: agent.description,
-    type: agent.type,
-    systemPrompt: agent.systemPrompt,
-    isPublic: agent.isPublic
+    description: agent.description
   })
   modalVisible.value = true
 }
@@ -231,9 +205,7 @@ function resetForm(): void {
   Object.assign(formData, {
     name: '',
     description: '',
-    type: 1,
-    systemPrompt: '',
-    isPublic: 0
+    type: 1
   })
 }
 

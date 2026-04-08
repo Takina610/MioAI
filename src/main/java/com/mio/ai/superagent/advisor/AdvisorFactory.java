@@ -14,27 +14,9 @@ import org.springframework.ai.vectorstore.VectorStore;
  * @description: 智能顾问工厂类，负责创建系统所需的问答顾问、重排顾问等实例
  */
 public class AdvisorFactory {
-    public static QuestionAnswerAdvisor createQuestionAnswerAdvisor(VectorStore vectorStore){
-        PromptTemplate promptTemplate = new PromptTemplate("""
-                【用户问题信息】
-                {query}
-                【上下文信息】
-                {question_answer_context}
-               
-                回答请严格遵循以下规则：
-                1. 若上下文包含与用户问题直接相关的地图打法、道具点位、战术执行、选手数据、战队信息，通过语义理解匹配后给出专业回答。
-                2. 如果上下文无相关内容，结合CS职业赛事知识，给出准确、实战可用、专业的分析。
-                3. 回答必须精准、简洁、专业，不编造选手数据、战队战绩、战术点位。
-                4. 回复直接给出答案，不使用“根据上下文”“根据信息”等冗余表述。
-                5. 语气保持专业、清晰、干练，符合职业教练/数据分析师风格，便于用户直接用于实战。
-                6. 若用户问题与CS无关，礼貌告知仅提供CS比赛相关咨询服务。
-                
-                【强制输出格式 - 重要】
-                7. 所有回答**必须使用标准 Markdown 格式排版**，像教程一样清晰易读。
-                8. 重点内容用 **加粗** 突出；分点说明使用 `-` 列表；战术步骤使用 `1. 2. 3.` 有序列表。
-                9. 地图名称、道具名称、选手名、战术术语可使用 `标记` 突出显示。
-                10. 排版必须美观、层级分明，不要使用任何无格式纯文本输出。
-                """);
+    public static QuestionAnswerAdvisor createQuestionAnswerAdvisor(VectorStore vectorStore,
+                                                                    PromptTemplate promptTemplate
+    ){
         return QuestionAnswerAdvisor.builder(vectorStore)
                 .promptTemplate(promptTemplate)
                 .searchRequest(SearchRequest

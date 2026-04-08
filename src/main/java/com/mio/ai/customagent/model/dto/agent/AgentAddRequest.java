@@ -28,17 +28,7 @@ public class AgentAddRequest implements Serializable {
     private String avatar;
 
     /**
-     * 智能体类型
-     */
-    private Integer type;
-
-    /**
      * 系统提示词
      */
     private String systemPrompt;
-
-    /**
-     * 是否公开
-     */
-    private Integer isPublic;
 }

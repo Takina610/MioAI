@@ -192,7 +192,7 @@
         <div class="chat-center-area" :class="{ 'has-messages': messages.length > 0 }">
           <div class="welcome-section" v-if="messages.length === 0 && !isLoading">
             <img :src="agentInfo?.avatar || '/favicon.ico'" alt="Agent" class="welcome-avatar" />
-            <h2 class="welcome-title">今天有什么可以帮到你？</h2>
+            <h2 class="welcome-title">我能帮什么忙吗，{{ userStore.userName }}？</h2>
           </div>
           <div class="chat-input-wrapper">
             <div class="chat-input-container">
