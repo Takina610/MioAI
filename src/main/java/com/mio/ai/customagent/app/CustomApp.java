@@ -19,6 +19,6 @@ public class CustomApp {
     ChatClient chatClient;
 
     public Flux<String> doChat(ChatVO chatVO) {
-
+        return null;
     }
 }

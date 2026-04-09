@@ -193,7 +193,6 @@ const cropModalVisible = ref<boolean>(false)
 const previewUrl = ref<string>('')
 const selectedFile = ref<File | null>(null)
 const imageRef = ref<HTMLImageElement | null>(null)
-const cropAreaRef = ref<HTMLDivElement | null>(null)
 
 const cropBox = reactive<CropBox>({
   x: 50,

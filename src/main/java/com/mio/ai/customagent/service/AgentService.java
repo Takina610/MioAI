@@ -6,6 +6,7 @@ import com.mio.ai.customagent.model.dto.agent.AgentAddRequest;
 import com.mio.ai.customagent.model.dto.agent.AgentQueryRequest;
 import com.mio.ai.customagent.model.dto.agent.AgentUpdateRequest;
 import com.mio.ai.customagent.model.entity.Agent;
+import com.mio.ai.customagent.model.vo.AgentDetailVO;
 import com.mio.ai.customagent.model.vo.AgentVO;
 
 /**
@@ -15,33 +16,19 @@ import com.mio.ai.customagent.model.vo.AgentVO;
  */
 public interface AgentService extends IService<Agent> {
 
-    /**
-     * 创建智能体
-     */
     Long addAgent(AgentAddRequest request, Long userId);
 
-    /**
-     * 更新智能体
-     */
     boolean updateAgent(AgentUpdateRequest request, Long userId);
 
-    /**
-     * 删除智能体
-     */
     boolean deleteAgent(Long id, Long userId);
 
-    /**
-     * 根据ID获取智能体
-     */
     AgentVO getAgentById(Long id);
 
-    /**
-     * 分页查询智能体
-     */
+    AgentDetailVO getAgentDetailById(Long id, Long userId);
+
     Page<AgentVO> queryAgents(AgentQueryRequest request);
 
-    /**
-     * 获取公开的智能体列表（广场）
-     */
     Page<AgentVO> getPublicAgents(long current, long size);
+
+    void publishAgent(Long agentId, AgentUpdateRequest request, Long userId);
 }

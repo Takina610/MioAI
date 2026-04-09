@@ -25,6 +25,11 @@ public interface AgentMcpService extends IService<AgentMcp> {
     boolean deleteAgentMcp(Long id);
 
     /**
+     * 根据智能体ID和MCP工具ID删除关联
+     */
+    boolean deleteByAgentIdAndMcpId(Long agentId, Long mcpId);
+
+    /**
      * 根据智能体ID获取MCP工具ID列表
      */
     List<Long> getMcpIdsByAgentId(Long agentId);

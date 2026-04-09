@@ -25,6 +25,11 @@ public interface AgentKnowledgeService extends IService<AgentKnowledge> {
     boolean deleteAgentKnowledge(Long id);
 
     /**
+     * 根据智能体ID和知识库ID删除关联
+     */
+    boolean deleteByAgentIdAndKbId(Long agentId, Long kbId);
+
+    /**
      * 根据智能体ID获取知识库列表
      */
     List<Long> getKbIdsByAgentId(Long agentId);

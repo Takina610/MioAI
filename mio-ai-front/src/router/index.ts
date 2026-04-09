@@ -50,10 +50,16 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '应用广场', requiresAuth: false }
       },
       {
-        path: 'agents',
+        path: 'agent',
         name: 'AgentManage',
         component: () => import('@/views/dashboard/agent/manage.vue'),
         meta: { title: '应用管理', requiresAuth: false }
+      },
+      {
+        path: 'agent/:id',
+        name: 'AgentEdit',
+        component: () => import('@/views/dashboard/agent/edit.vue'),
+        meta: { title: '智能体编辑', requiresAuth: false }
       },
       {
         path: 'mcp-market',

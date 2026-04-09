@@ -141,6 +141,45 @@ public class R2Util {
     }
 
     /**
+     * 复制文件（用于重命名临时文件）
+     * @param sourceUrl 源文件URL
+     * @param fileType 目标文件类型
+     * @param entityId 目标实体ID
+     * @return 新文件URL
+     * @throws IOException 复制异常
+     */
+    public String copyFile(String sourceUrl, FileType fileType, String entityId) throws IOException {
+        try {
+            String sourceKey = extractKeyFromUrl(sourceUrl);
+            String extension = getFileExtension(sourceKey);
+            String timestamp = String.valueOf(System.currentTimeMillis());
+            String destKey = fileType.getBasePath() + "/" + entityId + "_" + timestamp + "." + extension;
+
+            CopyObjectRequest copyRequest = CopyObjectRequest.builder()
+                    .bucket(bucketName)
+//                    .copySource(bucketName + "/" + sourceKey)
+                    .copySource(createCopySource(bucketName, sourceKey))
+                    .key(destKey)
+                    .build();
+
+            r2Client.copyObject(copyRequest);
+
+            deleteFile(sourceUrl);
+
+            return cdnDomain + "/" + destKey;
+        } catch (S3Exception e) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "复制文件失败: " + e.awsErrorDetails().errorMessage());
+        }
+    }
+
+    /**
+     * 创建copySource，确保正确编码
+     */
+    private String createCopySource(String bucket, String key) {
+        return "/" + bucket + "/" + key;
+    }
+
+    /**
      * 下载文件内容
      * @param fileUrl 文件URL
      * @return 文件内容字节数组

@@ -2,6 +2,7 @@ import request from '@/utils/request'
 
 import type {
   Agent,
+  AgentDetail,
   AgentAddRequest,
   AgentUpdateRequest,
   AgentQueryRequest,
@@ -38,6 +39,13 @@ export function getAgentById(id: number): Promise<Agent> {
   })
 }
 
+export function getAgentDetail(id: number): Promise<AgentDetail> {
+  return request({
+    url: `/agents/${id}/detail`,
+    method: 'get'
+  })
+}
+
 export function queryAgents(data: AgentQueryRequest): Promise<PageResponse<Agent>> {
   return request({
     url: '/agents/list',
@@ -51,5 +59,34 @@ export function getPublicAgents(params?: { current?: number; size?: number }): P
     url: '/agents/market',
     method: 'get',
     params
+  })
+}
+
+export function publishAgent(agentId: number, data: AgentUpdateRequest): Promise<boolean> {
+  return request({
+    url: `/agents/${agentId}/publish`,
+    method: 'post',
+    data
+  })
+}
+
+export function uploadAgentAvatar(file: File): Promise<string> {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request({
+    url: '/agents/avatar/upload',
+    method: 'post',
+    data: formData,
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+}
+
+export function deleteTempAvatar(url: string): Promise<boolean> {
+  return request({
+    url: '/agents/avatar/temp',
+    method: 'delete',
+    params: { url }
   })
 }

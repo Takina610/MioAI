@@ -35,8 +35,8 @@
             <a-tooltip :title="isCollapsed ? '智能体管理' : ''" placement="right">
               <div 
                 class="menu-item" 
-                :class="{ active: isActive('agents') }"
-                @click="navigateTo('agents')"
+                :class="{ active: isActive('agent') }"
+                @click="navigateTo('agent')"
               >
                 <AppstoreOutlined class="menu-icon" />
                 <span class="menu-text" v-show="!isCollapsed">智能体管理</span>
@@ -174,7 +174,7 @@ import {
   LogoutOutlined
 } from '@ant-design/icons-vue'
 
-type MenuKey = 'agent-market' | 'agents' | 'mcp-market' | 'mcp' | 'public-knowledge' | 'knowledge' | 'profile'
+type MenuKey = 'agent-market' | 'agent' | 'mcp-market' | 'mcp' | 'public-knowledge' | 'knowledge' | 'profile'
 
 const router = useRouter()
 const route = useRoute()
@@ -189,7 +189,7 @@ watch(
   (path) => {
     const pathMap: Record<string, MenuKey> = {
       '/dashboard/agent-market': 'agent-market',
-      '/dashboard/agents': 'agents',
+      '/dashboard/agent': 'agent',
       '/dashboard/mcp-market': 'mcp-market',
       '/dashboard/mcp': 'mcp',
       '/dashboard/public-knowledge': 'public-knowledge',
@@ -227,7 +227,7 @@ function navigateTo(key: MenuKey): void {
   currentPath.value = key
   const routes: Record<MenuKey, string> = {
     'agent-market': '/dashboard/agent-market',
-    'agents': '/dashboard/agents',
+    'agent': '/dashboard/agent',
     'mcp-market': '/dashboard/mcp-market',
     'mcp': '/dashboard/mcp',
     'public-knowledge': '/dashboard/public-knowledge',

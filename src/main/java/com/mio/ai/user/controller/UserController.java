@@ -242,7 +242,13 @@ public class UserController {
     public BaseResponse<String> uploadAvatar(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
         ThrowUtils.throwIf(file == null || file.isEmpty(), ErrorCode.PARAMS_ERROR, "文件不能为空");
         LoginUserVO loginUser = userService.getLoginUser(request);
-        
+
+        try {
+            r2Util.deleteFile(loginUser.getUserAvatar());
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "删除头像失败: " + e.getMessage());
+        }
+
         try {
             String avatarUrl = r2Util.uploadFile(file, FileType.USER_AVATAR, String.valueOf(loginUser.getId()));
             userService.updateAvatar(loginUser.getId(), avatarUrl);

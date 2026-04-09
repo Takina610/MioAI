@@ -1,4 +1,6 @@
 import type { PaginationParams } from './common'
+import type { KnowledgeBase } from './knowledgeBase'
+import type { McpTool } from './mcpTool'
 
 export interface Agent {
   id: number
@@ -16,6 +18,11 @@ export interface Agent {
   version?: string
   createTime: string
   updateTime: string
+}
+
+export interface AgentDetail extends Agent {
+  knowledgeBases: KnowledgeBase[]
+  mcpTools: McpTool[]
 }
 
 export interface AgentAddRequest {

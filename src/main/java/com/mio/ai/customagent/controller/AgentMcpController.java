@@ -38,6 +38,13 @@ public class AgentMcpController {
         return ResultUtils.success(result);
     }
 
+    @DeleteMapping("/agent/{agentId}/mcp/{mcpId}")
+    @CacheEvict(value = "agents", allEntries = true)
+    public BaseResponse<Boolean> deleteByAgentIdAndMcpId(@PathVariable Long agentId, @PathVariable Long mcpId) {
+        boolean result = agentMcpService.deleteByAgentIdAndMcpId(agentId, mcpId);
+        return ResultUtils.success(result);
+    }
+
     @GetMapping("/agent/{agentId}")
     public BaseResponse<List<Long>> getMcpIdsByAgentId(@PathVariable Long agentId) {
         List<Long> mcpIds = agentMcpService.getMcpIdsByAgentId(agentId);

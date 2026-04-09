@@ -38,6 +38,13 @@ public class AgentKnowledgeController {
         return ResultUtils.success(result);
     }
 
+    @DeleteMapping("/agent/{agentId}/kb/{kbId}")
+    @CacheEvict(value = "agents", allEntries = true)
+    public BaseResponse<Boolean> deleteByAgentIdAndKbId(@PathVariable Long agentId, @PathVariable Long kbId) {
+        boolean result = agentKnowledgeService.deleteByAgentIdAndKbId(agentId, kbId);
+        return ResultUtils.success(result);
+    }
+
     @GetMapping("/agent/{agentId}")
     public BaseResponse<List<Long>> getKbIdsByAgentId(@PathVariable Long agentId) {
         List<Long> kbIds = agentKnowledgeService.getKbIdsByAgentId(agentId);

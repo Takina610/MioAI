@@ -46,6 +46,17 @@ public class AgentMcpServiceImpl extends ServiceImpl<AgentMcpMapper, AgentMcp> i
     }
 
     @Override
+    public boolean deleteByAgentIdAndMcpId(Long agentId, Long mcpId) {
+        if (agentId == null || mcpId == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "智能体ID和MCP工具ID不能为空");
+        }
+        LambdaQueryWrapper<AgentMcp> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AgentMcp::getAgentId, agentId)
+                .eq(AgentMcp::getMcpId, mcpId);
+        return this.remove(wrapper);
+    }
+
+    @Override
     public List<Long> getMcpIdsByAgentId(Long agentId) {
         LambdaQueryWrapper<AgentMcp> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(AgentMcp::getAgentId, agentId)

@@ -46,6 +46,17 @@ public class AgentKnowledgeServiceImpl extends ServiceImpl<AgentKnowledgeMapper,
     }
 
     @Override
+    public boolean deleteByAgentIdAndKbId(Long agentId, Long kbId) {
+        if (agentId == null || kbId == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "智能体ID和知识库ID不能为空");
+        }
+        LambdaQueryWrapper<AgentKnowledge> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AgentKnowledge::getAgentId, agentId)
+                .eq(AgentKnowledge::getKbId, kbId);
+        return this.remove(wrapper);
+    }
+
+    @Override
     public List<Long> getKbIdsByAgentId(Long agentId) {
         LambdaQueryWrapper<AgentKnowledge> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(AgentKnowledge::getAgentId, agentId)
