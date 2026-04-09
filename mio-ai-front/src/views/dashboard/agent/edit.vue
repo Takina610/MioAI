@@ -4,8 +4,9 @@
       <div class="header-content">
         <div class="header-left">
           <div class="back-btn" @click="goBack">
-            <LeftOutlined />
+            <h2>智能体管理</h2>
           </div>
+          <h2> / </h2>
           <h2 class="editable-title" @click="showEditModal">{{ agentDetail?.name || '智能体编辑' }}</h2>
         </div>
         <div class="header-right">
@@ -161,6 +162,23 @@
                     :maxlength="995904"
                     show-count
                   />
+                </a-form-item>
+              </a-form>
+            </div>
+          </div>
+
+          <div class="edit-section">
+            <div class="section-header">
+              <h3>公开设置</h3>
+            </div>
+            <div class="section-content">
+              <a-form layout="vertical">
+                <a-form-item label="是否公开">
+                  <a-radio-group v-model:value="formData.isPublic">
+                    <a-radio :value="0">私有</a-radio>
+                    <a-radio :value="1">公开</a-radio>
+                  </a-radio-group>
+                  <div class="form-tip">公开后，其他用户可以在应用广场看到此智能体</div>
                 </a-form-item>
               </a-form>
             </div>
@@ -471,8 +489,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
   LeftOutlined,
@@ -508,7 +526,8 @@ const formData = reactive({
   name: '',
   description: '',
   avatar: '',
-  systemPrompt: ''
+  systemPrompt: '',
+  isPublic: 0
 })
 
 const knowledgeDrawerVisible = ref(false)
@@ -624,7 +643,7 @@ function getMcpTools(mcp: McpTool): { name: string; description: string }[] {
 }
 
 function goBack(): void {
-  saveAndGoBack()
+  router.push('/dashboard/agent')
 }
 
 function showEditModal(): void {
@@ -636,28 +655,6 @@ function handleEditSuccess(): void {
   fetchAgentDetail()
 }
 
-async function saveAndGoBack(): Promise<void> {
-  try {
-    saveLoading.value = true
-    const data: AgentUpdateRequest = {
-      id: agentId,
-      name: formData.name,
-      description: formData.description,
-      avatar: formData.avatar,
-      systemPrompt: formData.systemPrompt
-    }
-    await updateAgent(data)
-    message.success('应用已自动保存')
-    router.push('/dashboard/agent')
-  } catch (e) {
-    console.error(e)
-    message.error('保存失败')
-    router.push('/dashboard/agent')
-  } finally {
-    saveLoading.value = false
-  }
-}
-
 async function fetchAgentDetail(): Promise<void> {
   try {
     loading.value = true
@@ -667,6 +664,7 @@ async function fetchAgentDetail(): Promise<void> {
     formData.description = res.description || ''
     formData.avatar = res.avatar || ''
     formData.systemPrompt = res.systemPrompt || ''
+    formData.isPublic = res.isPublic ?? 0
   } catch (e) {
     console.error(e)
     message.error('获取智能体详情失败')
@@ -683,7 +681,8 @@ async function handlePublish(): Promise<void> {
       name: formData.name,
       description: formData.description,
       avatar: formData.avatar,
-      systemPrompt: formData.systemPrompt
+      systemPrompt: formData.systemPrompt,
+      isPublic: formData.isPublic
     }
     await publishAgent(agentId, data)
     message.success('发布成功')
@@ -830,8 +829,49 @@ function goToCreateMcp(): void {
   router.push('/dashboard/mcp')
 }
 
+const hasSaved = ref(false)
+
+async function autoSave(): Promise<void> {
+  if (hasSaved.value) return
+  try {
+    const data: AgentUpdateRequest = {
+      id: agentId,
+      name: formData.name,
+      description: formData.description,
+      avatar: formData.avatar,
+      systemPrompt: formData.systemPrompt,
+      isPublic: formData.isPublic
+    }
+    await updateAgent(data)
+    hasSaved.value = true
+  } catch (e) {
+    console.error('自动保存失败', e)
+  }
+}
+
+function handleBeforeUnload(e: BeforeUnloadEvent): void {
+  if (!hasSaved.value) {
+    e.preventDefault()
+    e.returnValue = ''
+  }
+}
+
+onBeforeUnmount(() => {
+  autoSave()
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+})
+
+onBeforeRouteLeave(async (to, from, next) => {
+  if (!hasSaved.value) {
+    await autoSave()
+    message.success('应用已自动保存')
+  }
+  next()
+})
+
 onMounted(() => {
   fetchAgentDetail()
+  window.addEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
 
@@ -856,17 +896,12 @@ onMounted(() => {
         gap: 12px;
 
         .back-btn {
-          width: 32px;
-          height: 32px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: all 0.3s;
-
           &:hover {
-            background: #f0f0f0;
+            cursor: pointer;
+          }
+          h2 {
+            color: #5f6368;
+            font-weight: 400;
           }
         }
 
@@ -941,6 +976,12 @@ onMounted(() => {
 
     .section-content {
       padding: 20px;
+
+      .form-tip {
+        font-size: 12px;
+        color: #999;
+        margin-top: 8px;
+      }
     }
   }
 

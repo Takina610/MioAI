@@ -1,5 +1,6 @@
 package com.mio.ai.customagent.controller;
 
+import com.mio.ai.common.utils.RedisComponent;
 import com.mio.ai.customagent.app.CustomApp;
 import com.mio.ai.superagent.model.vo.ChatVO;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,16 +25,19 @@ public class CustomAIController {
     @Autowired
     CustomApp customApp;
 
+    @Autowired
+    RedisComponent redisComponent;
+
     @GetMapping("/chat")
     public SseEmitter doChat(@RequestParam String chatId,
                              @RequestParam Long agentId,
                              @RequestParam String content,
-                             @RequestParam(required = false) Long userId) {
+                             @RequestParam String token) {
         ChatVO chatVO = new ChatVO();
         chatVO.setChatId(chatId);
         chatVO.setMessage(content);
         chatVO.setAgentId(agentId);
-        chatVO.setUserId(userId);
+        chatVO.setUserId(redisComponent.getUserId(token));
 
         // 创建一个超时时间较长的 SseEmitter
         SseEmitter sseEmitter = new SseEmitter(45000L); // 1.5 分钟超时

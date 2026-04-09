@@ -574,8 +574,8 @@ function sendMessage(): void {
     
     if (data === '[DONE]') {
       if (isNewChat && userStore.isLoggedIn) {
-      updateChatTitleWithTypewriter(content, messages.value[aiMessageIndex].content, userMessageIndex)
-    }
+        updateChatTitleWithTypewriter(content, messages.value[aiMessageIndex].content, userMessageIndex)
+      }
       isLoading.value = false
       if (eventSource) {
         eventSource.close()
@@ -595,8 +595,6 @@ function sendMessage(): void {
 }
 
 async function updateChatTitleWithTypewriter(userContent: string, aiContent: string, chatIndex: number): Promise<void> {
-    console.log(aiContent + userContent)
-
   const title = await generateTitle(agentId.value, currentChatId.value, userContent + '\n' + aiContent)
   
   const chatItem = chatList.value.find(c => c.id === currentChatId.value)

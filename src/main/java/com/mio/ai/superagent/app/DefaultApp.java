@@ -36,9 +36,8 @@ public class DefaultApp {
         if (chatVO.getUserId() != null) {
             chatHistoryRepository.save(chatVO);
 
-            prompt.advisors(memoryAdvisor);
-            prompt.advisors(spec ->
-                    spec.param(ChatMemory.CONVERSATION_ID, chatVO.getChatId())
+            prompt.advisors(memoryAdvisor).
+                    advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, chatVO.getChatId())
             );
         }
 
