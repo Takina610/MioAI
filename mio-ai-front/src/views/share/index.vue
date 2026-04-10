@@ -82,20 +82,29 @@ interface ChatMessage {
 const route = useRoute()
 const router = useRouter()
 
-const messages = ref<ChatMessage[]>([])
-const agentInfo = ref<Agent | null>(null)
 const loading = ref<boolean>(true)
 const conversationTitle = ref<string>('')
-const conversationDate = ref<Date>(new Date())
 const hoverMessageId = ref<string>('')
 const copiedMessageId = ref<string>('')
-
+const messages = ref<ChatMessage[]>([])
+const agentInfo = ref<Agent | null>(null)
+const conversationDate = ref<Date>(new Date())
 const agentId = ref<number>(0)
 
 marked.setOptions({
   gfm: true,
   breaks: true
 })
+
+watch(
+  () => [route.params.agentId, route.params.conversationId],
+  ([agentIdParam, conversationId]) => {
+    if (agentIdParam && conversationId && typeof agentIdParam === 'string' && typeof conversationId === 'string') {
+      loadShareData(agentIdParam, conversationId)
+    }
+  },
+  { immediate: true }
+)
 
 const formattedDate = computed(() => {
   const d = conversationDate.value
@@ -177,16 +186,6 @@ function goToChat(): void {
     router.push('/')
   }
 }
-
-watch(
-  () => [route.params.agentId, route.params.conversationId],
-  ([agentIdParam, conversationId]) => {
-    if (agentIdParam && conversationId && typeof agentIdParam === 'string' && typeof conversationId === 'string') {
-      loadShareData(agentIdParam, conversationId)
-    }
-  },
-  { immediate: true }
-)
 </script>
 
 <style lang="scss" scoped>

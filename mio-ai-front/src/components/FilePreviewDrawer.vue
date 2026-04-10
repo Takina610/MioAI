@@ -64,12 +64,12 @@ const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void
 }>()
 
+const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
+
 const loading = ref(false)
 const error = ref('')
 const textContent = ref('')
 const htmlContent = ref('')
-
-const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
 
 const fileType = computed(() => {
   const name = props.fileName.toLowerCase()
@@ -91,13 +91,6 @@ watch(
     }
   }
 )
-
-function resetState(): void {
-  loading.value = false
-  error.value = ''
-  textContent.value = ''
-  htmlContent.value = ''
-}
 
 async function loadPreview(): Promise<void> {
   const type = fileType.value
@@ -128,6 +121,13 @@ async function loadPreview(): Promise<void> {
     loading.value = true
     error.value = ''
   }
+}
+
+function resetState(): void {
+  loading.value = false
+  error.value = ''
+  textContent.value = ''
+  htmlContent.value = ''
 }
 
 function handleRendered(): void {

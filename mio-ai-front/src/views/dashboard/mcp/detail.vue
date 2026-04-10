@@ -100,16 +100,12 @@ import { useRouter, useRoute } from 'vue-router'
 import { ToolOutlined } from '@ant-design/icons-vue'
 import { getMcpToolById } from '@/api/mcpTool'
 import type { McpTool, McpToolInfo } from '@/types'
-import { useUserStore } from '@/store/user'
 import dayjs from 'dayjs'
-
-const userStore = useUserStore()
 
 const router = useRouter()
 const route = useRoute()
 
 const loading = ref(true)
-
 const mcpDetail = ref<McpTool | null>(null)
 
 const formattedConfig = computed(() => {
@@ -135,15 +131,6 @@ const toolInfos = computed<McpToolInfo[]>(() => {
     return []
   }
 })
-
-function formatTime(time?: string): string {
-  if (!time) return '-'
-  return dayjs(time).format('YYYY-MM-DD HH:mm')
-}
-
-function goBack(): void {
-  router.push('/dashboard/mcp-market')
-}
 
 async function fetchMcpDetail(): Promise<void> {
   const id = route.params.id as string
@@ -171,6 +158,15 @@ async function fetchMcpDetail(): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+function formatTime(time?: string): string {
+  if (!time) return '-'
+  return dayjs(time).format('YYYY-MM-DD HH:mm')
+}
+
+function goBack(): void {
+  router.push('/dashboard/mcp-market')
 }
 
 onMounted(() => {

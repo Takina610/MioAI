@@ -206,16 +206,24 @@ const emit = defineEmits<{
   (e: 'success'): void
 }>()
 
-const skipFirstStep = computed(() => props.skipFirstStep)
 
-const formRef = ref<FormInstance | null>(null)
-const currentStep = ref(0)
 const creatingKb = ref(false)
 const uploading = ref(false)
 const vectorizing = ref(false)
 const vectorizeComplete = ref(false)
 const vectorizeError = ref(false)
+
+const vectorizeProgress = ref(0)
+const currentStep = ref(0)
+const currentFileName = ref('')
+const errorMsg = ref('')
+const vectorizeStatusMessage = ref('请稍候...')
+const vectorizeStatusTitle = ref('准备向量化')
+
+const formRef = ref<FormInstance | null>(null)
 const kbId = ref<number | null>(null)
+const fileList = ref<any[]>([])
+const uploadedFiles = ref<UploadResult[]>([])
 
 const originalFormData = reactive({
   name: '',
@@ -227,26 +235,29 @@ const formData = reactive({
   description: ''
 })
 
+let eventSource: EventSource | null = null
+
+const skipFirstStep = computed(() => props.skipFirstStep)
+
 const rules: Record<string, Rule[]> = {
   name: [{ required: true, message: '请输入知识库名称', trigger: 'blur' }],
   description: [{ required: true, message: '请输入知识库描述', trigger: 'blur' }]
 }
-
-const fileList = ref<any[]>([])
-const uploadedFiles = ref<UploadResult[]>([])
-
-const vectorizeProgress = ref(0)
-const vectorizeStatusTitle = ref('准备向量化')
-const vectorizeStatusMessage = ref('请稍候...')
-const currentFileName = ref('')
-const errorMsg = ref('')
 
 const vectorizeResult = reactive({
   totalFiles: 0,
   completedFiles: 0
 })
 
-let eventSource: EventSource | null = null
+watch(() => props.visible, (newVal) => {
+  if (!newVal) {
+    resetState()
+  } else if (props.skipFirstStep && props.kbId) {
+    kbId.value = props.kbId
+    currentStep.value = 1
+  }
+})
+
 
 function handleCancel(): void {
   if (kbId.value && !skipFirstStep) {
@@ -506,15 +517,6 @@ function formatFileSize(bytes: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
-
-watch(() => props.visible, (newVal) => {
-  if (!newVal) {
-    resetState()
-  } else if (props.skipFirstStep && props.kbId) {
-    kbId.value = props.kbId
-    currentStep.value = 1
-  }
-})
 
 onUnmounted(() => {
   if (eventSource) {

@@ -48,12 +48,9 @@ import { getPublicKnowledgeBases } from '@/api/knowledgeBase'
 import type { KnowledgeBase, PageResponse } from '@/types'
 
 const router = useRouter()
+
 const loading = ref<boolean>(false)
 const knowledgeList = ref<KnowledgeBase[]>([])
-
-onMounted(() => {
-  fetchKnowledgeBases()
-})
 
 async function fetchKnowledgeBases(): Promise<void> {
   loading.value = true
@@ -82,6 +79,10 @@ function goToDetail(kbId: number): void {
 function goToSimilaritySearch(kbId: number): void {
   router.push(`/dashboard/public-knowledge/similaritySearch/${kbId}`)
 }
+
+onMounted(() => {
+  fetchKnowledgeBases()
+})
 </script>
 
 <style lang="scss" scoped>

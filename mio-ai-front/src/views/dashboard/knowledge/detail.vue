@@ -111,8 +111,6 @@ import FilePreviewDrawer from '@/components/FilePreviewDrawer.vue'
 const route = useRoute()
 const router = useRouter()
 
-const kbId = computed(() => Number(route.params.id))
-
 const loading = ref(false)
 const docLoading = ref(false)
 const previewVisible = ref(false)
@@ -130,10 +128,6 @@ const pagination = reactive({
   showTotal: (total: number) => `共 ${total} 条`
 })
 
-const authorName = computed(() => {
-  return knowledgeBase.value?.userName || '未知用户'
-})
-
 const columns = [
   { title: '文档名称', dataIndex: 'fileName', key: 'fileName', ellipsis: true },
   { title: '文件类型', dataIndex: 'fileType', key: 'fileType', width: 100 },
@@ -142,33 +136,12 @@ const columns = [
   { title: '创建时间', dataIndex: 'createTime', key: 'createTime', width: 180 }
 ]
 
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
+const kbId = computed(() => Number(route.params.id))
 
-function formatDate(dateStr: string): string {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
-  return date.toLocaleString('zh-CN')
-}
+const authorName = computed(() => {
+  return knowledgeBase.value?.userName || '未知用户'
+})
 
-function getStatusColor(status: number): string {
-  const colors: Record<number, string> = {
-    0: 'default',
-    1: 'processing',
-    2: 'success',
-    3: 'error'
-  }
-  return colors[status] || 'default'
-}
-
-function goBack(): void {
-  router.push('/dashboard/public-knowledge')
-}
 
 async function fetchKnowledgeBase(): Promise<void> {
   loading.value = true
@@ -223,6 +196,34 @@ function handlePreview(record: Document): void {
   previewFileUrl.value = record.filePath
   previewDocumentId.value = record.id
   previewVisible.value = true
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+function formatDate(dateStr: string): string {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  return date.toLocaleString('zh-CN')
+}
+
+function getStatusColor(status: number): string {
+  const colors: Record<number, string> = {
+    0: 'default',
+    1: 'processing',
+    2: 'success',
+    3: 'error'
+  }
+  return colors[status] || 'default'
+}
+
+function goBack(): void {
+  router.push('/dashboard/public-knowledge')
 }
 
 onMounted(() => {

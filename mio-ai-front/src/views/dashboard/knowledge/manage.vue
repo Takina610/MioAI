@@ -83,7 +83,6 @@ import type { KnowledgeBase, PageResponse } from '@/types'
 import { useRouter } from 'vue-router'
 import {
   PlusOutlined,
-  DeleteOutlined,
   DatabaseOutlined,
   FileTextOutlined
 } from '@ant-design/icons-vue'
@@ -95,15 +94,10 @@ defineEmits<{
 
 const userStore = useUserStore()
 const router = useRouter()
+
 const loading = ref<boolean>(false)
 const createModalVisible = ref<boolean>(false)
 const knowledgeList = ref<KnowledgeBase[]>([])
-
-function formatDate(dateStr: string): string {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('zh-CN')
-}
 
 async function fetchKnowledgeBases(): Promise<void> {
   if (!userStore.isLoggedIn) return
@@ -116,6 +110,27 @@ async function fetchKnowledgeBases(): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+function confirmDelete(kb: KnowledgeBase): void {
+  Modal.confirm({
+    title: '确认删除',
+    content: `确定要删除知识库「${kb.name}」吗？删除后将无法恢复。`,
+    okText: '确定',
+    cancelText: '取消',
+    okButtonProps: { danger: true },
+    async onOk() {
+      await deleteKnowledgeBase(kb.id)
+      message.success('删除成功')
+      fetchKnowledgeBases()
+    }
+  })
+}
+
+function formatDate(dateStr: string): string {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  return date.toLocaleDateString('zh-CN')
 }
 
 function showCreateModal(): void {
@@ -132,21 +147,6 @@ function goToDetail(kbId: number): void {
 
 function goToSimilaritySearch(kbId: number): void {
   router.push(`/dashboard/knowledge/similaritySearch/${kbId}`)
-}
-
-function confirmDelete(kb: KnowledgeBase): void {
-  Modal.confirm({
-    title: '确认删除',
-    content: `确定要删除知识库「${kb.name}」吗？删除后将无法恢复。`,
-    okText: '确定',
-    cancelText: '取消',
-    okButtonProps: { danger: true },
-    async onOk() {
-      await deleteKnowledgeBase(kb.id)
-      message.success('删除成功')
-      fetchKnowledgeBases()
-    }
-  })
 }
 
 onMounted(() => {

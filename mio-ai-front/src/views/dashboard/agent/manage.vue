@@ -54,7 +54,7 @@
                   </a-button>
                   <a-dropdown :trigger="['hover']" placement="bottomLeft">
                     <a-button class="action-btn more-btn">
-                     <MoreOutlined />
+                      <MoreOutlined />
                     </a-button>
                     <template #overlay>
                       <a-menu>
@@ -125,28 +125,6 @@ const editModalVisible = ref<boolean>(false)
 const editingAgentId = ref<number | undefined>(undefined)
 const agentList = ref<Agent[]>([])
 
-function getStatusName(status: number): string {
-  const statuses: Record<number, string> = { 0: '草稿', 1: '已发布' }
-  return statuses[status] || '未知'
-}
-
-function getStatusColor(status: number): string {
-  const colors: Record<number, string> = { 0: 'orange', 1: 'green' }
-  return colors[status] || 'default'
-}
-
-function formatDateTime(dateStr: string): string {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  const seconds = String(date.getSeconds()).padStart(2, '0')
-  return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`
-}
-
 async function fetchAgents(): Promise<void> {
   if (!userStore.isLoggedIn) return
   loading.value = true
@@ -160,13 +138,19 @@ async function fetchAgents(): Promise<void> {
   }
 }
 
-function showCreateModal(): void {
-  createModalVisible.value = true
-}
-
-function showEditModal(agentId: number): void {
-  editingAgentId.value = agentId
-  editModalVisible.value = true
+function handleDelete(agent: Agent): void {
+  Modal.confirm({
+    title: '确认删除',
+    content: `确定要删除智能体「${agent.name}」吗？`,
+    okText: '确定',
+    cancelText: '取消',
+    okButtonProps: { danger: true },
+    async onOk() {
+      await deleteAgent(agent.id)
+      message.success('删除成功')
+      fetchAgents()
+    }
+  })
 }
 
 function handleCreateSuccess(agentId?: number | void): void {
@@ -185,23 +169,39 @@ function goToEdit(agentId: number): void {
   router.push(`/dashboard/agent/${agentId}`)
 }
 
-function handleDelete(agent: Agent): void {
-  Modal.confirm({
-    title: '确认删除',
-    content: `确定要删除智能体「${agent.name}」吗？`,
-    okText: '确定',
-    cancelText: '取消',
-    okButtonProps: { danger: true },
-    async onOk() {
-      await deleteAgent(agent.id)
-      message.success('删除成功')
-      fetchAgents()
-    }
-  })
-}
-
 function startChat(agent: Agent): void {
   router.push(`/chat/${agent.id}`)
+}
+
+function getStatusName(status: number): string {
+  const statuses: Record<number, string> = { 0: '草稿', 1: '已发布' }
+  return statuses[status] || '未知'
+}
+
+function getStatusColor(status: number): string {
+  const colors: Record<number, string> = { 0: 'orange', 1: 'green' }
+  return colors[status] || 'default'
+}
+
+function showCreateModal(): void {
+  createModalVisible.value = true
+}
+
+function showEditModal(agentId: number): void {
+  editingAgentId.value = agentId
+  editModalVisible.value = true
+}
+
+function formatDateTime(dateStr: string): string {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const seconds = String(date.getSeconds()).padStart(2, '0')
+  return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`
 }
 
 onMounted(() => {

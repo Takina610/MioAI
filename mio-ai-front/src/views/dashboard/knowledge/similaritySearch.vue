@@ -132,41 +132,23 @@ interface SearchResult {
 const route = useRoute()
 const router = useRouter()
 
-const kbId = computed(() => Number(route.params.id))
-
 const loading = ref(false)
 const searching = ref(false)
 const hasSearched = ref(false)
-const knowledgeBase = ref<KnowledgeBase | null>(null)
+const thresholdPercent = ref(0.5)
 const searchContent = ref('')
+const knowledgeBase = ref<KnowledgeBase | null>(null)
 const searchResults = ref<SearchResult[]>([])
 
 const config = reactive({
   topK: 3
 })
 
-const thresholdPercent = ref(0.5)
+const kbId = computed(() => Number(route.params.id))
 
 const canSearch = computed(() => {
   return searchContent.value.trim().length > 0
 })
-
-function goBack(): void {
-  router.push('/dashboard/knowledge')
-}
-
-function getProgressColor(score: number): string {
-  if (score >= 0.8) return '#52c41a'
-  if (score >= 0.6) return '#1890ff'
-  if (score >= 0.4) return '#faad14'
-  return '#ff4d4f'
-}
-
-function truncateText(text: string, maxLength: number): string {
-  if (!text) return ''
-  if (text.length <= maxLength) return text
-  return text.substring(0, maxLength) + '...'
-}
 
 async function fetchKnowledgeBase(): Promise<void> {
   loading.value = true
@@ -203,6 +185,24 @@ async function handleSearch(): Promise<void> {
   } finally {
     searching.value = false
   }
+}
+
+
+function getProgressColor(score: number): string {
+  if (score >= 0.8) return '#52c41a'
+  if (score >= 0.6) return '#1890ff'
+  if (score >= 0.4) return '#faad14'
+  return '#ff4d4f'
+}
+
+function truncateText(text: string, maxLength: number): string {
+  if (!text) return ''
+  if (text.length <= maxLength) return text
+  return text.substring(0, maxLength) + '...'
+}
+
+function goBack(): void {
+  router.push('/dashboard/knowledge')
 }
 
 onMounted(() => {

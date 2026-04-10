@@ -24,7 +24,7 @@
                 <span class="author">
                   <UserOutlined /> {{ agent.type === 0 ? '官方' : (agent.userName || '匿名') }}
                 </span>
-                <span class="time">{{ formatTime(agent.createTime) }}</span>
+                <span class="time">{{ formatDateTime(agent.createTime) }}</span>
               </div>
               <div class="card-actions">
                 <a-button class="chat-btn" type="primary" size="small" @click="startChat(agent)">
@@ -54,31 +54,31 @@ const router = useRouter()
 const loading = ref<boolean>(false)
 const agentList = ref<AgentWithUser[]>([])
 
-onMounted(() => {
-  fetchAgents()
-})
-
 async function fetchAgents(): Promise<void> {
   loading.value = true
   try {
     const res: PageResponse<AgentWithUser> = await getPublicAgents()
-    agentList.value = res?.records || []
-  } catch (e) {
-    console.error(e)
-  } finally {
-    loading.value = false
+      agentList.value = res?.records || []
+    } catch (e) {
+      console.error(e)
+    } finally {
+      loading.value = false
+    }
   }
-}
-
+  
 function startChat(agent: AgentWithUser): void {
   router.push(`/chat/${agent.id}`)
 }
 
-function formatTime(time: string): string {
+function formatDateTime(time: string): string {
   if (!time) return ''
   const date = new Date(time)
   return date.toLocaleDateString()
 }
+
+onMounted(() => {
+  fetchAgents()
+})
 </script>
 
 <style lang="scss" scoped>

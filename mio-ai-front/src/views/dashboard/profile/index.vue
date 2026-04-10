@@ -182,15 +182,18 @@ interface CropBox {
 }
 
 const userStore = useUserStore()
-const formRef = ref<FormInstance | null>(null)
-const passwordFormRef = ref<FormInstance | null>(null)
 const loading = ref<boolean>(false)
 const passwordLoading = ref<boolean>(false)
 const avatarLoading = ref<boolean>(false)
 const passwordModalVisible = ref<boolean>(false)
 const cropModalVisible = ref<boolean>(false)
+const isDragging = ref<boolean>(false)
+const isResizing = ref<boolean>(false)
 
+const resizeDirection = ref<string>('')
 const previewUrl = ref<string>('')
+
+const passwordFormRef = ref<FormInstance | null>(null)
 const selectedFile = ref<File | null>(null)
 const imageRef = ref<HTMLImageElement | null>(null)
 
@@ -204,9 +207,7 @@ const cropBox = reactive<CropBox>({
 const imageNaturalSize = reactive({ width: 0, height: 0 })
 const imageDisplaySize = reactive({ width: 0, height: 0 })
 const containerSize = reactive({ width: 500, height: 400 })
-const isDragging = ref<boolean>(false)
-const isResizing = ref<boolean>(false)
-const resizeDirection = ref<string>('')
+
 const dragStart = reactive({ x: 0, y: 0 })
 const cropBoxStart = reactive<CropBox>({ x: 0, y: 0, width: 0, height: 0 })
 
@@ -226,25 +227,6 @@ const passwordForm = reactive<PasswordUpdateRequest>({
 
 const rules: Record<string, Rule[]> = {
   userName: [{ required: true, message: '请输入昵称', trigger: 'blur' }]
-}
-
-const validateConfirmPassword = async (_rule: Rule, value: string): Promise<void> => {
-  if (!value) {
-    return Promise.reject('请确认密码')
-  }
-  if (value !== passwordForm.newPassword) {
-    return Promise.reject('两次输入的密码不一致')
-  }
-  return Promise.resolve()
-}
-
-const passwordRules: Record<string, Rule[]> = {
-  oldPassword: [{ required: true, message: '请输入原密码', trigger: 'blur' }],
-  newPassword: [
-    { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 8, max: 20, message: '密码长度为8-20个字符', trigger: 'blur' }
-  ],
-  confirmPassword: [{ validator: validateConfirmPassword, trigger: 'blur' }]
 }
 
 const cropAreaStyle = computed(() => ({
@@ -271,18 +253,55 @@ const previewStyle = computed(() => {
   }
 })
 
-onMounted(() => {
-  if (userStore.userInfo) {
-    const info: UserVO = userStore.userInfo
-    Object.assign(formData, {
-      id: info.id,
-      userName: info.userName,
-      userAccount: info.userAccount,
-      userRole: info.userRole,
-      userProfile: info.userProfile || ''
-    })
+async function handleUpdate(): Promise<void> {
+  loading.value = true
+  try {
+    await updateUser(formData as UpdateUserRequest)
+    message.success('更新成功')
+    if (userStore.userInfo) {
+      userStore.setUserInfo({ ...userStore.userInfo, ...formData } as UserVO)
+    }
+  } catch (e) {
+    console.error(e)
+  } finally {
+    loading.value = false
   }
-})
+}
+
+async function handlePasswordChange(): Promise<void> {
+  try {
+    await passwordFormRef.value?.validate()
+    passwordLoading.value = true
+    await updatePassword(passwordForm)
+    message.success('密码修改成功，请重新登录')
+    passwordModalVisible.value = false
+    await userStore.logout()
+    window.location.href = '/'
+  } catch (e) {
+    console.error(e)
+  } finally {
+    passwordLoading.value = false
+  }
+}
+
+const validateConfirmPassword = async (_rule: Rule, value: string): Promise<void> => {
+  if (!value) {
+    return Promise.reject('请确认密码')
+  }
+  if (value !== passwordForm.newPassword) {
+    return Promise.reject('两次输入的密码不一致')
+  }
+  return Promise.resolve()
+}
+
+const passwordRules: Record<string, Rule[]> = {
+  oldPassword: [{ required: true, message: '请输入原密码', trigger: 'blur' }],
+  newPassword: [
+    { required: true, message: '请输入新密码', trigger: 'blur' },
+    { min: 8, max: 20, message: '密码长度为8-20个字符', trigger: 'blur' }
+  ],
+  confirmPassword: [{ validator: validateConfirmPassword, trigger: 'blur' }]
+}
 
 const beforeUpload: UploadProps['beforeUpload'] = (file) => {
   const isImage = file.type.startsWith('image/')
@@ -597,41 +616,23 @@ function handleCropCancel(): void {
   selectedFile.value = null
 }
 
-async function handleUpdate(): Promise<void> {
-  loading.value = true
-  try {
-    await updateUser(formData as UpdateUserRequest)
-    message.success('更新成功')
-    if (userStore.userInfo) {
-      userStore.setUserInfo({ ...userStore.userInfo, ...formData } as UserVO)
-    }
-  } catch (e) {
-    console.error(e)
-  } finally {
-    loading.value = false
-  }
-}
-
 function showPasswordModal(): void {
   passwordModalVisible.value = true
   passwordFormRef.value?.resetFields()
 }
 
-async function handlePasswordChange(): Promise<void> {
-  try {
-    await passwordFormRef.value?.validate()
-    passwordLoading.value = true
-    await updatePassword(passwordForm)
-    message.success('密码修改成功，请重新登录')
-    passwordModalVisible.value = false
-    await userStore.logout()
-    window.location.href = '/'
-  } catch (e) {
-    console.error(e)
-  } finally {
-    passwordLoading.value = false
+onMounted(() => {
+  if (userStore.userInfo) {
+    const info: UserVO = userStore.userInfo
+    Object.assign(formData, {
+      id: info.id,
+      userName: info.userName,
+      userAccount: info.userAccount,
+      userRole: info.userRole,
+      userProfile: info.userProfile || ''
+    })
   }
-}
+})
 </script>
 
 <style lang="scss" scoped>

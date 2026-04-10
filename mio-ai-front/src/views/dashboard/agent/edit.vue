@@ -493,7 +493,6 @@ import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
-  LeftOutlined,
   SendOutlined,
   PlusOutlined,
   DeleteOutlined,
@@ -515,26 +514,20 @@ const router = useRouter()
 const route = useRoute()
 
 const agentId = Number(route.params.id)
+
 const loading = ref(true)
 const publishLoading = ref(false)
-const saveLoading = ref(false)
 const addKnowledgeLoading = ref(false)
 const addMcpLoading = ref(false)
-const agentDetail = ref<AgentDetail | null>(null)
-
-const formData = reactive({
-  name: '',
-  description: '',
-  avatar: '',
-  systemPrompt: '',
-  isPublic: 0
-})
-
 const knowledgeDrawerVisible = ref(false)
 const mcpDrawerVisible = ref(false)
 const editModalVisible = ref(false)
+const hasSaved = ref(false)
+
 const knowledgeTab = ref('public')
 const mcpTab = ref('public')
+
+const agentDetail = ref<AgentDetail | null>(null)
 const publicKnowledgeBases = ref<KnowledgeBase[]>([])
 const customKnowledgeBases = ref<KnowledgeBase[]>([])
 const publicMcpTools = ref<McpTool[]>([])
@@ -548,112 +541,13 @@ const detailExpandedMcpIds = ref<number[]>([])
 const knowledgeDocuments = ref<Map<number, Document[]>>(new Map())
 const drawerKnowledgeDocuments = ref<Map<number, Document[]>>(new Map())
 
-function isKnowledgeAlreadyAdded(kbId: number): boolean {
-  return agentDetail.value?.knowledgeBases?.some(kb => kb.id === kbId) || false
-}
-
-function isMcpAlreadyAdded(mcpId: number): boolean {
-  return agentDetail.value?.mcpTools?.some(mcp => mcp.id === mcpId) || false
-}
-
-function handleKnowledgeClick(kb: KnowledgeBase): void {
-  if (isKnowledgeAlreadyAdded(kb.id)) return
-  toggleKnowledge(kb.id)
-}
-
-function handleMcpClick(mcp: McpTool): void {
-  if (isMcpAlreadyAdded(mcp.id)) return
-  toggleMcp(mcp.id)
-}
-
-async function fetchKnowledgeDocuments(kbId: number, isDrawer: boolean = false): Promise<void> {
-  const map = isDrawer ? drawerKnowledgeDocuments : knowledgeDocuments
-  if (map.value.has(kbId)) return
-  
-  try {
-    const res = await queryDocuments({ current: 1, pageSize: 100, kbId })
-    map.value.set(kbId, res.records || [])
-  } catch (e) {
-    console.error(e)
-  }
-}
-
-function toggleKnowledgeExpand(kbId: number): void {
-  const index = expandedKnowledgeIds.value.indexOf(kbId)
-  if (index > -1) {
-    expandedKnowledgeIds.value.splice(index, 1)
-  } else {
-    expandedKnowledgeIds.value.push(kbId)
-    fetchKnowledgeDocuments(kbId, true)
-  }
-}
-
-function toggleMcpExpand(mcpId: number): void {
-  const index = expandedMcpIds.value.indexOf(mcpId)
-  if (index > -1) {
-    expandedMcpIds.value.splice(index, 1)
-  } else {
-    expandedMcpIds.value.push(mcpId)
-  }
-}
-
-function toggleDetailKnowledgeExpand(kbId: number): void {
-  const index = detailExpandedKnowledgeIds.value.indexOf(kbId)
-  if (index > -1) {
-    detailExpandedKnowledgeIds.value.splice(index, 1)
-  } else {
-    detailExpandedKnowledgeIds.value.push(kbId)
-    fetchKnowledgeDocuments(kbId, false)
-  }
-}
-
-function toggleDetailMcpExpand(mcpId: number): void {
-  const index = detailExpandedMcpIds.value.indexOf(mcpId)
-  if (index > -1) {
-    detailExpandedMcpIds.value.splice(index, 1)
-  } else {
-    detailExpandedMcpIds.value.push(mcpId)
-  }
-}
-
-function getMcpToolCount(mcp: McpTool): number {
-  if (!mcp.toolInfo) return 0
-  try {
-    const info = JSON.parse(mcp.toolInfo)
-    if (Array.isArray(info)) {
-      return info.length
-    }
-    return info.tools?.length || 0
-  } catch {
-    return 0
-  }
-}
-
-function getMcpTools(mcp: McpTool): { name: string; description: string }[] {
-  if (!mcp.toolInfo) return []
-  try {
-    const info = JSON.parse(mcp.toolInfo)
-    if (Array.isArray(info)) {
-      return info
-    }
-    return info.tools || []
-  } catch {
-    return []
-  }
-}
-
-function goBack(): void {
-  router.push('/dashboard/agent')
-}
-
-function showEditModal(): void {
-  editModalVisible.value = true
-}
-
-function handleEditSuccess(): void {
-  editModalVisible.value = false
-  fetchAgentDetail()
-}
+const formData = reactive({
+  name: '',
+  description: '',
+  avatar: '',
+  systemPrompt: '',
+  isPublic: 0
+})
 
 async function fetchAgentDetail(): Promise<void> {
   try {
@@ -670,6 +564,44 @@ async function fetchAgentDetail(): Promise<void> {
     message.error('获取智能体详情失败')
   } finally {
     loading.value = false
+  }
+}
+
+async function fetchKnowledgeBases(): Promise<void> {
+  try {
+    const [publicRes, customRes] = await Promise.all([
+      getPublicKnowledgeBases({ current: 1, size: 100 }),
+      queryKnowledgeBases({ current: 1, pageSize: 100 })
+    ])
+    publicKnowledgeBases.value = publicRes.records || []
+    customKnowledgeBases.value = customRes.records || []
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+async function fetchKnowledgeDocuments(kbId: number, isDrawer: boolean = false): Promise<void> {
+  const map = isDrawer ? drawerKnowledgeDocuments : knowledgeDocuments
+  if (map.value.has(kbId)) return
+  
+  try {
+    const res = await queryDocuments({ current: 1, pageSize: 100, kbId })
+    map.value.set(kbId, res.records || [])
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+async function fetchMcpTools(): Promise<void> {
+  try {
+    const [publicRes, customRes] = await Promise.all([
+      getPublicMcpTools({ current: 1, size: 100 }),
+      queryMcpTools({ current: 1, pageSize: 100 })
+    ])
+    publicMcpTools.value = publicRes.records || []
+    customMcpTools.value = customRes.records || []
+  } catch (e) {
+    console.error(e)
   }
 }
 
@@ -695,23 +627,119 @@ async function handlePublish(): Promise<void> {
   }
 }
 
+async function autoSave(): Promise<void> {
+  if (hasSaved.value) return
+  try {
+    const data: AgentUpdateRequest = {
+      id: agentId,
+      name: formData.name,
+      description: formData.description,
+      avatar: formData.avatar,
+      systemPrompt: formData.systemPrompt,
+      isPublic: formData.isPublic
+    }
+    await updateAgent(data)
+    hasSaved.value = true
+  } catch (e) {
+    console.error('自动保存失败', e)
+  }
+}
+
+function isKnowledgeAlreadyAdded(kbId: number): boolean {
+  return agentDetail.value?.knowledgeBases?.some(kb => kb.id === kbId) || false
+}
+
+function isMcpAlreadyAdded(mcpId: number): boolean {
+  return agentDetail.value?.mcpTools?.some(mcp => mcp.id === mcpId) || false
+}
+
+function handleKnowledgeClick(kb: KnowledgeBase): void {
+  if (isKnowledgeAlreadyAdded(kb.id)) return
+  toggleKnowledge(kb.id)
+}
+
+function handleMcpClick(mcp: McpTool): void {
+  if (isMcpAlreadyAdded(mcp.id)) return
+  toggleMcp(mcp.id)
+}
+
+function toggleKnowledgeExpand(kbId: number): void {
+  const index = expandedKnowledgeIds.value.indexOf(kbId)
+  if (index > -1) {
+    expandedKnowledgeIds.value.splice(index, 1)
+  } else {
+    expandedKnowledgeIds.value.push(kbId)
+    fetchKnowledgeDocuments(kbId, true)
+  }
+}
+
+function toggleDetailKnowledgeExpand(kbId: number): void {
+  const index = detailExpandedKnowledgeIds.value.indexOf(kbId)
+  if (index > -1) {
+    detailExpandedKnowledgeIds.value.splice(index, 1)
+  } else {
+    detailExpandedKnowledgeIds.value.push(kbId)
+    fetchKnowledgeDocuments(kbId, false)
+  }
+}
+
+function toggleMcpExpand(mcpId: number): void {
+  const index = expandedMcpIds.value.indexOf(mcpId)
+  if (index > -1) {
+    expandedMcpIds.value.splice(index, 1)
+  } else {
+    expandedMcpIds.value.push(mcpId)
+  }
+}
+
+function toggleDetailMcpExpand(mcpId: number): void {
+  const index = detailExpandedMcpIds.value.indexOf(mcpId)
+  if (index > -1) {
+    detailExpandedMcpIds.value.splice(index, 1)
+  } else {
+    detailExpandedMcpIds.value.push(mcpId)
+  }
+}
+
+function getMcpToolCount(mcp: McpTool): number {
+  if (!mcp.toolInfo) return 0
+  try {
+    const toolInfo = JSON.parse(mcp.toolInfo)
+    return toolInfo.length || 0
+  } catch {
+    return 0
+  }
+}
+
+function getMcpTools(mcp: McpTool): { name: string; description: string }[] {
+  if (!mcp.toolInfo) return []
+  try {
+    const toolInfo = JSON.parse(mcp.toolInfo)
+    return toolInfo
+  } catch {
+    return []
+  }
+}
+
+function showEditModal(): void {
+  editModalVisible.value = true
+}
+
+function handleEditSuccess(): void {
+  editModalVisible.value = false
+  fetchAgentDetail()
+}
+
 async function showKnowledgeDrawer(): Promise<void> {
   knowledgeDrawerVisible.value = true
   selectedKnowledgeIds.value = []
   await fetchKnowledgeBases()
 }
 
-async function fetchKnowledgeBases(): Promise<void> {
-  try {
-    const [publicRes, customRes] = await Promise.all([
-      getPublicKnowledgeBases({ current: 1, size: 100 }),
-      queryKnowledgeBases({ current: 1, pageSize: 100 })
-    ])
-    publicKnowledgeBases.value = publicRes.records || []
-    customKnowledgeBases.value = customRes.records || []
-  } catch (e) {
-    console.error(e)
-  }
+async function showMcpDrawer(): Promise<void> {
+  mcpDrawerVisible.value = true
+  selectedMcpIds.value = []
+  await fetchMcpTools()
 }
 
 function toggleKnowledge(id: number): void {
@@ -755,25 +783,6 @@ async function handleRemoveKnowledge(kbId: number): Promise<void> {
   } catch (e) {
     console.error(e)
     message.error('移除失败')
-  }
-}
-
-async function showMcpDrawer(): Promise<void> {
-  mcpDrawerVisible.value = true
-  selectedMcpIds.value = []
-  await fetchMcpTools()
-}
-
-async function fetchMcpTools(): Promise<void> {
-  try {
-    const [publicRes, customRes] = await Promise.all([
-      getPublicMcpTools({ current: 1, size: 100 }),
-      queryMcpTools({ current: 1, pageSize: 100 })
-    ])
-    publicMcpTools.value = publicRes.records || []
-    customMcpTools.value = customRes.records || []
-  } catch (e) {
-    console.error(e)
   }
 }
 
@@ -821,6 +830,10 @@ async function handleRemoveMcp(mcpId: number): Promise<void> {
   }
 }
 
+function goBack(): void {
+  router.push('/dashboard/agent')
+}
+
 function goToCreateKnowledge(): void {
   router.push('/dashboard/knowledge')
 }
@@ -829,32 +842,17 @@ function goToCreateMcp(): void {
   router.push('/dashboard/mcp')
 }
 
-const hasSaved = ref(false)
-
-async function autoSave(): Promise<void> {
-  if (hasSaved.value) return
-  try {
-    const data: AgentUpdateRequest = {
-      id: agentId,
-      name: formData.name,
-      description: formData.description,
-      avatar: formData.avatar,
-      systemPrompt: formData.systemPrompt,
-      isPublic: formData.isPublic
-    }
-    await updateAgent(data)
-    hasSaved.value = true
-  } catch (e) {
-    console.error('自动保存失败', e)
-  }
-}
-
 function handleBeforeUnload(e: BeforeUnloadEvent): void {
   if (!hasSaved.value) {
     e.preventDefault()
     e.returnValue = ''
   }
 }
+
+onMounted(() => {
+  fetchAgentDetail()
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
 
 onBeforeUnmount(() => {
   autoSave()
@@ -867,11 +865,6 @@ onBeforeRouteLeave(async (to, from, next) => {
     message.success('应用已自动保存')
   }
   next()
-})
-
-onMounted(() => {
-  fetchAgentDetail()
-  window.addEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
 
@@ -955,6 +948,8 @@ onMounted(() => {
     flex-shrink: 0;
     max-height: 730px;
     overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
 
   .edit-section {
@@ -1045,6 +1040,7 @@ onMounted(() => {
           }
 
           .resource-desc {
+            cursor: default;
             font-size: 12px;
             color: #666;
             margin: 0;

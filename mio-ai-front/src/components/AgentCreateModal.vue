@@ -19,7 +19,11 @@
       layout="vertical"
     >
       <a-form-item name="name" label="名称">
-        <a-input :value="formData.name" @update:value="formData.name = $event" placeholder="请输入智能体名称" />
+        <a-input 
+          :value="formData.name"
+          @update:value="formData.name = $event"
+          placeholder="请输入智能体名称"
+        />
       </a-form-item>
       <a-form-item name="description" label="描述">
         <a-textarea
@@ -62,13 +66,14 @@ const props = defineProps<{
   mode?: 'create' | 'edit'
   agentId?: number
 }>()
-
+  
 const emit = defineEmits<{
   (e: 'update:visible', visible: boolean): void
   (e: 'success', agentId?: number | void): void
 }>()
 
 const defaultAvatarUrl = 'https://cdn.tak1na.cn/custom_agent.png'
+
 const submitLoading = ref(false)
 const loading = ref(false)
 const formRef = ref<FormInstance | null>(null)
@@ -111,17 +116,6 @@ async function fetchAgentData(): Promise<void> {
   }
 }
 
-function resetForm(): void {
-  formRef.value?.resetFields()
-  Object.assign(formData, {
-    name: '',
-    description: '',
-    avatar: ''
-  })
-  avatarUrl.value = ''
-  originalAvatarUrl.value = ''
-}
-
 function triggerFileSelect(): void {
   const input = document.createElement('input')
   input.type = 'file'
@@ -160,6 +154,12 @@ async function handleFileChange(event: Event): Promise<void> {
   }
 }
 
+function handleModalClose(visible: boolean): void {
+  if (!visible) {
+    handleCancel()
+  }
+}
+
 async function handleCancel(): Promise<void> {
   if (avatarUrl.value && avatarUrl.value !== originalAvatarUrl.value && avatarUrl.value.includes('temp_')) {
     try {
@@ -170,12 +170,6 @@ async function handleCancel(): Promise<void> {
   }
   avatarUrl.value = ''
   emit('update:visible', false)
-}
-
-function handleModalClose(visible: boolean): void {
-  if (!visible) {
-    handleCancel()
-  }
 }
 
 async function handleSubmit(): Promise<void> {
@@ -212,6 +206,17 @@ async function handleSubmit(): Promise<void> {
   } finally {
     submitLoading.value = false
   }
+}
+
+function resetForm(): void {
+  formRef.value?.resetFields()
+  Object.assign(formData, {
+    name: '',
+    description: '',
+    avatar: ''
+  })
+  avatarUrl.value = ''
+  originalAvatarUrl.value = ''
 }
 </script>
 

@@ -146,12 +146,12 @@ const emit = defineEmits<{
   (e: 'submit', data: McpToolAddRequest): void
 }>()
 
+const validating = ref(false)
+const submitting = ref(false)
 const currentStep = ref(0)
 const formRef = ref<FormInstance | null>(null)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const lineNumbersRef = ref<HTMLElement | null>(null)
-const validating = ref(false)
-const submitting = ref(false)
 const validateResult = ref<McpValidateResult | null>(null)
 
 const formData = reactive({
@@ -169,6 +169,20 @@ const rules: Record<string, Rule[]> = {
 const lineCount = computed(() => {
   const lines = formData.config.split('\n').length
   return Math.max(lines, 10)
+})
+
+watch(() => props.visible, (val) => {
+  if (val) {
+    if (props.editingMcp) {
+      Object.assign(formData, {
+        name: props.editingMcp.name,
+        description: props.editingMcp.description || '',
+        config: props.editingMcp.config || ''
+      })
+    } else {
+      resetForm()
+    }
+  }
 })
 
 function handleTextareaInput(event: Event): void {
@@ -268,20 +282,6 @@ function resetForm(): void {
     config: ''
   })
 }
-
-watch(() => props.visible, (val) => {
-  if (val) {
-    if (props.editingMcp) {
-      Object.assign(formData, {
-        name: props.editingMcp.name,
-        description: props.editingMcp.description || '',
-        config: props.editingMcp.config || ''
-      })
-    } else {
-      resetForm()
-    }
-  }
-})
 </script>
 
 <style lang="scss" scoped>

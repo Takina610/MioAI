@@ -193,9 +193,13 @@ const userStore = useUserStore()
 const loading = ref(true)
 const saving = ref(false)
 const validating = ref(false)
+const validateModalVisible = ref(false)
+const configChanged = ref(false)
+const formChanged = ref(false)
+const originalConfig = ref('')
+
 const error = ref<string | null>(null)
 const mcpDetail = ref<McpTool | null>(null)
-const validateModalVisible = ref(false)
 const validateResult = ref<McpValidateResult | null>(null)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const lineNumbersRef = ref<HTMLElement | null>(null)
@@ -207,9 +211,6 @@ const formData = reactive({
   isPublic: 0
 })
 
-const originalConfig = ref('')
-const configChanged = ref(false)
-const formChanged = ref(false)
 
 const lineCount = computed(() => {
   const lines = formData.config.split('\n').length
@@ -230,6 +231,93 @@ const canSave = computed(() => {
   if (configChanged.value && !validateResult.value?.success) return false
   return true
 })
+
+async function fetchMcpDetail(): Promise<void> {
+  const id = route.params.id as string
+  if (!id) {
+    router.push('/404')
+    return
+  }
+
+  try {
+    const data = await getMcpToolById(Number(id))
+
+    if (!data) {
+      router.push('/404')
+      return
+    }
+
+    if (!userStore.isLoggedIn || userStore.userInfo?.id !== data.userId) {
+      router.push('/403')
+      return
+    }
+    
+    mcpDetail.value = data
+    
+    let formattedConfig = data.config || ''
+    try {
+      const parsed = JSON.parse(formattedConfig)
+      formattedConfig = JSON.stringify(parsed, null, 2)
+    } catch {
+    }
+    
+    Object.assign(formData, {
+      name: data.name,
+      description: data.description || '',
+      config: formattedConfig,
+      isPublic: data.isPublic || 0
+    })
+    originalConfig.value = formattedConfig
+  } catch (e: any) {
+    console.error(e)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleValidate(): Promise<void> {
+  validating.value = true
+  try {
+    const result = await validateMcpConfig({ config: formData.config })
+    validateResult.value = result
+    validateModalVisible.value = true
+  } catch (e) {
+    console.error(e)
+    message.error('校验失败，请重试')
+  } finally {
+    validating.value = false
+  }
+}
+
+async function handleSave(): Promise<void> {
+  if (!mcpDetail.value) return
+  
+  if (configChanged.value && !validateResult.value?.success) {
+    message.warning('配置已修改，请先校验配置')
+    return
+  }
+  
+  saving.value = true
+  try {
+    await updateMcpTool({
+      id: mcpDetail.value.id,
+      name: formData.name,
+      description: formData.description,
+      config: formData.config,
+      toolInfo: mcpDetail.value.toolInfo,
+      isPublic: formData.isPublic
+    })
+    message.success('保存成功')
+    formChanged.value = false
+    originalConfig.value = formData.config
+    await fetchMcpDetail()
+  } catch (e) {
+    console.error(e)
+    message.error('保存失败')
+  } finally {
+    saving.value = false
+  }
+}
 
 function formatTime(time?: string): string {
   if (!time) return '-'
@@ -290,95 +378,8 @@ function getErrorMessage(result: McpValidateResult): string {
   }
 }
 
-async function handleValidate(): Promise<void> {
-  validating.value = true
-  try {
-    const result = await validateMcpConfig({ config: formData.config })
-    validateResult.value = result
-    validateModalVisible.value = true
-  } catch (e) {
-    console.error(e)
-    message.error('校验失败，请重试')
-  } finally {
-    validating.value = false
-  }
-}
-
-async function handleSave(): Promise<void> {
-  if (!mcpDetail.value) return
-  
-  if (configChanged.value && !validateResult.value?.success) {
-    message.warning('配置已修改，请先校验配置')
-    return
-  }
-  
-  saving.value = true
-  try {
-    await updateMcpTool({
-      id: mcpDetail.value.id,
-      name: formData.name,
-      description: formData.description,
-      config: formData.config,
-      toolInfo: mcpDetail.value.toolInfo,
-      isPublic: formData.isPublic
-    })
-    message.success('保存成功')
-    formChanged.value = false
-    originalConfig.value = formData.config
-    await fetchMcpDetail()
-  } catch (e) {
-    console.error(e)
-    message.error('保存失败')
-  } finally {
-    saving.value = false
-  }
-}
-
 function goBack(): void {
   router.push('/dashboard/mcp')
-}
-
-async function fetchMcpDetail(): Promise<void> {
-  const id = route.params.id as string
-  if (!id) {
-    router.push('/404')
-    return
-  }
-
-  try {
-    const data = await getMcpToolById(Number(id))
-
-    if (!data) {
-      router.push('/404')
-      return
-    }
-
-    if (!userStore.isLoggedIn || userStore.userInfo?.id !== data.userId) {
-      router.push('/403')
-      return
-    }
-    
-    mcpDetail.value = data
-    
-    let formattedConfig = data.config || ''
-    try {
-      const parsed = JSON.parse(formattedConfig)
-      formattedConfig = JSON.stringify(parsed, null, 2)
-    } catch {
-    }
-    
-    Object.assign(formData, {
-      name: data.name,
-      description: data.description || '',
-      config: formattedConfig,
-      isPublic: data.isPublic || 0
-    })
-    originalConfig.value = formattedConfig
-  } catch (e: any) {
-    console.error(e)
-  } finally {
-    loading.value = false
-  }
 }
 
 onMounted(() => {

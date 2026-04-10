@@ -147,16 +147,57 @@ const emit = defineEmits<{
 
 const userStore = useUserStore()
 
-const formRef = ref<FormInstance | null>(null)
 const loading = ref<boolean>(false)
 const isLogin = ref<boolean>(true)
-
+const formRef = ref<FormInstance | null>(null)
+    
 const formData = reactive<FormData>({
   userAccount: '',
   userName: '',
   userPassword: '',
   checkPassword: ''
 })
+
+watch(
+  () => formRef.value,
+  () => {
+    if (formRef.value) {
+      formRef.value.resetFields()
+    }
+  }
+)
+
+async function handleSubmit(): Promise<void> {
+  loading.value = true
+  try {
+    if (isLogin.value) {
+      await userStore.login({
+        userAccount: formData.userAccount,
+        userPassword: formData.userPassword
+      })
+      message.success('登录成功')
+    } else {
+      await userStore.register({
+        userAccount: formData.userAccount,
+        userName: formData.userName,
+        userPassword: formData.userPassword,
+        checkPassword: formData.checkPassword
+      })
+      message.success('注册成功，请登录')
+      isLogin.value = true
+      formRef.value?.resetFields()
+      return
+    }
+
+    emit('update:visible', false)
+    emit('success')
+    formRef.value?.resetFields()
+  } catch (error) {
+    console.error(error)
+  } finally {
+    loading.value = false
+  }
+}
 
 const validateCheckPassword = async (_rule: Rule, value: string): Promise<void> => {
   if (!isLogin.value) {
@@ -216,47 +257,6 @@ const passwordStrength = computed<PasswordStrength>(() => {
 function toggleMode(): void {
   isLogin.value = !isLogin.value
   formRef.value?.resetFields()
-}
-
-watch(
-  () => formRef.value,
-  () => {
-    if (formRef.value) {
-      formRef.value.resetFields()
-    }
-  }
-)
-
-async function handleSubmit(): Promise<void> {
-  loading.value = true
-  try {
-    if (isLogin.value) {
-      await userStore.login({
-        userAccount: formData.userAccount,
-        userPassword: formData.userPassword
-      })
-      message.success('登录成功')
-    } else {
-      await userStore.register({
-        userAccount: formData.userAccount,
-        userName: formData.userName,
-        userPassword: formData.userPassword,
-        checkPassword: formData.checkPassword
-      })
-      message.success('注册成功，请登录')
-      isLogin.value = true
-      formRef.value?.resetFields()
-      return
-    }
-
-    emit('update:visible', false)
-    emit('success')
-    formRef.value?.resetFields()
-  } catch (error) {
-    console.error(error)
-  } finally {
-    loading.value = false
-  }
 }
 </script>
 

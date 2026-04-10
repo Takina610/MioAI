@@ -51,10 +51,6 @@ const router = useRouter()
 const loading = ref<boolean>(false)
 const mcpList = ref<McpToolWithUser[]>([])
 
-onMounted(() => {
-  fetchMcpTools()
-})
-
 async function fetchMcpTools(): Promise<void> {
   loading.value = true
   try {
@@ -70,6 +66,10 @@ async function fetchMcpTools(): Promise<void> {
 function goToDetail(id: number): void {
   router.push(`/dashboard/mcp-market/${id}`)
 }
+
+onMounted(() => {
+  fetchMcpTools()
+})
 </script>
 
 <style lang="scss" scoped>

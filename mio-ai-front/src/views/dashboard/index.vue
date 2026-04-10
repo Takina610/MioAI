@@ -126,6 +126,7 @@
             </template>
           </a-dropdown>
         </template>
+
         <template v-else>
           <a-button type="primary" block @click="showAuthModal" v-show="!isCollapsed">
             登录
@@ -155,7 +156,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useUserStore } from '@/store/user'
@@ -187,7 +188,7 @@ const authModalVisible = ref<boolean>(false)
 watch(
   () => route.path,
   (path) => {
-    const pathMap: Record<string, MenuKey> = {
+    const exactPathMap: Record<string, MenuKey> = {
       '/dashboard/agent-market': 'agent-market',
       '/dashboard/agent': 'agent',
       '/dashboard/mcp-market': 'mcp-market',
@@ -196,16 +197,24 @@ watch(
       '/dashboard/knowledge': 'knowledge',
       '/dashboard/profile': 'profile'
     }
-    if (pathMap[path]) {
-      currentPath.value = pathMap[path]
-    } else if (path.startsWith('/dashboard/knowledge/')) {
-      currentPath.value = 'knowledge'
-    } else if (path.startsWith('/dashboard/public-knowledge/')) {
-      currentPath.value = 'public-knowledge'
-    } else if (path.startsWith('/dashboard/mcp/')) {
-      currentPath.value = 'mcp'
-    } else if (path.startsWith('/dashboard/mcp-market/')) {
-      currentPath.value = 'mcp-market'
+
+    const prefixPathMap: [RegExp, MenuKey][] = [
+      [/^\/dashboard\/knowledge\//, 'knowledge'],
+      [/^\/dashboard\/public-knowledge\//, 'public-knowledge'],
+      [/^\/dashboard\/mcp\//, 'mcp'],
+      [/^\/dashboard\/mcp-market\//, 'mcp-market'],
+      [/^\/dashboard\/agent\//, 'agent']
+    ]
+
+    if (exactPathMap[path]) {
+      currentPath.value = exactPathMap[path]
+    } else {
+      for (const [pattern, key] of prefixPathMap) {
+        if (pattern.test(path)) {
+          currentPath.value = key
+          return
+        }
+      }
     }
   },
   { immediate: true }

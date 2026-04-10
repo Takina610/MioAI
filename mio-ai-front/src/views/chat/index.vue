@@ -168,7 +168,7 @@
               <div class="message-content">
                 <div class="message-text" v-html="formatMessage(msg.content)"></div>
                 <div class="message-actions">
-                  <div class="copy-area" v-show="hoverMessageId === msg.id && msg.content">
+                  <div class="copy-area" v-show="!isLoading && hoverMessageId === msg.id && msg.content">
                     <a-tooltip :title="copiedMessageId === msg.id ? '已复制' : '复制'">
                       <a-button type="text" size="small" class="copy-btn" :class="{ 'copied': copiedMessageId === msg.id }" @click="copyMessage(msg.content, msg.id)">
                         <CheckOutlined v-if="copiedMessageId === msg.id" />
@@ -296,24 +296,28 @@ const userStore = useUserStore()
 
 const isCollapsed = ref<boolean>(false)
 const authModalVisible = ref<boolean>(false)
-const agentInfo = ref<Agent | null>(null)
-const currentChatId = ref<string>('')
-const chatList = ref<ChatSession[]>([])
-const chatListLoading = ref<boolean>(false)
-const chatListCurrent = ref<number>(1)
-const chatListPageSize = ref<number>(10)
-const chatListTotal = ref<number>(0)
-const chatListHasMore = ref<boolean>(true)
-const messages = ref<ChatMessage[]>([])
-const inputMessage = ref<string>('')
 const isLoading = ref<boolean>(false)
-const messagesRef = ref<HTMLElement | null>(null)
-const chatListRef = ref<HTMLElement | null>(null)
-const hoverMessageId = ref<string>('')
-const copiedMessageId = ref<string>('')
 const deleteModalVisible = ref<boolean>(false)
 const deleteLoading = ref<boolean>(false)
+const chatListHasMore = ref<boolean>(true)
+const chatListLoading = ref<boolean>(false)
+
+const currentChatId = ref<string>('')
+const hoverMessageId = ref<string>('')
+const copiedMessageId = ref<string>('')
 const pendingDeleteChatId = ref<string>('')
+const inputMessage = ref<string>('')
+
+const chatList = ref<ChatSession[]>([])
+const messages = ref<ChatMessage[]>([])
+const chatListCurrent = ref<number>(1)
+const agentId = ref<number>(0)
+const chatListPageSize = ref<number>(10)
+const chatListTotal = ref<number>(0)
+const agentInfo = ref<Agent | null>(null)
+const messagesRef = ref<HTMLElement | null>(null)
+const chatListRef = ref<HTMLElement | null>(null)
+
 
 marked.setOptions({
   gfm: true,
@@ -321,8 +325,6 @@ marked.setOptions({
 })
 
 let eventSource: EventSource | null = null
-
-const agentId = ref<number>(0)
 
 const currentChatTitle = computed(() => {
   const chat = chatList.value.find(c => c.id === currentChatId.value)
@@ -425,10 +427,6 @@ function handleChatListScroll(event: Event): void {
   if (scrollBottom < 50 && chatListHasMore.value && !chatListLoading.value) {
     loadChatHistory(true)
   }
-}
-
-function toggleCollapse(): void {
-  isCollapsed.value = !isCollapsed.value
 }
 
 function createNewChat(): void {
@@ -608,7 +606,6 @@ async function updateChatTitleWithTypewriter(userContent: string, aiContent: str
   }
 }
 
-
 function generateConversationId(): string {
   const timestamp = Date.now().toString()
   const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
@@ -705,6 +702,10 @@ function formatTime(date: Date | string): string {
   if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`
   return d.toLocaleDateString()
+}
+
+function toggleCollapse(): void {
+  isCollapsed.value = !isCollapsed.value
 }
 
 function goHome(): void {
@@ -1042,6 +1043,7 @@ onBeforeUnmount(() => {
         .chat-item-more {
           opacity: 0;
           transition: opacity 0.2s;
+          rotate: 90deg;
         }
 
         &:hover .chat-item-more {

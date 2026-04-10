@@ -87,6 +87,7 @@ defineEmits<{
 
 const router = useRouter()
 const userStore = useUserStore()
+
 const loading = ref<boolean>(false)
 const modalVisible = ref<boolean>(false)
 const editingMcp = ref<McpTool | null>(null)
@@ -104,11 +105,6 @@ async function fetchMcpTools(): Promise<void> {
   } finally {
     loading.value = false
   }
-}
-
-function showCreateModal(): void {
-  editingMcp.value = null
-  modalVisible.value = true
 }
 
 async function handleSubmit(data: McpToolAddRequest): Promise<void> {
@@ -143,6 +139,11 @@ function handleDelete(mcp: McpTool): void {
       fetchMcpTools()
     }
   })
+}
+
+function showCreateModal(): void {
+  editingMcp.value = null
+  modalVisible.value = true
 }
 
 function goToDetail(id: number): void {
