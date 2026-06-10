@@ -258,10 +258,20 @@ function handleAuthSuccess(): void {
   window.location.reload()
 }
 
+const logoutRouteMap: Record<string, string> = {
+  KnowledgeDetail: '/dashboard/knowledge',
+  KnowledgeMarketDetail: '/dashboard/knowledge/market',
+  AgentEdit: '/dashboard/agent',
+  McpDetail: '/dashboard/mcp',
+  McpMarketDetail: '/dashboard/mcp/market',
+  Profile: '/dashboard'
+}
+
 async function handleLogout(): Promise<void> {
   await userStore.logout()
-  if (route.name === 'KnowledgeDetail') {
-    router.push('/dashboard/knowledge')
+  const targetRoute = logoutRouteMap[route.name as string]
+  if (targetRoute) {
+    router.push(targetRoute)
   }
   message.success('已退出登录')
 }

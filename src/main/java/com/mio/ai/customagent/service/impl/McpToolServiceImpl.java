@@ -97,7 +97,7 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
         Page<McpTool> page = new Page<>(request.getCurrent(), request.getPageSize());
         LambdaQueryWrapper<McpTool> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(request.getStatus() != null, McpTool::getStatus, request.getStatus())
-                .eq(request.getIsPublic() != null, McpTool::getIsPublic, 1)
+                .eq(request.getIsPublic() != null, McpTool::getIsPublic, request.getIsPublic())
                 .eq(request.getUserId() != null, McpTool::getUserId, request.getUserId())
                 .orderByDesc(McpTool::getCreateTime);
         Page<McpTool> toolPage = this.page(page, wrapper);

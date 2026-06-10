@@ -390,7 +390,7 @@ onMounted(() => {
   }
 
   .page-content {
-    height: calc(100% - 132px);
+    max-height: 750px;
     overflow-y: auto;
     padding: 0 24px;
   }

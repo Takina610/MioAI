@@ -29,6 +29,7 @@
             <a-textarea
               v-model:value="formData.description"
               placeholder="请输入描述"
+              :maxlength="500"
               :rows="3"
             />
           </a-form-item>
@@ -231,6 +232,7 @@ async function handleNext(): Promise<void> {
 }
 
 function handlePrev(): void {
+  validating.value = false
   currentStep.value = 0
 }
 
@@ -269,12 +271,16 @@ async function handleSubmit(): Promise<void> {
 }
 
 function handleCancel(): void {
+  validating.value = false
+  submitting.value = false
   emit('update:visible', false)
 }
 
 function resetForm(): void {
   currentStep.value = 0
   validateResult.value = null
+  validating.value = false
+  submitting.value = false
   formRef.value?.resetFields()
   Object.assign(formData, {
     name: '',

@@ -331,6 +331,18 @@ function triggerFileSelect(): void {
 }
 
 function handleFileSelect(options: { file: File }): void {
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp']
+  if (!allowedTypes.includes(options.file.type)) {
+    message.error('只能上传图片文件（JPEG、PNG、GIF、WebP、BMP）')
+    return
+  }
+  
+  const maxSize = 10 * 1024 * 1024
+  if (options.file.size > maxSize) {
+    message.error('图片大小不能超过 10MB')
+    return
+  }
+  
   selectedFile.value = options.file
   const reader = new FileReader()
   reader.onload = (e) => {

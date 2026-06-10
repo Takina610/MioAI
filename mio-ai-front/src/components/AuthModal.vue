@@ -34,19 +34,6 @@
           </a-input>
         </a-form-item>
 
-        <a-form-item v-if="!isLogin" name="userName" label="昵称">
-          <a-input
-            :value="formData.userName"
-            @update:value="formData.userName = $event"
-            placeholder="请输入昵称"
-            size="large"
-          >
-            <template #prefix>
-              <IdcardOutlined />
-            </template>
-          </a-input>
-        </a-form-item>
-
         <a-form-item name="userPassword" label="密码">
           <a-input-password
             :value="formData.userPassword"
@@ -125,7 +112,6 @@ import {
 
 interface FormData {
   userAccount: string
-  userName: string
   userPassword: string
   checkPassword: string
 }
@@ -136,7 +122,7 @@ interface PasswordStrength {
   text: string
 }
 
-defineProps<{
+const props = defineProps<{
   visible: boolean
 }>()
 
@@ -153,19 +139,26 @@ const formRef = ref<FormInstance | null>(null)
     
 const formData = reactive<FormData>({
   userAccount: '',
-  userName: '',
   userPassword: '',
   checkPassword: ''
 })
 
 watch(
-  () => formRef.value,
-  () => {
-    if (formRef.value) {
-      formRef.value.resetFields()
+  () => props.visible,
+  (newVisible) => {
+    if (!newVisible) {
+      resetForm()
     }
   }
 )
+
+function resetForm(): void {
+  formRef.value?.resetFields()
+  formData.userAccount = ''
+  formData.userPassword = ''
+  formData.checkPassword = ''
+  isLogin.value = true
+}
 
 async function handleSubmit(): Promise<void> {
   loading.value = true
@@ -179,13 +172,11 @@ async function handleSubmit(): Promise<void> {
     } else {
       await userStore.register({
         userAccount: formData.userAccount,
-        userName: formData.userName,
         userPassword: formData.userPassword,
         checkPassword: formData.checkPassword
       })
       message.success('注册成功，请登录')
-      isLogin.value = true
-      formRef.value?.resetFields()
+      resetForm()
       return
     }
 
@@ -215,9 +206,6 @@ const rules: Record<string, Rule[]> = {
   userAccount: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
     { min: 4, max: 20, message: '用户名长度为4-20个字符', trigger: 'blur' }
-  ],
-  userName: [
-    { required: true, message: '请输入昵称', trigger: 'blur' }
   ],
   userPassword: [
     { required: true, message: '请输入密码', trigger: 'blur' },
@@ -257,6 +245,9 @@ const passwordStrength = computed<PasswordStrength>(() => {
 function toggleMode(): void {
   isLogin.value = !isLogin.value
   formRef.value?.resetFields()
+  formData.userAccount = ''
+  formData.userPassword = ''
+  formData.checkPassword = ''
 }
 </script>
 

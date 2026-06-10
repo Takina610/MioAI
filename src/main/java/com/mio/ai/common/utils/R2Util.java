@@ -12,6 +12,7 @@ import com.mio.ai.common.exception.ErrorCode;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -110,6 +111,10 @@ public class R2Util {
      * @throws IOException 删除异常
      */
     public void deleteFile(String fileUrl) throws IOException {
+        if (!StringUtils.hasText(fileUrl)) {
+            return;
+        }
+
         try {
             String fileKey = extractKeyFromUrl(fileUrl);
             DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()

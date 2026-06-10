@@ -30,6 +30,7 @@
           :value="formData.description"
           @update:value="formData.description = $event"
           placeholder="请输入描述"
+          :maxlength="500"
           :rows="3"
         />
       </a-form-item>
@@ -48,7 +49,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, onBeforeUnmount } from 'vue'
 import { message, type FormInstance } from 'ant-design-vue'
 import type { Rule } from 'ant-design-vue/es/form'
 import { EditOutlined } from '@ant-design/icons-vue'
@@ -144,6 +145,17 @@ async function handleFileChange(event: Event): Promise<void> {
 
   try {
     submitLoading.value = true
+    
+    // 删除之前的临时头像
+    if (avatarUrl.value && avatarUrl.value.includes('temp_')) {
+      console.log('删除头像')
+      try {
+        await deleteTempAvatar(avatarUrl.value)
+      } catch (e) {
+        console.error('删除之前的临时头像失败', e)
+      }
+    }
+    
     const url = await uploadAgentAvatar(file)
     avatarUrl.value = url
   } catch (e) {
@@ -218,6 +230,12 @@ function resetForm(): void {
   avatarUrl.value = ''
   originalAvatarUrl.value = ''
 }
+
+onBeforeUnmount(() => {
+  if (avatarUrl.value && avatarUrl.value !== originalAvatarUrl.value && avatarUrl.value.includes('temp_')) {
+    deleteTempAvatar(avatarUrl.value).catch(e => console.error('删除临时头像失败', e))
+  }
+})
 </script>
 
 <style lang="scss">

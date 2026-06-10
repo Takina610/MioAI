@@ -21,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -35,8 +36,12 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * @author: Takina
@@ -60,6 +65,9 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
     private VectorStore vectorStore;
 
     @Autowired
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Autowired
     private KeywordEnricher keywordEnricher;
 
     @Autowired
@@ -72,6 +80,9 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
     TikaReader tikaReader;
 
     private final ExecutorService executorService = Executors.newCachedThreadPool();
+    
+    // 存储正在进行的向量化任务的中断标志
+    private final Map<Long, Boolean> cancellationFlags = new java.util.concurrent.ConcurrentHashMap<>();
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -132,6 +143,9 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
 
         executorService.submit(() -> {
             try {
+                // 清除中断标志
+                cancellationFlags.remove(kbId);
+                
                 List<Document> documents = documentMapper.selectList(
                     new QueryWrapper<Document>()
                         .eq("kb_id", kbId)
@@ -139,73 +153,156 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
                 );
 
                 int total = documents.size();
-                int completed = 0;
+                if (total == 0) {
+                    emitter.send(SseEmitter.event().data(buildDoneEvent(0, 0, 0)));
+                    emitter.complete();
+                    return;
+                }
+
+                // 分批次处理，每批处理2个文件
+                int batchSize = 2;
+                int batchCount = (int) Math.ceil((double) total / batchSize);
+                
+                List<List<Document>> batches = IntStream.range(0, batchCount)
+                        .mapToObj(i -> new ArrayList<>(documents.subList(
+                                i * batchSize,
+                                Math.min((i + 1) * batchSize, total))))
+                        .collect(Collectors.toList());
+                
+                log.info("共 {} 个文件，分为 {} 批次并发处理", total, batchCount);
+
+                AtomicInteger completed = new AtomicInteger(0);
+                AtomicInteger failedCount = new AtomicInteger(0);
+                CountDownLatch countDownLatch = new CountDownLatch(batchCount);
 
                 emitter.send(SseEmitter.event()
                         .data(buildProgressEvent(total, 0, "开始处理文件...")));
 
-                for (Document doc : documents) {
-                    try {
-                        doc.setStatus(1);
-                        documentMapper.updateById(doc);
+                for (List<Document> batch : batches) {
+                    executorService.submit(() -> {
+                        try {
+                            for (Document doc : batch) {
+                                // 检查是否被中断
+                                if (Boolean.TRUE.equals(cancellationFlags.get(kbId))) {
+                                    log.info("向量化任务被中断: kbId={}", kbId);
+                                    return;
+                                }
+                                
+                                try {
+                                    doc.setStatus(1);
+                                    documentMapper.updateById(doc);
 
-                        emitter.send(SseEmitter.event()
-                                .data(buildProgressEvent(total, completed,
-                            "正在处理: " + doc.getFileName(), doc.getFileName())));
+                                    synchronized (emitter) {
+                                        emitter.send(SseEmitter.event()
+                                                .data(buildProgressEvent(total, completed.get(),
+                                                        "正在处理: " + doc.getFileName(), doc.getFileName())));
+                                    }
 
-                        List<org.springframework.ai.document.Document> aiDocuments =
-                                readDocumentFromUrl(doc.getFilePath(), doc.getFileType());
-                        
-                        if (aiDocuments.isEmpty()) {
-                            doc.setStatus(3);
-                            documentMapper.updateById(doc);
-                            completed++;
-                            continue;
+                                    List<org.springframework.ai.document.Document> aiDocuments =
+                                            readDocumentFromUrl(doc.getFilePath(), doc.getFileType());
+
+                                    if (aiDocuments.isEmpty()) {
+                                        doc.setStatus(3);
+                                        documentMapper.updateById(doc);
+                                        completed.incrementAndGet();
+                                        continue;
+                                    }
+
+                                    CustomTokenTextSplitter splitter = new CustomTokenTextSplitter();
+                                    List<org.springframework.ai.document.Document> splitDocuments =
+                                            splitter.apply(aiDocuments);
+
+                                    int chunkIndex = 0;
+                                    List<org.springframework.ai.document.Document> documentsWithId = new ArrayList<>();
+                                    for (org.springframework.ai.document.Document aiDoc : splitDocuments) {
+                                        Map<String, Object> metadata = new HashMap<>(aiDoc.getMetadata());
+                                        metadata.put("kbId", kbId);
+                                        metadata.put("docId", doc.getId());
+                                        metadata.put("fileName", doc.getFileName());
+                                        metadata.put("chunkIndex", chunkIndex);
+
+                                        String docId = "doc_" + doc.getId() + "_" + chunkIndex;
+                                        org.springframework.ai.document.Document docWithId =
+                                                new org.springframework.ai.document.Document(docId, aiDoc.getText(), metadata);
+                                        documentsWithId.add(docWithId);
+                                        chunkIndex++;
+                                    }
+
+                                    List<org.springframework.ai.document.Document> enrichedDocuments =
+                                            keywordEnricher.enrich(documentsWithId);
+
+                                    // 分批添加到向量存储，每批最多5个文档
+                                    int embeddingBatchSize = 5;
+                                    for (int i = 0; i < enrichedDocuments.size(); i += embeddingBatchSize) {
+                                        // 检查是否被中断
+                                        if (Boolean.TRUE.equals(cancellationFlags.get(kbId))) {
+                                            log.info("向量化任务被中断: kbId={}", kbId);
+                                            return;
+                                        }
+                                        
+                                        int end = Math.min(i + embeddingBatchSize, enrichedDocuments.size());
+                                        List<org.springframework.ai.document.Document> embeddingBatch =
+                                                enrichedDocuments.subList(i, end);
+                                        vectorStore.add(embeddingBatch);
+                                        log.info("向量化批次完成: {}/{}", Math.min(i + embeddingBatchSize, enrichedDocuments.size()), enrichedDocuments.size());
+                                    }
+
+                                    doc.setStatus(2);
+                                    documentMapper.updateById(doc);
+                                    int currentCompleted = completed.incrementAndGet();
+
+                                    synchronized (emitter) {
+                                        emitter.send(SseEmitter.event().data(buildProgressEvent(total, currentCompleted,
+                                                "已完成: " + doc.getFileName())));
+                                    }
+
+                                } catch (Exception e) {
+                                    log.error("处理文件失败: {}", doc.getFileName(), e);
+                                    doc.setStatus(3);
+                                    documentMapper.updateById(doc);
+                                    int currentCompleted = completed.incrementAndGet();
+                                    failedCount.incrementAndGet();
+                                    synchronized (emitter) {
+                                        try {
+                                            emitter.send(SseEmitter.event().data(buildProgressEvent(total, currentCompleted,
+                                                    "处理失败: " + doc.getFileName() + " - " + e.getMessage())));
+                                        } catch (IOException ex) {
+                                            throw new RuntimeException(ex);
+                                        }
+                                    }
+                                }
+                            }
+                        } finally {
+                            countDownLatch.countDown();
                         }
-
-                        CustomTokenTextSplitter splitter = new CustomTokenTextSplitter();
-                        List<org.springframework.ai.document.Document> splitDocuments =
-                                splitter.apply(aiDocuments);
-
-                        int chunkIndex = 0;
-                        List<org.springframework.ai.document.Document> documentsWithId = new java.util.ArrayList<>();
-                        for (org.springframework.ai.document.Document aiDoc : splitDocuments) {
-                            Map<String, Object> metadata = new java.util.HashMap<>(aiDoc.getMetadata());
-                            metadata.put("kbId", kbId);
-                            metadata.put("docId", doc.getId());
-                            metadata.put("fileName", doc.getFileName());
-                            metadata.put("chunkIndex", chunkIndex);
-                            
-                            String docId = "doc_" + doc.getId() + "_" + chunkIndex;
-                            org.springframework.ai.document.Document docWithId = 
-                                new org.springframework.ai.document.Document(docId, aiDoc.getText(), metadata);
-                            documentsWithId.add(docWithId);
-                            chunkIndex++;
-                        }
-
-                        List<org.springframework.ai.document.Document> enrichedDocuments =
-                                keywordEnricher.enrich(documentsWithId);
-
-                        vectorStore.add(enrichedDocuments);
-
-                        doc.setStatus(2);
-                        documentMapper.updateById(doc);
-                        completed++;
-
-                        emitter.send(SseEmitter.event().data(buildProgressEvent(total, completed, 
-                            "已完成: " + doc.getFileName())));
-
-                    } catch (Exception e) {
-                        log.error("处理文件失败: {}", doc.getFileName(), e);
-                        doc.setStatus(3);
-                        documentMapper.updateById(doc);
-                        completed++;
-                        emitter.send(SseEmitter.event().data(buildProgressEvent(total, completed, 
-                            "处理失败: " + doc.getFileName())));
-                    }
+                    });
                 }
 
-                emitter.send(SseEmitter.event().data(buildDoneEvent(total, completed)));
+                // 等待所有批次完成
+                countDownLatch.await(30, java.util.concurrent.TimeUnit.MINUTES);
+                
+                // 检查是否被中断
+                if (Boolean.TRUE.equals(cancellationFlags.get(kbId))) {
+                    log.info("向量化任务已取消: kbId={}", kbId);
+                    emitter.send(SseEmitter.event()
+                            .data("{\"type\":\"cancelled\",\"data\":{\"message\":\"向量化已取消\"}}"));
+                    emitter.complete();
+                    return;
+                }
+                
+                // 检查是否所有文件都失败了
+                int finalFailedCount = failedCount.get();
+                if (finalFailedCount == total) {
+                    log.warn("所有文件处理失败，自动清理: kbId={}", kbId);
+                    // 清理所有数据
+                    cleanupFailedKnowledgeBase(kbId);
+                    emitter.send(SseEmitter.event()
+                            .data("{\"type\":\"error\",\"data\":{\"message\":\"所有文件处理失败，已自动清理\"}}"));
+                    emitter.complete();
+                    return;
+                }
+                
+                emitter.send(SseEmitter.event().data(buildDoneEvent(total, completed.get(), finalFailedCount)));
                 
                 updateKnowledgeBaseStats(kbId);
                 
@@ -228,28 +325,20 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void cancelCreation(Long kbId, Long userId) {
+        // 设置中断标志
+        cancellationFlags.put(kbId, true);
+        log.info("设置向量化中断标志: kbId={}", kbId);
+        
         KnowledgeBase kb = knowledgeBaseService.getById(kbId);
         if (kb == null || !kb.getUserId().equals(userId)) {
             return;
         }
 
-        List<Document> documents = documentMapper.selectList(
-            new QueryWrapper<Document>()
-                .eq("kb_id", kbId)
-        );
-
-        for (Document doc : documents) {
-            try {
-                if (doc.getFilePath() != null && !doc.getFilePath().isEmpty()) {
-                    r2Util.deleteFile(doc.getFilePath());
-                }
-                documentMapper.deleteById(doc.getId());
-            } catch (Exception e) {
-                log.error("删除文件失败: {}", doc.getFileName(), e);
-            }
-        }
-
-        knowledgeBaseService.removeById(kbId);
+        // 删除知识库及其所有数据
+        deleteKnowledgeBaseAndDocuments(kbId);
+        
+        // 清除中断标志
+        cancellationFlags.remove(kbId);
     }
 
     private List<org.springframework.ai.document.Document> readDocumentFromUrl(String fileUrl,
@@ -281,16 +370,41 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
         URL url = new URL(encodedUrl);
         File tempFile = File.createTempFile("kb_doc_", ".tmp");
         
-        try (InputStream in = url.openStream();
-             FileOutputStream out = new FileOutputStream(tempFile)) {
-            byte[] buffer = new byte[8192];
-            int bytesRead;
-            while ((bytesRead = in.read(buffer)) != -1) {
-                out.write(buffer, 0, bytesRead);
+        // 重试机制，最多重试3次
+        int maxRetries = 3;
+        IOException lastException = null;
+        
+        for (int retry = 0; retry < maxRetries; retry++) {
+            try {
+                try (InputStream in = url.openStream();
+                     FileOutputStream out = new FileOutputStream(tempFile)) {
+                    byte[] buffer = new byte[8192];
+                    int bytesRead;
+                    while ((bytesRead = in.read(buffer)) != -1) {
+                        out.write(buffer, 0, bytesRead);
+                    }
+                }
+                // 下载成功，返回文件
+                return tempFile;
+            } catch (IOException e) {
+                lastException = e;
+                log.warn("下载文件失败(重试 {}/{}): {}", retry + 1, maxRetries, fileUrl, e);
+                if (retry < maxRetries - 1) {
+                    try {
+                        Thread.sleep(1000 * (retry + 1)); // 递增等待时间
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new IOException("下载被中断", ie);
+                    }
+                }
             }
         }
         
-        return tempFile;
+        // 所有重试都失败
+        if (tempFile.exists()) {
+            tempFile.delete();
+        }
+        throw new IOException("下载文件失败，已重试" + maxRetries + "次: " + fileUrl, lastException);
     }
 
     private String encodeUrl(String url) {
@@ -346,6 +460,82 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
         return fileName.substring(fileName.lastIndexOf(".") + 1).toLowerCase();
     }
 
+    /**
+     * 清理失败的知识库数据
+     */
+    private void cleanupFailedKnowledgeBase(Long kbId) {
+        deleteKnowledgeBaseAndDocuments(kbId);
+        log.info("清理失败知识库完成: kbId={}", kbId);
+    }
+    
+    /**
+     * 删除知识库及其所有关联数据（向量数据、R2文件、数据库记录）
+     */
+    private void deleteKnowledgeBaseAndDocuments(Long kbId) {
+        List<Document> documents = documentMapper.selectList(
+            new QueryWrapper<Document>()
+                .eq("kb_id", kbId)
+        );
+
+        for (Document doc : documents) {
+            deleteDocumentData(doc);
+        }
+
+        knowledgeBaseService.removeById(kbId);
+    }
+    
+    /**
+     * 删除单个文档的所有数据（向量数据、R2文件、数据库记录）
+     * 删除顺序：向量数据 -> R2文件 -> 数据库记录（确保外部资源先清理，避免孤立数据）
+     */
+    private void deleteDocumentData(Document doc) {
+        boolean vectorDeleted = false;
+        boolean r2Deleted = false;
+        
+        // 1. 删除向量数据
+        try {
+            List<String> idsToDelete = new ArrayList<>();
+            String pattern = "rag:doc_" + doc.getId() + "_*";
+            
+            Set<String> keys = stringRedisTemplate.keys(pattern);
+            if (keys != null && !keys.isEmpty()) {
+                for (String key : keys) {
+                    String docId = key.substring(4);
+                    idsToDelete.add(docId);
+                }
+            }
+            
+            if (!idsToDelete.isEmpty()) {
+                vectorStore.delete(idsToDelete);
+                log.info("删除向量数据成功: docId={}, 共{}个分块", doc.getId(), idsToDelete.size());
+            }
+            vectorDeleted = true;
+        } catch (Exception e) {
+            log.warn("删除向量数据失败: docId={}", doc.getId(), e);
+            // 向量数据删除失败，但继续尝试删除其他资源
+        }
+        
+        // 2. 删除 R2 存储中的文件
+        try {
+            if (doc.getFilePath() != null && !doc.getFilePath().isEmpty()) {
+                r2Util.deleteFile(doc.getFilePath());
+            }
+            r2Deleted = true;
+        } catch (Exception e) {
+            log.error("删除R2文件失败: {}", doc.getFileName(), e);
+            // R2文件删除失败，但继续删除数据库记录
+        }
+        
+        // 3. 最后删除数据库记录（只有在外部资源都删除成功，或者即使失败也要删除记录避免孤立）
+        try {
+            documentMapper.deleteById(doc.getId());
+            log.info("删除文档记录成功: docId={}, 向量删除:{}, R2删除:{}", 
+                    doc.getId(), vectorDeleted, r2Deleted);
+        } catch (Exception e) {
+            log.error("删除数据库记录失败: docId={}", doc.getId(), e);
+        }
+    }
+
     private String buildProgressEvent(int total, int current, String message) {
         return buildProgressEvent(total, current, message, null);
     }
@@ -364,11 +554,16 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
         return JacksonUtil.writeValueAsString(event);
     }
 
-    private String buildDoneEvent(int totalFiles, int completedFiles) {
+    private String buildDoneEvent(int totalFiles, int completedFiles, int failedFiles) {
         Map<String, Object> data = new HashMap<>();
         data.put("totalFiles", totalFiles);
         data.put("completedFiles", completedFiles);
-        data.put("message", "向量化完成");
+        data.put("failedFiles", failedFiles);
+        if (failedFiles > 0) {
+            data.put("message", "向量化完成，" + failedFiles + " 个文件处理失败");
+        } else {
+            data.put("message", "向量化完成");
+        }
         Map<String, Object> event = new HashMap<>();
         event.put("type", "done");
         event.put("data", data);

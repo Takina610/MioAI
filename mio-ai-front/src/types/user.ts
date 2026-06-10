@@ -26,7 +26,6 @@ export interface LoginRequest {
 
 export interface RegisterRequest {
   userAccount: string
-  userName: string
   userPassword: string
   checkPassword: string
 }

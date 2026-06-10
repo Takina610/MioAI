@@ -78,12 +78,13 @@
 
       <!-- Step 2: 上传文件 -->
       <div v-show="currentStep === 1" class="step-upload">
-        <div class="upload-area" @drop.prevent="handleDrop" @dragover.prevent>
+        <div class="upload-area" @dragover.prevent>
           <a-upload-dragger
             v-model:file-list="fileList"
             :before-upload="beforeUpload"
             :multiple="true"
             accept=".pdf,.doc,.docx,.md,.txt"
+            :show-remove-button="!uploading"
             @remove="handleRemove"
           >
             <p class="ant-upload-drag-icon">
@@ -177,7 +178,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, watch, onUnmounted, computed } from 'vue'
-import { message } from 'ant-design-vue'
+import { message, Upload } from 'ant-design-vue'
 import type { FormInstance, Rule } from 'ant-design-vue/es/form'
 import {
   CloseOutlined,
@@ -260,9 +261,20 @@ watch(() => props.visible, (newVal) => {
 
 
 function handleCancel(): void {
-  if (kbId.value && !skipFirstStep) {
-    cancelKnowledgeCreation(kbId.value).catch(() => {})
+  // 关闭 SSE 连接
+  if (eventSource) {
+    eventSource.close()
+    eventSource = null
   }
+  
+  // 如果有知识库ID，且不是编辑模式，或者正在处理中，都需要取消创建
+  if (kbId.value) {
+    // 正在向量化或上传中，或者不是跳过第一步模式（新建模式），都需要清理
+    if (vectorizing.value || uploading.value || !skipFirstStep.value) {
+      cancelKnowledgeCreation(kbId.value).catch(() => {})
+    }
+  }
+  
   resetState()
   emit('update:visible', false)
 }
@@ -341,12 +353,12 @@ function beforeUpload(file: any): boolean {
   const extension = file.name.split('.').pop()?.toLowerCase()
   if (!allowedTypes.includes(extension || '')) {
     message.error(`不支持的文件格式: ${extension}`)
-    return false
+    return Upload.LIST_IGNORE as any
   }
   const isLt50M = file.size / 1024 / 1024 < 50
   if (!isLt50M) {
     message.error('文件大小不能超过 50MB')
-    return false
+    return Upload.LIST_IGNORE as any
   }
   return false
 }
@@ -356,10 +368,6 @@ function handleRemove(file: any): void {
   if (index > -1) {
     fileList.value.splice(index, 1)
   }
-}
-
-function handleDrop(e: DragEvent): void {
-  // Handled by upload-dragger
 }
 
 async function handleUploadAndNext(): Promise<void> {
@@ -472,6 +480,16 @@ function handleVectorizeEvent(data: any): void {
       vectorizeError.value = true
       if (typeof eventData === 'object' && eventData !== null) {
         errorMsg.value = eventData.message || '处理失败'
+        
+        // 如果是自动清理的错误，延迟后自动关闭
+        if (eventData.message && eventData.message.includes('已自动清理')) {
+          vectorizeStatusMessage.value = '处理失败，已自动清理'
+          setTimeout(() => {
+            emit('update:visible', false)
+            emit('success') // 刷新列表
+            resetState()
+          }, 2000)
+        }
       } else {
         errorMsg.value = String(eventData)
       }
@@ -483,10 +501,33 @@ function handleVectorizeEvent(data: any): void {
       if (typeof eventData === 'object' && eventData !== null) {
         vectorizeResult.totalFiles = eventData.totalFiles || 0
         vectorizeResult.completedFiles = eventData.completedFiles || 0
-        vectorizeStatusMessage.value = eventData.message || '向量化完成'
+        
+        // 检查是否有失败的文件
+        const failedFiles = eventData.failedFiles || 0
+        const totalFiles = eventData.totalFiles || 0
+        
+        if (failedFiles > 0) {
+          vectorizeError.value = true
+          if (totalFiles === 1 && failedFiles === 1) {
+            errorMsg.value = '文件处理失败，请检查文件格式或内容是否正确'
+            vectorizeStatusMessage.value = '处理失败'
+          } else {
+            errorMsg.value = `${failedFiles}/${totalFiles} 个文件处理失败，请检查文件格式或内容`
+            vectorizeStatusMessage.value = eventData.message || '向量化完成'
+          }
+        } else {
+          vectorizeStatusMessage.value = eventData.message || '向量化完成'
+        }
       }
       vectorizeStatusTitle.value = '向量化完成'
       vectorizeProgress.value = 100
+      break
+      
+    case 'cancelled':
+      vectorizing.value = false
+      vectorizeComplete.value = true
+      vectorizeStatusTitle.value = '已取消'
+      vectorizeStatusMessage.value = '向量化已取消'
       break
   }
 }
@@ -504,10 +545,23 @@ function handleFinish(): void {
 }
 
 async function handleCancelCreation(): Promise<void> {
-  if (kbId.value && !skipFirstStep) {
-    await cancelKnowledgeCreation(kbId.value)
+  // 关闭 SSE 连接
+  if (eventSource) {
+    eventSource.close()
+    eventSource = null
   }
-  handleCancel()
+  
+  // 取消创建并清理
+  if (kbId.value && !skipFirstStep) {
+    try {
+      await cancelKnowledgeCreation(kbId.value)
+    } catch (e) {
+      console.error('取消创建失败', e)
+    }
+  }
+  
+  resetState()
+  emit('update:visible', false)
 }
 
 function formatFileSize(bytes: number): string {

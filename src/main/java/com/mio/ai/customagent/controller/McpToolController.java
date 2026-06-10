@@ -75,7 +75,9 @@ public class McpToolController {
     }
 
     @PostMapping("/list")
-    public BaseResponse<Page<McpToolVO>> listMcpTools(@RequestBody McpToolQueryRequest request) {
+    public BaseResponse<Page<McpToolVO>> listMcpTools(@RequestBody McpToolQueryRequest request, HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        request.setUserId(userId);
         Page<McpToolVO> page = mcpToolService.queryMcpTools(request);
         return ResultUtils.success(page);
     }

@@ -110,9 +110,15 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
 
         String newAvatar = request.getAvatar();
         String oldAvatar = agent.getAvatar();
+        String defaultAvatar = "https://cdn.tak1na.cn/custom_agent.png";
 
         if (!newAvatar.equals(oldAvatar) && StringUtils.isNotBlank(newAvatar) && newAvatar.contains("temp_")) {
             try {
+                // 删除旧头像（如果不是默认头像）
+                if (StringUtils.isNotBlank(oldAvatar) && !oldAvatar.equals(defaultAvatar)) {
+                    r2Util.deleteFile(oldAvatar);
+                }
+                
                 String finalAvatarUrl = r2Util.copyFile(newAvatar, FileType.AGENT_AVATAR, String.valueOf(agent.getId()));
                 request.setAvatar(finalAvatarUrl);
             } catch (IOException e) {
