@@ -53,7 +53,7 @@ const routes: RouteRecordRaw[] = [
         path: 'agent',
         name: 'AgentManage',
         component: () => import('@/views/dashboard/agent/manage.vue'),
-        meta: { title: '应用管理', requiresAuth: false }
+        meta: { title: '我的应用', requiresAuth: false }
       },
       {
         path: 'agent/:id',
@@ -71,7 +71,7 @@ const routes: RouteRecordRaw[] = [
         path: 'mcp',
         name: 'McpManage',
         component: () => import('@/views/dashboard/mcp/manage.vue'),
-        meta: { title: 'MCP管理', requiresAuth: false }
+        meta: { title: '我的MCP', requiresAuth: false }
       },
       {
         path: 'mcp/:id',
@@ -107,7 +107,7 @@ const routes: RouteRecordRaw[] = [
         path: 'knowledge',
         name: 'KnowledgeManage',
         component: () => import('@/views/dashboard/knowledge/manage.vue'),
-        meta: { title: '知识库管理', requiresAuth: false }
+        meta: { title: '我的知识库', requiresAuth: false }
       },
       {
         path: 'knowledge/:id',
@@ -126,6 +126,38 @@ const routes: RouteRecordRaw[] = [
         name: 'Profile',
         component: () => import('@/views/dashboard/profile/index.vue'),
         meta: { title: '个人中心', requiresAuth: true }
+      }
+    ]
+  },
+  {
+    path: '/admin',
+    component: () => import('@/views/admin/layout.vue'),
+    meta: { title: '管理后台', requiresAuth: true },
+    redirect: '/admin/user',
+    children: [
+      {
+        path: 'user',
+        name: 'AdminUser',
+        component: () => import('@/views/admin/user/index.vue'),
+        meta: { title: '用户管理' }
+      },
+      {
+        path: 'agent',
+        name: 'AdminAgent',
+        component: () => import('@/views/admin/agent/index.vue'),
+        meta: { title: '智能体管理' }
+      },
+      {
+        path: 'mcp',
+        name: 'AdminMcp',
+        component: () => import('@/views/admin/mcp/index.vue'),
+        meta: { title: 'MCP 管理' }
+      },
+      {
+        path: 'knowledge',
+        name: 'AdminKnowledge',
+        component: () => import('@/views/admin/knowledge/index.vue'),
+        meta: { title: '知识库管理' }
       }
     ]
   },
