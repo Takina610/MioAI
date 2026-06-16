@@ -5,6 +5,7 @@ import com.mio.ai.superagent.advisor.ChineseSafeGuardAdvisor;
 import com.mio.ai.superagent.advisor.MyLoggerAdvisor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -33,7 +34,7 @@ public class CommonConfig2 {
                                           ChatMemory jdbcChatMemory) {
         return ChatClient.builder(chatModel)
                 .defaultAdvisors(
-                        new MyLoggerAdvisor(),
+                        new SimpleLoggerAdvisor(),
                         new ChineseSafeGuardAdvisor(List.of("公务员", "政府", "政治", "暴力"))
                 )
                 .build();

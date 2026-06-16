@@ -23,7 +23,13 @@
                 @mouseleave="hoverMessageId = ''"
               >
                 <div class="message-content">
-                  <div class="message-text" v-html="formatMessage(msg.content)"></div>
+                  <MioManusMessage
+                    v-if="msg.role === 'assistant' && msg.segments"
+                    :content="msg.content"
+                    :segments="msg.segments"
+                    :is-loading="false"
+                  />
+                  <div v-else class="message-text" v-html="formatMessage(msg.content)"></div>
                   <div class="message-actions">
                     <div class="copy-area" v-show="hoverMessageId === msg.id && msg.content">
                       <a-tooltip :title="copiedMessageId === msg.id ? '已复制' : '复制'">
@@ -71,12 +77,19 @@ import { getChatHistory, getConversation } from '@/api/chatMemory'
 import { getAgentById } from '@/api/agent'
 import type { Agent } from '@/types'
 import { CopyOutlined, CheckOutlined, MessageOutlined } from '@ant-design/icons-vue'
+import MioManusMessage from '@/views/chat/MioManusMessage.vue'
+
+interface MessageSegment {
+  content: string
+  type?: 'thinking' | 'action' | 'final'
+}
 
 interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
   createTime: Date
+  segments?: MessageSegment[]
 }
 
 const route = useRoute()
@@ -114,6 +127,24 @@ const formattedDate = computed(() => {
   return `${year} 年 ${month} 月 ${day} 日`
 })
 
+function mergeConsecutiveAssistantMessages(msgs: ChatMessage[]): ChatMessage[] {
+  if (msgs.length === 0) return []
+  const result: ChatMessage[] = []
+  for (const msg of msgs) {
+    const last = result[result.length - 1]
+    if (msg.role === 'assistant' && last && last.role === 'assistant') {
+      if (!last.segments) {
+        last.segments = [{ content: last.content }]
+      }
+      last.segments.push({ content: msg.content })
+      last.content += msg.content
+    } else {
+      result.push({ ...msg })
+    }
+  }
+  return result
+}
+
 async function loadShareData(agentIdParam: string, conversationId: string): Promise<void> {
   loading.value = true
   try {
@@ -139,13 +170,18 @@ async function loadShareData(agentIdParam: string, conversationId: string): Prom
     }
 
     if (res && res.length > 0) {
-      messages.value = res.map((item: any, index: number) => ({
+      let loadedMessages = res.map((item: any, index: number) => ({
         id: `${conversationId}_${index}`,
         role: item.role,
         content: item.content,
         createTime: new Date()
       }))
-      
+
+      // 合并连续的 assistant 消息（MioManus 的多步回复）
+      loadedMessages = mergeConsecutiveAssistantMessages(loadedMessages)
+
+      messages.value = loadedMessages
+
       if (!conversationTitle.value && res[0].content) {
         conversationTitle.value = res[0].content.slice(0, 30) + (res[0].content.length > 30 ? '...' : '')
         document.title = `${conversationTitle.value} - MioAI`

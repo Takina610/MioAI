@@ -49,7 +49,14 @@ public class CustomAIController {
                     } catch (IOException e) {
                         sseEmitter.completeWithError(e);
                     }
-                }, sseEmitter::completeWithError, sseEmitter::complete);
+                }, sseEmitter::completeWithError, () -> {
+                    try {
+                        sseEmitter.send("[DONE]");
+                    } catch (IOException e) {
+                        // ignore
+                    }
+                    sseEmitter.complete();
+                });
         // 返回
         return sseEmitter;
     }

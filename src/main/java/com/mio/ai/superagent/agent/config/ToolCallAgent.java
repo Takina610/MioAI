@@ -61,6 +61,11 @@ public class ToolCallAgent extends ReActAgent {
     private AssistantMessage currentStepAssistantMessage;
 
     /**
+     * 当前步骤是否需要执行行动（调用工具）
+     */
+    private boolean currentStepNeedAct = false;
+
+    /**
      * 敏感词拦截标识（与 ChineseSafeGuardAdvisor 中的响应消息匹配）
      */
     private static final String SENSITIVE_CONTENT_FLAG = "敏感内容";
@@ -111,9 +116,11 @@ public class ToolCallAgent extends ReActAgent {
             if (toolCallList.isEmpty()) {
                 // 只有不调用工具时，才需要手动记录助手消息
                 getMessageList().add(assistantMessage);
+                this.currentStepNeedAct = false;
                 return false;
             } else {
                 // 需要调用工具时，无需记录助手消息，因为调用工具时会自动记录
+                this.currentStepNeedAct = true;
                 return true;
             }
         } catch (Exception e) {
@@ -143,8 +150,9 @@ public class ToolCallAgent extends ReActAgent {
         boolean terminateToolCalled = toolResponseMessage.getResponses().stream()
                 .anyMatch(response -> response.name().equals("doTerminate"));
         if (terminateToolCalled) {
-            // 任务结束，更改状态
+            // 任务结束，更改状态，同时标记当前步骤为最终回复
             setState(AgentState.FINISHED);
+            this.currentStepNeedAct = false;
         }
         // 优化日志输出，返回更友好的消息
         String results = toolResponseMessage.getResponses().stream()
@@ -178,6 +186,10 @@ public class ToolCallAgent extends ReActAgent {
         if (currentStepAssistantMessage != null) {
             String text = currentStepAssistantMessage.getText();
             if (StrUtil.isNotBlank(text)) {
+                // 如果任务已结束（调用了 terminate 工具），过滤掉末尾的 "terminate" 字样
+                if (getState() == AgentState.FINISHED) {
+                    text = text.replaceAll("(?i)\\s*terminate\\s*$", "").trim();
+                }
                 return text;
             }
         }
@@ -190,6 +202,15 @@ public class ToolCallAgent extends ReActAgent {
     @Override
     protected String getCurrentStepAssistantResponse() {
         return getCurrentStepResponse();
+    }
+
+    /**
+     * 重写父类方法，返回当前步骤的消息类型
+     * 不需要调用工具时为最终回复(final)，需要调用工具时为思考过程(thinking)
+     */
+    @Override
+    protected String getCurrentStepType() {
+        return this.currentStepNeedAct ? "thinking" : "final";
     }
 }
 

@@ -44,3 +44,6 @@ build/
 /output/
 /tmp/
 /deploy/
+/src/main/resources/mcp
+
+/src/main/resources/application.yml

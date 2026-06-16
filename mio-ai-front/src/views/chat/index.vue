@@ -166,7 +166,16 @@
               @mouseleave="hoverMessageId = ''"
             >
               <div class="message-content">
-                <div class="message-text" v-html="formatMessage(msg.content)"></div>
+                <div v-if="msg.role === 'assistant' && isLoading && !msg.content" class="message-loading">
+                  <span></span><span></span><span></span>
+                </div>
+                <MioManusMessage
+                  v-else-if="msg.role === 'assistant' && msg.segments"
+                  :content="msg.content"
+                  :segments="msg.segments"
+                  :is-loading="isLoading"
+                />
+                <div v-else class="message-text" v-html="formatMessage(msg.content)"></div>
                 <div class="message-actions">
                   <div class="copy-area" v-show="!isLoading && hoverMessageId === msg.id && msg.content">
                     <a-tooltip :title="copiedMessageId === msg.id ? '已复制' : '复制'">
@@ -176,13 +185,6 @@
                       </a-button>
                     </a-tooltip>
                   </div>
-                </div>
-              </div>
-            </div>
-            <div v-if="isLoading" class="message assistant">
-              <div class="message-content">
-                <div class="message-loading">
-                  <span></span><span></span><span></span>
                 </div>
               </div>
             </div>
@@ -258,6 +260,7 @@ import {
 import { getChatIdsPage, getChatHistory, deleteChat as deleteChatApi } from '@/api/chatMemory'
 import type { Agent } from '@/types'
 import AuthModal from '@/components/AuthModal.vue'
+import MioManusMessage from '@/views/chat/MioManusMessage.vue'
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -276,11 +279,17 @@ import {
   CheckOutlined
 } from '@ant-design/icons-vue'
 
+interface MessageSegment {
+  content: string
+  type?: 'thinking' | 'action' | 'final'
+}
+
 interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
   createTime: Date
+  segments?: MessageSegment[]
 }
 
 interface ChatSession {
@@ -318,6 +327,9 @@ const agentInfo = ref<Agent | null>(null)
 const messagesRef = ref<HTMLElement | null>(null)
 const chatListRef = ref<HTMLElement | null>(null)
 
+// 每个会话的加载状态和消息列表
+const chatLoadingMap = ref<Map<string, boolean>>(new Map())
+const chatMessagesMap = ref<Map<string, ChatMessage[]>>(new Map())
 
 marked.setOptions({
   gfm: true,
@@ -325,6 +337,7 @@ marked.setOptions({
 })
 
 let eventSource: EventSource | null = null
+let currentEventSourceChatId: string = '' // 当前 EventSource 对应的会话ID
 
 const currentChatTitle = computed(() => {
   const chat = chatList.value.find(c => c.id === currentChatId.value)
@@ -347,10 +360,15 @@ watch(
   (conversationId) => {
     if (conversationId && typeof conversationId === 'string') {
       currentChatId.value = conversationId
+      // 更新加载状态为当前会话的加载状态
+      isLoading.value = chatLoadingMap.value.get(conversationId) || false
+      // 从Map中加载当前会话的消息
+      messages.value = chatMessagesMap.value.get(conversationId) || []
       loadMessages(conversationId)
     } else {
       currentChatId.value = ''
       messages.value = []
+      isLoading.value = false
     }
   },
   { immediate: true }
@@ -433,29 +451,72 @@ function createNewChat(): void {
   currentChatId.value = ''
   messages.value = []
   inputMessage.value = ''
+  isLoading.value = false
   router.push(`/chat/${agentId.value}`)
 }
 
 function selectChat(conversationId: string): void {
   currentChatId.value = conversationId
+  // 更新加载状态为当前会话的加载状态
+  isLoading.value = chatLoadingMap.value.get(conversationId) || false
+  // 从Map中加载当前会话的消息
+  messages.value = chatMessagesMap.value.get(conversationId) || []
   router.push(`/chat/${agentId.value}/${conversationId}`)
   loadMessages(conversationId)
 }
 
+function mergeConsecutiveAssistantMessages(msgs: ChatMessage[]): ChatMessage[] {
+  if (msgs.length === 0) return []
+  const result: ChatMessage[] = []
+  for (const msg of msgs) {
+    const last = result[result.length - 1]
+    if (msg.role === 'assistant' && last && last.role === 'assistant') {
+      if (!last.segments) {
+        last.segments = [{ content: last.content }]
+      }
+      last.segments.push({ content: msg.content })
+      last.content += msg.content
+    } else {
+      result.push({ ...msg })
+    }
+  }
+  return result
+}
+
 async function loadMessages(conversationId: string): Promise<void> {
   if (!userStore.isLoggedIn) return
-  
+
   try {
     const res = await getChatHistory(conversationId)
     if (!res) {
       return
     }
-    messages.value = res.map((item: any, index: number) => ({
+    let loadedMessages = res.map((item: any, index: number) => ({
       id: `${conversationId}_${index}`,
       role: item.role,
       content: item.content,
       createTime: new Date()
     }))
+
+    // 合并连续的 assistant 消息（MioManus 的多步回复）
+    loadedMessages = mergeConsecutiveAssistantMessages(loadedMessages)
+
+    // 如果该会话正在加载中，不要覆盖 chatMessagesMap，只更新显示
+    const isLoadingThisChat = chatLoadingMap.value.get(conversationId)
+    if (!isLoadingThisChat) {
+      // 存储到Map中
+      chatMessagesMap.value.set(conversationId, loadedMessages)
+    }
+
+    // 如果是当前会话，更新显示的消息
+    if (currentChatId.value === conversationId) {
+      if (isLoadingThisChat) {
+        // 正在加载中，使用 Map 中的消息（包含正在接收的内容）
+        messages.value = chatMessagesMap.value.get(conversationId) || loadedMessages
+      } else {
+        messages.value = loadedMessages
+      }
+    }
     nextTick(() => {
       scrollToBottom()
     })
@@ -499,21 +560,34 @@ function sendMessage(): void {
     currentChatId.value = 'temp_' + Date.now()
   }
 
-  const userMessageIndex = messages.value.length
-  messages.value.push({
+  // 记录当前会话ID
+  const chatIdForThisMessage = currentChatId.value
+
+  // 获取或创建该会话的消息列表
+  const existingMessages = chatMessagesMap.value.get(chatIdForThisMessage) || []
+  
+  const userMessageIndex = existingMessages.length
+  const userMessage: ChatMessage = {
     id: generateUUID(),
     role: 'user',
     content,
     createTime: new Date()
-  })
+  }
+  const chatMessages = [...existingMessages, userMessage]
+  chatMessagesMap.value.set(chatIdForThisMessage, chatMessages)
+  
+  // 如果是当前会话，更新显示的消息
+  if (currentChatId.value === chatIdForThisMessage) {
+    messages.value = chatMessages
+  }
 
   inputMessage.value = ''
 
   if (userStore.isLoggedIn) {
-    const existingChatIndex = chatList.value.findIndex(c => c.id === currentChatId.value)
+    const existingChatIndex = chatList.value.findIndex(c => c.id === chatIdForThisMessage)
     if (existingChatIndex === -1) {
       chatList.value.unshift({
-        id: currentChatId.value,
+        id: chatIdForThisMessage,
         title: '新对话',
         updateTime: new Date(),
         hasMessage: true
@@ -527,7 +601,7 @@ function sendMessage(): void {
   }
 
   if (isNewChat && userStore.isLoggedIn) {
-    router.push(`/chat/${agentId.value}/${currentChatId.value}`)
+    router.push(`/chat/${agentId.value}/${chatIdForThisMessage}`)
   }
 
   nextTick(() => {
@@ -535,67 +609,160 @@ function sendMessage(): void {
     scrollToChatListTop()
   })
 
+  // 设置当前会话的加载状态
+  chatLoadingMap.value.set(chatIdForThisMessage, true)
   isLoading.value = true
 
-  const aiMessageIndex = messages.value.length
-  messages.value.push({
+  const aiMessageIndex = chatMessages.length
+  const isMioManus = agentId.value === 3
+  const aiMessage: ChatMessage = {
     id: generateUUID(),
     role: 'assistant',
     content: '',
-    createTime: new Date()
-  })
+    createTime: new Date(),
+    segments: isMioManus ? [] : undefined
+  }
+  const messagesWithAi = [...chatMessages, aiMessage]
+  chatMessagesMap.value.set(chatIdForThisMessage, messagesWithAi)
+  
+  // 如果是当前会话，更新显示的消息
+  if (currentChatId.value === chatIdForThisMessage) {
+    messages.value = messagesWithAi
+  }
 
   const token: string = localStorage.getItem('token') || ''
   const userId = userStore.userInfo?.id || null
 
+  // 关闭旧的 EventSource
   if (eventSource) {
     eventSource.close()
+    eventSource = null
   }
 
+  // 记录当前 EventSource 对应的会话ID
+  currentEventSourceChatId = chatIdForThisMessage
+
   if (isDefaultAgent) {
-    eventSource = chatWithDefaultAgent(content, currentChatId.value, agentId.value, userId)
+    eventSource = chatWithDefaultAgent(content, chatIdForThisMessage, agentId.value, userId)
   } else if (agentId.value === 2) {
-    eventSource = chatWithCSApp(content, currentChatId.value, agentId.value, token)
+    eventSource = chatWithCSApp(content, chatIdForThisMessage, agentId.value, token)
   } else if (agentId.value === 3) {
-    eventSource = chatWithMioManus(content, currentChatId.value, agentId.value, token)
+    eventSource = chatWithMioManus(content, chatIdForThisMessage, agentId.value, token)
   } else {
-    eventSource = chatWithCustomAgent(content, currentChatId.value, agentId.value, token)
+    eventSource = chatWithCustomAgent(content, chatIdForThisMessage, agentId.value, token)
   }
 
   eventSource.onmessage = (event) => {
-    const data = event.data
-    if (data && data !== '[DONE]') {
-      if (aiMessageIndex < messages.value.length) {
-        messages.value[aiMessageIndex].content += data
+    const rawData = event.data
+
+    // 检查是否是当前会话的消息，如果不是则忽略
+    if (currentEventSourceChatId !== chatIdForThisMessage) {
+      return
+    }
+
+    // 从Map中获取该会话的消息列表
+    let chatMessages = chatMessagesMap.value.get(chatIdForThisMessage) || []
+
+    if (rawData && rawData !== '[DONE]') {
+      // 解析后端发送的 JSON 格式，提取 type 和 content
+      let segmentContent = rawData
+      let segmentType: MessageSegment['type'] = undefined
+      try {
+        const parsed = JSON.parse(rawData)
+        if (parsed.content !== undefined) {
+          segmentContent = parsed.content
+          segmentType = parsed.type
+        }
+      } catch {
+        // 兼容旧格式，直接当作普通文本
+      }
+
+      if (aiMessageIndex < chatMessages.length) {
+        // 创建新数组以确保响应式更新
+        const updatedMessages = [...chatMessages]
+        const targetMsg = updatedMessages[aiMessageIndex]
+        const newSegment: MessageSegment = { content: segmentContent, type: segmentType }
+        updatedMessages[aiMessageIndex] = {
+          ...targetMsg,
+          content: targetMsg.content + segmentContent,
+          segments: targetMsg.segments ? [...targetMsg.segments, newSegment] : undefined
+        }
+        chatMessagesMap.value.set(chatIdForThisMessage, updatedMessages)
+
+        // 如果是当前会话，更新显示的消息
+        if (currentChatId.value === chatIdForThisMessage) {
+          messages.value = updatedMessages
+          nextTick(() => scrollToBottom())
+        }
       }
     }
     
     if (data === '[DONE]') {
+      const finalMessages = chatMessagesMap.value.get(chatIdForThisMessage) || chatMessages
       if (isNewChat && userStore.isLoggedIn) {
-        updateChatTitleWithTypewriter(content, messages.value[aiMessageIndex].content, userMessageIndex)
+        updateChatTitleWithTypewriter(content, finalMessages[aiMessageIndex]?.content || '', userMessageIndex, chatIdForThisMessage)
       }
-      isLoading.value = false
+      chatLoadingMap.value.delete(chatIdForThisMessage)
+      isLoading.value = chatLoadingMap.value.get(currentChatId.value) || false
       if (eventSource) {
         eventSource.close()
+        eventSource = null
+        currentEventSourceChatId = ''
       }
     }
   }
   
-  eventSource.onerror = () => {
-    if (isNewChat && userStore.isLoggedIn) {
-      updateChatTitleWithTypewriter(content, messages.value[aiMessageIndex].content, userMessageIndex)
+  eventSource.onerror = (error) => {
+    console.error('SSE连接错误:', error)
+    
+    // 检查是否是当前会话的消息，如果不是则忽略
+    if (currentEventSourceChatId !== chatIdForThisMessage) {
+      return
     }
-    isLoading.value = false
+    
+    // 如果该会话已经不在加载中了，说明消息已经完成接收（[DONE]已处理），忽略此错误
+    const isStillLoading = chatLoadingMap.value.get(chatIdForThisMessage)
+    if (!isStillLoading) {
+      return
+    }
+    
+    // 从Map中获取该会话的消息列表
+    const errorMessages = chatMessagesMap.value.get(chatIdForThisMessage) || []
+    
+    // 移除空的AI消息
+    const lastMsg = errorMessages[errorMessages.length - 1]
+    if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.content) {
+      const updatedMessages = errorMessages.slice(0, -1)
+      chatMessagesMap.value.set(chatIdForThisMessage, updatedMessages)
+      
+      // 如果是当前会话，更新显示的消息
+      if (currentChatId.value === chatIdForThisMessage) {
+        messages.value = updatedMessages
+      }
+    }
+    
+    // 给用户提示
+    // message.error('消息发送失败，请重试')
+    
+    const finalErrorMessages = chatMessagesMap.value.get(chatIdForThisMessage) || []
+    if (isNewChat && userStore.isLoggedIn) {
+      updateChatTitleWithTypewriter(content, finalErrorMessages[aiMessageIndex]?.content || '', userMessageIndex, chatIdForThisMessage)
+    }
+    
+    chatLoadingMap.value.delete(chatIdForThisMessage)
+    isLoading.value = chatLoadingMap.value.get(currentChatId.value) || false
     if (eventSource) {
       eventSource.close()
+      eventSource = null
+      currentEventSourceChatId = ''
     }
   }
 }
 
-async function updateChatTitleWithTypewriter(userContent: string, aiContent: string, chatIndex: number): Promise<void> {
-  const title = await generateTitle(agentId.value, currentChatId.value, userContent + '\n' + aiContent)
+async function updateChatTitleWithTypewriter(userContent: string, aiContent: string, chatIndex: number, chatId: string): Promise<void> {
+  const title = await generateTitle(agentId.value, chatId, userContent + '\n' + aiContent)
   
-  const chatItem = chatList.value.find(c => c.id === currentChatId.value)
+  const chatItem = chatList.value.find(c => c.id === chatId)
   if (!chatItem) return
   
   chatItem.title = ''
@@ -731,6 +898,7 @@ function handleAuthSuccess(): void {
 async function handleLogout(): Promise<void> {
   await userStore.logout()
   message.success('已退出登录')
+  window.location.reload()
 }
 
 onMounted(() => {
@@ -745,6 +913,8 @@ onUnmounted(() => {
 onBeforeUnmount(() => {
   if (eventSource) {
     eventSource.close()
+    eventSource = null
+    currentEventSourceChatId = ''
   }
 })
 </script>

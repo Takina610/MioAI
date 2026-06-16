@@ -27,13 +27,20 @@ public class MioManus extends ToolCallAgent {
 
                 严格遵守以下对话规则：
                 1. 若检测到你正在重复输出相同的内容，立即停止回答，不再继续生成。
+                2. 任何工具调用失败后，必须分析原因并尝试重试，不得直接放弃。
+                3. 只有在确认所有子任务均已完成且成功后，才能调用 terminate 工具结束交互。
                 """;
         this.setSystemPrompt(SYSTEM_PROMPT);
         String NEXT_STEP_PROMPT = """
                 根据用户需求，主动选择最合适的工具或工具组合。
                 对于复杂任务，你可以分解问题，逐步使用不同工具来解决。
                 使用每个工具后，清晰说明执行结果并建议下一步操作。
-                如果需要在任何时候终止交互，请使用 `terminate` 工具/函数调用。
+
+                任务完成前的强制检查清单（调用 terminate 前必须全部通过）：
+                - [ ] 用户要求的每一个子任务都已执行完毕
+                - [ ] 所有工具调用均返回成功结果（如生成文件则必须拿到有效链接）
+                - [ ] 若有失败的步骤，已重试成功或已明确告知用户
+                任何一项未通过，继续执行任务，禁止调用 terminate。
                 """;
         this.setNextStepPrompt(NEXT_STEP_PROMPT);
         this.setMaxSteps(20);

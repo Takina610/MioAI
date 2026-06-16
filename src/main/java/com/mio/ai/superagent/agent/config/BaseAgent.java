@@ -97,10 +97,14 @@ public abstract class BaseAgent {
                     String assistantResponse = getCurrentStepAssistantResponse();
                     // 发送 SSE 事件，返回 AI 的实际回复
                     if (StrUtil.isNotBlank(assistantResponse)) {
-                        sendSseEvent(sseEmitter, "message", assistantResponse);
+                        sendSseEvent(sseEmitter, getCurrentStepType(), assistantResponse);
                     } else if (StrUtil.isNotBlank(stepResult) && !stepResult.equals("思考完成 - 无需行动")) {
                         // 如果没有助手回复但有步骤结果，发送步骤结果
                         sendSseEvent(sseEmitter, "action", stepResult);
+                    }
+                    // 如果不需要行动，说明已得到最终回复，结束任务
+                    if ("思考完成 - 无需行动".equals(stepResult)) {
+                        state = AgentState.FINISHED;
                     }
                 }
                 // 检查是否超出步骤限制
@@ -110,6 +114,11 @@ public abstract class BaseAgent {
                 }
                 // 发送完成事件
                 sendSseEvent(sseEmitter, "done", "任务已完成");
+                try {
+                    sseEmitter.send("[DONE]");
+                } catch (IOException e) {
+                    // ignore
+                }
                 sseEmitter.complete();
             } catch (Exception e) {
                 state = AgentState.ERROR;
@@ -153,7 +162,7 @@ public abstract class BaseAgent {
         event.put("timestamp", System.currentTimeMillis());
         sseEmitter.send(SseEmitter.event()
                 .name("message")
-                .data(content));
+                .data(objectMapper.writeValueAsString(event)));
     }
 
     /**
@@ -162,6 +171,14 @@ public abstract class BaseAgent {
      */
     protected String getCurrentStepAssistantResponse() {
         return null;
+    }
+
+    /**
+     * 获取当前步骤的消息类型（子类可重写）
+     * 用于区分思考过程、工具执行结果和最终回复
+     */
+    protected String getCurrentStepType() {
+        return "message";
     }
 
     /**
@@ -212,6 +229,10 @@ public abstract class BaseAgent {
                     results.add(assistantResponse);
                 } else if (StrUtil.isNotBlank(stepResult)) {
                     results.add(stepResult);
+                }
+                // 如果不需要行动，说明已得到最终回复，结束任务
+                if ("思考完成 - 无需行动".equals(stepResult)) {
+                    state = AgentState.FINISHED;
                 }
             }
             // 检查是否超出步骤限制

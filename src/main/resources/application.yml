@@ -22,7 +22,7 @@ spring:
 #      url: redis://localhost:6379
   ai:
     dashscope:
-      api-key: sk-4aef10c11b1e4b10823f7a7a764c230a
+      api-key: sk-da51c51c9e7f42188ac6bfce73a239b4
       embedding:
         options:
           model: text-embedding-v4

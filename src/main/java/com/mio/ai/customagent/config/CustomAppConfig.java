@@ -7,6 +7,7 @@ import com.mio.ai.superagent.advisor.ChineseSafeGuardAdvisor;
 import com.mio.ai.superagent.advisor.MyLoggerAdvisor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -37,11 +38,11 @@ public class CustomAppConfig {
 
         return ChatClient.builder(chatModel)
                 .defaultAdvisors(
-                        new MyLoggerAdvisor(),
+                        new SimpleLoggerAdvisor(),
                         new ChineseSafeGuardAdvisor(List.of("公务员", "政府", "政治", "暴力")),
                         MessageChatMemoryAdvisor.builder(jdbcChatMemory).build(),
-                        AdvisorFactory.createQuestionAnswerAdvisor(vectorStore, promptTemplate),
-                        AdvisorFactory.createRerankAdvisor(vectorStore, rerankModel)
+                        AdvisorFactory.createQuestionAnswerAdvisor(vectorStore, promptTemplate)
+//                        AdvisorFactory.createRerankAdvisor(vectorStore, rerankModel)
                 )
                 .build();
     }
