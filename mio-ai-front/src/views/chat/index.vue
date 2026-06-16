@@ -246,7 +246,7 @@
 import { ref, computed, onMounted, nextTick, watch, onUnmounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { marked } from 'marked'
+import { safeMarkdown } from '@/utils/security'
 import { useUserStore } from '@/store/user'
 import { getAgentById } from '@/api/agent'
 import {
@@ -330,11 +330,6 @@ const chatListRef = ref<HTMLElement | null>(null)
 // 每个会话的加载状态和消息列表
 const chatLoadingMap = ref<Map<string, boolean>>(new Map())
 const chatMessagesMap = ref<Map<string, ChatMessage[]>>(new Map())
-
-marked.setOptions({
-  gfm: true,
-  breaks: true
-})
 
 let eventSource: EventSource | null = null
 let currentEventSourceChatId: string = '' // 当前 EventSource 对应的会话ID
@@ -848,17 +843,7 @@ async function handleDeleteConfirm(): Promise<void> {
 }
 
 function formatMessage(content: string): string {
-  if (!content) return ''
-  try {
-    marked.setOptions({
-      breaks: true,
-      gfm: true
-    })
-    return marked.parse(content) as string
-  } catch (e) {
-    console.error('Markdown parse error:', e)
-    return content.replace(/\n/g, '<br>')
-  }
+  return safeMarkdown(content)
 }
 
 function formatTime(date: Date | string): string {

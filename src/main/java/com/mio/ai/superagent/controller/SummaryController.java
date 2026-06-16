@@ -7,6 +7,7 @@ import com.mio.ai.superagent.mapper.ChatConversationDOMapper;
 import com.mio.ai.superagent.model.dto.ChatMessageRequest;
 import com.mio.ai.superagent.model.entity.ChatConversationDO;
 import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -30,7 +31,7 @@ public class SummaryController {
      * 输入一段对话文本，返回一句总结标题
      */
     @RequestMapping("/summary")
-    public BaseResponse<String> generateTitle(@RequestBody ChatMessageRequest chatMessageRequest) {
+    public BaseResponse<String> generateTitle(@Valid @RequestBody ChatMessageRequest chatMessageRequest) {
         String prompt = """
             请你给下面这段对话，生成一个简短标题，要求：
             1. 一句话

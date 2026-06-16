@@ -1,5 +1,8 @@
 package com.mio.ai.customagent.model.dto.mcptool;
 
+import com.mio.ai.common.annotation.XssClean;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -12,29 +15,38 @@ import java.io.Serializable;
 @Data
 public class McpToolUpdateRequest implements Serializable {
 
+    private static final long serialVersionUID = 1L;
+
     /**
      * 工具ID
      */
+    @NotNull(message = "工具ID不能为空")
     private Long id;
 
     /**
      * 工具名称
      */
+    @Size(max = 100, message = "工具名称长度不能超过100")
+    @XssClean(mode = "strict")
     private String name;
 
     /**
      * 工具描述
      */
+    @Size(max = 2000, message = "工具描述长度不能超过2000")
+    @XssClean(mode = "rich")
     private String description;
 
     /**
      * 配置（JSON格式）
      */
+    @Size(max = 10000, message = "配置长度不能超过10000")
     private String config;
 
     /**
      * 工具信息：工具列表（JSON格式）
      */
+    @Size(max = 20000, message = "工具信息长度不能超过20000")
     private String toolInfo;
 
     /**

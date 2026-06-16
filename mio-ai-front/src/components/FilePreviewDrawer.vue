@@ -47,7 +47,7 @@
 import { ref, watch, computed } from 'vue'
 import { message } from 'ant-design-vue'
 import { DownloadOutlined } from '@ant-design/icons-vue'
-import { marked } from 'marked'
+import { safeMarkdown } from '@/utils/security'
 import VueOfficePdf from "@vue-office/pdf/lib/v3/vue-office-pdf.mjs"
 import VueOfficeDocx from "@vue-office/docx/lib/v3/vue-office-docx.mjs"
 import "@vue-office/docx/lib/v3/index.css"
@@ -110,7 +110,7 @@ async function loadPreview(): Promise<void> {
       const text = await response.text()
       textContent.value = text
       if (type === 'md') {
-        htmlContent.value = await marked(text)
+        htmlContent.value = safeMarkdown(text)
       }
     } catch (e) {
       error.value = e instanceof Error ? e.message : '文件加载失败'

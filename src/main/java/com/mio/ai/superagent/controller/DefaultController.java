@@ -2,7 +2,11 @@ package com.mio.ai.superagent.controller;
 
 import com.mio.ai.superagent.app.DefaultApp;
 import com.mio.ai.superagent.model.vo.ChatVO;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,6 +20,7 @@ import java.io.IOException;
  * @description:
  */
 
+@Validated
 @RestController
 public class DefaultController {
 
@@ -23,9 +28,9 @@ public class DefaultController {
     DefaultApp defaultApp;
 
     @GetMapping("/chat")
-    public SseEmitter doChat(@RequestParam String chatId,
-                             @RequestParam Long agentId,
-                             @RequestParam String content,
+    public SseEmitter doChat(@RequestParam @NotBlank @Size(max = 64) String chatId,
+                             @RequestParam @NotNull Long agentId,
+                             @RequestParam @NotBlank @Size(max = 20000) String content,
                              @RequestParam(required = false) Long userId) {
         ChatVO chatVO = new ChatVO();
         chatVO.setChatId(chatId);

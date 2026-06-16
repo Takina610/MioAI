@@ -13,6 +13,7 @@ import com.mio.ai.customagent.service.DocumentService;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
@@ -22,6 +23,7 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URLEncoder;
@@ -33,6 +35,7 @@ import java.util.List;
  * @date: 2026/4/1
  * @description: 文档接口
  */
+@Validated
 @Slf4j
 @RestController
 @RequestMapping("/documents")
@@ -52,7 +55,7 @@ public class DocumentController {
 
     @PostMapping
     @CacheEvict(value = "knowledgeBases", allEntries = true)
-    public BaseResponse<Long> addDocument(@RequestBody DocumentAddRequest request, HttpServletRequest httpRequest) {
+    public BaseResponse<Long> addDocument(@Valid @RequestBody DocumentAddRequest request, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         Long id = documentService.addDocument(request, userId);
         return ResultUtils.success(id);

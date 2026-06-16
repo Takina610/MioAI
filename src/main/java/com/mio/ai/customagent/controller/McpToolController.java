@@ -13,9 +13,11 @@ import com.mio.ai.customagent.model.vo.McpValidateResultVO;
 import com.mio.ai.customagent.service.McpToolService;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
  * @date: 2026/4/1
  * @description: MCP工具接口
  */
+@Validated
 @Slf4j
 @RestController
 @RequestMapping("/mcp")
@@ -36,7 +39,7 @@ public class McpToolController {
 
     @PostMapping
     @CacheEvict(value = "mcpTools", allEntries = true)
-    public BaseResponse<Long> addMcpTool(@RequestBody McpToolAddRequest request, HttpServletRequest httpRequest) {
+    public BaseResponse<Long> addMcpTool(@Valid @RequestBody McpToolAddRequest request, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         Long id = mcpToolService.addMcpTool(request, userId);
         return ResultUtils.success(id);
@@ -44,7 +47,7 @@ public class McpToolController {
 
     @PutMapping
     @CacheEvict(value = "mcpTools", allEntries = true)
-    public BaseResponse<Boolean> updateMcpTool(@RequestBody McpToolUpdateRequest request, HttpServletRequest httpRequest) {
+    public BaseResponse<Boolean> updateMcpTool(@Valid @RequestBody McpToolUpdateRequest request, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         boolean result = mcpToolService.updateMcpTool(request, userId);
         return ResultUtils.success(result);

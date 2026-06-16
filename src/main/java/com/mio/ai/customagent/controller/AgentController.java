@@ -16,9 +16,11 @@ import com.mio.ai.customagent.model.vo.AgentVO;
 import com.mio.ai.customagent.service.AgentService;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -30,6 +32,7 @@ import java.util.UUID;
  * @date: 2026/4/1
  * @description: 智能体接口
  */
+@Validated
 @Slf4j
 @RestController
 @RequestMapping("/agents")
@@ -46,7 +49,7 @@ public class AgentController {
 
     @PostMapping
     @CacheEvict(value = "agents", allEntries = true)
-    public BaseResponse<Long> addAgent(@RequestBody AgentAddRequest request, HttpServletRequest httpRequest) {
+    public BaseResponse<Long> addAgent(@Valid @RequestBody AgentAddRequest request, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         Long id = agentService.addAgent(request, userId);
         return ResultUtils.success(id);
@@ -54,7 +57,7 @@ public class AgentController {
 
     @PutMapping
     @CacheEvict(value = "agents", allEntries = true)
-    public BaseResponse<Boolean> updateAgent(@RequestBody AgentUpdateRequest request, HttpServletRequest httpRequest) {
+    public BaseResponse<Boolean> updateAgent(@Valid @RequestBody AgentUpdateRequest request, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         boolean result = agentService.updateAgent(request, userId);
         return ResultUtils.success(result);
@@ -103,7 +106,7 @@ public class AgentController {
     @CacheEvict(value = "agents", allEntries = true)
     public BaseResponse<Boolean> publishAgent(
             @PathVariable Long agentId,
-            @RequestBody AgentUpdateRequest request,
+            @Valid @RequestBody AgentUpdateRequest request,
             HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         agentService.publishAgent(agentId, request, userId);

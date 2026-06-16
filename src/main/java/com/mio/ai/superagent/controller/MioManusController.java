@@ -5,9 +5,13 @@ import com.mio.ai.superagent.agent.MioManus;
 import com.mio.ai.superagent.model.vo.ChatVO;
 import com.mio.ai.superagent.repository.ChatHistoryRepository;
 import jakarta.annotation.Resource;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -17,6 +21,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * @description:
  */
 
+@Validated
 @RequestMapping("/mio")
 @RestController
 public class MioManusController {
@@ -37,10 +42,10 @@ public class MioManusController {
      *
      */
     @RequestMapping("/chat")
-    public SseEmitter doChatWithManus(@RequestParam String chatId,
-                                      @RequestParam Long agentId,
-                                      @RequestParam String content,
-                                      @RequestParam String token) {
+    public SseEmitter doChatWithManus(@RequestParam @NotBlank @Size(max = 64) String chatId,
+                                      @RequestParam @NotNull Long agentId,
+                                      @RequestParam @NotBlank @Size(max = 20000) String content,
+                                      @RequestParam @NotBlank String token) {
         ChatVO chatVO = new ChatVO();
         chatVO.setChatId(chatId);
         chatVO.setMessage(content);

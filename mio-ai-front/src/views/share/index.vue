@@ -72,7 +72,7 @@
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { marked } from 'marked'
+import { safeMarkdown } from '@/utils/security'
 import { getChatHistory, getConversation } from '@/api/chatMemory'
 import { getAgentById } from '@/api/agent'
 import type { Agent } from '@/types'
@@ -103,11 +103,6 @@ const messages = ref<ChatMessage[]>([])
 const agentInfo = ref<Agent | null>(null)
 const conversationDate = ref<Date>(new Date())
 const agentId = ref<number>(0)
-
-marked.setOptions({
-  gfm: true,
-  breaks: true
-})
 
 watch(
   () => [route.params.agentId, route.params.conversationId],
@@ -196,13 +191,7 @@ async function loadShareData(agentIdParam: string, conversationId: string): Prom
 }
 
 function formatMessage(content: string): string {
-  if (!content) return ''
-  try {
-    return marked.parse(content) as string
-  } catch (e) {
-    console.error('Markdown parse error:', e)
-    return content.replace(/\n/g, '<br>')
-  }
+  return safeMarkdown(content)
 }
 
 async function copyMessage(content: string, messageId: string): Promise<void> {

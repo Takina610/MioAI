@@ -44,7 +44,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { marked } from 'marked'
+import { safeMarkdown } from '@/utils/security'
 import { CaretRightOutlined } from '@ant-design/icons-vue'
 
 interface MessageSegment {
@@ -108,17 +108,7 @@ const finalSegments = computed(() => {
 })
 
 function formatContent(content: string): string {
-  if (!content) return ''
-  try {
-    marked.setOptions({
-      breaks: true,
-      gfm: true
-    })
-    return marked.parse(content) as string
-  } catch (e) {
-    console.error('Markdown parse error:', e)
-    return content.replace(/\n/g, '<br>')
-  }
+  return safeMarkdown(content)
 }
 </script>
 

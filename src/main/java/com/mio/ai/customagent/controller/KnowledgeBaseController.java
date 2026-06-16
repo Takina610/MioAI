@@ -11,9 +11,11 @@ import com.mio.ai.customagent.model.vo.KnowledgeBaseVO;
 import com.mio.ai.customagent.service.KnowledgeBaseService;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
  * @date: 2026/4/1
  * @description: 知识库接口
  */
+@Validated
 @Slf4j
 @RestController
 @RequestMapping("/knowledge-bases")
@@ -34,7 +37,7 @@ public class KnowledgeBaseController {
 
     @PostMapping
     @CacheEvict(value = "knowledgeBases", allEntries = true)
-    public BaseResponse<Long> addKnowledgeBase(@RequestBody KnowledgeBaseAddRequest request, HttpServletRequest httpRequest) {
+    public BaseResponse<Long> addKnowledgeBase(@Valid @RequestBody KnowledgeBaseAddRequest request, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         Long id = knowledgeBaseService.addKnowledgeBase(request, userId);
         return ResultUtils.success(id);
@@ -42,7 +45,7 @@ public class KnowledgeBaseController {
 
     @PutMapping
     @CacheEvict(value = "knowledgeBases", allEntries = true)
-    public BaseResponse<Boolean> updateKnowledgeBase(@RequestBody KnowledgeBaseUpdateRequest request, HttpServletRequest httpRequest) {
+    public BaseResponse<Boolean> updateKnowledgeBase(@Valid @RequestBody KnowledgeBaseUpdateRequest request, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         boolean result = knowledgeBaseService.updateKnowledgeBase(request, userId);
         return ResultUtils.success(result);
