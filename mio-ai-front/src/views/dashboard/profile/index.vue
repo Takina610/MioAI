@@ -79,6 +79,22 @@
           <a-button @click="showPasswordModal">修改密码</a-button>
         </div>
       </a-card>
+
+      <a-card class="model-card" :bordered="false">
+        <template #title>
+          <span>模型设置</span>
+        </template>
+        <div class="model-item">
+          <div class="item-info">
+            <span class="label">AI 模型提供方</span>
+            <span class="desc">切换对话使用的 AI 模型来源</span>
+          </div>
+          <a-radio-group v-model:value="modelProvider" @change="handleModelChange">
+            <a-radio-button value="dashscope">云端模型</a-radio-button>
+            <a-radio-button value="ollama">本地模型</a-radio-button>
+          </a-radio-group>
+        </div>
+      </a-card>
     </div>
 
     <a-modal
@@ -218,6 +234,12 @@ const formData = reactive<FormData>({
   userRole: '',
   userProfile: ''
 })
+
+const modelProvider = ref<string>(localStorage.getItem('ai-model-provider') || 'dashscope')
+
+function handleModelChange(): void {
+  localStorage.setItem('ai-model-provider', modelProvider.value)
+}
 
 const passwordForm = reactive<PasswordUpdateRequest>({
   oldPassword: '',
@@ -830,6 +852,44 @@ onMounted(() => {
           .desc {
             font-size: 13px;
             color: #999;
+          }
+        }
+      }
+    }
+
+    .model-card {
+      flex-shrink: 0;
+
+      .model-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+
+        .item-info {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+
+          .label {
+            font-size: 15px;
+            font-weight: 500;
+            color: $text-dark;
+          }
+
+          .desc {
+            font-size: 13px;
+            color: #999;
+          }
+        }
+
+        :deep(.ant-radio-button-wrapper) {
+          &::before {
+            display: none;
+          }
+
+          &:not(:first-child) {
+            border-left-width: 1px;
+            margin-left: -1px;
           }
         }
       }

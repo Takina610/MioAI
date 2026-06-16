@@ -48,24 +48,24 @@
         <div class="menu-group">
           <div class="menu-group-title" v-show="!isCollapsed">MCP</div>
           <div class="menu-items">
-            <a-tooltip :title="isCollapsed ? 'MCP广场' : ''" placement="right">
+            <a-tooltip :title="isCollapsed ? 'MCP 广场' : ''" placement="right">
               <div 
                 class="menu-item" 
                 :class="{ active: isActive('mcp-market') }"
                 @click="navigateTo('mcp-market')"
               >
                 <ShopOutlined class="menu-icon" />
-                <span class="menu-text" v-show="!isCollapsed">MCP广场</span>
+                <span class="menu-text" v-show="!isCollapsed">MCP 广场</span>
               </div>
             </a-tooltip>
-            <a-tooltip :title="isCollapsed ? '我的MCP' : ''" placement="right">
+            <a-tooltip :title="isCollapsed ? '我的 MCP' : ''" placement="right">
               <div 
                 class="menu-item" 
                 :class="{ active: isActive('mcp') }"
                 @click="navigateTo('mcp')"
               >
                 <ToolOutlined class="menu-icon" />
-                <span class="menu-text" v-show="!isCollapsed">我的MCP</span>
+                <span class="menu-text" v-show="!isCollapsed">我的 MCP</span>
               </div>
             </a-tooltip>
           </div>
@@ -141,13 +141,24 @@
     <div class="main-container">
       <header class="header">
         <div class="header-left">
-          <a-menu
-            v-if="userStore.userInfo?.userRole === 'admin'"
-            mode="horizontal"
-            class="admin-menu"
-            :selectable="false"
-            :items="adminItems"
-          />
+          <div v-if="userStore.userInfo?.userRole === 'admin'" class="admin-btns">
+            <a :href="`${baseUrl}/admin/user`" target="_blank" rel="noopener noreferrer" class="admin-btn">
+              <span class="btn-text">用户管理</span>
+              <ExportOutlined class="btn-icon" />
+            </a>
+            <a :href="`${baseUrl}/admin/agent`" target="_blank" rel="noopener noreferrer" class="admin-btn">
+              <span class="btn-text">智能体管理</span>
+              <ExportOutlined class="btn-icon" />
+            </a>
+            <a :href="`${baseUrl}/admin/mcp`" target="_blank" rel="noopener noreferrer" class="admin-btn">
+              <span class="btn-text"> MCP 管理</span>
+              <ExportOutlined class="btn-icon" />
+            </a>
+            <a :href="`${baseUrl}/admin/knowledge`" target="_blank" rel="noopener noreferrer" class="admin-btn">
+              <span class="btn-text">知识库管理</span>
+              <ExportOutlined class="btn-icon" />
+            </a>
+          </div>
         </div>
         <div class="header-right"></div>
       </header>
@@ -166,7 +177,7 @@
 </template>
 
 <script setup lang="ts">
-import { h, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useUserStore } from '@/store/user'
@@ -182,7 +193,8 @@ import {
   MenuUnfoldOutlined,
   HomeOutlined,
   UserOutlined,
-  LogoutOutlined
+  LogoutOutlined,
+  ExportOutlined
 } from '@ant-design/icons-vue'
 
 type MenuKey = 'agent-market' | 'agent' | 'mcp-market' | 'mcp' | 'public-knowledge' | 'knowledge' | 'profile'
@@ -195,29 +207,6 @@ const isCollapsed = ref<boolean>(false)
 const currentPath = ref<MenuKey>('agent-market')
 const baseUrl = window.location.origin
 const authModalVisible = ref<boolean>(false)
-
-const adminItems = [
-  {
-    key: 'admin-user',
-    label: h('a', { href: `${baseUrl}/admin/user`, target: '_blank', rel: 'noopener noreferrer' }, [h(UserOutlined), ' 用户管理']),
-    title: '用户管理'
-  },
-  {
-    key: 'admin-agent',
-    label: h('a', { href: `${baseUrl}/admin/agent`, target: '_blank', rel: 'noopener noreferrer' }, [h(RobotOutlined), ' 智能体管理']),
-    title: '智能体管理'
-  },
-  {
-    key: 'admin-mcp',
-    label: h('a', { href: `${baseUrl}/admin/mcp`, target: '_blank', rel: 'noopener noreferrer' }, [h(ToolOutlined), ' MCP 管理']),
-    title: 'MCP 管理'
-  },
-  {
-    key: 'admin-knowledge',
-    label: h('a', { href: `${baseUrl}/admin/knowledge`, target: '_blank', rel: 'noopener noreferrer' }, [h(DatabaseOutlined), ' 知识库管理']),
-    title: '知识库管理'
-  }
-]
 
 watch(
   () => route.path,
@@ -536,22 +525,46 @@ async function handleLogout(): Promise<void> {
     align-items: center;
   }
 
-  .admin-menu {
-    background: transparent;
-    border-bottom: none;
-    :deep(.ant-menu-item) {
-      padding: 0 12px !important;
-      
-      .ant-menu-title-content {
-        a {
-          gap: 6px;
-          font-size: 14px;
-          font-weight: 500;
+  .admin-btns {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 
-          &:hover {
-            color: #2aa1a9;
-          }
-        }
+    .admin-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 18px;
+      background: linear-gradient(180deg, #ffffff 0%, #f5f7fa 100%);
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04), inset 0 1px 0 #ffffff;
+      color: #4b5563;
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.2s ease;
+
+      &:hover {
+        background: linear-gradient(180deg, #f0fdfd 0%, #e6f7f7 100%);
+        border-color: #2aa1a9;
+        color: #2aa1a9;
+        box-shadow: 0 4px 10px rgba(42, 161, 169, 0.12), 0 1px 3px rgba(0, 0, 0, 0.06), inset 0 1px 0 #ffffff;
+      }
+
+      &:active {
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), inset 0 1px 2px rgba(0, 0, 0, 0.04);
+      }
+
+      .btn-text {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .btn-icon {
+        font-size: 14px;
+        opacity: 0.7;
       }
     }
   }

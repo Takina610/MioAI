@@ -90,10 +90,111 @@ export const generateTitle = async (
   }
 }
 
+// 走本地大模型的情况
+export interface ChatStreamController {
+  close: () => void
+}
+export const chatWithStream = (
+  content: string,
+  chatId: string,
+  agentId: number,
+  token: string,
+  userId: number | null,
+  history: Array<{ role: string; content: string }>,
+  onMessage: (data: string) => void,
+  onError: (error: any) => void
+): ChatStreamController => {
+  const provider = localStorage.getItem('ai-model-provider') || 'dashscope'
+
+  if (provider === 'ollama') {
+    const abortController = new AbortController()
+
+    fetch('http://localhost:11434/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: localStorage.getItem('ollama-model') || 'deepseek-r1:1.5b',
+        messages: history,
+        stream: true
+      }),
+      signal: abortController.signal
+    }).then(async (response) => {
+      if (!response.ok) {
+        const errText = await response.text().catch(() => 'Ollama 请求失败')
+        onError(new Error(errText))
+        return
+      }
+      if (!response.body) {
+        onError(new Error('无响应体'))
+        return
+      }
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value, { stream: true })
+        const lines = chunk.split('\n').filter(line => line.trim())
+
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line)
+            if (data.message?.content) {
+              onMessage(data.message.content)
+            }
+            if (data.done) {
+              onMessage('[DONE]')
+            }
+          } catch {
+            // 忽略解析失败的行
+          }
+        }
+      }
+    }).catch(onError)
+
+    return { close: () => abortController.abort() }
+  }
+
+  // 原有的 SSE 逻辑
+  const isDefaultAgent = agentId === 1
+  let url = ''
+  let params: Record<string, any> = {}
+
+  if (isDefaultAgent) {
+    url = '/chat'
+    params = { content, chatId, agentId, userId: userId ?? '' }
+  } else if (agentId === 2) {
+    url = '/cs/chat'
+    params = { content, chatId, agentId, token }
+  } else if (agentId === 3) {
+    url = '/mio/chat'
+    params = { content, chatId, agentId, token }
+  } else {
+    url = '/custom/chat'
+    params = { content, chatId, agentId, token }
+  }
+
+  const es = connectSSE(url, params)
+  es.onmessage = (event: MessageEvent) => {
+    const data = event.data
+    if (data === '[DONE]') {
+      onMessage('[DONE]')
+    } else {
+      onMessage(data)
+    }
+  }
+  es.onerror = onError
+
+  return { close: () => es.close() }
+}
+
 export default {
   chatWithCSApp,
   chatWithDefaultAgent,
   chatWithMioManus,
   chatWithCustomAgent,
-  generateTitle
+  generateTitle,
+  chatWithStream
 }

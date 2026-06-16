@@ -254,7 +254,8 @@ import {
   chatWithDefaultAgent,
   chatWithMioManus,
   chatWithCustomAgent,
-  generateTitle
+  generateTitle,
+  chatWithStream
 } from '@/api/chat'
 
 import { getChatIdsPage, getChatHistory, deleteChat as deleteChatApi } from '@/api/chatMemory'
@@ -333,6 +334,8 @@ const chatMessagesMap = ref<Map<string, ChatMessage[]>>(new Map())
 
 let eventSource: EventSource | null = null
 let currentEventSourceChatId: string = '' // 当前 EventSource 对应的会话ID
+let activeStream: { close: () => void } | null = null
+let currentStreamChatId: string = '' // 当前 Ollama 流式请求对应的会话ID
 
 const currentChatTitle = computed(() => {
   const chat = chatList.value.find(c => c.id === currentChatId.value)
@@ -628,6 +631,62 @@ function sendMessage(): void {
   const token: string = localStorage.getItem('token') || ''
   const userId = userStore.userInfo?.id || null
 
+  // 走本地大模型的情况
+  const provider = localStorage.getItem('ai-model-provider') || 'dashscope'
+  if (provider === 'ollama') {
+    // 本地 Ollama 直连
+    if (activeStream) {
+      activeStream.close()
+      activeStream = null
+    }
+    currentStreamChatId = chatIdForThisMessage
+
+    const history = chatMessages
+      .filter(m => m.role === 'user' || (m.role === 'assistant' && m.content))
+      .map(m => ({ role: m.role, content: m.content }))
+
+    activeStream = chatWithStream(
+      content,
+      chatIdForThisMessage,
+      agentId.value,
+      token,
+      userId,
+      history,
+      (rawData) => {
+        if (currentStreamChatId !== chatIdForThisMessage) return
+        const msgs = chatMessagesMap.value.get(chatIdForThisMessage) || []
+        if (rawData && rawData !== '[DONE]') {
+          if (aiMessageIndex < msgs.length) {
+            const updated = [...msgs]
+            updated[aiMessageIndex] = {
+              ...updated[aiMessageIndex],
+              content: updated[aiMessageIndex].content + rawData
+            }
+            chatMessagesMap.value.set(chatIdForThisMessage, updated)
+            if (currentChatId.value === chatIdForThisMessage) {
+              messages.value = updated
+              nextTick(() => scrollToBottom())
+            }
+          }
+        }
+        if (rawData === '[DONE]') {
+          chatLoadingMap.value.delete(chatIdForThisMessage)
+          isLoading.value = false
+          activeStream = null
+          currentStreamChatId = ''
+        }
+      },
+      (error) => {
+        console.error('Ollama 错误:', error)
+        chatLoadingMap.value.delete(chatIdForThisMessage)
+        isLoading.value = false
+        activeStream = null
+        currentStreamChatId = ''
+      }
+    )
+    return
+  }
+
   // 关闭旧的 EventSource
   if (eventSource) {
     eventSource.close()
@@ -894,12 +953,17 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyboardShortcut)
 })
 
-// 组件销毁前关闭SSE连接
+// 组件销毁前关闭连接
 onBeforeUnmount(() => {
   if (eventSource) {
     eventSource.close()
     eventSource = null
     currentEventSourceChatId = ''
+  }
+  if (activeStream) {
+    activeStream.close()
+    activeStream = null
+    currentStreamChatId = ''
   }
 })
 </script>
