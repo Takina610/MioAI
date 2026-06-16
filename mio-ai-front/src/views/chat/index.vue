@@ -692,7 +692,7 @@ function sendMessage(): void {
       }
     }
     
-    if (data === '[DONE]') {
+    if (rawData === '[DONE]') {
       const finalMessages = chatMessagesMap.value.get(chatIdForThisMessage) || chatMessages
       if (isNewChat && userStore.isLoggedIn) {
         updateChatTitleWithTypewriter(content, finalMessages[aiMessageIndex]?.content || '', userMessageIndex, chatIdForThisMessage)
