@@ -47,3 +47,4 @@ build/
 /src/main/resources/mcp
 
 /src/main/resources/application.yml
+/src/main/resources/mcp/mcp-servers-config.json
