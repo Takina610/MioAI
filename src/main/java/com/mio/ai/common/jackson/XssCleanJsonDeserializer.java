@@ -3,7 +3,6 @@ package com.mio.ai.common.jackson;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
-import com.mio.ai.common.annotation.XssClean;
 import com.mio.ai.common.utils.XssUtils;
 
 import java.io.IOException;

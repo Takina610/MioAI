@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.databind.deser.ContextualDeserializer;
 import com.fasterxml.jackson.databind.deser.std.StringDeserializer;
 import com.fasterxml.jackson.databind.module.SimpleModule;
-import com.mio.ai.common.annotation.XssClean;
+import com.mio.ai.common.aop.annotation.XssClean;
 import com.mio.ai.common.utils.XssUtils;
 
 import java.io.IOException;

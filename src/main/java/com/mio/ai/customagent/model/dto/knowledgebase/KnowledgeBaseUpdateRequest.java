@@ -1,6 +1,6 @@
 package com.mio.ai.customagent.model.dto.knowledgebase;
 
-import com.mio.ai.common.annotation.XssClean;
+import com.mio.ai.common.aop.annotation.XssClean;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;

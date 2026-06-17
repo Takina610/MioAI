@@ -1,4 +1,4 @@
-package com.mio.ai.common.annotation;
+package com.mio.ai.common.aop.annotation;
 
 import java.lang.annotation.*;
 

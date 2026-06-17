@@ -1,4 +1,4 @@
-package com.mio.ai.user.model.dto;
+package com.mio.ai.admin.model.dto;
 
 import com.mio.ai.common.aop.annotation.XssClean;
 import jakarta.validation.constraints.NotNull;
@@ -9,32 +9,30 @@ import lombok.Data;
 import java.io.Serializable;
 
 /**
- * @author: Takina
- * @date: 2026/3/28 14:34
- * @description: 更新用户请求
+ * 管理员更新用户请求
  */
 @Data
-public class UserUpdateRequest implements Serializable {
+public class UserAdminUpdateRequest implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
     /**
-     * id
+     * 用户 id
      */
-    @NotNull(message = "用户ID不能为空")
+    @NotNull(message = "用户 id 不能为空")
     private Long id;
 
     /**
      * 用户昵称
      */
-    @Size(max = 50, message = "用户昵称长度不能超过50")
+    @Size(max = 64, message = "用户昵称长度不能超过 64")
     @XssClean(mode = "strict")
     private String userName;
 
     /**
-     * 简介
+     * 用户简介
      */
-    @Size(max = 500, message = "用户简介长度不能超过500")
+    @Size(max = 512, message = "用户简介长度不能超过 512")
     @XssClean(mode = "rich")
     private String userProfile;
 
@@ -43,4 +41,11 @@ public class UserUpdateRequest implements Serializable {
      */
     @Pattern(regexp = "^(user|admin)$", message = "用户角色只能是 user 或 admin")
     private String userRole;
+
+    /**
+     * 用户头像
+     */
+    @Size(max = 512, message = "头像 URL 长度不能超过 512")
+    @XssClean(mode = "strict")
+    private String userAvatar;
 }
