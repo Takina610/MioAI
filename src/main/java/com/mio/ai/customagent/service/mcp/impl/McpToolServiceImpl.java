@@ -8,9 +8,11 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.customagent.mapper.mcp.McpToolMapper;
+import com.mio.ai.customagent.mapper.agent.AgentMcpMapper;
 import com.mio.ai.customagent.model.dto.mcptool.McpToolAddRequest;
 import com.mio.ai.customagent.model.dto.mcptool.McpToolQueryRequest;
 import com.mio.ai.customagent.model.dto.mcptool.McpToolUpdateRequest;
+import com.mio.ai.customagent.model.entity.AgentMcp;
 import com.mio.ai.customagent.model.entity.McpTool;
 import com.mio.ai.customagent.model.enums.McpToolStatusEnum;
 import com.mio.ai.customagent.model.vo.mcp.McpToolVO;
@@ -33,6 +35,9 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
 
     @Autowired
     UserMapper userMapper;
+
+    @Autowired
+    AgentMcpMapper agentMcpMapper;
 
     @Override
     public Long addMcpTool(McpToolAddRequest request, Long userId) {
@@ -76,6 +81,8 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
         if (!mcpTool.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限删除该工具");
         }
+        // 删除智能体与该 MCP 的关联记录
+        agentMcpMapper.delete(new LambdaQueryWrapper<AgentMcp>().eq(AgentMcp::getMcpId, id));
         return this.removeById(id);
     }
 

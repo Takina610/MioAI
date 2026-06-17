@@ -8,9 +8,11 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.customagent.mapper.knowledge.KnowledgeBaseMapper;
+import com.mio.ai.customagent.mapper.agent.AgentKnowledgeMapper;
 import com.mio.ai.customagent.model.dto.knowledgebase.KnowledgeBaseAddRequest;
 import com.mio.ai.customagent.model.dto.knowledgebase.KnowledgeBaseQueryRequest;
 import com.mio.ai.customagent.model.dto.knowledgebase.KnowledgeBaseUpdateRequest;
+import com.mio.ai.customagent.model.entity.AgentKnowledge;
 import com.mio.ai.customagent.model.entity.KnowledgeBase;
 import com.mio.ai.customagent.model.enums.KnowledgeBaseStatusEnum;
 import com.mio.ai.customagent.model.vo.knowledge.KnowledgeBaseVO;
@@ -37,6 +39,9 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
 
     @Autowired
     UserService userService;
+
+    @Autowired
+    AgentKnowledgeMapper agentKnowledgeMapper;
 
     @Override
     public Long addKnowledgeBase(KnowledgeBaseAddRequest request, Long userId) {
@@ -84,6 +89,9 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
         }
 
         documentService.deleteDocumentsByKbId(id, userId);
+
+        // 删除智能体与该知识库的关联记录
+        agentKnowledgeMapper.delete(new LambdaQueryWrapper<AgentKnowledge>().eq(AgentKnowledge::getKbId, id));
 
         return this.removeById(id);
     }

@@ -203,7 +203,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         if (agent == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "智能体不存在");
         }
-        if (!agent.getUserId().equals(userId)) {
+        if (userId != null && !agent.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限查看该智能体");
         }
 
