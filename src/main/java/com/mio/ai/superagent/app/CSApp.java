@@ -140,6 +140,7 @@ public class CSApp {
 
             RagRetrievalLog retrievalLog = new RagRetrievalLog();
             retrievalLog.setAgentId(chatVO.getAgentId());
+            retrievalLog.setUserId(chatVO.getUserId());
             retrievalLog.setKbId(kbId);
             retrievalLog.setQuery(chatVO.getMessage());
             retrievalLog.setRetrievedChunks(JacksonUtil.writeValueAsString(chunks));

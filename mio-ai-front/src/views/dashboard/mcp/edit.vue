@@ -445,8 +445,11 @@ onMounted(() => {
   }
 
   .page-content {
+    max-height: 765px;
     overflow-y: auto;
     padding: 24px;
+    -ms-overflow-style: none; /* IE 和旧版 Edge 隐藏滚动条 */
+    scrollbar-width: none; /* Firefox 隐藏滚动条 */
   }
   
   .loading-container {

@@ -24,6 +24,11 @@ public class ToolCallLog implements Serializable {
     private Long agentId;
 
     /**
+     * 用户ID
+     */
+    private Long userId;
+
+    /**
      * 工具ID
      */
     private Long toolId;

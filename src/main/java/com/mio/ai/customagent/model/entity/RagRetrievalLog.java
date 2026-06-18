@@ -24,6 +24,11 @@ public class RagRetrievalLog implements Serializable {
     private Long agentId;
 
     /**
+     * 用户ID
+     */
+    private Long userId;
+
+    /**
      * 知识库ID
      */
     private Long kbId;

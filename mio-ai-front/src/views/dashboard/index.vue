@@ -96,6 +96,22 @@
             </a-tooltip>
           </div>
         </div>
+
+        <div class="menu-group">
+          <div class="menu-group-title" v-show="!isCollapsed">记录</div>
+          <div class="menu-items">
+            <a-tooltip :title="isCollapsed ? '使用记录' : ''" placement="right">
+              <div 
+                class="menu-item" 
+                :class="{ active: isActive('usage') }"
+                @click="navigateTo('usage')"
+              >
+                <BarChartOutlined class="menu-icon" />
+                <span class="menu-text" v-show="!isCollapsed">使用记录</span>
+              </div>
+            </a-tooltip>
+          </div>
+        </div>
       </div>
 
       <div class="sidebar-footer">
@@ -142,22 +158,22 @@
       <header class="header">
         <div class="header-left">
           <div v-if="userStore.userInfo?.userRole === 'admin'" class="admin-btns">
-            <button class="admin-btn" @click="openAdmin('/admin/user')">
+            <a :href="`${baseUrl}/admin/user`" target="_blank" rel="noopener noreferrer" class="admin-btn">
               <span class="btn-text">用户管理</span>
               <ExportOutlined class="btn-icon" />
-            </button>
-            <button class="admin-btn" @click="openAdmin('/admin/agent')">
+            </a>
+            <a :href="`${baseUrl}/admin/agent`" target="_blank" rel="noopener noreferrer" class="admin-btn">
               <span class="btn-text">智能体管理</span>
               <ExportOutlined class="btn-icon" />
-            </button>
-            <button class="admin-btn" @click="openAdmin('/admin/mcp')">
-              <span class="btn-text">MCP 管理</span>
+            </a>
+            <a :href="`${baseUrl}/admin/mcp`" target="_blank" rel="noopener noreferrer" class="admin-btn">
+              <span class="btn-text"> MCP 管理</span>
               <ExportOutlined class="btn-icon" />
-            </button>
-            <button class="admin-btn" @click="openAdmin('/admin/knowledge')">
+            </a>
+            <a :href="`${baseUrl}/admin/knowledge`" target="_blank" rel="noopener noreferrer" class="admin-btn">
               <span class="btn-text">知识库管理</span>
               <ExportOutlined class="btn-icon" />
-            </button>
+            </a>
           </div>
         </div>
         <div class="header-right"></div>
@@ -194,10 +210,11 @@ import {
   HomeOutlined,
   UserOutlined,
   LogoutOutlined,
-  ExportOutlined
+  ExportOutlined,
+  BarChartOutlined
 } from '@ant-design/icons-vue'
 
-type MenuKey = 'agent-market' | 'agent' | 'mcp-market' | 'mcp' | 'public-knowledge' | 'knowledge' | 'profile'
+type MenuKey = 'agent-market' | 'agent' | 'mcp-market' | 'mcp' | 'public-knowledge' | 'knowledge' | 'usage' | 'profile'
 
 const router = useRouter()
 const route = useRoute()
@@ -206,9 +223,6 @@ const userStore = useUserStore()
 const isCollapsed = ref<boolean>(false)
 const currentPath = ref<MenuKey>('agent-market')
 const baseUrl = window.location.origin
-const openAdmin = (path: string) => {
-  window.open(`${baseUrl}${path}`, '_blank')
-}
 const authModalVisible = ref<boolean>(false)
 
 watch(
@@ -221,6 +235,7 @@ watch(
       '/dashboard/mcp': 'mcp',
       '/dashboard/public-knowledge': 'public-knowledge',
       '/dashboard/knowledge': 'knowledge',
+      '/dashboard/usage': 'usage',
       '/dashboard/profile': 'profile'
     }
 
@@ -267,6 +282,7 @@ function navigateTo(key: MenuKey): void {
     'mcp': '/dashboard/mcp',
     'public-knowledge': '/dashboard/public-knowledge',
     'knowledge': '/dashboard/knowledge',
+    'usage': '/dashboard/usage',
     'profile': '/dashboard/profile'
   }
   router.push(routes[key] || '/dashboard/agent-market')
@@ -290,6 +306,7 @@ const logoutRouteMap: Record<string, string> = {
   AgentEdit: '/dashboard/agent',
   McpDetail: '/dashboard/mcp',
   McpMarketDetail: '/dashboard/mcp/market',
+  Usage: '/dashboard/usage',
   Profile: '/dashboard'
 }
 
@@ -528,36 +545,41 @@ async function handleLogout(): Promise<void> {
     align-items: center;
   }
 
-  /* From Uiverse.io by elijahgummer */
   .admin-btns {
     display: flex;
     align-items: center;
     gap: 12px;
 
     .admin-btn {
-      font: inherit;
-      background-color: #f0f0f0;
-      border: 0;
-      color: #242424;
-      border-radius: 0.5em;
-      font-size: 14px;
-      padding: 0.375em 1em;
-      font-weight: 600;
-      text-shadow: 0 0.0625em 0 #fff;
-      box-shadow: inset 0 0.0625em 0 0 #f4f4f4, 0 0.0625em 0 0 #efefef,
-        0 0.125em 0 0 #ececec, 0 0.25em 0 0 #e0e0e0, 0 0.3125em 0 0 #dedede,
-        0 0.375em 0 0 #dcdcdc, 0 0.425em 0 0 #cacaca, 0 0.425em 0.5em 0 #cecece;
-      transition: 0.15s ease;
-      cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
+      padding: 8px 18px;
+      background: linear-gradient(180deg, #ffffff 0%, #f5f7fa 100%);
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04), inset 0 1px 0 #ffffff;
+      color: #4b5563;
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.2s ease;
+
+      &:hover {
+        background: linear-gradient(180deg, #f0fdfd 0%, #e6f7f7 100%);
+        border-color: #2aa1a9;
+        color: #2aa1a9;
+        box-shadow: 0 4px 10px rgba(42, 161, 169, 0.12), 0 1px 3px rgba(0, 0, 0, 0.06), inset 0 1px 0 #ffffff;
+      }
 
       &:active {
-        translate: 0 0.225em;
-        box-shadow: inset 0 0.03em 0 0 #f4f4f4, 0 0.03em 0 0 #efefef,
-          0 0.0625em 0 0 #ececec, 0 0.125em 0 0 #e0e0e0, 0 0.125em 0 0 #dedede,
-          0 0.2em 0 0 #dcdcdc, 0 0.225em 0 0 #cacaca, 0 0.225em 0.375em 0 #cecece;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), inset 0 1px 2px rgba(0, 0, 0, 0.04);
+      }
+
+      .btn-text {
+        display: flex;
+        align-items: center;
+        gap: 6px;
       }
 
       .btn-icon {

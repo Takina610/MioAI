@@ -243,6 +243,7 @@ public class ToolCallAgent extends ReActAgent {
         for (AssistantMessage.ToolCall toolCall : toolCallList) {
             ToolCallLog log = new ToolCallLog();
             log.setAgentId(agentId);
+            log.setUserId(userId);
             log.setConversationId(conversationId);
             log.setToolId(0L);
             log.setName(toolCall.name());

@@ -122,6 +122,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '命中测试', requiresAuth: false }
       },
       {
+        path: 'usage',
+        name: 'Usage',
+        component: () => import('@/views/dashboard/usage/index.vue'),
+        meta: { title: '使用记录', requiresAuth: false }
+      },
+      {
         path: 'profile',
         name: 'Profile',
         component: () => import('@/views/dashboard/profile/index.vue'),
