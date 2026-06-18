@@ -3,6 +3,11 @@ package com.mio.ai.superagent.agent.config;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
+import com.mio.ai.common.utils.JacksonUtil;
+import com.mio.ai.customagent.model.entity.AgentUsageLog;
+import com.mio.ai.customagent.model.entity.ToolCallLog;
+import com.mio.ai.customagent.service.log.AgentUsageLogService;
+import com.mio.ai.customagent.service.log.ToolCallLogService;
 import com.mio.ai.superagent.model.enums.AgentState;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -18,6 +23,7 @@ import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.ai.tool.ToolCallback;
 
+import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -44,9 +50,32 @@ public class ToolCallAgent extends ReActAgent {
     // 禁用 Spring AI 内置的工具调用机制，自己维护选项和消息上下文
     private final ChatOptions chatOptions;
 
+    // 使用日志服务
+    private AgentUsageLogService agentUsageLogService;
+    private ToolCallLogService toolCallLogService;
+
+    // 调用上下文
+    private Long agentId;
+    private Long userId;
+    private Long conversationId;
+
     public ToolCallAgent(ToolCallback[] availableTools) {
+        this(availableTools, null, null, null, null, null);
+    }
+
+    public ToolCallAgent(ToolCallback[] availableTools,
+                         AgentUsageLogService agentUsageLogService,
+                         ToolCallLogService toolCallLogService,
+                         Long agentId,
+                         Long userId,
+                         Long conversationId) {
         super();
         this.availableTools = availableTools;
+        this.agentUsageLogService = agentUsageLogService;
+        this.toolCallLogService = toolCallLogService;
+        this.agentId = agentId;
+        this.userId = userId;
+        this.conversationId = conversationId;
         this.toolCallingManager = ToolCallingManager.builder().build();
         // 禁用 Spring AI 内置的工具调用机制，自己维护选项和消息上下文
         this.chatOptions = DashScopeChatOptions.builder()
@@ -81,6 +110,14 @@ public class ToolCallAgent extends ReActAgent {
         // NEXT_STEP_PROMPT 作为系统内部提示，不添加到消息列表，避免被记录到数据库
         List<Message> messageList = getMessageList();
         Prompt prompt = new Prompt(messageList, this.chatOptions);
+        long startTime = System.currentTimeMillis();
+        AgentUsageLog usageLog = new AgentUsageLog();
+        usageLog.setAgentId(agentId);
+        usageLog.setUserId(userId);
+        usageLog.setConversationId(conversationId);
+        usageLog.setStatus(1);
+        usageLog.setCreateTime(new Date());
+
         try {
             ChatResponse chatResponse = getChatClient().prompt(prompt)
                     .system(getSystemPrompt() + "\n\n" + (StrUtil.isNotBlank(getNextStepPrompt()) ? getNextStepPrompt() : ""))
@@ -88,6 +125,19 @@ public class ToolCallAgent extends ReActAgent {
                     .toolCallbacks(availableTools)
                     .call()
                     .chatResponse();
+
+            // 记录 token 使用情况
+            if (chatResponse != null && chatResponse.getMetadata() != null
+                    && chatResponse.getMetadata().getUsage() != null) {
+                var usage = chatResponse.getMetadata().getUsage();
+                if (usage.getPromptTokens() != null) {
+                    usageLog.setInputTokens(usage.getPromptTokens().intValue());
+                }
+                if (usage.getCompletionTokens() != null) {
+                    usageLog.setOutputTokens(usage.getCompletionTokens().intValue());
+                }
+            }
+
             // 记录响应，用于等下 Act
             this.toolCallChatResponse = chatResponse;
             // 3、解析工具调用结果，获取要调用的工具
@@ -112,21 +162,39 @@ public class ToolCallAgent extends ReActAgent {
                     .map(toolCall -> String.format("工具名称：%s，参数：%s", toolCall.name(), toolCall.arguments()))
                     .collect(Collectors.joining("\n"));
             log.info(toolCallInfo);
+
+            // 记录工具调用日志
+            logToolCalls(toolCallList);
+
             // 如果不需要调用工具，返回 false
             if (toolCallList.isEmpty()) {
                 // 只有不调用工具时，才需要手动记录助手消息
                 getMessageList().add(assistantMessage);
                 this.currentStepNeedAct = false;
+                saveUsageLog(usageLog, startTime, null);
                 return false;
             } else {
                 // 需要调用工具时，无需记录助手消息，因为调用工具时会自动记录
                 this.currentStepNeedAct = true;
+                saveUsageLog(usageLog, startTime, null);
                 return true;
             }
         } catch (Exception e) {
             log.error(getName() + "的思考过程遇到了问题：" + e.getMessage());
             getMessageList().add(new AssistantMessage("处理时遇到了错误：" + e.getMessage()));
+            saveUsageLog(usageLog, startTime, e.getMessage());
             return false;
+        }
+    }
+
+    private void saveUsageLog(AgentUsageLog usageLog, long startTime, String errorMsg) {
+        usageLog.setResponseTime((int) (System.currentTimeMillis() - startTime));
+        if (errorMsg != null) {
+            usageLog.setStatus(0);
+            usageLog.setErrorMsg(errorMsg);
+        }
+        if (agentUsageLogService != null) {
+            agentUsageLogService.logUsage(usageLog);
         }
     }
 
@@ -146,6 +214,7 @@ public class ToolCallAgent extends ReActAgent {
         // 记录消息上下文，conversationHistory 已经包含了助手消息和工具调用返回的结果
         setMessageList(toolExecutionResult.conversationHistory());
         ToolResponseMessage toolResponseMessage = (ToolResponseMessage) CollUtil.getLast(toolExecutionResult.conversationHistory());
+
         // 判断是否调用了终止工具
         boolean terminateToolCalled = toolResponseMessage.getResponses().stream()
                 .anyMatch(response -> response.name().equals("doTerminate"));
@@ -164,6 +233,24 @@ public class ToolCallAgent extends ReActAgent {
                 })
                 .collect(Collectors.joining("\n"));
         return results;
+    }
+
+    private void logToolCalls(List<AssistantMessage.ToolCall> toolCallList) {
+        if (toolCallLogService == null || toolCallList == null || toolCallList.isEmpty()) {
+            return;
+        }
+
+        for (AssistantMessage.ToolCall toolCall : toolCallList) {
+            ToolCallLog log = new ToolCallLog();
+            log.setAgentId(agentId);
+            log.setConversationId(conversationId);
+            log.setToolId(0L);
+            log.setName(toolCall.name());
+            log.setInputParams(toolCall.arguments());
+            log.setStatus(1);
+            log.setCreateTime(new Date());
+            toolCallLogService.logToolCall(log);
+        }
     }
 
     /**

@@ -29,6 +29,11 @@ public class ToolCallLog implements Serializable {
     private Long toolId;
 
     /**
+     * 工具名称
+     */
+    private String name;
+
+    /**
      * 会话ID
      */
     private Long conversationId;

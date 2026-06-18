@@ -1,6 +1,8 @@
 package com.mio.ai.superagent.controller;
 
 import com.mio.ai.common.utils.RedisComponent;
+import com.mio.ai.customagent.service.log.AgentUsageLogService;
+import com.mio.ai.customagent.service.log.ToolCallLogService;
 import com.mio.ai.superagent.agent.MioManus;
 import com.mio.ai.superagent.model.vo.ChatVO;
 import com.mio.ai.superagent.repository.ChatHistoryRepository;
@@ -37,6 +39,12 @@ public class MioManusController {
     @Autowired
     RedisComponent redisComponent;
 
+    @Autowired
+    private ToolCallLogService toolCallLogService;
+
+    @Autowired
+    private AgentUsageLogService agentUsageLogService;
+
     /**
      * 流式调用 Manus 超级智能体
      *
@@ -53,7 +61,23 @@ public class MioManusController {
         chatVO.setUserId(redisComponent.getUserId(token));
         chatHistoryRepository.save(chatVO);
 
-        MioManus mioManus = new MioManus(commonTools, mioManusChatClient);
+        MioManus mioManus = new MioManus(
+                commonTools,
+                mioManusChatClient,
+                agentUsageLogService,
+                toolCallLogService,
+                chatVO.getAgentId(),
+                chatVO.getUserId(),
+                parseConversationId(chatVO.getChatId())
+        );
         return mioManus.runStream(content, chatVO.getChatId());
+    }
+
+    private Long parseConversationId(String chatId) {
+        try {
+            return Long.valueOf(chatId);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }

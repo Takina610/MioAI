@@ -1,9 +1,10 @@
 package com.mio.ai.superagent.agent;
 
+import com.mio.ai.customagent.service.log.AgentUsageLogService;
+import com.mio.ai.customagent.service.log.ToolCallLogService;
 import com.mio.ai.superagent.agent.config.ToolCallAgent;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.tool.ToolCallback;
-import org.springframework.stereotype.Component;
 
 /**
  * @author: Takina
@@ -12,14 +13,38 @@ import org.springframework.stereotype.Component;
  */
 
 /**
- * 鱼皮的 AI 超级智能体（拥有自主规划能力，可以直接使用）
+ * AI 超级智能体（拥有自主规划能力，可以直接使用）
+ * <p>由调用方手动创建实例，不作为 Spring Bean 管理
  */
-@Component
 public class MioManus extends ToolCallAgent {
 
     public MioManus(ToolCallback[] commonTools,
                     ChatClient mioManusChatClient) {
         super(commonTools);
+        init(mioManusChatClient);
+    }
+
+    public MioManus(ToolCallback[] commonTools,
+                    ChatClient mioManusChatClient,
+                    AgentUsageLogService agentUsageLogService,
+                    Long agentId,
+                    Long userId,
+                    Long conversationId) {
+        this(commonTools, mioManusChatClient, agentUsageLogService, null, agentId, userId, conversationId);
+    }
+
+    public MioManus(ToolCallback[] commonTools,
+                    ChatClient mioManusChatClient,
+                    AgentUsageLogService agentUsageLogService,
+                    ToolCallLogService toolCallLogService,
+                    Long agentId,
+                    Long userId,
+                    Long conversationId) {
+        super(commonTools, agentUsageLogService, toolCallLogService, agentId, userId, conversationId);
+        init(mioManusChatClient);
+    }
+
+    private void init(ChatClient mioManusChatClient) {
         this.setName("mioManus");
         String SYSTEM_PROMPT = """
                 你是 MioManus，一个全能型 AI 助手，致力于解决用户提出的任何任务。
