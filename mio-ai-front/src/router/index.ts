@@ -164,6 +164,12 @@ const routes: RouteRecordRaw[] = [
         name: 'AdminKnowledge',
         component: () => import('@/views/admin/knowledge/index.vue'),
         meta: { title: '知识库管理' }
+      },
+      {
+        path: 'usage',
+        name: 'AdminUsage',
+        component: () => import('@/views/admin/usage/index.vue'),
+        meta: { title: '使用记录管理' }
       }
     ]
   },

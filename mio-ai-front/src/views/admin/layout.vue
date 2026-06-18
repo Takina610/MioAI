@@ -34,7 +34,8 @@ const pageTitleMap: Record<string, string> = {
   '/admin/user': '用户管理',
   '/admin/agent': '智能体管理',
   '/admin/mcp': 'MCP 管理',
-  '/admin/knowledge': '知识库管理'
+  '/admin/knowledge': '知识库管理',
+  '/admin/usage': '使用记录管理'
 }
 
 const pageTitle = computed(() => pageTitleMap[route.path] || '管理后台')

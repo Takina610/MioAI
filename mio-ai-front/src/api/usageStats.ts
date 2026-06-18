@@ -16,3 +16,14 @@ export function getUsageStats(
     params: params as unknown as Record<string, unknown>
   })
 }
+
+export function getAdminUsageStats(
+  type: 'agent' | 'knowledge' | 'mcp',
+  params: UsageStatsQueryParams
+): Promise<UsageStats> {
+  return request({
+    url: `/admin/usage-stats/${type}`,
+    method: 'get',
+    params: params as unknown as Record<string, unknown>
+  })
+}

@@ -174,6 +174,10 @@
               <span class="btn-text">知识库管理</span>
               <ExportOutlined class="btn-icon" />
             </a>
+            <a :href="`${baseUrl}/admin/usage`" target="_blank" rel="noopener noreferrer" class="admin-btn">
+              <span class="btn-text">记录管理</span>
+              <ExportOutlined class="btn-icon" />
+            </a>
           </div>
         </div>
         <div class="header-right"></div>
