@@ -3,6 +3,7 @@ package com.mio.ai.common.utils;
 import com.mio.ai.common.common.FileType;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
@@ -15,6 +16,7 @@ import java.io.InputStream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
+@EnabledIfEnvironmentVariable(named = "DASHSCOPE_API_KEY", matches = ".+")
 @Slf4j
 class R2UtilTest {
 

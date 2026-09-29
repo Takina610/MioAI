@@ -19,9 +19,9 @@ public interface DocumentService extends IService<Document> {
     boolean deleteDocument(Long id, Long userId);
 
     /**
-     * 根据ID获取文档
+     * 根据ID获取文档（校验所有者或公开知识库可见）
      */
-    DocumentVO getDocumentById(Long id);
+    DocumentVO getDocumentById(Long id, Long userId);
 
     Page<DocumentVO> queryDocuments(DocumentQueryRequest request, Long userId);
 

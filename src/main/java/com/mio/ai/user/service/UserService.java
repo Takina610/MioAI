@@ -46,6 +46,15 @@ public interface UserService extends IService<User> {
     String getEncryptPassword(String userPassword);
 
     /**
+     * 校验明文密码与库中口令是否匹配（兼容历史 MD5 口令与 BCrypt 口令）
+     *
+     * @param rawPassword    明文密码
+     * @param storedPassword 库中存储的口令
+     * @return 是否匹配
+     */
+    boolean matchesPassword(String rawPassword, String storedPassword);
+
+    /**
      * 获取当前登录用户
      *
      * @param request

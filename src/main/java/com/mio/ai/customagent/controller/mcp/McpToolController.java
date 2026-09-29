@@ -35,6 +35,9 @@ public class McpToolController {
     @Resource
     private RedisComponent redisComponent;
 
+    @Resource
+    private com.mio.ai.customagent.service.security.AccessGuardService accessGuardService;
+
     @PostMapping
     @CacheEvict(value = "mcpTools", allEntries = true)
     public BaseResponse<Long> addMcpTool(@Valid @RequestBody McpToolAddRequest request, HttpServletRequest httpRequest) {
@@ -70,7 +73,10 @@ public class McpToolController {
 
     @GetMapping("/{id:\\d+}")
     @Cacheable(value = "mcpTools", key = "#id")
-    public BaseResponse<McpToolVO> getMcpTool(@PathVariable Long id) {
+    public BaseResponse<McpToolVO> getMcpTool(@PathVariable Long id, HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        // 可见性校验：所有者或公开工具（在读取缓存前执行）
+        accessGuardService.checkMcpReadable(id, userId);
         McpToolVO tool = mcpToolService.getMcpToolById(id);
         return ResultUtils.success(tool);
     }

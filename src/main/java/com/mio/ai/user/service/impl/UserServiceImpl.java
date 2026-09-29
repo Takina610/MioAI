@@ -42,6 +42,12 @@ import java.util.stream.Collectors;
 public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         implements UserService {
 
+    /**
+     * BCrypt 编码器：每次加密自带随机盐，强度默认 10
+     */
+    private static final org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder BCRYPT_ENCODER =
+            new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();
+
     @Autowired
     RedisUtil redisUtil;
 
@@ -105,31 +111,53 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         if (userPassword.length() < 8) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户密码应不低于8位");
         }
-        // 2. 对用户传递的密码进行加密
-        String encryptPassword = getEncryptPassword(userPassword);
-        // 3. 查询数据库中的用户是否存在
+        // 2. 按账号查询用户（密码校验移到内存中进行，以同时兼容历史 MD5 口令与 BCrypt 口令）
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("user_account", userAccount);
-        queryWrapper.eq("user_password", encryptPassword);
         User user = this.baseMapper.selectOne(queryWrapper);
-        // 不存在，抛异常
-        if (user == null) {
+        // 不存在或密码不匹配，抛异常
+        if (user == null || !matchesPassword(userPassword, user.getUserPassword())) {
             log.info("user login failed, userAccount cannot match userPassword");
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户不存在或者密码错误");
+        }
+        // 3. 历史口令平滑升级：MD5 口令在首次登录成功后自动改存为 BCrypt
+        if (!isBcryptHash(user.getUserPassword())) {
+            user.setUserPassword(getEncryptPassword(userPassword));
+            this.updateById(user);
+            log.info("用户 {} 的口令已从 MD5 升级为 BCrypt", userAccount);
         }
         return this.getLoginUserVO(user);
     }
 
     /**
-     * 获取加密后的密码
+     * 获取加密后的密码（BCrypt，自带随机盐）
      *
      * @param userPassword 用户密码
      * @return 加密后的密码
      */
     @Override
     public String getEncryptPassword(String userPassword) {
-        // 加盐，混淆密码
-        return DigestUtils.md5DigestAsHex((SystemConstant.SALT + userPassword).getBytes());
+        return BCRYPT_ENCODER.encode(userPassword);
+    }
+
+    /**
+     * 校验明文密码与库中口令是否匹配。
+     * 兼容两种存储格式：BCrypt（$2a$/$2b$ 开头）与历史 MD5 加盐口令
+     */
+    @Override
+    public boolean matchesPassword(String rawPassword, String storedPassword) {
+        if (rawPassword == null || storedPassword == null) {
+            return false;
+        }
+        if (isBcryptHash(storedPassword)) {
+            return BCRYPT_ENCODER.matches(rawPassword, storedPassword);
+        }
+        return DigestUtils.md5DigestAsHex((SystemConstant.SALT + rawPassword).getBytes()).equals(storedPassword);
+    }
+
+    private boolean isBcryptHash(String stored) {
+        return stored != null && (stored.startsWith("$2a$") || stored.startsWith("$2b$")
+                || stored.startsWith("$2y$"));
     }
 
     @Override
@@ -244,7 +272,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         queryWrapper.like(StrUtil.isNotBlank(userAccount), "user_account", userAccount);
         queryWrapper.like(StrUtil.isNotBlank(userName), "user_name", userName);
         queryWrapper.like(StrUtil.isNotBlank(userProfile), "user_profile", userProfile);
-        queryWrapper.orderBy(StrUtil.isNotEmpty(sortField), sortOrder.equals("ascend"), sortField);
+        // sortOrder 可能为 null（前端未传排序方向），用常量在前的比较避免 NPE
+        queryWrapper.orderBy(StrUtil.isNotEmpty(sortField), "ascend".equals(sortOrder), sortField);
         return queryWrapper;
     }
 
@@ -268,8 +297,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "用户不存在");
         }
         
-        String oldEncryptPassword = getEncryptPassword(oldPassword);
-        if (!user.getUserPassword().equals(oldEncryptPassword)) {
+        if (!matchesPassword(oldPassword, user.getUserPassword())) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "原密码错误");
         }
         

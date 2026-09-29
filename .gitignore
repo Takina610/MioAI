@@ -48,3 +48,7 @@ build/
 
 /src/main/resources/application.yml
 /src/main/resources/mcp/mcp-servers-config.json
+
+# 本地环境变量（含密钥，禁止提交）
+.env
+/target/

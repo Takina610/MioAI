@@ -11,19 +11,25 @@ import io.modelcontextprotocol.client.transport.StdioClientTransport;
 import io.modelcontextprotocol.json.McpJsonMapper;
 import io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.spec.McpSchema;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
 
-@SpringBootTest
 class McpValidateControllerTest {
 
+    /**
+     * 高德 MCP 连通性测试：key 从环境变量读取，不配置时自动跳过，避免密钥硬编码入库
+     */
     @Test
     void validateMcpConfig() {
+        String amapKey = System.getenv("AMAP_MAPS_API_KEY");
+        Assumptions.assumeTrue(amapKey != null && !amapKey.isBlank(),
+                "未设置 AMAP_MAPS_API_KEY 环境变量，跳过该测试");
+
         String config = "{\n" +
                 "  \"mcpServers\": {\n" +
                 "    \"amap-maps\": {\n" +
@@ -33,7 +39,7 @@ class McpValidateControllerTest {
                 "        \"@amap/amap-maps-mcp-server\"\n" +
                 "      ],\n" +
                 "      \"env\": {\n" +
-                "        \"AMAP_MAPS_API_KEY\": \"4f139370b9f0de116bc60ce409506dae\"\n" +
+                "        \"AMAP_MAPS_API_KEY\": \"" + amapKey + "\"\n" +
                 "      }\n" +
                 "    }\n" +
                 "  }\n" +

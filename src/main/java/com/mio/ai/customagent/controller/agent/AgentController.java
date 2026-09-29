@@ -47,6 +47,9 @@ public class AgentController {
     @Resource
     private R2Util r2Util;
 
+    @Resource
+    private com.mio.ai.customagent.service.security.AccessGuardService accessGuardService;
+
     @PostMapping
     @CacheEvict(value = "agents", allEntries = true)
     public BaseResponse<Long> addAgent(@Valid @RequestBody AgentAddRequest request, HttpServletRequest httpRequest) {
@@ -82,7 +85,10 @@ public class AgentController {
 
     @GetMapping("/{id:\\d+}")
     @Cacheable(value = "agents", key = "#id")
-    public BaseResponse<AgentVO> getAgent(@PathVariable Long id) {
+    public BaseResponse<AgentVO> getAgent(@PathVariable Long id, HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        // 可见性校验：所有者/内置/公开已发布（在读取缓存前执行）
+        accessGuardService.checkAgentUsable(id, userId);
         AgentVO agent = agentService.getAgentById(id);
         return ResultUtils.success(agent);
     }

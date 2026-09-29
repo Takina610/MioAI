@@ -3,14 +3,12 @@ package com.mio.ai.common.utils;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * XSS 防护工具测试类
+ * XSS 防护工具测试类（纯单元测试，XssUtils 为静态工具类，无需启动 Spring 容器）
  */
-@SpringBootTest
 @Slf4j
 class XssUtilsTest {
 

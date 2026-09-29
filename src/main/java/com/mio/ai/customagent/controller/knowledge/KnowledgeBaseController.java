@@ -35,6 +35,9 @@ public class KnowledgeBaseController {
     @Resource
     private RedisComponent redisComponent;
 
+    @Resource
+    private com.mio.ai.customagent.service.security.AccessGuardService accessGuardService;
+
     @PostMapping
     @CacheEvict(value = "knowledgeBases", allEntries = true)
     public BaseResponse<Long> addKnowledgeBase(@Valid @RequestBody KnowledgeBaseAddRequest request, HttpServletRequest httpRequest) {
@@ -70,7 +73,10 @@ public class KnowledgeBaseController {
 
     @GetMapping("/{id:\\d+}")
     @Cacheable(value = "knowledgeBases", key = "#id")
-    public BaseResponse<KnowledgeBaseVO> getKnowledgeBase(@PathVariable Long id) {
+    public BaseResponse<KnowledgeBaseVO> getKnowledgeBase(@PathVariable Long id, HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        // 可见性校验：所有者或公开知识库（在读取缓存前执行）
+        accessGuardService.checkKbReadable(id, userId);
         KnowledgeBaseVO kb = knowledgeBaseService.getKnowledgeBaseById(id);
         return ResultUtils.success(kb);
     }

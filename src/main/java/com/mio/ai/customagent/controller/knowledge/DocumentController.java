@@ -9,18 +9,19 @@ import com.mio.ai.customagent.model.dto.document.DocumentAddRequest;
 import com.mio.ai.customagent.model.dto.document.DocumentQueryRequest;
 import com.mio.ai.customagent.model.vo.knowledge.DocumentVO;
 import com.mio.ai.customagent.model.vo.knowledge.SimilaritySearchResultVO;
+import com.mio.ai.customagent.rag.KnowledgeRetrievalResult;
 import com.mio.ai.customagent.service.knowledge.DocumentService;
+import com.mio.ai.customagent.service.knowledge.KnowledgeRetrievalService;
+import com.mio.ai.customagent.service.knowledge.KnowledgeBaseService;
+import com.mio.ai.customagent.model.entity.KnowledgeBase;
+import com.mio.ai.customagent.service.security.AccessGuardService;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.SearchRequest;
-import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
@@ -45,13 +46,19 @@ public class DocumentController {
     private DocumentService documentService;
 
     @Resource
+    private KnowledgeBaseService knowledgeBaseService;
+
+    @Resource
+    private KnowledgeRetrievalService knowledgeRetrievalService;
+
+    @Resource
+    private AccessGuardService accessGuardService;
+
+    @Resource
     private RedisComponent redisComponent;
 
     @Resource
     private R2Util r2Util;
-
-    @Autowired
-    VectorStore vectorStore;
 
     @PostMapping
     @CacheEvict(value = "knowledgeBases", allEntries = true)
@@ -69,23 +76,33 @@ public class DocumentController {
         return ResultUtils.success(result);
     }
 
+    /**
+     * 获取文档详情（所有者或公开知识库内文档可见）
+     */
     @GetMapping("/{id}")
-    @Cacheable(value = "knowledgeBases", key = "#id")
-    public BaseResponse<DocumentVO> getDocument(@PathVariable Long id) {
-        DocumentVO document = documentService.getDocumentById(id);
+    public BaseResponse<DocumentVO> getDocument(@PathVariable Long id, HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        DocumentVO document = documentService.getDocumentById(id, userId);
         return ResultUtils.success(document);
     }
 
     @PostMapping("/list")
     public BaseResponse<Page<DocumentVO>> listDocuments(@RequestBody DocumentQueryRequest request, HttpServletRequest httpRequest) {
-        Page<DocumentVO> page = documentService.queryDocuments(request, request.getUserId());
+        // userId 一律以登录态为准，不接受前端传入，防止越权枚举他人文档
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        request.setUserId(userId);
+        Page<DocumentVO> page = documentService.queryDocuments(request, userId);
         return ResultUtils.success(page);
     }
 
+    /**
+     * 在线预览文档原文件（所有者或公开知识库内文档可预览）
+     */
     @GetMapping("/preview/{id}")
-    public void previewDocument(@PathVariable Long id, HttpServletResponse response) {
+    public void previewDocument(@PathVariable Long id, HttpServletRequest httpRequest, HttpServletResponse response) {
         try {
-            DocumentVO document = documentService.getDocumentById(id);
+            Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+            DocumentVO document = documentService.getDocumentById(id, userId);
             if (document == null || document.getFilePath() == null) {
                 response.setStatus(HttpServletResponse.SC_NOT_FOUND);
                 return;
@@ -97,7 +114,6 @@ public class DocumentController {
 
             response.setContentType(contentType);
             response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "inline; filename*=UTF-8''" + URLEncoder.encode(fileName, StandardCharsets.UTF_8));
-            response.setHeader(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "*");
             response.setContentLength(fileContent.length);
             response.getOutputStream().write(fileContent);
             response.getOutputStream().flush();
@@ -107,53 +123,60 @@ public class DocumentController {
         }
     }
 
+    /**
+     * 命中测试：向量检索限定在用户有权访问的知识库范围内
+     *
+     * @param kbId 可选；传入时只在该知识库内检索（需为所有者或公开知识库），
+     *             不传时检索"本人全部知识库 + 公开知识库"
+     */
     @GetMapping("/similaritySearch/{content}/{threshold}/{topK}")
-    public BaseResponse<List<SimilaritySearchResultVO>> similaritySearch(@PathVariable Double threshold, @PathVariable String content, @PathVariable Integer topK) {
-        SearchRequest searchRequest = SearchRequest
-                .builder().query(content)
-                .topK(topK)
-                .similarityThreshold(threshold)
-                .build();
-        List<Document> documents = vectorStore.similaritySearch(searchRequest);
-        
-        List<SimilaritySearchResultVO> results = documents.stream().map(doc -> {
-            SimilaritySearchResultVO vo = new SimilaritySearchResultVO();
-            vo.setId(doc.getId());
-            vo.setText(doc.getText());
-            vo.setScore(doc.getScore());
-            
-            String fileName = "未知文档";
-            try {
-                Long docId = parseDocIdFromVectorId(doc.getId());
-                if (docId != null) {
-                    com.mio.ai.customagent.model.entity.Document document = documentService.getById(docId);
-                    if (document != null && document.getFileName() != null) {
-                        fileName = document.getFileName();
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("获取文档名称失败: {}", doc.getId(), e);
+    public BaseResponse<List<SimilaritySearchResultVO>> similaritySearch(
+            @PathVariable Double threshold,
+            @PathVariable String content,
+            @PathVariable Integer topK,
+            @RequestParam(required = false) Long kbId,
+            HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+
+        List<Long> searchableKbIds;
+        if (kbId != null) {
+            accessGuardService.checkKbReadable(kbId, userId);
+            searchableKbIds = List.of(kbId);
+        } else {
+            searchableKbIds = listSearchableKbIds(userId);
+            if (searchableKbIds.isEmpty()) {
+                return ResultUtils.success(List.of());
             }
-            vo.setFileName(fileName);
+        }
+
+        List<KnowledgeRetrievalResult> results =
+                knowledgeRetrievalService.retrieve(searchableKbIds, content, topK, threshold, false);
+
+        return ResultUtils.success(results.stream().map(r -> {
+            SimilaritySearchResultVO vo = new SimilaritySearchResultVO();
+            vo.setId(r.getChunkId());
+            vo.setText(r.getText());
+            vo.setScore(r.getScore());
+            vo.setFileName(r.getFileName() != null ? r.getFileName() : "未知文档");
             return vo;
-        }).toList();
-        
-        return ResultUtils.success(results);
+        }).toList());
     }
 
-    private Long parseDocIdFromVectorId(String vectorId) {
-        if (vectorId == null || !vectorId.startsWith("doc_")) {
-            return null;
-        }
-        try {
-            String[] parts = vectorId.split("_");
-            if (parts.length >= 2) {
-                return Long.parseLong(parts[1]);
-            }
-        } catch (NumberFormatException e) {
-            log.warn("解析文档ID失败: {}", vectorId);
-        }
-        return null;
+    /**
+     * 可检索的知识库 = 本人创建的知识库 + 公开知识库
+     */
+    private List<Long> listSearchableKbIds(Long userId) {
+        List<Long> ownKbIds = knowledgeBaseService.list().stream()
+                .filter(kb -> userId != null && userId.equals(kb.getUserId()))
+                .map(KnowledgeBase::getId)
+                .toList();
+        List<Long> publicKbIds = knowledgeBaseService.list().stream()
+                .filter(kb -> Integer.valueOf(1).equals(kb.getIsPublic()))
+                .map(KnowledgeBase::getId)
+                .toList();
+        return java.util.stream.Stream.concat(ownKbIds.stream(), publicKbIds.stream())
+                .distinct()
+                .toList();
     }
 
     private String getContentType(String fileType) {

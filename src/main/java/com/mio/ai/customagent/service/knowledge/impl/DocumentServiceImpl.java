@@ -116,32 +116,53 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
     }
 
     @Override
-    public DocumentVO getDocumentById(Long id) {
+    public DocumentVO getDocumentById(Long id, Long userId) {
         if (id == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "文档ID不能为空");
         }
         Document document = this.getById(id);
-//        if (document == null) {
-//            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "文档不存在");
-//        }
+        if (document == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "文档不存在");
+        }
+        KnowledgeBase kb = knowledgeBaseService.getById(document.getKbId());
+        boolean owner = kb != null && userId != null && userId.equals(kb.getUserId());
+        if (!owner && (kb == null || !Integer.valueOf(1).equals(kb.getIsPublic()))) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限查看该文档");
+        }
         return convertToVO(document);
     }
 
     @Override
     public Page<DocumentVO> queryDocuments(DocumentQueryRequest request, Long userId) {
-        if (request.getKbId() != null) {
-            KnowledgeBase kb = knowledgeBaseService.getById(request.getKbId());
-//            if (kb == null || !kb.getUserId().equals(userId)) {
-//                throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "知识库不存在");
-//            }
-        }
-        Page<Document> page = new Page<>(request.getCurrent(), request.getPageSize());
+        Long scopedUserId = userId != null ? userId : request.getUserId();
         LambdaQueryWrapper<Document> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(request.getKbId() != null, Document::getKbId, request.getKbId())
-                .like(StringUtils.isNotBlank(request.getFileName()), Document::getFileName, request.getFileName())
+        if (request.getKbId() != null) {
+            // 指定知识库：校验所有者或公开知识库
+            KnowledgeBase kb = knowledgeBaseService.getById(request.getKbId());
+            if (kb == null) {
+                throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "知识库不存在");
+            }
+            boolean owner = scopedUserId != null && scopedUserId.equals(kb.getUserId());
+            if (!owner && !Integer.valueOf(1).equals(kb.getIsPublic())) {
+                throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限查看该知识库下的文档");
+            }
+            wrapper.eq(Document::getKbId, request.getKbId());
+        } else {
+            // 未指定知识库：只允许查询本人知识库下的文档
+            List<Long> ownKbIds = knowledgeBaseService.list().stream()
+                    .filter(kb -> scopedUserId != null && scopedUserId.equals(kb.getUserId()))
+                    .map(KnowledgeBase::getId)
+                    .toList();
+            if (ownKbIds.isEmpty()) {
+                return new Page<>(request.getCurrent(), request.getPageSize());
+            }
+            wrapper.in(Document::getKbId, ownKbIds);
+        }
+        wrapper.like(StringUtils.isNotBlank(request.getFileName()), Document::getFileName, request.getFileName())
                 .eq(StringUtils.isNotBlank(request.getFileType()), Document::getFileType, request.getFileType())
                 .eq(request.getStatus() != null, Document::getStatus, request.getStatus())
                 .orderByDesc(Document::getCreateTime);
+        Page<Document> page = new Page<>(request.getCurrent(), request.getPageSize());
         Page<Document> docPage = this.page(page, wrapper);
         Page<DocumentVO> voPage = new Page<>(docPage.getCurrent(), docPage.getSize(), docPage.getTotal());
         voPage.setRecords(docPage.getRecords().stream().map(this::convertToVO).toList());
