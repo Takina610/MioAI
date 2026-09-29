@@ -65,8 +65,64 @@ public class McpClientManagerServiceImpl implements McpClientManagerService {
         LambdaQueryWrapper<McpTool> mcpWrapper = new LambdaQueryWrapper<>();
         mcpWrapper.in(McpTool::getId, mcpIds)
                 .eq(McpTool::getStatus, 1);
-        
-        return mcpToolMapper.selectList(mcpWrapper);
+        Map<Long, McpTool> toolById = mcpToolMapper.selectList(mcpWrapper).stream()
+                .collect(java.util.stream.Collectors.toMap(McpTool::getId, t -> t));
+
+        // agent_mcp.config_override 真正生效：把绑定上的覆盖配置合并进工具的原始配置
+        List<McpTool> result = new ArrayList<>();
+        for (AgentMcp binding : amList) {
+            McpTool tool = toolById.get(binding.getMcpId());
+            if (tool == null) {
+                continue;
+            }
+            if (binding.getConfigOverride() != null && !binding.getConfigOverride().isBlank()) {
+                tool.setConfig(mergeConfigOverride(tool.getConfig(), binding.getConfigOverride()));
+            }
+            result.add(tool);
+        }
+        return result;
+    }
+
+    /**
+     * 将绑定上的覆盖配置合并进 MCP 工具的原始配置。
+     * 按 mcpServers 下同名（或第一个）服务节点合并：env 按键覆盖、args/url/command 存在则整体替换。
+     */
+    private String mergeConfigOverride(String baseConfig, String overrideConfig) {
+        try {
+            JSONObject base = JSONUtil.parseObj(baseConfig);
+            JSONObject override = JSONUtil.parseObj(overrideConfig);
+            JSONObject baseServers = base.getJSONObject("mcpServers");
+            JSONObject overrideServers = override.getJSONObject("mcpServers");
+            if (baseServers == null || baseServers.isEmpty() || overrideServers == null || overrideServers.isEmpty()) {
+                return baseConfig;
+            }
+            String serverName = baseServers.keySet().iterator().next();
+            JSONObject overrideServer = overrideServers.containsKey(serverName)
+                    ? overrideServers.getJSONObject(serverName)
+                    : overrideServers.getJSONObject(overrideServers.keySet().iterator().next());
+            if (overrideServer == null) {
+                return baseConfig;
+            }
+            JSONObject baseServer = baseServers.getJSONObject(serverName);
+            JSONObject overrideEnv = overrideServer.getJSONObject("env");
+            if (overrideEnv != null) {
+                JSONObject env = baseServer.getJSONObject("env");
+                if (env == null) {
+                    baseServer.set("env", overrideEnv);
+                } else {
+                    env.putAll(overrideEnv);
+                }
+            }
+            for (String key : List.of("args", "url", "command")) {
+                if (overrideServer.containsKey(key)) {
+                    baseServer.set(key, overrideServer.get(key));
+                }
+            }
+            return base.toString();
+        } catch (Exception e) {
+            log.warn("合并 configOverride 失败，使用原始配置: {}", e.getMessage());
+            return baseConfig;
+        }
     }
 
     @Override
@@ -79,20 +135,51 @@ public class McpClientManagerServiceImpl implements McpClientManagerService {
 
         for (McpTool mcpTool : mcpTools) {
             try {
-                McpSyncClient client = createMcpClient(mcpTool);
-                if (client != null) {
+                // 复用缓存的客户端，避免每次对话都新建连接（旧实现每次 put 覆盖且不 close，造成进程/连接泄漏）
+                McpSyncClient client = clientCache.get(mcpTool.getId());
+                if (client == null) {
+                    McpSyncClient created = createMcpClient(mcpTool);
+                    if (created == null) {
+                        log.warn("MCP客户端创建失败: {} - {}", mcpTool.getName(), mcpTool.getId());
+                        continue;
+                    }
+                    client = created;
                     clientCache.put(mcpTool.getId(), client);
-                    
-                    List<ToolCallback> callbacks = McpToolUtils.getToolCallbacksFromSyncClients(List.of(client));
-                    allCallbacks.addAll(callbacks);
-                    log.info("成功初始化MCP工具: {} - {}", mcpTool.getName(), mcpTool.getId());
                 }
+                List<ToolCallback> callbacks = McpToolUtils.getToolCallbacksFromSyncClients(List.of(client));
+                allCallbacks.addAll(callbacks);
+                log.info("成功初始化MCP工具: {} - {}", mcpTool.getName(), mcpTool.getId());
             } catch (Exception e) {
+                // 缓存的客户端可能已失效（服务端重启等）：关闭并重建一次
+                closeQuietly(clientCache.remove(mcpTool.getId()));
+                try {
+                    McpSyncClient recreated = createMcpClient(mcpTool);
+                    if (recreated != null) {
+                        clientCache.put(mcpTool.getId(), recreated);
+                        List<ToolCallback> callbacks = McpToolUtils.getToolCallbacksFromSyncClients(List.of(recreated));
+                        allCallbacks.addAll(callbacks);
+                        log.info("重建MCP客户端成功: {} - {}", mcpTool.getName(), mcpTool.getId());
+                        continue;
+                    }
+                } catch (Exception retryError) {
+                    closeQuietly(clientCache.remove(mcpTool.getId()));
+                }
                 log.error("初始化MCP工具失败: {} - {}", mcpTool.getName(), mcpTool.getId(), e);
             }
         }
 
         return allCallbacks.toArray(new ToolCallback[0]);
+    }
+
+    private void closeQuietly(McpSyncClient client) {
+        if (client == null) {
+            return;
+        }
+        try {
+            client.close();
+        } catch (Exception e) {
+            log.warn("关闭MCP客户端失败: {}", e.getMessage());
+        }
     }
 
     private McpSyncClient createMcpClient(McpTool mcpTool) {

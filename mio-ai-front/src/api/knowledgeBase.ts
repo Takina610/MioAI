@@ -135,9 +135,15 @@ export interface SimilarityResult {
   metadata?: Record<string, unknown>
 }
 
-export function similaritySearch(content: string, threshold: number, topK: number): Promise<SimilarityResult[]> {
+export function similaritySearch(
+  content: string,
+  threshold: number,
+  topK: number,
+  kbId?: number
+): Promise<SimilarityResult[]> {
   return request({
     url: `/documents/similaritySearch/${encodeURIComponent(content)}/${threshold}/${topK}`,
-    method: 'get'
+    method: 'get',
+    params: kbId ? { kbId } : undefined
   })
 }

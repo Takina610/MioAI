@@ -215,7 +215,8 @@ function goToChat(): void {
 
 <style lang="scss" scoped>
 .share-page {
-  background: top/contain url('@/assets/bg.addae38f.jpg') no-repeat,#f1f4fb;
+  // 原背景图 bg.jpg 未随仓库提交，构建时报 ENOENT；先回退为纯色背景
+  background: #f1f4fb;
   min-height: 100vh;
   background-attachment: fixed;
 

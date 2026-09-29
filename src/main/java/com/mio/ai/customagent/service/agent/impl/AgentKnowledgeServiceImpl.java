@@ -66,6 +66,18 @@ public class AgentKnowledgeServiceImpl extends ServiceImpl<AgentKnowledgeMapper,
     }
 
     @Override
+    public List<AgentKnowledge> getEnabledBindingsByAgentId(Long agentId) {
+        if (agentId == null) {
+            return List.of();
+        }
+        LambdaQueryWrapper<AgentKnowledge> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AgentKnowledge::getAgentId, agentId)
+                .eq(AgentKnowledge::getEnabled, 1)
+                .orderByAsc(AgentKnowledge::getId);
+        return this.list(wrapper);
+    }
+
+    @Override
     public boolean deleteByAgentId(Long agentId) {
         LambdaQueryWrapper<AgentKnowledge> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(AgentKnowledge::getAgentId, agentId);

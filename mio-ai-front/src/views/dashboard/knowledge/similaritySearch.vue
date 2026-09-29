@@ -175,7 +175,8 @@ async function handleSearch(): Promise<void> {
     const res = await similaritySearch(
       searchContent.value.trim(),
       thresholdPercent.value,
-      config.topK
+      config.topK,
+      kbId.value
     )
     searchResults.value = res || []
     hasSearched.value = true

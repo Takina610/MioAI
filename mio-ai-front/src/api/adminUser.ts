@@ -14,6 +14,8 @@ export interface UserAdminVO {
 export interface UserAdminQueryRequest {
   current?: number
   pageSize?: number
+  /** 模糊搜索关键词（匹配用户名或账号） */
+  keyword?: string
   userName?: string
   userAccount?: string
   userRole?: string

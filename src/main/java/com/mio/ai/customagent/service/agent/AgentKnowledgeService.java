@@ -34,6 +34,11 @@ public interface AgentKnowledgeService extends IService<AgentKnowledge> {
     List<Long> getKbIdsByAgentId(Long agentId);
 
     /**
+     * 获取智能体所有启用的知识库绑定（含每个绑定的检索配置）
+     */
+    List<AgentKnowledge> getEnabledBindingsByAgentId(Long agentId);
+
+    /**
      * 根据智能体ID删除所有关联
      */
     boolean deleteByAgentId(Long agentId);

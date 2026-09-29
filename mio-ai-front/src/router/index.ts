@@ -1,9 +1,12 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { message } from 'ant-design-vue'
 
 declare module 'vue-router' {
   interface RouteMeta {
     title?: string
     requiresAuth?: boolean
+    /** 仅管理员可访问（需要在 requiresAuth 基础上使用） */
+    requiresAdmin?: boolean
   }
 }
 
@@ -138,38 +141,38 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/admin',
     component: () => import('@/views/admin/layout.vue'),
-    meta: { title: '管理后台', requiresAuth: true },
+    meta: { title: '管理后台', requiresAuth: true, requiresAdmin: true },
     redirect: '/admin/user',
     children: [
       {
         path: 'user',
         name: 'AdminUser',
         component: () => import('@/views/admin/user/index.vue'),
-        meta: { title: '用户管理' }
+        meta: { title: '用户管理', requiresAuth: true, requiresAdmin: true }
       },
       {
         path: 'agent',
         name: 'AdminAgent',
         component: () => import('@/views/admin/agent/index.vue'),
-        meta: { title: '智能体管理' }
+        meta: { title: '智能体管理', requiresAuth: true, requiresAdmin: true }
       },
       {
         path: 'mcp',
         name: 'AdminMcp',
         component: () => import('@/views/admin/mcp/index.vue'),
-        meta: { title: 'MCP 管理' }
+        meta: { title: 'MCP 管理', requiresAuth: true, requiresAdmin: true }
       },
       {
         path: 'knowledge',
         name: 'AdminKnowledge',
         component: () => import('@/views/admin/knowledge/index.vue'),
-        meta: { title: '知识库管理' }
+        meta: { title: '知识库管理', requiresAuth: true, requiresAdmin: true }
       },
       {
         path: 'usage',
         name: 'AdminUsage',
         component: () => import('@/views/admin/usage/index.vue'),
-        meta: { title: '使用记录管理' }
+        meta: { title: '使用记录管理', requiresAuth: true, requiresAdmin: true }
       }
     ]
   },
@@ -198,8 +201,35 @@ const router = createRouter({
   routes
 })
 
+/**
+ * 全局路由守卫：
+ * 1. 设置页面标题；
+ * 2. requiresAuth 路由校验登录态（本地 token），未登录跳转首页；
+ * 3. requiresAdmin 路由校验管理员角色，非管理员跳转 403。
+ * 说明：前端守卫只做体验层的拦截，真正的数据安全由后端接口鉴权保证。
+ */
 router.beforeEach((to) => {
   document.title = to.meta.title ? `${to.meta.title} - MioAI` : 'MioAI'
+
+  const token = localStorage.getItem('token')
+  if (to.meta.requiresAuth && !token) {
+    message.warning('请先登录')
+    return { path: '/', query: { redirect: to.fullPath } }
+  }
+
+  if (to.meta.requiresAdmin) {
+    let userInfo: { userRole?: string } | null = null
+    try {
+      userInfo = JSON.parse(localStorage.getItem('userInfo') || 'null')
+    } catch {
+      userInfo = null
+    }
+    if (userInfo?.userRole !== 'admin') {
+      message.error('没有权限访问管理后台')
+      return { path: '/403' }
+    }
+  }
+  return true
 })
 
 export default router
