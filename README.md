@@ -7,10 +7,15 @@ MioAI 是一个基于 Spring Boot 3、Spring AI 和 Vue 3 的智能体应用平�
 - 智能体对话：支持默认智能体、CS 游戏助手、MioManus 超级智能体和自定义智能体的 SSE 流式输出。
 - 智能体管理：支持智能体创建、编辑、发布、删除、头像上传和应用广场展示。
 - 知识库 RAG：支持知识库创建、文档上传、文档解析、向量检索、命中测试和公共知识库。
-- MCP 工具：支持 MCP 工具配置、校验、市场展示，并可绑定到自定义智能体。
-- 用户体系：支持注册、登录、登出、当前用户获取、个人资料维护和管理员接口。
+- **知识库绑定与检索隔离**：自定义智能体只检索其绑定的知识库（向量过滤 `kbId`），每个绑定可独立配置 topK / 相似度阈值 / 是否重排（`agent_knowledge.retrieval_config`）。
+- **MioManus 显式规划**：对标 Manus 的任务清单机制，执行前创建计划、每步更新状态，计划实时注入思考提示词。
+- **长会话摘要记忆**：超过阈值的历史对话自动压缩为摘要注入上下文，避免固定窗口遗忘早期信息。
+- **RAG 消融实验**：内置 30 条评测集与检索评测脚本，支持分块大小/关键词增强/重排的单变量对比实验（见 `doc/rag-eval-experiment.md`）。
+- MCP 工具：支持 MCP 工具配置、校验、市场展示，并可绑定到自定义智能体（支持绑定级 `config_override` 覆盖密钥等参数）。
+- 用户体系：支持注册、登录、登出、当前用户获取、个人资料维护和管理员接口（密码 BCrypt 存储，历史 MD5 口令登录时自动升级）。
 - 聊天记录：支持会话保存、历史消息、标题生成和对话分享。
 - 文件与外部服务：支持 Cloudflare R2 对象存储、Pexels 图片搜索、SearchAPI Web 搜索、PDF 生成等扩展能力。
+- 安全基线：接口级资源归属校验、终端命令白名单、XSS 过滤、前端路由守卫。
 
 ## 技术栈
 
@@ -23,8 +28,8 @@ MioAI 是一个基于 Spring Boot 3、Spring AI 和 Vue 3 的智能体应用平�
 - Spring MVC / WebFlux / SSE
 - MyBatis-Plus 3.5.11
 - MySQL 8
-- Redis / Redis Vector Store
-- Lombok、Hutool、iText、Jsoup
+- Redis Stack（含 RediSearch）/ Redis Vector Store
+- Lombok、Hutool、iText、Jsoup、spring-security-crypto（BCrypt）
 - AWS SDK S3 兼容存储，用于接入 Cloudflare R2
 
 ### 前端
@@ -32,7 +37,7 @@ MioAI 是一个基于 Spring Boot 3、Spring AI 和 Vue 3 的智能体应用平�
 - Vue 3
 - Vite
 - TypeScript
-- Vue Router
+- Vue Router（含全局路由守卫）
 - Pinia
 - Ant Design Vue
 - Axios
@@ -43,33 +48,38 @@ MioAI 是一个基于 Spring Boot 3、Spring AI 和 Vue 3 的智能体应用平�
 
 ```text
 mio-ai
-|-- deploy/                         # 部署配置，例如 nginx.conf
+|-- Dockerfile                      # 后端镜像（多阶段构建）
+|-- docker-compose.yml              # 一键部署：MySQL + RedisStack + 后端 + 前端
+|-- .env.example                    # 部署环境变量模板
 |-- mio-ai-front/                   # Vue 3 前端项目
+|   |-- Dockerfile                  # 前端镜像（构建 + nginx）
+|   |-- nginx.conf                  # 容器内 nginx 配置（静态托管 + /api 反代 + SSE）
 |   |-- src/
 |   |   |-- api/                    # 前端接口封装
 |   |   |-- components/             # 通用组件
-|   |   |-- router/                 # 前端路由
+|   |   |-- router/                 # 前端路由（含 requiresAuth/requiresAdmin 守卫）
 |   |   |-- store/                  # Pinia 状态管理
 |   |   |-- types/                  # TypeScript 类型
 |   |   |-- utils/                  # 请求、消息、存储等工具
 |   |   `-- views/                  # 页面视图
 |   |-- package.json
 |   `-- vite.config.ts
+|-- doc/
+|   `-- rag-eval-experiment.md      # RAG 消融实验设计与论文写作指引
 |-- src/
 |   |-- main/
 |   |   |-- java/com/mio/ai/
 |   |   |   |-- common/             # 通用响应、异常、配置、AOP、工具类
-|   |   |   |-- customagent/        # 自定义智能体、知识库、MCP 工具等业务
-|   |   |   |-- superagent/         # 默认智能体、CS 助手、MioManus、RAG 与工具调用
+|   |   |   |-- customagent/        # 自定义智能体、知识库、MCP 工具、检索隔离等业务
+|   |   |   |-- superagent/         # 默认智能体、CS 助手、MioManus（含显式规划）、摘要记忆与工具
 |   |   |   |-- user/               # 用户模块
 |   |   |   `-- MioAIApplication.java
 |   |   `-- resources/
-|   |       |-- application.yml     # 后端配置
-|   |       |-- mcp/                # MCP 客户端配置
+|   |       |-- application.yml.example  # 后端配置模板（复制为 application.yml 后填写）
 |   |       |-- rag/                # 内置 RAG 文档
 |   |       `-- sql/                # Spring AI 聊天记忆表结构
-|   `-- test/                       # 单元测试与接口测试
-|-- mio_ai.sql                      # 项目数据库初始化脚本
+|   `-- test/                       # 纯单元测试（无需外部环境）+ 集成/评测测试（需配置环境）
+|-- mio_ai.sql                      # 数据库初始化脚本（纯结构 + 种子数据，无真实数据）
 |-- pom.xml                         # Maven 后端依赖
 `-- README.md
 ```
@@ -80,7 +90,7 @@ mio-ai
 - Maven 3.9+
 - Node.js 20+，推荐配合 pnpm 使用
 - MySQL 8
-- Redis
+- Redis Stack（向量检索需要 RediSearch 模块，普通 Redis 无法使用）
 - 可用的 DashScope API Key
 - 如需完整文件能力，还需要配置 Cloudflare R2 或其他 S3 兼容对象存储
 
@@ -88,83 +98,29 @@ mio-ai
 
 ### 1. 初始化数据库
 
-创建并导入数据库脚本：
-
 ```bash
 mysql -u root -p < mio_ai.sql
 ```
 
-脚本会创建 `mio_ai` 数据库及项目所需表结构。`src/main/resources/sql/schema-mysql.sql` 用于 Spring AI JDBC Chat Memory 的表结构初始化。
+脚本会创建 `mio_ai` 数据库及全部表结构，并写入种子数据（内置智能体 + 默认管理员 `admin / admin123456`，**首次登录后请立即修改密码**）。脚本只包含结构与种子数据，不含任何真实聊天记录或密钥。
 
-### 2. 启动 Redis
+### 2. 配置后端
 
-后端默认读取 `application.yml` 中的 Redis 配置。当前配置示例使用：
-
-```text
-redis://127.0.0.1:8888
+```bash
+cp src/main/resources/application.yml.example src/main/resources/application.yml
 ```
 
-如果你的 Redis 使用默认端口，请将配置改为：
+编辑 `application.yml`，至少填写 MySQL、Redis、DashScope API Key、R2 配置。`application.yml` 已被 `.gitignore` 排除，不会误提交；所有敏感项均支持用同名大写环境变量覆盖。
 
-```text
-redis://localhost:6379
-```
-
-### 3. 配置后端
-
-编辑 `src/main/resources/application.yml`，至少确认以下配置：
-
-```yaml
-server:
-  port: 8081
-
-spring:
-  datasource:
-    username: your_mysql_user
-    password: your_mysql_password
-    url: jdbc:mysql://localhost:3306/mio_ai?characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-  data:
-    redis:
-      url: redis://localhost:6379
-  ai:
-    dashscope:
-      api-key: your_dashscope_api_key
-
-web:
-  search:
-    api-key: your_searchapi_key
-
-pexels:
-  search:
-    api-key: your_pexels_key
-
-r2:
-  endpoint: your_r2_endpoint
-  access-key-id: your_r2_access_key_id
-  secret-access-key: your_r2_secret_access_key
-  bucket-name: your_bucket_name
-  cdn-domain: your_cdn_domain
-```
-
-注意：请不要把真实密钥提交到公开仓库。建议后续改造为环境变量或本地私有配置文件。
-
-### 4. 启动后端
-
-在项目根目录执行：
+### 3. 启动后端
 
 ```bash
 mvn spring-boot:run
 ```
 
-后端默认运行在：
+后端默认运行在 `http://localhost:8081`。
 
-```text
-http://localhost:8081
-```
-
-### 5. 启动前端
-
-进入前端目录：
+### 4. 启动前端
 
 ```bash
 cd "mio-ai-front"
@@ -172,20 +128,15 @@ pnpm install
 pnpm dev
 ```
 
-前端默认运行在：
+前端默认运行在 `http://localhost:3000`，`vite.config.ts` 已将 `/api` 代理到 `http://127.0.0.1:8081`。
 
-```text
-http://localhost:3000
+## Docker 一键部署
+
+```bash
+cp .env.example .env      # 填入真实密钥
+docker compose up -d --build
+# 首次访问 http://localhost:8090（数据库结构已由 compose 初始化脚本自动导入）
 ```
-
-`mio-ai-front/.env` 默认配置：
-
-```text
-VITE_API_BASE_URL=/api
-VITE_APP_TITLE=MioAI
-```
-
-`vite.config.ts` 中已配置 `/api` 代理到 `http://127.0.0.1:8081`。如果后端没有启用 `/api` context-path，需要在代理中移除或重写 `/api` 前缀，或者打开后端 `server.servlet.context-path=/api`。
 
 ## 常用命令
 
@@ -195,8 +146,11 @@ VITE_APP_TITLE=MioAI
 # 启动后端
 mvn spring-boot:run
 
-# 运行测试
+# 运行纯单元测试（无需 MySQL/Redis/密钥）
 mvn test
+
+# 运行 RAG 检索评测（需要真实环境，详见 doc/rag-eval-experiment.md）
+RAG_EVAL=true RAG_EVAL_KB_ID=1 mvn test -Dtest=RagEvaluationTest
 
 # 打包
 mvn clean package
@@ -224,46 +178,36 @@ pnpm preview
 
 - `/chat`：默认智能体流式对话。
 - `/cs/chat`：CS 游戏助手流式对话。
-- `/mio/chat`：MioManus 超级智能体流式对话。
-- `/custom/chat`：自定义智能体流式对话。
+- `/mio/chat`：MioManus 超级智能体流式对话（含显式任务规划）。
+- `/custom/chat`：自定义智能体流式对话（仅检索绑定知识库）。
 - `/summary`：对话标题生成。
 - `/user/**`：用户注册、登录、资料维护、头像上传。
 - `/agents/**`：智能体增删改查、发布、市场列表、头像管理。
 - `/knowledge-bases/**`：知识库增删改查、公共知识库、分页查询。
-- `/documents/**`：知识库文档上传、处理、查询。
+- `/documents/**`：知识库文档上传、处理、查询、命中测试（按知识库过滤）。
 - `/mcp/**`：MCP 工具配置、校验、管理。
-- `/agent-mcp/**`、`/agent-knowledge/**`：智能体与 MCP、知识库的绑定关系。
+- `/agent-mcp/**`、`/agent-knowledge/**`：智能体与 MCP、知识库的绑定关系（含归属校验）。
 - `/rag-retrieval-logs/**`、`/tool-call-logs/**`、`/agent-usage-logs/**`：检索、工具调用和智能体使用日志。
+- `/usage-stats/**`、`/admin/**`：用户/管理员使用统计与后台管理。
 
-## 部署说明
+## 安全设计要点
 
-前端构建：
+- **资源归属校验**：会话、文档、知识库、智能体、MCP 绑定等资源均校验所有者（公开资源按可见性规则放行），见 `AccessGuardService`。
+- **检索隔离**：向量检索通过 `filterExpression` 限定 `kbId` 范围，自定义智能体无法跨用户检索。
+- **终端命令白名单**：MioManus 的终端工具仅允许白名单内单条命令，拒绝管道/链式/重定向（`TerminalCommandPolicy`，可经 `mio.ai.tools.terminal.allowed-commands` 配置）。
+- **密码安全**：BCrypt 存储；历史 MD5 口令在登录成功后自动升级，`mio_ai.sql` 不含真实用户口令。
+- **密钥管理**：`application.yml`、`.env` 均不入库，配置模板与应用分离；历史泄露的密钥请到对应平台作废重发。
 
-```bash
-cd "mio-ai-front"
-pnpm build
-```
-
-构建产物位于 `mio-ai-front/dist`。仓库中提供了 `deploy/nginx.conf`，用于将前端静态文件交给 Nginx，并把 `/api` 请求代理到后端 `8081` 端口。
-
-后端打包：
-
-```bash
-mvn clean package
-java -jar target/mio-ai-0.0.1-SNAPSHOT.jar
-```
-
-生产环境建议：
+## 生产环境建议
 
 - 使用环境变量或独立配置文件管理数据库、Redis、API Key、R2 密钥。
 - 关闭开发环境 SQL 日志，避免泄露参数和影响性能。
-- 为 SSE 接口和上传接口配置合理的 Nginx 超时时间与文件大小限制。
+- 为 SSE 接口和上传接口配置合理的 Nginx 超时时间与文件大小限制（`mio-ai-front/nginx.conf` 已按 SSE 调整）。
 - 为 Redis、MySQL、对象存储配置访问控制和备份策略。
+- SSE 鉴权当前通过 URL 传 token（EventSource 限制），生产环境建议改为一次性短票据换取连接。
 
 ## 注意事项
 
-- 当前后端配置文件中包含外部服务密钥示例，提交公开仓库前请务必替换或迁移到环境变量。
-- 数据库脚本 `mio_ai.sql` 包含初始化数据，导入前请确认不会覆盖已有同名数据库。
-- 项目依赖 Redis Vector Store，RAG 功能需要 Redis 可用并能初始化向量索引。
+- 项目依赖 Redis Stack 的 RediSearch 模块，普通 Redis 镜像无法初始化向量索引。
 - 文件上传依赖 R2 配置，未配置对象存储时头像、知识库文档等上传能力可能不可用。
 - 前端通过 `token` 请求头传递登录态，联调时请确认浏览器本地存储和后端 Redis 登录态一致。

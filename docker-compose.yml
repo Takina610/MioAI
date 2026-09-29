@@ -1,0 +1,84 @@
+# MioAI 一键部署：MySQL + RedisStack + 后端 + 前端
+#
+# 使用方式：
+#   1. 复制环境变量模板：cp .env.example .env 并填入真实密钥
+#   2. docker compose up -d --build
+#   3. 初始化数据库（首次）：docker compose exec -T mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" mio_ai < mio_ai.sql
+#      （也可用 MYSQL_INITDB 脚本自动执行，见 mysql.volumes 注释）
+#   4. 访问 http://localhost:8090
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mio-ai-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeme-root}
+      MYSQL_DATABASE: mio_ai
+      MYSQL_USER: ${MYSQL_USERNAME:-mioai}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-changeme}
+      TZ: Asia/Shanghai
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # 首次启动自动执行初始化脚本（表结构 + 种子数据）
+      - ./mio_ai.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-changeme-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # 注意：向量检索需要 RediSearch 模块，必须使用 RedisStack，不能用普通 redis 镜像
+  redis:
+    image: redis/redis-stack-server:latest
+    container_name: mio-ai-redis
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mio-ai-backend
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_USERNAME: ${MYSQL_USERNAME:-mioai}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-changeme}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
+      R2_ENDPOINT: ${R2_ENDPOINT}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
+      R2_BUCKET: ${R2_BUCKET:-mio-ai}
+      R2_CDN_DOMAIN: ${R2_CDN_DOMAIN}
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Shanghai"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./mio-ai-front
+      dockerfile: Dockerfile
+    container_name: mio-ai-frontend
+    depends_on:
+      - backend
+    ports:
+      - "8090:80"
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+  redis-data:
