@@ -38,8 +38,8 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ToolCallAgent extends ReActAgent {
 
-    // 可用的工具
-    private final ToolCallback[] availableTools;
+    // 可用的工具（非 final：MioManus 等子类可追加实例专属工具，如规划工具）
+    private ToolCallback[] availableTools;
 
     // 保存工具调用信息的响应结果（要调用那些工具）
     private ChatResponse toolCallChatResponse;

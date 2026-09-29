@@ -20,6 +20,7 @@ import com.mio.ai.superagent.rag.KeywordEnricher;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -68,6 +69,12 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
 
     @Autowired
     private KeywordEnricher keywordEnricher;
+
+    /**
+     * 分块大小（token），可通过 mio.ai.rag.chunk-size 调整，用于 RAG 分块消融实验（400/800/1200）
+     */
+    @Value("${mio.ai.rag.chunk-size:800}")
+    private int chunkSize;
 
     @Autowired
     MarkdownReader markdownReader;
@@ -207,7 +214,9 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
                                         continue;
                                     }
 
-                                    CustomTokenTextSplitter splitter = new CustomTokenTextSplitter();
+                                    CustomTokenTextSplitter splitter = CustomTokenTextSplitter.builder()
+                                            .withChunkSize(chunkSize)
+                                            .build();
                                     List<org.springframework.ai.document.Document> splitDocuments =
                                             splitter.apply(aiDocuments);
 

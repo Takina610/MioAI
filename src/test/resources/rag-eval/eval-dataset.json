@@ -1,0 +1,41 @@
+{
+  "dataset": "mio-ai-rag-eval-v1",
+  "description": "MioAI RAG 检索评测集：基于内置 CS 比赛数据知识库（地图打法/赛事体系/选手战队/道具战术四篇文档）构造。每条用例包含问题、命中判定关键词（出现在正确分块中）、期望来源文档关键词、类别。",
+  "metrics": {
+    "recall@k": "top-k 检索结果中至少一条分块包含任一期望关键词的用例占比",
+    "docHit@k": "top-k 检索结果中至少一条分块来自期望文档（文件名含期望文档关键词）的用例占比",
+    "mrr": "第一条包含期望关键词的结果排名倒数的平均值"
+  },
+  "cases": [
+    { "id": "q01", "category": "tournament", "question": "CS2 的 Major 赛事多久举办一届？", "expectedKeywords": ["每年2届", "春季", "秋季"], "expectedDocKeyword": "赛事体系" },
+    { "id": "q02", "category": "tournament", "question": "Major 比赛一共有多少支队伍参加？怎么晋级的？", "expectedKeywords": ["24支", "RMR"], "expectedDocKeyword": "赛事体系" },
+    { "id": "q03", "category": "tournament", "question": "RMR 赛事的作用是什么？", "expectedKeywords": ["Major预选赛", "种子排名"], "expectedDocKeyword": "赛事体系" },
+    { "id": "q04", "category": "tournament", "question": "2024 年的 BLAST.tv Paris Major 冠军是哪支战队？", "expectedKeywords": ["G2"], "expectedDocKeyword": "赛事体系" },
+    { "id": "q05", "category": "tournament", "question": "ESL Pro League 的小组赛赛制是怎样的？", "expectedKeywords": ["4组", "瑞士轮"], "expectedDocKeyword": "赛事体系" },
+    { "id": "q06", "category": "tournament", "question": "IEM 卡托维兹和科隆是什么级别的赛事？", "expectedKeywords": ["顶级", "卡托维兹", "科隆"], "expectedDocKeyword": "赛事体系" },
+    { "id": "q07", "category": "tournament", "question": "Major 赛事的峰值观赛人数大概有多少？", "expectedKeywords": ["100万"], "expectedDocKeyword": "赛事体系" },
+    { "id": "q08", "category": "tournament", "question": "BLAST Premier 小组赛采用什么赛制？", "expectedKeywords": ["双败淘汰"], "expectedDocKeyword": "赛事体系" },
+    { "id": "q09", "category": "player", "question": "选手 Rating 2.0 多少算顶级水平？", "expectedKeywords": ["1.3", "顶级"], "expectedDocKeyword": "选手" },
+    { "id": "q10", "category": "player", "question": "HLTV 数据里 ADR 指标是什么意思？多少算超顶级？", "expectedKeywords": ["ADR", "每回合平均伤害", "100"], "expectedDocKeyword": "选手" },
+    { "id": "q11", "category": "player", "question": "2025 年 HLTV Top1 选手是谁？", "expectedKeywords": ["m0NESY"], "expectedDocKeyword": "选手" },
+    { "id": "q12", "category": "player", "question": "2023 年 HLTV Top1 选手是谁？他当时效力哪支战队？", "expectedKeywords": ["s1mple", "NaVi"], "expectedDocKeyword": "选手" },
+    { "id": "q13", "category": "player", "question": "ZywOo 的打法特点是什么？", "expectedKeywords": ["全能型", "步枪", "AWP"], "expectedDocKeyword": "选手" },
+    { "id": "q14", "category": "player", "question": "残局胜率多少才算顶级选手？", "expectedKeywords": ["30%", "残局"], "expectedDocKeyword": "选手" },
+    { "id": "q15", "category": "player", "question": "G2 战队的现役核心选手有哪些？", "expectedKeywords": ["m0NESY", "Niko", "huNter-"], "expectedDocKeyword": "选手" },
+    { "id": "q16", "category": "player", "question": "HLTV 战队排名中 Vitality 的胜率是多少？战术风格是什么？", "expectedKeywords": ["78%", "慢控"], "expectedDocKeyword": "选手" },
+    { "id": "q17", "category": "player", "question": "FaZe 战队的核心地图有哪些？", "expectedKeywords": ["Inferno", "Vertigo"], "expectedDocKeyword": "选手" },
+    { "id": "q18", "category": "player", "question": "战队胜率多少算超顶级水平？", "expectedKeywords": ["80%", "超顶级"], "expectedDocKeyword": "选手" },
+    { "id": "q19", "category": "grenade", "question": "烟雾弹在职业比赛中的核心作用有哪些？", "expectedKeywords": ["封锁视野", "阻断回防"], "expectedDocKeyword": "道具" },
+    { "id": "q20", "category": "grenade", "question": "Inferno 香蕉道 T 方的道具套餐是什么组合？", "expectedKeywords": ["1烟", "2闪", "燃烧弹"], "expectedDocKeyword": "道具" },
+    { "id": "q21", "category": "grenade", "question": "燃烧弹在职业比赛中怎么用？", "expectedKeywords": ["封锁走位", "清理点位", "拖延时间"], "expectedDocKeyword": "道具" },
+    { "id": "q22", "category": "grenade", "question": "闪光弹的反清闪是什么意思？", "expectedKeywords": ["反清", "致盲", "夺回控制权"], "expectedDocKeyword": "道具" },
+    { "id": "q23", "category": "grenade", "question": "Mirage A 点快攻的道具组合是什么？", "expectedKeywords": ["A1警家", "A大坑", "1烟"], "expectedDocKeyword": "道具" },
+    { "id": "q24", "category": "grenade", "question": "道具执行的核心原则有哪些？", "expectedKeywords": ["同步性", "精准度", "经济性"], "expectedDocKeyword": "道具" },
+    { "id": "q25", "category": "map", "question": "Inferno 香蕉道 T 方怎么控权？", "expectedKeywords": ["2人香蕉道", "烟雾", "闪光"], "expectedDocKeyword": "地图" },
+    { "id": "q26", "category": "map", "question": "Mirage A 点快攻怎么打？", "expectedKeywords": ["3人A1", "警家烟", "rush"], "expectedDocKeyword": "地图" },
+    { "id": "q27", "category": "map", "question": "Nuke 外场 CT 方怎么防守？", "expectedKeywords": ["屋顶", "铁门", "双架"], "expectedDocKeyword": "地图" },
+    { "id": "q28", "category": "map", "question": "Overpass B 点慢控怎么打？", "expectedKeywords": ["厕所", "B大", "逐步推进"], "expectedDocKeyword": "地图" },
+    { "id": "q29", "category": "map", "question": "地图打法中为什么要优先控权？", "expectedKeywords": ["控权优先", "关键通道", "主动权"], "expectedDocKeyword": "地图" },
+    { "id": "q30", "category": "map", "question": "Vertigo 的上下联动战术怎么执行？", "expectedKeywords": ["A点", "B点", "夹击"], "expectedDocKeyword": "地图" }
+  ]
+}
