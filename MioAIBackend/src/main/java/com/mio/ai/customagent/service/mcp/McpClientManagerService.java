@@ -30,4 +30,10 @@ public interface McpClientManagerService {
      * 关闭所有MCP客户端
      */
     void closeAllClients();
+
+    /**
+     * 失效并关闭指定MCP工具的缓存客户端（更新配置/删除工具后调用，避免继续使用旧配置的连接）
+     * @param mcpId MCP工具ID
+     */
+    void evictClient(Long mcpId);
 }

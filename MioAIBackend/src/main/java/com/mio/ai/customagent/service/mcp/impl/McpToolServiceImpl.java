@@ -1,6 +1,7 @@
 package com.mio.ai.customagent.service.mcp.impl;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.bean.copier.CopyOptions;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.StringUtils;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -16,7 +17,9 @@ import com.mio.ai.customagent.model.entity.AgentMcp;
 import com.mio.ai.customagent.model.entity.McpTool;
 import com.mio.ai.customagent.model.enums.McpToolStatusEnum;
 import com.mio.ai.customagent.model.vo.mcp.McpToolVO;
+import com.mio.ai.customagent.service.mcp.McpClientManagerService;
 import com.mio.ai.customagent.service.mcp.McpToolService;
+import com.mio.ai.customagent.service.mcp.impl.McpClientFactory;
 import com.mio.ai.user.mapper.UserMapper;
 import com.mio.ai.user.model.entity.User;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,10 +42,21 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
     @Autowired
     AgentMcpMapper agentMcpMapper;
 
+    @Autowired
+    McpClientFactory mcpClientFactory;
+
+    @Autowired
+    McpClientManagerService mcpClientManagerService;
+
     @Override
     public Long addMcpTool(McpToolAddRequest request, Long userId) {
         if (StringUtils.isBlank(request.getName())) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "工具名称不能为空");
+        }
+        // 服务端兜底校验配置结构：前端绕过校验直接调添加接口时，避免存入运行时必然失败的配置
+        String configError = mcpClientFactory.validateStructure(request.getConfig());
+        if (configError != null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, configError);
         }
         McpTool mcpTool = new McpTool();
         BeanUtil.copyProperties(request, mcpTool);
@@ -64,9 +78,19 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
         if (!mcpTool.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限修改该工具");
         }
-        BeanUtil.copyProperties(request, mcpTool);
+        if (StringUtils.isNotBlank(request.getConfig())) {
+            String configError = mcpClientFactory.validateStructure(request.getConfig());
+            if (configError != null) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, configError);
+            }
+        }
+        // 忽略 null 字段：部分更新时不能把未传字段清空（如只改名称会把 config 置空）
+        BeanUtil.copyProperties(request, mcpTool, CopyOptions.create().setIgnoreNullValue(true));
         mcpTool.setUpdateTime(new Date());
-        return this.updateById(mcpTool);
+        boolean updated = this.updateById(mcpTool);
+        // 配置/信息变更后失效缓存客户端，下次对话按新配置重建
+        mcpClientManagerService.evictClient(mcpTool.getId());
+        return updated;
     }
 
     @Override
@@ -81,8 +105,9 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
         if (!mcpTool.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限删除该工具");
         }
-        // 删除智能体与该 MCP 的关联记录
+        // 删除智能体与该 MCP 的关联记录，并关闭其缓存客户端
         agentMcpMapper.delete(new LambdaQueryWrapper<AgentMcp>().eq(AgentMcp::getMcpId, id));
+        mcpClientManagerService.evictClient(id);
         return this.removeById(id);
     }
 

@@ -1,14 +1,15 @@
 package com.mio.ai.superagent.agent.config;
 
 import cn.hutool.core.util.StrUtil;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mio.ai.superagent.model.enums.AgentState;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -42,8 +43,11 @@ public abstract class BaseAgent {
     private int currentStep = 0;
     private int maxSteps = 10;
 
-    // LLM 大模型
-    private ChatClient chatClient;
+    // LLM 大模型（2.0 手动工具循环必须直连 ChatModel：ChatClient 会自动挂载 ToolCallAdvisor 执行工具）
+    private ChatModel chatModel;
+
+    // 会话记忆（跨请求持久化对话历史；为空时仅使用进程内 messageList）
+    private ChatMemory chatMemory;
 
     // Memory 记忆（需要自主维护会话上下文）
     private List<Message> messageList = new ArrayList<>();
@@ -52,7 +56,7 @@ public abstract class BaseAgent {
     private String chatId;
 
     // JSON 序列化工具
-    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final JsonMapper jsonMapper = JsonMapper.builder().build();
 
     /**
      * 运行代理（流式输出）
@@ -84,7 +88,9 @@ public abstract class BaseAgent {
             // 2、执行，更改状态
             this.state = AgentState.RUNNING;
             // 记录消息上下文
-            messageList.add(new UserMessage(userPrompt));
+            UserMessage userMessage = new UserMessage(userPrompt);
+            messageList.add(userMessage);
+            persistToMemory(userMessage);
             try {
                 // 执行循环
                 for (int i = 0; i < maxSteps && state != AgentState.FINISHED; i++) {
@@ -162,7 +168,21 @@ public abstract class BaseAgent {
         event.put("timestamp", System.currentTimeMillis());
         sseEmitter.send(SseEmitter.event()
                 .name("message")
-                .data(objectMapper.writeValueAsString(event)));
+                .data(jsonMapper.writeValueAsString(event)));
+    }
+
+    /**
+     * 把单条消息持久化到会话记忆（ChatMemoryAdvisor 在 2.0 手动循环里不再介入，改由代理自主保存）
+     */
+    protected void persistToMemory(Message message) {
+        if (chatMemory == null || chatId == null || message == null) {
+            return;
+        }
+        try {
+            chatMemory.add(chatId, message);
+        } catch (Exception e) {
+            log.warn("会话记忆写入失败: {}", e.getMessage());
+        }
     }
 
     /**
@@ -212,7 +232,9 @@ public abstract class BaseAgent {
         // 2、执行，更改状态
         this.state = AgentState.RUNNING;
         // 记录消息上下文
-        messageList.add(new UserMessage(userPrompt));
+        UserMessage userMessage = new UserMessage(userPrompt);
+        messageList.add(userMessage);
+        persistToMemory(userMessage);
         // 保存结果列表
         List<String> results = new ArrayList<>();
         try {

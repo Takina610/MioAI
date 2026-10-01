@@ -1,13 +1,10 @@
 package com.mio.ai.customagent.service.knowledge.impl;
 
-import com.alibaba.cloud.ai.dashscope.rerank.DashScopeRerankOptions;
-import com.alibaba.cloud.ai.model.RerankModel;
-import com.alibaba.cloud.ai.model.RerankRequest;
-import com.alibaba.cloud.ai.model.RerankResponse;
 import com.baomidou.mybatisplus.core.toolkit.StringUtils;
 import com.mio.ai.customagent.model.entity.AgentKnowledge;
 import com.mio.ai.customagent.model.entity.KnowledgeBase;
 import com.mio.ai.customagent.rag.KnowledgeRetrievalResult;
+import com.mio.ai.customagent.rag.RerankClient;
 import com.mio.ai.customagent.rag.RetrievalConfig;
 import com.mio.ai.customagent.service.agent.AgentKnowledgeService;
 import com.mio.ai.customagent.service.knowledge.KnowledgeBaseService;
@@ -60,7 +57,7 @@ public class KnowledgeRetrievalServiceImpl implements KnowledgeRetrievalService 
     private KnowledgeBaseService knowledgeBaseService;
 
     @Autowired
-    private ObjectProvider<RerankModel> rerankModelProvider;
+    private ObjectProvider<RerankClient> rerankClientProvider;
 
     /**
      * 重排总开关（全局），绑定上的 enableRerank 是细粒度开关，两者同时开启才生效
@@ -169,57 +166,34 @@ public class KnowledgeRetrievalServiceImpl implements KnowledgeRetrievalService 
     }
 
     /**
-     * 调用 DashScope 重排模型对候选分块重排序；失败时降级为向量检索原始顺序
+     * 调用重排模型对候选分块重排序（按原始下标精确回填）；失败时降级为向量检索原始顺序
      */
     private List<KnowledgeRetrievalResult> rerank(String query,
                                                   List<KnowledgeRetrievalResult> candidates,
                                                   int topN) {
-        RerankModel rerankModelBean = rerankModelProvider.getIfAvailable();
-        if (rerankModelBean == null || candidates.isEmpty()) {
+        RerankClient rerankClient = rerankClientProvider.getIfAvailable();
+        if (rerankClient == null || candidates.isEmpty()) {
             return candidates;
         }
         try {
             List<KnowledgeRetrievalResult> inputs = candidates.subList(0,
                     Math.min(candidates.size(), MAX_RERANK_CANDIDATES));
-            List<Document> documents = inputs.stream()
-                    .map(r -> new Document(r.getChunkId(), r.getText(), Map.of()))
+            List<String> documents = inputs.stream()
+                    .map(r -> r.getText() == null ? "" : r.getText())
                     .toList();
-            RerankRequest request = new RerankRequest(query, documents,
-                    DashScopeRerankOptions.builder()
-                            .withModel(rerankModel)
-                            .withTopN(Math.min(topN, inputs.size()))
-                            .withReturnDocuments(true)
-                            .build());
-            RerankResponse response = rerankModelBean.call(request);
-            // DashScope 返回的结果不一定保留原文档 ID，按 ID 或正文双重匹配回原结果
-            Map<String, KnowledgeRetrievalResult> byId = new HashMap<>();
-            Map<String, KnowledgeRetrievalResult> byText = new HashMap<>();
-            for (KnowledgeRetrievalResult r : inputs) {
-                if (r.getChunkId() != null) {
-                    byId.put(r.getChunkId(), r);
+            List<RerankClient.RerankHit> hits = rerankClient.rerank(rerankModel, query, documents,
+                    Math.min(Math.max(topN, 1), inputs.size()));
+            List<KnowledgeRetrievalResult> reranked = new ArrayList<>();
+            for (RerankClient.RerankHit hit : hits) {
+                if (hit.index() < 0 || hit.index() >= inputs.size()) {
+                    continue;
                 }
-                if (r.getText() != null) {
-                    byText.put(r.getText().trim(), r);
+                KnowledgeRetrievalResult origin = inputs.get(hit.index());
+                if (hit.score() != null) {
+                    origin.setScore(hit.score());
                 }
+                reranked.add(origin);
             }
-            List<KnowledgeRetrievalResult> reranked = response.getResults().stream()
-                    .map(dws -> {
-                        Document doc = dws.getOutput();
-                        if (doc == null) {
-                            return null;
-                        }
-                        KnowledgeRetrievalResult origin = doc.getId() != null
-                                ? byId.get(doc.getId()) : null;
-                        if (origin == null && doc.getText() != null) {
-                            origin = byText.get(doc.getText().trim());
-                        }
-                        if (origin != null && dws.getScore() != null) {
-                            origin.setScore(dws.getScore());
-                        }
-                        return origin;
-                    })
-                    .filter(Objects::nonNull)
-                    .toList();
             log.info("Rerank 完成：候选 {} 条 → 返回 {} 条", inputs.size(), reranked.size());
             return reranked;
         } catch (Exception e) {

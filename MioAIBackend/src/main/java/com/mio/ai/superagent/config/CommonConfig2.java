@@ -1,12 +1,12 @@
 package com.mio.ai.superagent.config;
 
-import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.mio.ai.superagent.advisor.ChineseSafeGuardAdvisor;
 import com.mio.ai.superagent.advisor.MyLoggerAdvisor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -21,7 +21,7 @@ import java.util.List;
 @Configuration(enforceUniqueMethods = false)
 public class CommonConfig2 {
     @Bean(name = "summaryChatClient")
-    public ChatClient dashScopeChatClient(DashScopeChatModel chatModel) {
+    public ChatClient chatClient(OpenAiChatModel chatModel) {
         return ChatClient.builder(chatModel)
                 .defaultAdvisors(
                         new MyLoggerAdvisor()
@@ -30,8 +30,8 @@ public class CommonConfig2 {
     }
 
     @Bean(name = "defaultChatClient")
-    public ChatClient dashScopeChatClient(DashScopeChatModel chatModel,
-                                          ChatMemory jdbcChatMemory) {
+    public ChatClient chatClient(OpenAiChatModel chatModel,
+                                 ChatMemory jdbcChatMemory) {
         return ChatClient.builder(chatModel)
                 .defaultAdvisors(
                         new SimpleLoggerAdvisor(),

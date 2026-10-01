@@ -58,6 +58,7 @@ export interface McpValidateResult {
   success: boolean
   errorMessage?: string
   errorType?: 'CONFIG_INVALID' | 'CONNECTION_FAILED' | 'AUTH_FAILED' | 'TIMEOUT' | 'UNKNOWN'
+  warnings?: string[]
   tools?: McpToolInfo[]
   serverInfo?: McpServerInfo
 }

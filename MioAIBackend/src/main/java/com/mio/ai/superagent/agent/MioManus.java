@@ -5,7 +5,8 @@ import com.mio.ai.customagent.service.log.ToolCallLogService;
 import com.mio.ai.superagent.agent.config.ToolCallAgent;
 import com.mio.ai.superagent.plan.AgentPlan;
 import com.mio.ai.superagent.plan.PlanningTool;
-import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.ai.tool.ToolCallback;
 
@@ -26,32 +27,35 @@ public class MioManus extends ToolCallAgent {
     private final AgentPlan plan = new AgentPlan();
 
     public MioManus(ToolCallback[] commonTools,
-                    ChatClient mioManusChatClient) {
+                    ChatModel mioManusChatModel,
+                    ChatMemory chatMemory) {
         super(commonTools);
-        init(mioManusChatClient, commonTools);
+        init(mioManusChatModel, chatMemory, commonTools);
     }
 
     public MioManus(ToolCallback[] commonTools,
-                    ChatClient mioManusChatClient,
+                    ChatModel mioManusChatModel,
+                    ChatMemory chatMemory,
                     AgentUsageLogService agentUsageLogService,
                     Long agentId,
                     Long userId,
                     Long conversationId) {
-        this(commonTools, mioManusChatClient, agentUsageLogService, null, agentId, userId, conversationId);
+        this(commonTools, mioManusChatModel, chatMemory, agentUsageLogService, null, agentId, userId, conversationId);
     }
 
     public MioManus(ToolCallback[] commonTools,
-                    ChatClient mioManusChatClient,
+                    ChatModel mioManusChatModel,
+                    ChatMemory chatMemory,
                     AgentUsageLogService agentUsageLogService,
                     ToolCallLogService toolCallLogService,
                     Long agentId,
                     Long userId,
                     Long conversationId) {
-        super(commonTools, agentUsageLogService, toolCallLogService, agentId, userId, conversationId);
-        init(mioManusChatClient, commonTools);
+        super(commonTools, agentUsageLogService, toolCallLogService, chatMemory, agentId, userId, conversationId);
+        init(mioManusChatModel, chatMemory, commonTools);
     }
 
-    private void init(ChatClient mioManusChatClient, ToolCallback[] commonTools) {
+    private void init(ChatModel mioManusChatModel, ChatMemory chatMemory, ToolCallback[] commonTools) {
         this.setName("mioManus");
         String SYSTEM_PROMPT = """
                 你是 MioManus，一个全能型 AI 助手，致力于解决用户提出的任何任务。
@@ -82,8 +86,9 @@ public class MioManus extends ToolCallAgent {
                 """;
         this.setNextStepPrompt(NEXT_STEP_PROMPT);
         this.setMaxSteps(20);
-        // 初始化 AI 对话客户端
-        this.setChatClient(mioManusChatClient);
+        // 初始化 AI 对话模型与会话记忆
+        this.setChatModel(mioManusChatModel);
+        this.setChatMemory(chatMemory);
         // 注册本实例专属的规划工具
         this.setAvailableTools(concatTools(commonTools, createPlanningToolCallback()));
     }

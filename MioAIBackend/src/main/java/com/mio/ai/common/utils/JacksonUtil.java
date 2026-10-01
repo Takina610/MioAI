@@ -1,9 +1,9 @@
 package com.mio.ai.common.utils;
 
-import com.fasterxml.jackson.core.JacksonException;
-import com.fasterxml.jackson.databind.JavaType;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.json.JsonParseException;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JavaType;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -11,7 +11,7 @@ import java.util.concurrent.Callable;
 /**
  * @author: Takina
  * @date: 2026/3/28 15:40
- * @description: 序列化与反序列化工具
+ * @description: 序列化与反序列化工具（Jackson 3 / tools.jackson）
  */
 
 public class JacksonUtil {
@@ -20,14 +20,14 @@ public class JacksonUtil {
     }
 
     // ! 单例模式
-    private static final ObjectMapper OBJECT_MAPPER;
+    private static final JsonMapper JSON_MAPPER;
 
     static {
-        OBJECT_MAPPER = new ObjectMapper();
+        JSON_MAPPER = JsonMapper.builder().build();
     }
 
-    private static ObjectMapper getObjectMapper() {
-        return OBJECT_MAPPER;
+    private static JsonMapper getObjectMapper() {
+        return JSON_MAPPER;
     }
 
     /**
@@ -69,4 +69,3 @@ public class JacksonUtil {
         }
     }
 }
-

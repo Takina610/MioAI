@@ -83,6 +83,9 @@
                 <span class="info-label">版本：</span>
                 <span class="info-value">{{ validateResult.serverInfo.version || '-' }}</span>
               </div>
+              <div class="warning-list" v-if="validateResult.warnings?.length">
+                <div class="warning-item" v-for="w in validateResult.warnings" :key="w">{{ w }}</div>
+              </div>
               <div class="tools-list" v-if="validateResult.tools && validateResult.tools.length > 0">
                 <div class="tool-items">
                   <div class="tool-item" v-for="tool in validateResult.tools" :key="tool.name">
@@ -468,6 +471,20 @@ function resetForm(): void {
   p {
     margin-top: 12px;
     color: #666;
+  }
+}
+
+.warning-list {
+  padding: 8px 12px;
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  border-radius: 6px;
+  margin-bottom: 12px;
+
+  .warning-item {
+    color: #ad6800;
+    font-size: 12px;
+    line-height: 20px;
   }
 }
 

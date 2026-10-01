@@ -1,7 +1,6 @@
 package com.mio.ai.superagent.config;
 
-import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
-import com.alibaba.cloud.ai.model.RerankModel;
+import com.mio.ai.customagent.rag.RerankClient;
 import com.mio.ai.superagent.advisor.ChineseSafeGuardAdvisor;
 import com.mio.ai.superagent.advisor.AdvisorFactory;
 import com.mio.ai.superagent.memory.SummarizingChatMemory;
@@ -12,6 +11,7 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -38,6 +38,12 @@ public class CommonConfig1 {
     @Value("${mio.ai.memory.keep-recent-messages:20}")
     private int memoryKeepRecentMessages;
 
+    @Value("${mio.ai.rag.rerank-model:gte-rerank}")
+    private String rerankModel;
+
+    @Value("${mio.ai.rag.rerank-top-n:5}")
+    private int rerankTopN;
+
     /**
      * 长会话记忆：开启摘要后，超过阈值的历史会被压缩成摘要注入上下文（见 SummarizingChatMemory）；
      * 关闭时行为等同原来的固定 300 条窗口
@@ -57,10 +63,10 @@ public class CommonConfig1 {
     }
 
     @Bean(name = "csAppChatClient")
-    public ChatClient dashScopeChatClient(DashScopeChatModel chatModel,
+    public ChatClient chatClient(OpenAiChatModel chatModel,
                                           ChatMemory jdbcChatMemory,
                                           VectorStore vectorStore,
-                                          RerankModel rerankModel,
+                                          RerankClient rerankClient,
                                           @Value("${mio.ai.rag.rerank-enabled:false}") boolean rerankEnabled,
                                           ToolCallbackProvider toolCallbackProvider
     ) {
@@ -96,15 +102,15 @@ public class CommonConfig1 {
                         // 重排开关：开启后由 RetrievalRerankAdvisor 检索 + gte-rerank 重排（消融实验对比项）；
                         // 关闭时使用普通 QuestionAnswerAdvisor 向量检索
                         rerankEnabled
-                                ? AdvisorFactory.createRerankAdvisor(vectorStore, rerankModel)
+                                ? AdvisorFactory.createRerankAdvisor(vectorStore, rerankClient, rerankModel, rerankTopN)
                                 : AdvisorFactory.createQuestionAnswerAdvisor(vectorStore, promptTemplate)
                 )
-                .defaultToolCallbacks(toolCallbackProvider);
+                .defaultToolCallbacks(toolCallbackProvider.getToolCallbacks());
         return builder.build();
     }
 
     @Bean(name = "mioManusChatClient")
-    public ChatClient dashScopeChatClient(DashScopeChatModel chatModel,
+    public ChatClient chatClient(OpenAiChatModel chatModel,
                                           ChatMemory jdbcChatMemory,
                                           ToolCallbackProvider toolCallbackProvider) {
         return ChatClient.builder(chatModel)
@@ -113,7 +119,7 @@ public class CommonConfig1 {
                         new ChineseSafeGuardAdvisor(List.of("公务员", "政府", "政治", "暴力")),
                         MessageChatMemoryAdvisor.builder(jdbcChatMemory).build()
                 )
-                .defaultToolCallbacks(toolCallbackProvider)
+                .defaultToolCallbacks(toolCallbackProvider.getToolCallbacks())
                 .build();
     }
 }

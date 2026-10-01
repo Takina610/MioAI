@@ -10,9 +10,11 @@ import jakarta.annotation.Resource;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -30,8 +32,12 @@ public class MioManusController {
     @Resource
     private ToolCallback[] commonTools;
 
-    @Resource
-    private ChatClient mioManusChatClient;
+    @Autowired
+    private ChatModel mioManusChatModel;
+
+    @Autowired
+    @Qualifier("jdbcChatMemory")
+    private ChatMemory jdbcChatMemory;
 
     @Autowired
     ChatHistoryRepository chatHistoryRepository;
@@ -63,7 +69,8 @@ public class MioManusController {
 
         MioManus mioManus = new MioManus(
                 commonTools,
-                mioManusChatClient,
+                mioManusChatModel,
+                jdbcChatMemory,
                 agentUsageLogService,
                 toolCallLogService,
                 chatVO.getAgentId(),

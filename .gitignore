@@ -58,3 +58,4 @@ build/
 /一键启动脚本/
 /logs/
 /RunKit/
+.deploy/

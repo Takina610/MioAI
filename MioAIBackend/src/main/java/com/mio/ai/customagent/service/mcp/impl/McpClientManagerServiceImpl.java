@@ -1,24 +1,13 @@
 package com.mio.ai.customagent.service.mcp.impl;
 
-import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.mio.ai.common.exception.BusinessException;
-import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.customagent.mapper.agent.AgentMcpMapper;
 import com.mio.ai.customagent.mapper.mcp.McpToolMapper;
 import com.mio.ai.customagent.model.entity.AgentMcp;
 import com.mio.ai.customagent.model.entity.McpTool;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mio.ai.customagent.service.mcp.McpClientManagerService;
-import io.modelcontextprotocol.client.McpClient;
-import io.modelcontextprotocol.client.McpSyncClient;
-import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
-import io.modelcontextprotocol.client.transport.ServerParameters;
-import io.modelcontextprotocol.client.transport.StdioClientTransport;
-import io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapper;
-import io.modelcontextprotocol.spec.McpSchema;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.mcp.McpToolUtils;
 import org.springframework.ai.tool.ToolCallback;
@@ -40,15 +29,18 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class McpClientManagerServiceImpl implements McpClientManagerService {
 
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
+
     @Autowired
     private AgentMcpMapper agentMcpMapper;
 
     @Autowired
     private McpToolMapper mcpToolMapper;
 
-    private final JacksonMcpJsonMapper mapper = new JacksonMcpJsonMapper(new ObjectMapper());
-    
-    private final ConcurrentHashMap<Long, McpSyncClient> clientCache = new ConcurrentHashMap<>();
+    @Autowired
+    private McpClientFactory mcpClientFactory;
+
+    private final ConcurrentHashMap<Long, McpClientFactory.McpClientHandle> clientCache = new ConcurrentHashMap<>();
 
     @Override
     public List<McpTool> getAgentMcpTools(Long agentId) {
@@ -136,27 +128,25 @@ public class McpClientManagerServiceImpl implements McpClientManagerService {
         for (McpTool mcpTool : mcpTools) {
             try {
                 // 复用缓存的客户端，避免每次对话都新建连接（旧实现每次 put 覆盖且不 close，造成进程/连接泄漏）
-                McpSyncClient client = clientCache.get(mcpTool.getId());
-                if (client == null) {
-                    McpSyncClient created = createMcpClient(mcpTool);
-                    if (created == null) {
-                        log.warn("MCP客户端创建失败: {} - {}", mcpTool.getName(), mcpTool.getId());
+                McpClientFactory.McpClientHandle handle = clientCache.get(mcpTool.getId());
+                if (handle == null) {
+                    handle = createHandle(mcpTool);
+                    if (handle == null) {
                         continue;
                     }
-                    client = created;
-                    clientCache.put(mcpTool.getId(), client);
+                    clientCache.put(mcpTool.getId(), handle);
                 }
-                List<ToolCallback> callbacks = McpToolUtils.getToolCallbacksFromSyncClients(List.of(client));
+                List<ToolCallback> callbacks = McpToolUtils.getToolCallbacksFromSyncClients(List.of(handle.client()));
                 allCallbacks.addAll(callbacks);
                 log.info("成功初始化MCP工具: {} - {}", mcpTool.getName(), mcpTool.getId());
             } catch (Exception e) {
                 // 缓存的客户端可能已失效（服务端重启等）：关闭并重建一次
                 closeQuietly(clientCache.remove(mcpTool.getId()));
                 try {
-                    McpSyncClient recreated = createMcpClient(mcpTool);
+                    McpClientFactory.McpClientHandle recreated = createHandle(mcpTool);
                     if (recreated != null) {
                         clientCache.put(mcpTool.getId(), recreated);
-                        List<ToolCallback> callbacks = McpToolUtils.getToolCallbacksFromSyncClients(List.of(recreated));
+                        List<ToolCallback> callbacks = McpToolUtils.getToolCallbacksFromSyncClients(List.of(recreated.client()));
                         allCallbacks.addAll(callbacks);
                         log.info("重建MCP客户端成功: {} - {}", mcpTool.getName(), mcpTool.getId());
                         continue;
@@ -171,107 +161,60 @@ public class McpClientManagerServiceImpl implements McpClientManagerService {
         return allCallbacks.toArray(new ToolCallback[0]);
     }
 
-    private void closeQuietly(McpSyncClient client) {
-        if (client == null) {
+    @Override
+    public void evictClient(Long mcpId) {
+        if (mcpId == null) {
+            return;
+        }
+        closeQuietly(clientCache.remove(mcpId));
+    }
+
+    private void closeQuietly(McpClientFactory.McpClientHandle handle) {
+        if (handle == null) {
             return;
         }
         try {
-            client.close();
+            handle.close();
         } catch (Exception e) {
             log.warn("关闭MCP客户端失败: {}", e.getMessage());
         }
     }
 
-    private McpSyncClient createMcpClient(McpTool mcpTool) {
-        if (mcpTool.getConfig() == null || mcpTool.getConfig().isEmpty()) {
+    /**
+     * 解析工具配置并创建客户端；配置结构问题返回 null（记 warn），连接失败抛异常（由调用方决定重试）
+     */
+    private McpClientFactory.McpClientHandle createHandle(McpTool mcpTool) {
+        String config = mcpTool.getConfig();
+        if (config == null || config.isBlank()) {
             log.warn("MCP工具配置为空: {}", mcpTool.getName());
             return null;
         }
 
-        JSONObject configJson = JSONUtil.parseObj(mcpTool.getConfig());
+        JSONObject configJson;
+        try {
+            configJson = JSONUtil.parseObj(config);
+        } catch (Exception e) {
+            log.warn("MCP工具配置JSON无效: {} - {}", mcpTool.getName(), e.getMessage());
+            return null;
+        }
         JSONObject mcpServers = configJson.getJSONObject("mcpServers");
-        
         if (mcpServers == null || mcpServers.isEmpty()) {
             log.warn("MCP配置中未找到mcpServers节点: {}", mcpTool.getName());
             return null;
         }
-
         String serverName = mcpServers.keySet().iterator().next();
         JSONObject serverConfig = mcpServers.getJSONObject(serverName);
-
         if (serverConfig == null) {
             log.warn("MCP服务器配置为空: {}", mcpTool.getName());
             return null;
         }
 
-        String url = serverConfig.getStr("url");
-        String command = serverConfig.getStr("command");
-
-        try {
-            if (url != null && !url.isEmpty()) {
-                return createSseClient(url, mcpTool.getId());
-            } else if (command != null && !command.isEmpty()) {
-                return createStdioClient(serverConfig, mcpTool.getId());
-            } else {
-                log.warn("MCP配置必须包含url(SSE模式)或command(STDIO模式): {}", mcpTool.getName());
-                return null;
-            }
-        } catch (Exception e) {
-            log.error("创建MCP客户端失败: {}", mcpTool.getName(), e);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "系统错误");
-        }
-    }
-
-    private McpSyncClient createSseClient(String url, Long mcpId) {
-        HttpClientSseClientTransport transport = HttpClientSseClientTransport.builder(url).build();
-
-        McpSyncClient client = McpClient.sync(transport)
-                .clientInfo(new McpSchema.Implementation("mio-ai-agent-" + mcpId, "1.0.0"))
-                .capabilities(McpSchema.ClientCapabilities.builder()
-                        .roots(true)
-                        .sampling()
-                        .build())
-                .requestTimeout(Duration.ofSeconds(30))
-                .build();
-
-        client.initialize();
-        log.info("SSE MCP客户端初始化成功: {}", url);
-        return client;
-    }
-
-    private McpSyncClient createStdioClient(JSONObject serverConfig, Long mcpId) {
-        String command = serverConfig.getStr("command");
-        JSONArray argsArray = serverConfig.getJSONArray("args");
-        JSONObject envObj = serverConfig.getJSONObject("env");
-
-        List<String> args = argsArray != null ? argsArray.toList(String.class) : List.of();
-        Map<String, String> env = envObj != null ? envObj.toBean(Map.class) : Map.of();
-
-        StdioClientTransport transport = new StdioClientTransport(
-                ServerParameters.builder(command)
-                        .args(args)
-                        .env(env)
-                        .build(),
-                mapper
-        );
-
-        McpSyncClient client = McpClient.sync(transport)
-                .clientInfo(new McpSchema.Implementation("mio-ai-agent-" + mcpId, "1.0.0"))
-                .capabilities(McpSchema.ClientCapabilities.builder()
-                        .roots(true)
-                        .sampling()
-                        .build())
-                .requestTimeout(Duration.ofSeconds(60))
-                .build();
-
-        client.initialize();
-        log.info("STDIO MCP客户端初始化成功: {}", command);
-        return client;
+        return mcpClientFactory.createSyncClient("mio-ai-agent-" + mcpTool.getId(), serverConfig, REQUEST_TIMEOUT);
     }
 
     @Override
     public void closeAllClients() {
-        for (Map.Entry<Long, McpSyncClient> entry : clientCache.entrySet()) {
+        for (Map.Entry<Long, McpClientFactory.McpClientHandle> entry : clientCache.entrySet()) {
             try {
                 entry.getValue().close();
                 log.info("关闭MCP客户端: {}", entry.getKey());

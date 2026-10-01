@@ -2,7 +2,6 @@ package com.mio.ai.superagent.agent.config;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
-import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import com.mio.ai.common.utils.JacksonUtil;
 import com.mio.ai.customagent.model.entity.AgentUsageLog;
 import com.mio.ai.customagent.model.entity.ToolCallLog;
@@ -17,8 +16,8 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.ai.tool.ToolCallback;
@@ -47,9 +46,6 @@ public class ToolCallAgent extends ReActAgent {
     // 工具调用管理者
     private final ToolCallingManager toolCallingManager;
 
-    // 禁用 Spring AI 内置的工具调用机制，自己维护选项和消息上下文
-    private final ChatOptions chatOptions;
-
     // 使用日志服务
     private AgentUsageLogService agentUsageLogService;
     private ToolCallLogService toolCallLogService;
@@ -60,12 +56,13 @@ public class ToolCallAgent extends ReActAgent {
     private Long conversationId;
 
     public ToolCallAgent(ToolCallback[] availableTools) {
-        this(availableTools, null, null, null, null, null);
+        this(availableTools, null, null, null, null, null, null);
     }
 
     public ToolCallAgent(ToolCallback[] availableTools,
                          AgentUsageLogService agentUsageLogService,
                          ToolCallLogService toolCallLogService,
+                         ChatMemory chatMemory,
                          Long agentId,
                          Long userId,
                          Long conversationId) {
@@ -73,15 +70,11 @@ public class ToolCallAgent extends ReActAgent {
         this.availableTools = availableTools;
         this.agentUsageLogService = agentUsageLogService;
         this.toolCallLogService = toolCallLogService;
+        setChatMemory(chatMemory);
         this.agentId = agentId;
         this.userId = userId;
         this.conversationId = conversationId;
         this.toolCallingManager = ToolCallingManager.builder().build();
-        // 禁用 Spring AI 内置的工具调用机制，自己维护选项和消息上下文
-        this.chatOptions = DashScopeChatOptions.builder()
-//                .withInternalToolExecutionEnabled(false)
-                .internalToolExecutionEnabled(false)
-                .build();
     }
 
     /**
@@ -107,9 +100,14 @@ public class ToolCallAgent extends ReActAgent {
     @Override
     public boolean think() {
         // 1、调用 AI 大模型，获取工具调用结果
-        // NEXT_STEP_PROMPT 作为系统内部提示，不添加到消息列表，避免被记录到数据库
+        // NEXT_STEP_PROMPT 作为系统内部提示，通过 augmentSystemMessage 合并进 Prompt，不添加到消息列表
         List<Message> messageList = getMessageList();
-        Prompt prompt = new Prompt(messageList, this.chatOptions);
+        // 2.0 手动工具循环：直连 ChatModel，工具定义经 options 传入但不在内部执行
+        ToolCallingChatOptions chatOptions = ToolCallingChatOptions.builder()
+                .toolCallbacks(availableTools)
+                .build();
+        Prompt prompt = new Prompt(messageList, chatOptions)
+                .augmentSystemMessage(getSystemPrompt() + "\n\n" + (StrUtil.isNotBlank(getNextStepPrompt()) ? getNextStepPrompt() : ""));
         long startTime = System.currentTimeMillis();
         AgentUsageLog usageLog = new AgentUsageLog();
         usageLog.setAgentId(agentId);
@@ -119,12 +117,7 @@ public class ToolCallAgent extends ReActAgent {
         usageLog.setCreateTime(new Date());
 
         try {
-            ChatResponse chatResponse = getChatClient().prompt(prompt)
-                    .system(getSystemPrompt() + "\n\n" + (StrUtil.isNotBlank(getNextStepPrompt()) ? getNextStepPrompt() : ""))
-                    .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, this.getChatId()))
-                    .toolCallbacks(availableTools)
-                    .call()
-                    .chatResponse();
+            ChatResponse chatResponse = getChatModel().call(prompt);
 
             // 记录 token 使用情况
             if (chatResponse != null && chatResponse.getMetadata() != null
@@ -143,8 +136,9 @@ public class ToolCallAgent extends ReActAgent {
             // 3、解析工具调用结果，获取要调用的工具
             // 助手消息
             AssistantMessage assistantMessage = chatResponse.getResult().getOutput();
-            // 保存当前步骤的助手消息（用于返回给前端）
+            // 保存当前步骤的助手消息（用于返回给前端），并写入会话记忆
             this.currentStepAssistantMessage = assistantMessage;
+            persistToMemory(assistantMessage);
             // 获取要调用的工具列表
             List<AssistantMessage.ToolCall> toolCallList = assistantMessage.getToolCalls();
             // 输出提示信息
@@ -208,12 +202,14 @@ public class ToolCallAgent extends ReActAgent {
         if (!toolCallChatResponse.hasToolCalls()) {
             return "没有工具需要调用";
         }
-        // 调用工具
-        Prompt prompt = new Prompt(getMessageList(), this.chatOptions);
+        // 调用工具（与 think() 保持同一套 options，工具定义来自 availableTools）
+        Prompt prompt = new Prompt(getMessageList(),
+                ToolCallingChatOptions.builder().toolCallbacks(availableTools).build());
         ToolExecutionResult toolExecutionResult = toolCallingManager.executeToolCalls(prompt, toolCallChatResponse);
         // 记录消息上下文，conversationHistory 已经包含了助手消息和工具调用返回的结果
         setMessageList(toolExecutionResult.conversationHistory());
         ToolResponseMessage toolResponseMessage = (ToolResponseMessage) CollUtil.getLast(toolExecutionResult.conversationHistory());
+        persistToMemory(toolResponseMessage);
 
         // 判断是否调用了终止工具
         boolean terminateToolCalled = toolResponseMessage.getResponses().stream()

@@ -13,6 +13,10 @@ RUN mvn package -DskipTests -B -q
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
+# node/npx：STDIO 型 MCP 服务器（npx -y xxx）以子进程方式在容器内运行，运行镜像必须带 Node 运行时
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends nodejs npm ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 # 非 root 运行
 RUN useradd --system --uid 1001 mioai
 USER mioai

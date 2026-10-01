@@ -24,17 +24,19 @@ spring:
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
       database: 0
+      # spring-ai 的 RedisVectorStore 自动配置要求 JedisConnectionFactory（类路径同时有 lettuce/jedis 时 Boot 默认用 lettuce）
+      client-type: jedis
 
   ai:
-    # 阿里云 DashScope（LLM / 向量 / 重排）
-    dashscope:
+    # 阿里云 DashScope 走 OpenAI 兼容模式（Spring AI 2.0 官方 openai starter）。
+    # 注意：2.0 底层为 openai-java SDK，不再自动补 /v1，base-url 必须以 /v1 结尾
+    openai:
       api-key: ${DASHSCOPE_API_KEY:your-dashscope-api-key}
+      base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
       chat:
-        options:
-          model: ${DASHSCOPE_CHAT_MODEL:qwen-plus}
+        model: ${DASHSCOPE_CHAT_MODEL:qwen-plus}
       embedding:
-        options:
-          model: ${DASHSCOPE_EMBEDDING_MODEL:text-embedding-v3}
+        model: ${DASHSCOPE_EMBEDDING_MODEL:text-embedding-v3}
 
     # Redis 向量库（需要 RedisStack，含 RediSearch 模块）
     vectorstore:
@@ -72,10 +74,13 @@ mio:
   ai:
     # RAG 检索配置
     rag:
-      # 重排总开关（csApp 客户端使用 RetrievalRerankAdvisor；绑定级开关见 agent_knowledge.retrieval_config）
+      # 重排总开关（绑定级开关见 agent_knowledge.retrieval_config）
       rerank-enabled: false
       rerank-model: gte-rerank
       rerank-top-n: 5
+      # DashScope 原生重排 API（OpenAI 兼容模式不提供 rerank，需直连原生端点）
+      rerank-api-url: ${DASHSCOPE_RERANK_URL:https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank}
+      rerank-api-key: ${DASHSCOPE_API_KEY:your-dashscope-api-key}
       # 分块大小（token），消融实验可取 400/800/1200
       chunk-size: 800
     # 长会话摘要记忆

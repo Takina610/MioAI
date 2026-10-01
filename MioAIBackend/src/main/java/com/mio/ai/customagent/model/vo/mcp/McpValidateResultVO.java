@@ -29,6 +29,11 @@ public class McpValidateResultVO implements Serializable {
     private String errorType;
 
     /**
+     * 非致命提示（如配置包含多个服务器节点时只校验第一个）
+     */
+    private List<String> warnings;
+
+    /**
      * 工具列表
      */
     private List<McpToolInfo> tools;
