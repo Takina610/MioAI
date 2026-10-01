@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.mio</groupId>
+        <artifactId>mio-ai</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+    <artifactId>mio-agent</artifactId>
+    <name>mio-agent</name>
+    <description>业务模块：智能体、知识库/RAG 检索、MCP 工具管理、调用统计、MioManus 与 CS 应用</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.mio</groupId>
+            <artifactId>mio-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.mio</groupId>
+            <artifactId>mio-system</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.mio</groupId>
+            <artifactId>mio-framework</artifactId>
+        </dependency>
+        <!-- 参数校验（DTO @NotBlank/@Size + @Valid） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+    </dependencies>
+</project>

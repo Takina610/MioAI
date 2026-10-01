@@ -46,7 +46,7 @@ build/
 /deploy/
 /MioAIBackend/src/main/resources/mcp
 
-/MioAIBackend/src/main/resources/application.yml
+/MioAIBackend/mio-admin/src/main/resources/application.yml
 
 # 本地环境变量（含密钥，禁止提交）
 .env
