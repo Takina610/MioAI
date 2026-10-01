@@ -43,12 +43,12 @@ spring:
         index-name: mio-ai-index
         prefix: "mio-ai:"
 
-    # 聊天记忆入库（启动时自动建表）
+    # 聊天记忆入库（启动时自动建表；取值为 DatabaseInitializationMode：always/embedded/never）
     chat:
       memory:
         repository:
           jdbc:
-            initialize-schema: true
+            initialize-schema: always
 
   servlet:
     multipart:
@@ -87,6 +87,22 @@ mio:
     tools:
       terminal:
         allowed-commands: ""
+
+# ------------------------------------------------------------
+# 联网搜索 / 图片检索工具（MioManus 智能体使用，密钥由环境变量注入）
+# ------------------------------------------------------------
+web:
+  search:
+    url: ${WEB_SEARCH_URL:https://www.searchapi.io/api/v1/search}
+    api-key: ${WEB_SEARCH_API_KEY:}
+pexels:
+  search:
+    url: ${PEXELS_SEARCH_URL:https://api.pexels.com/v1/search}
+    api-key: ${PEXELS_API_KEY:}
+
+# RAG 示例数据初始化开关（true=跳过，不自动灌入示例文档）
+data:
+  is-load: ${DATA_IS_LOAD:true}
 
 # ------------------------------------------------------------
 # Cloudflare R2 对象存储（文件/头像/知识库文件）

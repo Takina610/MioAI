@@ -48,10 +48,27 @@ MioAI 是一个基于 Spring Boot 3、Spring AI 和 Vue 3 的智能体应用平�
 
 ```text
 mio-ai
-|-- Dockerfile                      # 后端镜像（多阶段构建）
-|-- docker-compose.yml              # 一键部署：MySQL + RedisStack + 后端 + 前端
-|-- .env.example                    # 部署环境变量模板
-|-- mio-ai-front/                   # Vue 3 前端项目
+|-- MioAIBackend/                   # Spring Boot 3 后端项目
+|   |-- Dockerfile                  # 后端镜像（多阶段构建）
+|   |-- settings.xml                # Docker 构建专用：Maven Central 阿里云镜像
+|   |-- mio_ai.sql                  # 数据库初始化脚本（纯结构 + 种子数据，无真实数据）
+|   |-- doc/
+|   |   `-- rag-eval-experiment.md  # RAG 消融实验设计与论文写作指引
+|   |-- pom.xml                     # Maven 后端依赖
+|   `-- src/
+|       |-- main/
+|       |   |-- java/com/mio/ai/
+|       |   |   |-- common/             # 通用响应、异常、配置、AOP、工具类
+|       |   |   |-- customagent/        # 自定义智能体、知识库、MCP 工具、检索隔离等业务
+|       |   |   |-- superagent/         # 默认智能体、CS 助手、MioManus（含显式规划）、摘要记忆与工具
+|       |   |   |-- user/               # 用户模块
+|       |   |   `-- MioAIApplication.java
+|       |   `-- resources/
+|       |       |-- application.yml.example  # 后端配置模板（复制为 application.yml 后填写）
+|       |       |-- rag/                # 内置 RAG 文档
+|       |       `-- sql/                # Spring AI 聊天记忆表结构
+|       `-- test/                       # 纯单元测试（无需外部环境）+ 集成/评测测试（需配置环境）
+|-- MioAIFrontend/                  # Vue 3 前端项目
 |   |-- Dockerfile                  # 前端镜像（构建 + nginx）
 |   |-- nginx.conf                  # 容器内 nginx 配置（静态托管 + /api 反代 + SSE）
 |   |-- src/
@@ -64,23 +81,8 @@ mio-ai
 |   |   `-- views/                  # 页面视图
 |   |-- package.json
 |   `-- vite.config.ts
-|-- doc/
-|   `-- rag-eval-experiment.md      # RAG 消融实验设计与论文写作指引
-|-- src/
-|   |-- main/
-|   |   |-- java/com/mio/ai/
-|   |   |   |-- common/             # 通用响应、异常、配置、AOP、工具类
-|   |   |   |-- customagent/        # 自定义智能体、知识库、MCP 工具、检索隔离等业务
-|   |   |   |-- superagent/         # 默认智能体、CS 助手、MioManus（含显式规划）、摘要记忆与工具
-|   |   |   |-- user/               # 用户模块
-|   |   |   `-- MioAIApplication.java
-|   |   `-- resources/
-|   |       |-- application.yml.example  # 后端配置模板（复制为 application.yml 后填写）
-|   |       |-- rag/                # 内置 RAG 文档
-|   |       `-- sql/                # Spring AI 聊天记忆表结构
-|   `-- test/                       # 纯单元测试（无需外部环境）+ 集成/评测测试（需配置环境）
-|-- mio_ai.sql                      # 数据库初始化脚本（纯结构 + 种子数据，无真实数据）
-|-- pom.xml                         # Maven 后端依赖
+|-- docker-compose.yml              # 一键部署：MySQL + RedisStack + 后端 + 前端
+|-- .env.example                    # 部署环境变量模板
 `-- README.md
 ```
 
@@ -123,7 +125,7 @@ mvn spring-boot:run
 ### 4. 启动前端
 
 ```bash
-cd "mio-ai-front"
+cd "MioAIFrontend"
 pnpm install
 pnpm dev
 ```
@@ -159,7 +161,7 @@ mvn clean package
 ### 前端
 
 ```bash
-cd "mio-ai-front"
+cd "MioAIFrontend"
 
 # 开发环境
 pnpm dev
@@ -202,7 +204,7 @@ pnpm preview
 
 - 使用环境变量或独立配置文件管理数据库、Redis、API Key、R2 密钥。
 - 关闭开发环境 SQL 日志，避免泄露参数和影响性能。
-- 为 SSE 接口和上传接口配置合理的 Nginx 超时时间与文件大小限制（`mio-ai-front/nginx.conf` 已按 SSE 调整）。
+- 为 SSE 接口和上传接口配置合理的 Nginx 超时时间与文件大小限制（`MioAIFrontend/nginx.conf` 已按 SSE 调整）。
 - 为 Redis、MySQL、对象存储配置访问控制和备份策略。
 - SSE 鉴权当前通过 URL 传 token（EventSource 限制），生产环境建议改为一次性短票据换取连接。
 

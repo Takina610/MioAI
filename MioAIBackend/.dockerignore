@@ -1,0 +1,9 @@
+# 缩小后端构建上下文：只需 pom.xml 与 src
+.git
+.idea
+target
+doc
+.env
+*.md
+*.sql
+*.tar.gz
