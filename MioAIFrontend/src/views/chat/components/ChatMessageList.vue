@@ -32,9 +32,6 @@
                   <CopyOutlined v-else />
                 </a-button>
               </a-tooltip>
-              <span v-if="msg.usage" class="msg-usage">
-                {{ usageText(msg.usage) }}
-              </span>
             </div>
           </div>
         </div>
@@ -81,13 +78,6 @@ async function copyMessage(content: string, messageId: string): Promise<void> {
     console.error(e)
     message.error('复制失败')
   }
-}
-
-function usageText(usage: { inputTokens?: number; outputTokens?: number; durationMs?: number }): string {
-  const parts: string[] = []
-  if (usage.outputTokens) parts.push(usage.outputTokens + ' tokens')
-  if (usage.durationMs) parts.push((usage.durationMs / 1000).toFixed(1) + 's')
-  return parts.join(' · ')
 }
 
 defineExpose({ scrollToBottom })
@@ -194,12 +184,6 @@ defineExpose({ scrollToBottom })
             &.copied {
               color: #52c41a;
             }
-          }
-
-          .msg-usage {
-            font-size: 12px;
-            color: #b0b8c4;
-            white-space: nowrap;
           }
         }
       }
