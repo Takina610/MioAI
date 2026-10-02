@@ -31,7 +31,7 @@ import java.util.Set;
  * <ul>
  *   <li>Streamable HTTP（type=http/streamable-http，或 AUTO 时优先尝试，2026 年起的主流协议）</li>
  *   <li>SSE（type=sse，或 url 以 /sse 结尾；deprecated 但仍被大量旧服务使用）</li>
- *   <li>STDIO（command/args/env，本地子进程）</li>
+ *   <li>STDIO（command/args/env，本地子进程；Windows 下 npx 等无扩展名命令自动解析为 .cmd/.exe）</li>
  * </ul>
  * <p>支持配置中的 headers（Authorization 等认证头）；AUTO 模式在 Streamable 初始化失败时回退 SSE。
  */
@@ -161,7 +161,7 @@ public class McpClientFactory {
     }
 
     private McpClientHandle createStdioClient(String clientName, JSONObject serverConfig, Duration requestTimeout) {
-        String command = serverConfig.getStr("command");
+        String command = McpCommandResolver.resolve(serverConfig.getStr("command"));
         JSONArray argsArray = serverConfig.getJSONArray("args");
         List<String> args = argsArray != null ? argsArray.toList(String.class) : List.of();
         // env 值一律转字符串：数字/布尔值直接 toBean(Map) 会在子进程启动时才炸出 ClassCastException
