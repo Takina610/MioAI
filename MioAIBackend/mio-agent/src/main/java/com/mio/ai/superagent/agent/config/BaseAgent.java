@@ -2,6 +2,7 @@ package com.mio.ai.superagent.agent.config;
 
 import cn.hutool.core.util.StrUtil;
 import com.mio.ai.superagent.model.enums.AgentState;
+import com.mio.ai.superagent.util.SseStreams;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -9,7 +10,6 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author: Takina
@@ -55,8 +56,11 @@ public abstract class BaseAgent {
     // 会话ID
     private String chatId;
 
-    // JSON 序列化工具
-    private static final JsonMapper jsonMapper = JsonMapper.builder().build();
+    // 当前流式运行的 SSE 连接（runStream 期间设置，供子类发送工具调用等事件）
+    protected transient SseEmitter currentEmitter;
+
+    // 事件序号（信封里的 seq，前端可据此排序/去重）
+    private final AtomicInteger eventSeq = new AtomicInteger();
 
     /**
      * 运行代理（流式输出）
@@ -67,7 +71,8 @@ public abstract class BaseAgent {
     public SseEmitter runStream(String userPrompt, String chatId) {
         this.chatId = chatId;
         // 创建一个超时时间较长的 SseEmitter
-        SseEmitter sseEmitter = new SseEmitter(300000L); // 5 分钟超时
+        SseEmitter sseEmitter = new SseEmitter(SseStreams.CHAT_TIMEOUT_MS);
+        this.currentEmitter = sseEmitter;
         // 使用线程异步处理，避免阻塞主线程
         CompletableFuture.runAsync(() -> {
             // 1、基础校验
@@ -120,11 +125,6 @@ public abstract class BaseAgent {
                 }
                 // 发送完成事件
                 sendSseEvent(sseEmitter, "done", "任务已完成");
-                try {
-                    sseEmitter.send("[DONE]");
-                } catch (IOException e) {
-                    // ignore
-                }
                 sseEmitter.complete();
             } catch (Exception e) {
                 state = AgentState.ERROR;
@@ -138,6 +138,7 @@ public abstract class BaseAgent {
             } finally {
                 // 3、清理资源
                 this.cleanup();
+                this.currentEmitter = null;
             }
         });
 
@@ -159,16 +160,15 @@ public abstract class BaseAgent {
     }
 
     /**
-     * 发送 SSE 事件
+     * 发送 SSE 事件（统一信封：type/content/seq/ts 序列化为一行 JSON）
      */
     protected void sendSseEvent(SseEmitter sseEmitter, String eventType, String content) throws IOException {
         Map<String, Object> event = new HashMap<>();
         event.put("type", eventType);
         event.put("content", content);
-        event.put("timestamp", System.currentTimeMillis());
-        sseEmitter.send(SseEmitter.event()
-                .name("message")
-                .data(jsonMapper.writeValueAsString(event)));
+        event.put("seq", eventSeq.incrementAndGet());
+        event.put("ts", System.currentTimeMillis());
+        SseStreams.sendTyped(sseEmitter, event);
     }
 
     /**

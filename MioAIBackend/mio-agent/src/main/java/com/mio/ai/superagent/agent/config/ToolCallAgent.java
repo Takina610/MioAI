@@ -7,7 +7,9 @@ import com.mio.ai.customagent.model.entity.AgentUsageLog;
 import com.mio.ai.customagent.model.entity.ToolCallLog;
 import com.mio.ai.customagent.service.log.AgentUsageLogService;
 import com.mio.ai.customagent.service.log.ToolCallLogService;
+import com.mio.ai.superagent.model.dto.SseChunk;
 import com.mio.ai.superagent.model.enums.AgentState;
+import com.mio.ai.superagent.util.SseStreams;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
@@ -17,9 +19,9 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionResult;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 
 import java.util.Date;
@@ -102,10 +104,11 @@ public class ToolCallAgent extends ReActAgent {
         // 1、调用 AI 大模型，获取工具调用结果
         // NEXT_STEP_PROMPT 作为系统内部提示，通过 augmentSystemMessage 合并进 Prompt，不添加到消息列表
         List<Message> messageList = getMessageList();
-        // 2.0 手动工具循环：直连 ChatModel，工具定义经 options 传入但不在内部执行
-        ToolCallingChatOptions chatOptions = ToolCallingChatOptions.builder()
-                .toolCallbacks(availableTools)
-                .build();
+        // 2.0 手动工具循环：直连 ChatModel，工具定义经 options 传入但不在内部执行。
+        // 必须用 OpenAiChatOptions（模型内部会强转 prompt.options）；
+        // 且要从模型默认配置拷贝——builder 裸建的 options 默认 model=gpt-5-mini，
+        // 会覆盖 yml 里的 dashscope 模型名导致 404
+        OpenAiChatOptions chatOptions = buildChatOptions();
         Prompt prompt = new Prompt(messageList, chatOptions)
                 .augmentSystemMessage(getSystemPrompt() + "\n\n" + (StrUtil.isNotBlank(getNextStepPrompt()) ? getNextStepPrompt() : ""));
         long startTime = System.currentTimeMillis();
@@ -160,6 +163,11 @@ public class ToolCallAgent extends ReActAgent {
             // 记录工具调用日志
             logToolCalls(toolCallList);
 
+            // 向前端推送工具调用事件（思考过程区可见）
+            for (AssistantMessage.ToolCall toolCall : toolCallList) {
+                emitToolEvent(SseChunk.toolCall(toolCall.name(), truncate(toolCall.arguments(), 300)));
+            }
+
             // 如果不需要调用工具，返回 false
             if (toolCallList.isEmpty()) {
                 // 只有不调用工具时，才需要手动记录助手消息
@@ -203,8 +211,7 @@ public class ToolCallAgent extends ReActAgent {
             return "没有工具需要调用";
         }
         // 调用工具（与 think() 保持同一套 options，工具定义来自 availableTools）
-        Prompt prompt = new Prompt(getMessageList(),
-                ToolCallingChatOptions.builder().toolCallbacks(availableTools).build());
+        Prompt prompt = new Prompt(getMessageList(), buildChatOptions());
         ToolExecutionResult toolExecutionResult = toolCallingManager.executeToolCalls(prompt, toolCallChatResponse);
         // 记录消息上下文，conversationHistory 已经包含了助手消息和工具调用返回的结果
         setMessageList(toolExecutionResult.conversationHistory());
@@ -219,6 +226,9 @@ public class ToolCallAgent extends ReActAgent {
             setState(AgentState.FINISHED);
             this.currentStepNeedAct = false;
         }
+        // 向前端推送工具执行结果事件
+        toolResponseMessage.getResponses().forEach(response ->
+                emitToolEvent(SseChunk.toolResult(response.name(), truncate(response.responseData(), 300))));
         // 优化日志输出，返回更友好的消息
         String results = toolResponseMessage.getResponses().stream()
                 .map(response -> {
@@ -248,6 +258,32 @@ public class ToolCallAgent extends ReActAgent {
             log.setCreateTime(new Date());
             toolCallLogService.logToolCall(log);
         }
+    }
+
+    /** 向前端推送工具调用/结果事件（连接断开时静默跳过） */
+    private void emitToolEvent(SseChunk chunk) {
+        if (currentEmitter != null) {
+            SseStreams.sendTyped(currentEmitter, chunk.fields());
+        }
+    }
+
+    /** 以模型默认配置（yml 里的模型名）为基础，挂上本代理可用工具 */
+    private OpenAiChatOptions buildChatOptions() {
+        if (getChatModel().getDefaultOptions() instanceof OpenAiChatOptions defaults) {
+            return defaults.mutate()
+                    .toolCallbacks(List.of(availableTools))
+                    .build();
+        }
+        return OpenAiChatOptions.builder()
+                .toolCallbacks(List.of(availableTools))
+                .build();
+    }
+
+    private String truncate(String text, int max) {
+        if (text == null) {
+            return "";
+        }
+        return text.length() <= max ? text : text.substring(0, max) + "…";
     }
 
     /**

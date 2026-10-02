@@ -234,50 +234,101 @@ export function useChatStream(options: {
         return
       }
 
-      const chatMsgs = messagesApi.getChatMessages(chatId)
-
-      if (rawData && rawData !== '[DONE]') {
-        // 解析后端发送的 JSON 格式，提取 type 和 content
-        let segmentContent = rawData
-        let segmentType: MessageSegment['type'] = undefined
-        try {
-          const parsed = JSON.parse(rawData)
-          if (parsed.content !== undefined) {
-            segmentContent = parsed.content
-            segmentType = parsed.type
-          }
-        } catch {
-          // 兼容旧格式，直接当作普通文本
-        }
-
-        if (aiMessageIndex < chatMsgs.length) {
-          const updatedMessages = [...chatMsgs]
-          const targetMsg = updatedMessages[aiMessageIndex]
-          const newSegment: MessageSegment = { content: segmentContent, type: segmentType }
-          updatedMessages[aiMessageIndex] = {
-            ...targetMsg,
-            content: targetMsg.content + segmentContent,
-            segments: targetMsg.segments ? [...targetMsg.segments, newSegment] : undefined
-          }
-          messagesApi.setChatMessages(chatId, updatedMessages)
-
-          if (messagesApi.currentChatId.value === chatId) {
-            nextTick(() => options.scrollToBottom())
-          }
-        }
-      }
-
+      // 旧协议结束标记
       if (rawData === '[DONE]') {
-        disarmStreamWatchdog()
-        const finalMessages = messagesApi.getChatMessages(chatId)
-        if (isNewChat && userStore.isLoggedIn) {
-          options.updateTitle(content, finalMessages[aiMessageIndex]?.content || '', chatId)
-        }
-        messagesApi.setLoading(chatId, false)
-        es.close()
-        eventSource = null
-        currentEventSourceChatId = ''
+        finishStream()
+        return
       }
+
+      const chatMsgs = messagesApi.getChatMessages(chatId)
+      if (aiMessageIndex >= chatMsgs.length) {
+        return
+      }
+
+      let parsed: Record<string, any> | null = null
+      try {
+        const obj = JSON.parse(rawData)
+        if (obj && typeof obj === 'object') parsed = obj
+      } catch {
+        // 旧协议：裸文本 chunk，按正文增量处理
+      }
+
+      const updated = [...chatMsgs]
+      const target = updated[aiMessageIndex]
+      // 无分段事件时保持 undefined：空数组也是 truthy，会导致消息在
+      // MarkdownView 与 MioManusMessage 两个分支间切换、组件补丁崩溃
+      let segments = target.segments
+      let content = target.content
+      let usage = target.usage
+      let finished = false
+
+      if (!parsed) {
+        content += rawData
+      } else {
+        const type = String(parsed.type ?? '')
+        switch (type) {
+          case 'answer':
+            // 正文增量
+            content += String(parsed.delta ?? parsed.content ?? '')
+            break
+          case 'usage':
+            usage = {
+              inputTokens: Number(parsed.inputTokens) || undefined,
+              outputTokens: Number(parsed.outputTokens) || undefined,
+              durationMs: Number(parsed.durationMs) || undefined
+            }
+            break
+          case 'done':
+            finished = true
+            break
+          default: {
+            // 其余类型归入分段：delta 语义合并到同类末段，content 语义为整段新增
+            const next = [...(segments ?? [])]
+            const isDelta = parsed.delta !== undefined
+            const text = String(parsed.delta ?? parsed.content ?? '')
+            const last = next[next.length - 1]
+            if (isDelta && last && last.type === type) {
+              next[next.length - 1] = { ...last, content: last.content + text }
+            } else {
+              next.push({
+                type: (type || undefined) as MessageSegment['type'],
+                content: text,
+                tool: parsed.tool,
+                args: parsed.args
+              })
+            }
+            segments = next
+            // 思考/动作整段与最终回复计入 content（标题生成、复制仍可用）
+            if (!isDelta && (type === 'thinking' || type === 'action' || type === 'final')) {
+              content += text
+            }
+            break
+          }
+        }
+      }
+
+      updated[aiMessageIndex] = { ...target, content, segments, usage }
+      messagesApi.setChatMessages(chatId, updated)
+
+      if (messagesApi.currentChatId.value === chatId) {
+        nextTick(() => options.scrollToBottom())
+      }
+      if (finished) {
+        finishStream()
+      }
+    }
+
+    /** 流完成：生成标题、复位加载状态、关闭连接 */
+    function finishStream(): void {
+      disarmStreamWatchdog()
+      const finalMessages = messagesApi.getChatMessages(chatId)
+      if (isNewChat && userStore.isLoggedIn) {
+        options.updateTitle(content, finalMessages[aiMessageIndex]?.content || '', chatId)
+      }
+      messagesApi.setLoading(chatId, false)
+      es.close()
+      eventSource = null
+      currentEventSourceChatId = ''
     }
 
     es.onerror = handleStreamError

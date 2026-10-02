@@ -6,6 +6,7 @@ import com.mio.ai.customagent.model.entity.AgentUsageLog;
 import com.mio.ai.customagent.model.entity.RagRetrievalLog;
 import com.mio.ai.customagent.service.log.AgentUsageLogService;
 import com.mio.ai.customagent.service.log.RagRetrievalLogService;
+import com.mio.ai.superagent.model.dto.SseChunk;
 import com.mio.ai.superagent.model.vo.ChatVO;
 import com.mio.ai.superagent.repository.ChatHistoryRepository;
 import jakarta.annotation.Resource;
@@ -21,6 +22,7 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.Date;
 import java.util.List;
@@ -55,7 +57,7 @@ public class CSApp {
     @Autowired
     private VectorStore vectorStore;
 
-    public Flux<String> doChat(ChatVO chatVO) {
+    public Flux<SseChunk> doChat(ChatVO chatVO) {
         chatHistoryRepository.save(chatVO);
 
         logRagRetrieval(chatVO);
@@ -81,13 +83,15 @@ public class CSApp {
                 .chatResponse()
                 .doOnNext(response -> extractUsage(response, inputTokens, outputTokens))
                 // Spring AI 2.0 流式末尾会推一条仅含 usage 的响应（getResult() 为 null），必须判空
-                .map(response -> {
-                    var generation = response.getResult();
-                    return generation == null || generation.getOutput() == null
-                            ? ""
-                            : generation.getOutput().getText();
+                .<SseChunk>handle((response, sink) -> {
+                    SseChunk chunk = toChunk(response);
+                    if (chunk != null) {
+                        sink.next(chunk);
+                    }
                 })
-                .filter(StrUtil::isNotEmpty)
+                .concatWith(Mono.defer(() -> Mono.just(SseChunk.usage(
+                        inputTokens.get(), outputTokens.get(),
+                        System.currentTimeMillis() - startTime))))
                 .doOnTerminate(() -> {
                     usageLog.setInputTokens(inputTokens.get());
                     usageLog.setOutputTokens(outputTokens.get());
@@ -98,6 +102,23 @@ public class CSApp {
                     usageLog.setStatus(0);
                     usageLog.setErrorMsg(error.getMessage());
                 });
+    }
+
+    /** 推理模型的思考增量归 thinking，其余归 answer 正文 */
+    private SseChunk toChunk(ChatResponse response) {
+        if (response == null || response.getResult() == null || response.getResult().getOutput() == null) {
+            return null;
+        }
+        var output = response.getResult().getOutput();
+        Object reasoning = output.getMetadata().get("reasoningContent");
+        if (reasoning instanceof String reasoningText && !reasoningText.isEmpty()) {
+            return SseChunk.delta("thinking", reasoningText);
+        }
+        String text = output.getText();
+        if (StrUtil.isEmpty(text)) {
+            return null;
+        }
+        return SseChunk.delta("answer", text);
     }
 
     private Long parseConversationId(String chatId) {

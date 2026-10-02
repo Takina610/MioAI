@@ -13,17 +13,16 @@
           <div v-if="msg.role === 'assistant' && isLoading && !msg.content" class="message-loading">
             <span></span><span></span><span></span>
           </div>
+          <!-- assistant 固定走分段渲染组件（无分段时回退渲染正文），流式期间分支稳定不切换 -->
           <MioManusMessage
-            v-else-if="msg.role === 'assistant' && msg.segments"
+            v-else-if="msg.role === 'assistant'"
             :content="msg.content"
             :segments="msg.segments"
             :is-loading="isLoading"
+            :interrupted="msg.interrupted"
           />
           <template v-else>
             <MarkdownView class="message-text" :content="msg.content" />
-            <div v-if="msg.role === 'assistant' && msg.interrupted" class="stream-interrupted">
-              连接中断，本条回答可能不完整
-            </div>
           </template>
           <div class="message-actions">
             <div class="copy-area" v-show="!isLoading && hoverMessageId === msg.id && msg.content">
@@ -33,6 +32,9 @@
                   <CopyOutlined v-else />
                 </a-button>
               </a-tooltip>
+              <span v-if="msg.usage" class="msg-usage">
+                {{ usageText(msg.usage) }}
+              </span>
             </div>
           </div>
         </div>
@@ -79,6 +81,13 @@ async function copyMessage(content: string, messageId: string): Promise<void> {
     console.error(e)
     message.error('复制失败')
   }
+}
+
+function usageText(usage: { inputTokens?: number; outputTokens?: number; durationMs?: number }): string {
+  const parts: string[] = []
+  if (usage.outputTokens) parts.push(usage.outputTokens + ' tokens')
+  if (usage.durationMs) parts.push((usage.durationMs / 1000).toFixed(1) + 's')
+  return parts.join(' · ')
 }
 
 defineExpose({ scrollToBottom })
@@ -185,6 +194,12 @@ defineExpose({ scrollToBottom })
             &.copied {
               color: #52c41a;
             }
+          }
+
+          .msg-usage {
+            font-size: 12px;
+            color: #b0b8c4;
+            white-space: nowrap;
           }
         }
       }
