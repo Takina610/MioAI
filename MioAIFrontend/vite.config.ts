@@ -13,9 +13,11 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
+      // 与生产 nginx 一致：转发时剥掉 /api 前缀（后端控制器映射不带 /api）
       '/api': {
         target: 'http://127.0.0.1:8081',
-        changeOrigin: true
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
       }
     }
   },
