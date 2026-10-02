@@ -22,13 +22,13 @@ MioAI 是一个基于 Spring Boot 3、Spring AI 和 Vue 3 的智能体应用平�
 ### 后端
 
 - Java 21
-- Spring Boot 3.4.6
-- Spring AI 1.1.4
+- Spring Boot 4.1.1
+- Spring AI 2.0.1
 - Spring AI Alibaba DashScope
 - Spring MVC / WebFlux / SSE
 - MyBatis-Plus 3.5.11
 - MySQL 8
-- Redis Stack（含 RediSearch）/ Redis Vector Store
+- PostgreSQL 16 + pgvector（向量库）/ Redis（缓存）
 - Lombok、Hutool、iText、Jsoup、spring-security-crypto（BCrypt）
 - AWS SDK S3 兼容存储，用于接入 Cloudflare R2
 
@@ -81,7 +81,7 @@ mio-ai
 |   |   `-- views/                  # 页面视图
 |   |-- package.json
 |   `-- vite.config.ts
-|-- docker-compose.yml              # 一键部署：MySQL + RedisStack + 后端 + 前端
+|-- docker-compose.yml              # 一键部署：MySQL + PostgreSQL(pgvector) + Redis + 后端 + 前端
 |-- .env.example                    # 部署环境变量模板
 `-- README.md
 ```
@@ -92,7 +92,7 @@ mio-ai
 - Maven 3.9+
 - Node.js 20+，推荐配合 pnpm 使用
 - MySQL 8
-- Redis Stack（向量检索需要 RediSearch 模块，普通 Redis 无法使用）
+- PostgreSQL 16（向量检索依赖 pgvector 扩展）+ Redis（缓存）
 - 可用的 DashScope API Key
 - 如需完整文件能力，还需要配置 Cloudflare R2 或其他 S3 兼容对象存储
 
@@ -210,6 +210,6 @@ pnpm preview
 
 ## 注意事项
 
-- 项目依赖 Redis Stack 的 RediSearch 模块，普通 Redis 镜像无法初始化向量索引。
+- 向量数据存 PostgreSQL（pgvector），普通 Redis 只作缓存，不再承担向量检索。
 - 文件上传依赖 R2 配置，未配置对象存储时头像、知识库文档等上传能力可能不可用。
 - 前端通过 `token` 请求头传递登录态，联调时请确认浏览器本地存储和后端 Redis 登录态一致。

@@ -24,8 +24,6 @@ spring:
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
       database: 0
-      # spring-ai 的 RedisVectorStore 自动配置要求 JedisConnectionFactory（类路径同时有 lettuce/jedis 时 Boot 默认用 lettuce）
-      client-type: jedis
 
   ai:
     # 阿里云百炼（DashScope）走 OpenAI 兼容模式 —— 兼容模式支持全部 qwen 系列对话模型（含免费额度模型，改 model 名即可）
@@ -39,13 +37,6 @@ spring:
         model: ${DASHSCOPE_CHAT_MODEL:qwen-plus}
       embedding:
         model: ${DASHSCOPE_EMBEDDING_MODEL:text-embedding-v3}
-
-    # Redis 向量库（需要 RedisStack，含 RediSearch 模块）
-    vectorstore:
-      redis:
-        initialize-schema: true
-        index-name: mio-ai-index
-        prefix: "mio-ai:"
 
     # 聊天记忆入库（启动时自动建表；取值为 DatabaseInitializationMode：always/embedded/never）
     chat:
@@ -74,6 +65,13 @@ mybatis-plus:
 # ------------------------------------------------------------
 mio:
   ai:
+    # PostgreSQL 向量库（pgvector 扩展，mio-framework 的 VectorStoreConfig 装配）
+    vector:
+      jdbc-url: jdbc:postgresql://${PG_HOST:localhost}:${PG_PORT:5432}/${PG_DATABASE:mio_ai_vec}
+      username: ${PG_USERNAME:postgres}
+      password: ${PG_PASSWORD:mioai}
+      # 与向量模型输出维度一致（text-embedding-v3 默认 1024），不一致时启动建表即报错
+      dimensions: ${PG_VECTOR_DIMENSIONS:1024}
     # RAG 检索配置
     rag:
       # 重排总开关（绑定级开关见 agent_knowledge.retrieval_config）

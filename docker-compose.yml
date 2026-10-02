@@ -1,4 +1,4 @@
-# MioAI 一键部署：MySQL + RedisStack + 后端 + 前端
+# MioAI 一键部署：MySQL + PostgreSQL(pgvector 向量库) + Redis(缓存) + 后端 + 前端
 #
 # 使用方式：
 #   1. 复制环境变量模板：cp .env.example .env 并填入真实密钥
@@ -29,9 +29,27 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # 注意：向量检索需要 RediSearch 模块，必须使用 RedisStack，不能用普通 redis 镜像
+  # 向量库：PostgreSQL + pgvector 扩展（镜像自带扩展，无需手动编译）
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: mio-ai-postgres
+    environment:
+      POSTGRES_USER: ${PG_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-mioai}
+      POSTGRES_DB: ${PG_DATABASE:-mio_ai_vec}
+      TZ: Asia/Shanghai
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USERNAME:-postgres} -d ${PG_DATABASE:-mio_ai_vec}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # 仅作缓存使用（登录态/验证码等）；向量检索已迁移到 PostgreSQL(pgvector)
   redis:
-    image: redis/redis-stack-server:latest
+    image: redis:7-alpine
     container_name: mio-ai-redis
     volumes:
       - redis-data:/data
@@ -50,6 +68,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     environment:
@@ -57,6 +77,11 @@ services:
       MYSQL_PORT: "3306"
       MYSQL_USERNAME: ${MYSQL_USERNAME:-mioai}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-changeme}
+      PG_HOST: postgres
+      PG_PORT: "5432"
+      PG_USERNAME: ${PG_USERNAME:-postgres}
+      PG_PASSWORD: ${PG_PASSWORD:-mioai}
+      PG_DATABASE: ${PG_DATABASE:-mio_ai_vec}
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
@@ -83,4 +108,5 @@ services:
 
 volumes:
   mysql-data:
+  pg-data:
   redis-data:
