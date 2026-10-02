@@ -259,6 +259,7 @@ function segmentText(segment: MessageSegment): string {
 
   .segment-text {
     flex: 1;
+    min-width: 0;
     font-size: 13px;
     line-height: 1.6;
     color: #444;

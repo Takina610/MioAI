@@ -1,6 +1,7 @@
 import DOMPurify from 'dompurify'
 import MarkdownIt from 'markdown-it'
 import { katex } from '@mdit/plugin-katex'
+import cjkFriendly from 'markdown-it-cjk-friendly'
 import hljs from 'highlight.js/lib/common'
 
 function escapeHtml(s: string): string {
@@ -9,9 +10,11 @@ function escapeHtml(s: string): string {
   ))
 }
 
-/** 主流 AI Chat 渲染配置：GFM 表格/删除线、软换行转 <br>、链接识别、代码高亮、LaTeX 公式 */
+/** 主流 AI Chat 渲染配置：GFM 表格/删除线、软换行转 <br>、链接识别、代码高亮、LaTeX 公式。
+ *  html 放行裸 HTML（模型常用 <br> 换行表格单元格），危险内容由下方 DOMPurify 白名单过滤；
+ *  cjkFriendly 修复全角标点相邻时 **加粗** 不解析（CommonMark 侧翼规则的 CJK 缺陷） */
 export const markdown = new MarkdownIt({
-  html: false,
+  html: true,
   linkify: true,
   breaks: true,
   highlight(code, lang): string {
@@ -26,7 +29,7 @@ export const markdown = new MarkdownIt({
     const langClass = lang ? ` class="language-${escapeHtml(lang)}"` : ''
     return `<pre class="md-code"><code${langClass}>${escapeHtml(code)}</code></pre>`
   }
-}).use(katex, { throwOnError: false })
+}).use(katex, { throwOnError: false }).use(cjkFriendly)
 
 /** KaTeX 输出的 MathML/HTML 标签与属性 */
 const KATEX_TAGS = [

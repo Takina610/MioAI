@@ -106,7 +106,8 @@
       border: 1px solid #dce3ec;
       padding: 6px 12px;
       font-size: 13px;
-      white-space: nowrap;
+      /* 允许换行：多列表格适配容器宽度，超宽场景由上方 overflow-x 兜底内部滚动 */
+      word-break: break-word;
     }
     th {
       background: #eef4f8;

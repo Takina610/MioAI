@@ -87,6 +87,7 @@ defineExpose({ scrollToBottom })
 .chat-messages {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 24px;
   padding-bottom: 120px;
 
@@ -117,6 +118,8 @@ defineExpose({ scrollToBottom })
 
       .message-content {
         flex: 1;
+        /* 允许 flex 项收缩到内容以下：宽表格/代码块由内部滚动，不撑破气泡产生页面横向滚动 */
+        min-width: 0;
         display: flex;
         flex-direction: column;
         position: relative;
