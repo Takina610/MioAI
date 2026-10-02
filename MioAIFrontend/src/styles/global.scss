@@ -107,3 +107,6 @@ input, textarea {
     background-color: darken($secondary-color, 10%);
   }
 }
+
+/* dashboard 管理界面公共样式 */
+@import './dashboard';

@@ -1,35 +1,28 @@
 <template>
-  <div class="mcp-market">
-    <div class="page-header">
-      <div class="header-content">
-        <h2>MCP广场 {{ mcpList.length }}</h2>
-      </div>
-      <div class="header-line"></div>
-    </div>
+  <div class="dash-page">
+    <PageHeader :title="`MCP广场 ${mcpList.length}`" />
 
-    <div class="page-content" v-if="!loading && mcpList.length === 0">
-      <a-empty  description="暂无公开MCP工具" />
-    </div>
-    
-    <div class="mcp-list">
-      <a-row :gutter="[16, 16]">
-      <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="mcp in mcpList" :key="mcp.id">
-        <div class="mcp-card" @click="goToDetail(mcp.id)">
-          <div class="card-header">
-            <div class="icon-wrapper">
-              <ToolOutlined />
+    <div class="dash-page-content">
+      <a-empty v-if="!loading && mcpList.length === 0" description="暂无公开MCP工具" />
+
+      <a-row v-else :gutter="[16, 16]">
+        <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="mcp in mcpList" :key="mcp.id">
+          <div class="dash-card mcp-card" @click="goToDetail(mcp.id)">
+            <div class="card-header">
+              <div class="card-icon-wrapper">
+                <ToolOutlined />
+              </div>
+            </div>
+            <h3 class="card-title">{{ mcp.name }}</h3>
+            <p class="card-desc">{{ mcp.description || '暂无描述' }}</p>
+            <div class="card-footer">
+              <span class="author">{{ mcp.userName || '匿名' }}</span>
+              <a-tag :color="mcp.isPublic === 1 ? 'blue' : 'orange'">
+                {{ mcp.isPublic === 1 ? '公开' : '私有' }}
+              </a-tag>
             </div>
           </div>
-          <h3 class="card-title">{{ mcp.name }}</h3>
-          <p class="card-desc">{{ mcp.description || '暂无描述' }}</p>
-          <div class="card-footer">
-            <span class="author">{{ mcp.userName || '匿名' }}</span>
-            <a-tag :color="mcp.isPublic === 1 ? 'blue' : 'orange'">
-              {{ mcp.isPublic === 1 ? '公开' : '私有' }}
-            </a-tag>
-          </div>
-        </div>
-      </a-col>
+        </a-col>
       </a-row>
     </div>
   </div>
@@ -41,6 +34,7 @@ import { useRouter } from 'vue-router'
 import { ToolOutlined } from '@ant-design/icons-vue'
 import { getPublicMcpTools } from '@/api/mcpTool'
 import type { McpTool, PageResponse } from '@/types'
+import PageHeader from '../components/PageHeader.vue'
 
 interface McpToolWithUser extends McpTool {
   userName?: string
@@ -48,7 +42,7 @@ interface McpToolWithUser extends McpTool {
 }
 
 const router = useRouter()
-const loading = ref<boolean>(false)
+const loading = ref(false)
 const mcpList = ref<McpToolWithUser[]>([])
 
 async function fetchMcpTools(): Promise<void> {
@@ -73,94 +67,29 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
-.mcp-market {
-  height: 100%;
-  .page-header {
-    .header-content {
-      padding: 10px 24px;
-      h2 {
-        font-size: 24px;
-        font-weight: 600;
-        color: #202124;
-        margin-bottom: 8px;
-      }
-    }
-    .header-line {
-      height: 1px;
-      background: #e8eaed;
-    }
+.mcp-card {
+  cursor: pointer;
+
+  .card-header {
+    margin-bottom: 16px;
   }
 
-  .page-content {
-    height: calc(100% - 140px);
+  .card-title {
+    margin-bottom: 8px;
+  }
+
+  .card-desc {
+    margin-bottom: 16px;
+  }
+
+  .card-footer {
     display: flex;
-    flex-direction: column;
-    justify-content: center;
-  }
+    justify-content: space-between;
+    align-items: center;
 
-  .mcp-list {
-    overflow-y: auto;
-    padding: 24px;
-  }
-
-  .mcp-card {
-    background: #fff;
-    border-radius: 12px;
-    padding: 20px;
-    cursor: pointer;
-    transition: all 0.3s;
-    border: 1px solid #f0f0f0;
-
-    &:hover {
-      box-shadow: $shadow-medium;
-    }
-
-    .card-header {
-      margin-bottom: 16px;
-
-      .icon-wrapper {
-        width: 48px;
-        height: 48px;
-        border-radius: 12px;
-        background: rgba($primary-color, 0.1);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-
-        .anticon {
-          font-size: 24px;
-          color: $primary-color;
-        }
-      }
-    }
-
-    .card-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: $text-dark;
-      margin-bottom: 8px;
-    }
-
-    .card-desc {
-      font-size: 13px;
-      color: #666;
-      margin-bottom: 16px;
-      display: -webkit-box;
-      line-clamp: 2;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-
-    .card-footer {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-
-      .author {
-        font-size: 12px;
-        color: #999;
-      }
+    .author {
+      font-size: 12px;
+      color: #999;
     }
   }
 }

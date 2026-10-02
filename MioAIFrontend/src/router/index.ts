@@ -103,7 +103,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'public-knowledge/similaritySearch/:id',
         name: 'PublicSimilaritySearch',
-        component: () => import('@/views/dashboard/knowledge/publicSimilaritySearch.vue'),
+        component: () => import('@/views/dashboard/knowledge/similarity-search.vue'),
         meta: { title: '命中测试', requiresAuth: false }
       },
       {
@@ -121,7 +121,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'knowledge/similaritySearch/:id',
         name: 'SimilaritySearch',
-        component: () => import('@/views/dashboard/knowledge/similaritySearch.vue'),
+        component: () => import('@/views/dashboard/knowledge/similarity-search.vue'),
         meta: { title: '命中测试', requiresAuth: false }
       },
       {

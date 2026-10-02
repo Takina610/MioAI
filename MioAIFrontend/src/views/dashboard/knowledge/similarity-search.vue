@@ -1,26 +1,21 @@
 <template>
-  <div class="similarity-search">
-    <div class="page-header">
-      <div class="header-content">
-        <div class="header-left">
-          <div class="back-btn" @click="goBack">
-            <h2>知识库管理</h2>
-          </div>
-          <h2> / 命中测试</h2>
-        </div>
-        <div class="header-right">
-          <a-button type="primary" :loading="searching" :disabled="!canSearch" @click="handleSearch">
-            开始测试
-          </a-button>
-        </div>
-      </div>
-      <div class="header-line"></div>
-    </div>
+  <div class="dash-page similarity-search">
+    <PageHeader
+      :back-label="isPublic ? '公共知识库' : '知识库管理'"
+      :back-to="isPublic ? '/dashboard/public-knowledge' : '/dashboard/knowledge'"
+      title="命中测试"
+    >
+      <template #actions>
+        <a-button type="primary" :loading="searching" :disabled="!canSearch" @click="handleSearch">
+          开始测试
+        </a-button>
+      </template>
+    </PageHeader>
 
-    <div class="page-content">
+    <div class="dash-page-content">
       <a-spin :spinning="loading">
         <div class="search-container">
-          <div class="config-section">
+          <div class="config-section dash-section">
             <h3 class="section-title">检索配置</h3>
             <div class="config-item">
               <label class="config-label">返回数量 (TopK)</label>
@@ -58,7 +53,7 @@
             </div>
           </div>
 
-          <div class="search-section">
+          <div class="search-section dash-section">
             <h3 class="section-title">检索内容</h3>
             <div class="search-input-wrapper">
               <a-textarea
@@ -115,11 +110,12 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { FileTextOutlined } from '@ant-design/icons-vue'
 import { similaritySearch, getKnowledgeBaseById } from '@/api/knowledgeBase'
-import type { KnowledgeBase } from '@/types'
+import { truncateText } from '@/utils/format'
+import PageHeader from '../components/PageHeader.vue'
 
 interface SearchResult {
   id: string
@@ -130,14 +126,15 @@ interface SearchResult {
 }
 
 const route = useRoute()
-const router = useRouter()
+
+/** 公共/私有知识库共用本页，按路由前缀区分面包屑与返回地址 */
+const isPublic = route.path.startsWith('/dashboard/public-knowledge')
 
 const loading = ref(false)
 const searching = ref(false)
 const hasSearched = ref(false)
 const thresholdPercent = ref(0.5)
 const searchContent = ref('')
-const knowledgeBase = ref<KnowledgeBase | null>(null)
 const searchResults = ref<SearchResult[]>([])
 
 const config = reactive({
@@ -153,8 +150,7 @@ const canSearch = computed(() => {
 async function fetchKnowledgeBase(): Promise<void> {
   loading.value = true
   try {
-    const res = await getKnowledgeBaseById(kbId.value)
-    knowledgeBase.value = res
+    await getKnowledgeBaseById(kbId.value)
   } catch (e) {
     console.error(e)
     message.error('获取知识库信息失败')
@@ -188,22 +184,11 @@ async function handleSearch(): Promise<void> {
   }
 }
 
-
 function getProgressColor(score: number): string {
   if (score >= 0.8) return '#52c41a'
   if (score >= 0.6) return '#1890ff'
   if (score >= 0.4) return '#faad14'
   return '#ff4d4f'
-}
-
-function truncateText(text: string, maxLength: number): string {
-  if (!text) return ''
-  if (text.length <= maxLength) return text
-  return text.substring(0, maxLength) + '...'
-}
-
-function goBack(): void {
-  router.push('/dashboard/knowledge')
 }
 
 onMounted(() => {
@@ -213,91 +198,15 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .similarity-search {
-  height: 100%;
-
-  .page-header {
-    .header-content {
-      padding: 16px 24px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-
-      .header-left {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-
-        .back-btn {
-          &:hover {
-            cursor: pointer;
-          }
-          h2 {
-            color: #5f6368;
-            font-weight: 400;
-          }
-        }
-
-        h2 {
-          font-size: 24px;
-          font-weight: 600;
-          color: #202124;
-          margin: 0;
-        }
-      }
-
-      .header-right {
-        :deep(.ant-btn-primary) {
-          background: $primary-color;
-          border-color: $primary-color;
-
-          &:hover {
-            background: darken($primary-color, 10%);
-            border-color: darken($primary-color, 10%);
-          }
-
-          &:disabled {
-            background: #f5f5f5;
-            border-color: #d9d9d9;
-          }
-        }
-      }
-    }
-
-    .header-line {
-      height: 1px;
-      background: #e8eaed;
-    }
-  }
-
-  .page-content {
-    overflow-y: auto;
-    padding: 0 24px;
-  }
-
   .search-container {
     display: flex;
     gap: 24px;
-    padding: 24px 0;
-    min-height: calc(100% - 48px);
   }
 
   .config-section {
     width: 320px;
     flex-shrink: 0;
-    background: #fff;
-    border-radius: 12px;
-    padding: 24px;
-    border: 1px solid #f0f0f0;
     height: fit-content;
-
-    .section-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: #202124;
-      margin-bottom: 20px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid #f0f0f0;
-    }
 
     .config-item {
       margin-bottom: 24px;
@@ -341,20 +250,7 @@ onMounted(() => {
 
   .search-section {
     flex: 1;
-    background: #fff;
-    border-radius: 12px;
-    padding: 24px;
-    border: 1px solid #f0f0f0;
     min-width: 0;
-
-    .section-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: #202124;
-      margin-bottom: 20px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid #f0f0f0;
-    }
 
     .search-input-wrapper {
       margin-bottom: 24px;
