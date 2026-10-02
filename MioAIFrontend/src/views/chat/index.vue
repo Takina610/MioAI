@@ -1,149 +1,18 @@
 <template>
   <div class="chat-layout">
-    <aside class="sidebar" :class="{ collapsed: isCollapsed }">
-      <div class="sidebar-top">
-        <div class="logo-section" v-show="!isCollapsed">
-          <img :src="agentInfo?.avatar || '/favicon.ico'" alt="Avatar" class="agent-avatar" />
-          <span class="agent-name">{{ agentInfo?.name || '智能体' }}</span>
-        </div>
-        <a-button
-          type="text"
-          class="collapse-btn"
-          @click="toggleCollapse"
-        >
-          <MenuFoldOutlined v-if="!isCollapsed" />
-          <MenuUnfoldOutlined v-else />
-        </a-button>
-      </div>
-
-      <div class="sidebar-content">
-        <div class="sidebar-actions">
-          <div class="new-chat-btn-wrapper" v-show="!isCollapsed">
-            <a-button class="new-chat-btn" @click="createNewChat">
-              <FormOutlined />
-              <span class="btn-text">新对话</span>
-              <div class="shortcut-hint">
-                <span class="key-box">Ctrl</span>
-                <span class="key-box">K</span>
-              </div>
-            </a-button>
-          </div>
-          <a-tooltip placement="right" v-if="isCollapsed">
-            <template #title>新对话</template>
-            <div class="new-chat-btn-collapsed" @click="createNewChat">
-              <FormOutlined />
-            </div>
-          </a-tooltip>
-
-          <div class="app-square-btn-wrapper" v-show="!isCollapsed">
-            <a-button class="app-square-btn" @click="goDashboard">
-              <RobotOutlined />
-              <span class="btn-text">智能体广场</span>
-            </a-button>
-          </div>
-          <a-tooltip placement="right" v-if="isCollapsed">
-            <template #title>智能体广场</template>
-            <div class="app-square-btn-collapsed" @click="goDashboard">
-              <RobotOutlined />
-            </div>
-          </a-tooltip>
-        </div>
-
-        <div class="chat-list-section">
-          <div class="section-title" v-show="!isCollapsed">历史会话</div>
-          <div class="chat-list" @scroll="handleChatListScroll" ref="chatListRef">
-            <template v-if="chatListLoading && chatList.length === 0">
-              <div v-for="i in 3" :key="'skeleton-' + i" class="chat-item-skeleton">
-                <a-skeleton :paragraph="{ rows: 1 }" :title="false" active />
-              </div>
-            </template>
-            <a-tooltip placement="right" v-if="isCollapsed" v-for="chat in chatList" :key="chat.id">
-              <template #title>{{ chat.title }}</template>
-              <div
-                class="chat-item chat-item-collapsed"
-                :class="{ active: currentChatId === chat.id }"
-                @click="selectChat(chat.id)"
-              >
-                <MessageOutlined />
-              </div>
-            </a-tooltip>
-            <template v-if="!isCollapsed">
-              <div
-                v-for="chat in chatList"
-                :key="chat.id"
-                class="chat-item"
-                :class="{ active: currentChatId === chat.id }"
-                @click="selectChat(chat.id)"
-              >
-                <div class="chat-item-content">
-                  <div class="chat-item-title">{{ chat.title }}</div>
-                  <div class="chat-item-time">{{ formatTime(chat.updateTime) }}</div>
-                </div>
-                <a-dropdown :trigger="['click']">
-                  <a-button type="text" size="small" class="chat-item-more" @click.stop>
-                    <MoreOutlined />
-                  </a-button>
-                  <template #overlay>
-                    <a-menu>
-                      <a-menu-item key="share" @click="shareChat(chat.id)">
-                        <ShareAltOutlined /> 分享对话
-                      </a-menu-item>
-                      <a-menu-item key="delete" class="delete-menu-item" @click="confirmDeleteChat(chat.id)">
-                        <DeleteOutlined /> 删除对话
-                      </a-menu-item>
-                    </a-menu>
-                  </template>
-                </a-dropdown>
-              </div>
-              <div v-if="chatListLoading && chatList.length > 0" class="chat-list-loading">
-                <a-spin size="small" />
-              </div>
-            </template>
-          </div>
-        </div>
-      </div>
-
-      <div class="sidebar-footer">
-        <template v-if="userStore.isLoggedIn">
-          <a-dropdown :trigger="['click']" placement="topLeft">
-            <div class="user-info" :class="{ collapsed: isCollapsed }">
-              <a-avatar :size="isCollapsed ? 36 : 40" :src="userStore.userAvatar">
-                {{ userStore.userName?.charAt(0)?.toUpperCase() }}
-              </a-avatar>
-              <div class="user-detail" v-show="!isCollapsed">
-                <span class="user-name">{{ userStore.userName }}</span>
-                <span class="user-role">{{ userStore.userInfo?.userProfile }}</span>
-              </div>
-            </div>
-            <template #overlay>
-              <a-menu>
-                <a-menu-item key="home" @click="goHome">
-                  <HomeOutlined /> 返回首页
-                </a-menu-item>
-                <a-menu-item key="profile" @click="goProfile">
-                  <UserOutlined /> 个人中心
-                </a-menu-item>
-                <a-menu-item key="dashboard" @click="goDashboard">
-                  <SettingOutlined /> 控制台
-                </a-menu-item>
-                <a-menu-divider />
-                <a-menu-item key="logout" @click="handleLogout">
-                  <LogoutOutlined /> 退出登录
-                </a-menu-item>
-              </a-menu>
-            </template>
-          </a-dropdown>
-        </template>
-        <template v-else>
-          <a-button type="primary" block @click="showAuthModal" v-show="!isCollapsed">
-            登录
-          </a-button>
-          <a-button type="primary" @click="showAuthModal" v-show="isCollapsed">
-            <UserOutlined />
-          </a-button>
-        </template>
-      </div>
-    </aside>
+    <ChatSidebar
+      ref="sidebarRef"
+      :agent-info="agentInfo"
+      :chat-list="chatList"
+      :current-chat-id="currentChatId"
+      :chat-list-loading="chatListLoading"
+      @select="selectChat"
+      @new-chat="createNewChat"
+      @share="shareChat"
+      @delete="requestDelete"
+      @load-more="loadSessions(true)"
+      @login="authModalVisible = true"
+    />
 
     <div class="main-container">
       <div class="chat-header" v-if="currentChatId">
@@ -155,71 +24,15 @@
       </div>
 
       <div class="chat-container">
-        <div class="chat-messages" ref="messagesRef" v-if="messages.length > 0">
-          <div class="messages-wrapper">
-            <div
-              v-for="msg in messages"
-              :key="msg.id"
-              class="message"
-              :class="msg.role"
-              @mouseenter="handleMouseEnter(msg.id)"
-              @mouseleave="hoverMessageId = ''"
-            >
-              <div class="message-content">
-                <div v-if="msg.role === 'assistant' && isLoading && !msg.content" class="message-loading">
-                  <span></span><span></span><span></span>
-                </div>
-                <MioManusMessage
-                  v-else-if="msg.role === 'assistant' && msg.segments"
-                  :content="msg.content"
-                  :segments="msg.segments"
-                  :is-loading="isLoading"
-                />
-                <div v-else class="message-text" v-html="formatMessage(msg.content)"></div>
-                <div class="message-actions">
-                  <div class="copy-area" v-show="!isLoading && hoverMessageId === msg.id && msg.content">
-                    <a-tooltip :title="copiedMessageId === msg.id ? '已复制' : '复制'">
-                      <a-button type="text" size="small" class="copy-btn" :class="{ 'copied': copiedMessageId === msg.id }" @click="copyMessage(msg.content, msg.id)">
-                        <CheckOutlined v-if="copiedMessageId === msg.id" />
-                        <CopyOutlined v-else />
-                      </a-button>
-                    </a-tooltip>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="chat-center-area" :class="{ 'has-messages': messages.length > 0 }">
-          <div class="welcome-section" v-if="messages.length === 0 && !isLoading">
-            <img :src="agentInfo?.avatar || '/favicon.ico'" alt="Agent" class="welcome-avatar" />
-            <h2 class="welcome-title">我能帮什么忙吗，{{ userStore.userName }}？</h2>
-          </div>
-          <div class="chat-input-wrapper">
-            <div class="chat-input-container">
-              <div class="input-box">
-                <a-textarea
-                  v-model:value="inputMessage"
-                  :placeholder="`给 ${agentInfo?.name || '智能体'} 发送消息`"
-                  :auto-size="{ minRows: 1, maxRows: 6 }"
-                  @pressEnter="handleEnter"
-                  class="chat-textarea"
-                />
-                <a-button
-                  type="primary"
-                  shape="circle"
-                  class="send-btn"
-                  :disabled="!inputMessage.trim() || isLoading"
-                  :loading="isLoading"
-                  @click="sendMessage"
-                >
-                  <ArrowUpOutlined v-if="!isLoading" />
-                </a-button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ChatMessageList ref="messageListRef" :messages="messages" :is-loading="isLoading" />
+        <ChatInput
+          v-model="inputMessage"
+          :agent-name="agentInfo?.name"
+          :agent-avatar="agentInfo?.avatar"
+          :has-messages="messages.length > 0"
+          :loading="isLoading"
+          @send="handleSend"
+        />
       </div>
     </div>
 
@@ -243,101 +56,67 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, watch, onUnmounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
-import { safeMarkdown } from '@/utils/security'
-import { useUserStore } from '@/store/user'
 import { getAgentById } from '@/api/agent'
-import {
-  chatWithCSApp,
-  chatWithDefaultAgent,
-  chatWithMioManus,
-  chatWithCustomAgent,
-  generateTitle,
-  chatWithStream
-} from '@/api/chat'
-
-import { getChatIdsPage, getChatHistory, deleteChat as deleteChatApi } from '@/api/chatMemory'
+import { useUserStore } from '@/store/user'
 import type { Agent } from '@/types'
 import AuthModal from '@/components/AuthModal.vue'
-import MioManusMessage from '@/views/chat/MioManusMessage.vue'
-import {
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  MessageOutlined,
-  MoreOutlined,
-  DeleteOutlined,
-  HomeOutlined,
-  RobotOutlined,
-  SettingOutlined,
-  LogoutOutlined,
-  UserOutlined,
-  ArrowUpOutlined,
-  FormOutlined,
-  CopyOutlined,
-  ShareAltOutlined,
-  CheckOutlined
-} from '@ant-design/icons-vue'
-
-interface MessageSegment {
-  content: string
-  type?: 'thinking' | 'action' | 'final'
-}
-
-interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  createTime: Date
-  segments?: MessageSegment[]
-}
-
-interface ChatSession {
-  id: string
-  title: string
-  updateTime: Date
-  hasMessage: boolean
-}
+import ChatSidebar from './components/ChatSidebar.vue'
+import ChatMessageList from './components/ChatMessageList.vue'
+import ChatInput from './components/ChatInput.vue'
+import { useChatSessions } from './composables/useChatSessions'
+import { useChatMessages } from './composables/useChatMessages'
+import { useChatStream } from './composables/useChatStream'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 
-const isCollapsed = ref<boolean>(false)
+const agentId = ref<number>(0)
+const agentInfo = ref<Agent | null>(null)
 const authModalVisible = ref<boolean>(false)
-const isLoading = ref<boolean>(false)
-const deleteModalVisible = ref<boolean>(false)
-const deleteLoading = ref<boolean>(false)
-const chatListHasMore = ref<boolean>(true)
-const chatListLoading = ref<boolean>(false)
-
-const currentChatId = ref<string>('')
-const hoverMessageId = ref<string>('')
-const copiedMessageId = ref<string>('')
-const pendingDeleteChatId = ref<string>('')
 const inputMessage = ref<string>('')
 
-const chatList = ref<ChatSession[]>([])
-const messages = ref<ChatMessage[]>([])
-const chatListCurrent = ref<number>(1)
-const agentId = ref<number>(0)
-const chatListPageSize = ref<number>(10)
-const chatListTotal = ref<number>(0)
-const agentInfo = ref<Agent | null>(null)
-const messagesRef = ref<HTMLElement | null>(null)
-const chatListRef = ref<HTMLElement | null>(null)
+const sidebarRef = ref<InstanceType<typeof ChatSidebar> | null>(null)
+const messageListRef = ref<InstanceType<typeof ChatMessageList> | null>(null)
 
-// 每个会话的加载状态和消息列表
-const chatLoadingMap = ref<Map<string, boolean>>(new Map())
-const chatMessagesMap = ref<Map<string, ChatMessage[]>>(new Map())
+function scrollToBottom(): void {
+  messageListRef.value?.scrollToBottom()
+}
 
-let eventSource: EventSource | null = null
-let currentEventSourceChatId: string = '' // 当前 EventSource 对应的会话ID
-let activeStream: { close: () => void } | null = null
-let currentStreamChatId: string = '' // 当前 Ollama 流式请求对应的会话ID
-let streamWatchdogTimer: ReturnType<typeof setTimeout> | null = null // 流式看门狗：连接被异常中断且收不到任何事件时强制收尾
-const STREAM_WATCHDOG_TIMEOUT_MS = 60000 // 后端 SseEmitter 45s 超时，看门狗阈值需大于它，只在连接"挂死"时触发
+function scrollToChatListTop(): void {
+  sidebarRef.value?.scrollToTop()
+}
+
+const messagesApi = useChatMessages({ scrollToBottom })
+
+const {
+  chatList,
+  chatListLoading,
+  deleteModalVisible,
+  deleteLoading,
+  loadChatHistory,
+  ensureSession,
+  updateChatTitleWithTypewriter,
+  shareChat,
+  requestDelete,
+  confirmDelete
+} = useChatSessions({
+  agentId,
+  onCurrentChatDeleted: createNewChat
+})
+
+const { sendMessage, cleanup: cleanupStream } = useChatStream({
+  agentId,
+  messagesApi,
+  ensureSession,
+  updateTitle: updateChatTitleWithTypewriter,
+  scrollToBottom,
+  scrollToChatListTop
+})
+
+const { currentChatId, messages, isLoading, switchChat, loadMessages } = messagesApi
 
 const currentChatTitle = computed(() => {
   const chat = chatList.value.find(c => c.id === currentChatId.value)
@@ -359,16 +138,10 @@ watch(
   () => route.params.conversationId,
   (conversationId) => {
     if (conversationId && typeof conversationId === 'string') {
-      currentChatId.value = conversationId
-      // 更新加载状态为当前会话的加载状态
-      isLoading.value = chatLoadingMap.value.get(conversationId) || false
-      // 从Map中加载当前会话的消息
-      messages.value = chatMessagesMap.value.get(conversationId) || []
+      switchChat(conversationId)
       loadMessages(conversationId)
     } else {
-      currentChatId.value = ''
-      messages.value = []
-      isLoading.value = false
+      switchChat('')
     }
   },
   { immediate: true }
@@ -376,13 +149,13 @@ watch(
 
 async function loadAgentInfo(): Promise<void> {
   try {
-    const res = await getAgentById(agentId.value)
-    agentInfo.value = res
-    await loadChatHistory()
-    
-    if (route.params.conversationId && typeof route.params.conversationId === 'string') {
-      currentChatId.value = route.params.conversationId
-      loadMessages(route.params.conversationId)
+    agentInfo.value = await getAgentById(agentId.value)
+    await loadSessions()
+
+    const conversationId = route.params.conversationId
+    if (conversationId && typeof conversationId === 'string') {
+      switchChat(conversationId)
+      loadMessages(conversationId)
     }
   } catch (e) {
     console.error(e)
@@ -390,151 +163,43 @@ async function loadAgentInfo(): Promise<void> {
   }
 }
 
-async function loadChatHistory(isLoadMore: boolean = false): Promise<void> {
-  if (!userStore.isLoggedIn) return
-  
-  if (chatListLoading.value) return
-  if (isLoadMore && !chatListHasMore.value) return
-  
-  chatListLoading.value = true
-  
-  try {
-    const current = isLoadMore ? chatListCurrent.value + 1 : 1
-    const res = await getChatIdsPage(String(agentId.value), current, chatListPageSize.value)
-    
-    const newChats = res.records.map((item: any) => ({
-      id: item.conversationId,
-      title: item.title || '新对话',
-      updateTime: item.updateTime ? new Date(item.updateTime) : new Date(),
-      hasMessage: true
-    }))
-    
-    if (isLoadMore) {
-      chatList.value = [...chatList.value, ...newChats]
-    } else {
-      chatList.value = newChats
-    }
-    
-    chatListCurrent.value = res.current
-    chatListTotal.value = res.total
-    chatListHasMore.value = res.current < res.pages
-  } catch (e) {
-    console.error(e)
-  } finally {
-    chatListLoading.value = false
-    nextTick(() => {
-      checkAndLoadMore()
-    })
-  }
-}
-
-function checkAndLoadMore(): void {
-  if (!chatListRef.value || !chatListHasMore.value || chatListLoading.value) return
-  
-  const { scrollHeight, clientHeight } = chatListRef.value
-  
-  if (scrollHeight <= clientHeight) {
-    loadChatHistory(true)
-  }
-}
-
-function handleChatListScroll(event: Event): void {
-  const target = event.target as HTMLElement
-  const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight
-  
-  if (scrollBottom < 50 && chatListHasMore.value && !chatListLoading.value) {
-    loadChatHistory(true)
-  }
+/** 加载会话列表；仅在真实拉取过后检查列表是否撑满一屏，避免游客/无更多页时空转 */
+async function loadSessions(isLoadMore: boolean = false): Promise<void> {
+  const loaded = await loadChatHistory(isLoadMore)
+  if (!loaded) return
+  nextTick(() => {
+    sidebarRef.value?.checkListFilled()
+  })
 }
 
 function createNewChat(): void {
-  currentChatId.value = ''
-  messages.value = []
+  switchChat('')
   inputMessage.value = ''
-  isLoading.value = false
   router.push(`/chat/${agentId.value}`)
 }
 
 function selectChat(conversationId: string): void {
-  currentChatId.value = conversationId
-  // 更新加载状态为当前会话的加载状态
-  isLoading.value = chatLoadingMap.value.get(conversationId) || false
-  // 从Map中加载当前会话的消息
-  messages.value = chatMessagesMap.value.get(conversationId) || []
+  switchChat(conversationId)
   router.push(`/chat/${agentId.value}/${conversationId}`)
   loadMessages(conversationId)
 }
 
-function mergeConsecutiveAssistantMessages(msgs: ChatMessage[]): ChatMessage[] {
-  if (msgs.length === 0) return []
-  const result: ChatMessage[] = []
-  for (const msg of msgs) {
-    const last = result[result.length - 1]
-    if (msg.role === 'assistant' && last && last.role === 'assistant') {
-      if (!last.segments) {
-        last.segments = [{ content: last.content }]
-      }
-      last.segments.push({ content: msg.content })
-      last.content += msg.content
-    } else {
-      result.push({ ...msg })
-    }
+function handleSend(): void {
+  const content = inputMessage.value.trim()
+  if (!content || isLoading.value) return
+
+  // 游客仅默认智能体可直接对话，其余引导登录
+  if (agentId.value !== 1 && !userStore.isLoggedIn) {
+    authModalVisible.value = true
+    return
   }
-  return result
+
+  sendMessage(content)
+  inputMessage.value = ''
 }
 
-async function loadMessages(conversationId: string): Promise<void> {
-  if (!userStore.isLoggedIn) return
-
-  try {
-    // 新会话刚发送首条消息时会与本请求竞态（后端会话记录尚未落库），此时静默失败并保留本地消息
-    const res = await getChatHistory(conversationId, { skipErrorMessage: true })
-    if (!res) {
-      return
-    }
-    let loadedMessages = res.map((item: any, index: number) => ({
-      id: `${conversationId}_${index}`,
-      role: item.role,
-      content: item.content,
-      createTime: new Date()
-    }))
-
-    // 合并连续的 assistant 消息（MioManus 的多步回复）
-    loadedMessages = mergeConsecutiveAssistantMessages(loadedMessages)
-
-    // 如果该会话正在加载中，不要覆盖 chatMessagesMap，只更新显示
-    const isLoadingThisChat = chatLoadingMap.value.get(conversationId)
-    if (!isLoadingThisChat) {
-      // 存储到Map中
-      chatMessagesMap.value.set(conversationId, loadedMessages)
-    }
-
-    // 如果是当前会话，更新显示的消息
-    if (currentChatId.value === conversationId) {
-      if (isLoadingThisChat) {
-        // 正在加载中，使用 Map 中的消息（包含正在接收的内容）
-        messages.value = chatMessagesMap.value.get(conversationId) || loadedMessages
-      } else {
-        messages.value = loadedMessages
-      }
-    }
-    nextTick(() => {
-      scrollToBottom()
-    })
-  } catch (e) {
-    console.error(e)
-    // 本地已有该会话的消息（正在接收中或刚创建），不提示错误
-    if (!chatMessagesMap.value.get(conversationId)?.length) {
-      message.error('加载消息失败')
-    }
-  }
-}
-
-function handleEnter(e: KeyboardEvent): void {
-  if (!e.shiftKey) {
-    e.preventDefault()
-    sendMessage()
-  }
+function handleDeleteConfirm(): void {
+  confirmDelete((chatId) => chatId === currentChatId.value)
 }
 
 function handleKeyboardShortcut(e: KeyboardEvent): void {
@@ -544,429 +209,7 @@ function handleKeyboardShortcut(e: KeyboardEvent): void {
   }
 }
 
-function disarmStreamWatchdog(): void {
-  if (streamWatchdogTimer) {
-    clearTimeout(streamWatchdogTimer)
-    streamWatchdogTimer = null
-  }
-}
-
-function sendMessage(): void {
-  const content = inputMessage.value.trim()
-  if (!content || isLoading.value) return
-
-  const isDefaultAgent = agentId.value === 1
-
-  if (!isDefaultAgent && !userStore.isLoggedIn) {
-    authModalVisible.value = true
-    return
-  }
-
-  const isNewChat = !currentChatId.value
-  if (isNewChat && userStore.isLoggedIn) {
-    currentChatId.value = generateConversationId()
-  }
-  
-  if (isNewChat && !userStore.isLoggedIn) {
-    currentChatId.value = 'temp_' + Date.now()
-  }
-
-  // 记录当前会话ID
-  const chatIdForThisMessage = currentChatId.value
-
-  // 获取或创建该会话的消息列表
-  const existingMessages = chatMessagesMap.value.get(chatIdForThisMessage) || []
-  
-  const userMessageIndex = existingMessages.length
-  const userMessage: ChatMessage = {
-    id: generateUUID(),
-    role: 'user',
-    content,
-    createTime: new Date()
-  }
-  const chatMessages = [...existingMessages, userMessage]
-  chatMessagesMap.value.set(chatIdForThisMessage, chatMessages)
-  
-  // 如果是当前会话，更新显示的消息
-  if (currentChatId.value === chatIdForThisMessage) {
-    messages.value = chatMessages
-  }
-
-  inputMessage.value = ''
-
-  if (userStore.isLoggedIn) {
-    const existingChatIndex = chatList.value.findIndex(c => c.id === chatIdForThisMessage)
-    if (existingChatIndex === -1) {
-      chatList.value.unshift({
-        id: chatIdForThisMessage,
-        title: '新对话',
-        updateTime: new Date(),
-        hasMessage: true
-      })
-    } else {
-      const existingChat = chatList.value[existingChatIndex]
-      existingChat.updateTime = new Date()
-      chatList.value.splice(existingChatIndex, 1)
-      chatList.value.unshift(existingChat)
-    }
-  }
-
-  if (isNewChat && userStore.isLoggedIn) {
-    router.push(`/chat/${agentId.value}/${chatIdForThisMessage}`)
-  }
-
-  nextTick(() => {
-    scrollToBottom()
-    scrollToChatListTop()
-  })
-
-  // 设置当前会话的加载状态
-  chatLoadingMap.value.set(chatIdForThisMessage, true)
-  isLoading.value = true
-
-  const aiMessageIndex = chatMessages.length
-  const isMioManus = agentId.value === 3
-  const aiMessage: ChatMessage = {
-    id: generateUUID(),
-    role: 'assistant',
-    content: '',
-    createTime: new Date(),
-    segments: isMioManus ? [] : undefined
-  }
-  const messagesWithAi = [...chatMessages, aiMessage]
-  chatMessagesMap.value.set(chatIdForThisMessage, messagesWithAi)
-  
-  // 如果是当前会话，更新显示的消息
-  if (currentChatId.value === chatIdForThisMessage) {
-    messages.value = messagesWithAi
-  }
-
-  const token: string = localStorage.getItem('token') || ''
-  const userId = userStore.userInfo?.id || null
-
-  // 走本地大模型的情况
-  const provider = localStorage.getItem('ai-model-provider') || 'dashscope'
-  if (provider === 'ollama') {
-    // 本地 Ollama 直连
-    if (activeStream) {
-      activeStream.close()
-      activeStream = null
-    }
-    currentStreamChatId = chatIdForThisMessage
-
-    const history = chatMessages
-      .filter(m => m.role === 'user' || (m.role === 'assistant' && m.content))
-      .map(m => ({ role: m.role, content: m.content }))
-
-    activeStream = chatWithStream(
-      content,
-      chatIdForThisMessage,
-      agentId.value,
-      token,
-      userId,
-      history,
-      (rawData) => {
-        if (currentStreamChatId !== chatIdForThisMessage) return
-        const msgs = chatMessagesMap.value.get(chatIdForThisMessage) || []
-        if (rawData && rawData !== '[DONE]') {
-          if (aiMessageIndex < msgs.length) {
-            const updated = [...msgs]
-            updated[aiMessageIndex] = {
-              ...updated[aiMessageIndex],
-              content: updated[aiMessageIndex].content + rawData
-            }
-            chatMessagesMap.value.set(chatIdForThisMessage, updated)
-            if (currentChatId.value === chatIdForThisMessage) {
-              messages.value = updated
-              nextTick(() => scrollToBottom())
-            }
-          }
-        }
-        if (rawData === '[DONE]') {
-          chatLoadingMap.value.delete(chatIdForThisMessage)
-          isLoading.value = false
-          activeStream = null
-          currentStreamChatId = ''
-        }
-      },
-      (error) => {
-        console.error('Ollama 错误:', error)
-        chatLoadingMap.value.delete(chatIdForThisMessage)
-        isLoading.value = false
-        activeStream = null
-        currentStreamChatId = ''
-      }
-    )
-    return
-  }
-
-  // 关闭旧的 EventSource
-  if (eventSource) {
-    eventSource.close()
-    eventSource = null
-  }
-
-  // 记录当前 EventSource 对应的会话ID
-  currentEventSourceChatId = chatIdForThisMessage
-
-  if (isDefaultAgent) {
-    eventSource = chatWithDefaultAgent(content, chatIdForThisMessage, agentId.value, userId)
-  } else if (agentId.value === 2) {
-    eventSource = chatWithCSApp(content, chatIdForThisMessage, agentId.value, token)
-  } else if (agentId.value === 3) {
-    eventSource = chatWithMioManus(content, chatIdForThisMessage, agentId.value, token)
-  } else {
-    eventSource = chatWithCustomAgent(content, chatIdForThisMessage, agentId.value, token)
-  }
-
-  // 流式异常收尾：移除空的AI消息、尝试生成标题、复位加载状态
-  const handleStreamError = (error: Event) => {
-    console.error('SSE连接错误:', error)
-
-    // 检查是否是当前会话的消息，如果不是则忽略
-    if (currentEventSourceChatId !== chatIdForThisMessage) {
-      return
-    }
-
-    // 如果该会话已经不在加载中了，说明消息已经完成接收（[DONE]已处理），忽略此错误
-    const isStillLoading = chatLoadingMap.value.get(chatIdForThisMessage)
-    if (!isStillLoading) {
-      return
-    }
-
-    disarmStreamWatchdog()
-
-    // 从Map中获取该会话的消息列表
-    const errorMessages = chatMessagesMap.value.get(chatIdForThisMessage) || []
-
-    // 移除空的AI消息
-    const lastMsg = errorMessages[errorMessages.length - 1]
-    if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.content) {
-      const updatedMessages = errorMessages.slice(0, -1)
-      chatMessagesMap.value.set(chatIdForThisMessage, updatedMessages)
-
-      // 如果是当前会话，更新显示的消息
-      if (currentChatId.value === chatIdForThisMessage) {
-        messages.value = updatedMessages
-      }
-    }
-
-    const finalErrorMessages = chatMessagesMap.value.get(chatIdForThisMessage) || []
-    if (isNewChat && userStore.isLoggedIn) {
-      updateChatTitleWithTypewriter(content, finalErrorMessages[aiMessageIndex]?.content || '', userMessageIndex, chatIdForThisMessage)
-    }
-
-    chatLoadingMap.value.delete(chatIdForThisMessage)
-    isLoading.value = chatLoadingMap.value.get(currentChatId.value) || false
-    if (eventSource) {
-      eventSource.close()
-      eventSource = null
-      currentEventSourceChatId = ''
-    }
-  }
-
-  // 连接被异常中断且收不到任何事件时（如代理未转发断连），看门狗强制走异常收尾
-  disarmStreamWatchdog()
-  streamWatchdogTimer = setTimeout(() => {
-    streamWatchdogTimer = null
-    if (chatLoadingMap.value.get(chatIdForThisMessage)) {
-      handleStreamError(new Event('stream-watchdog'))
-    }
-  }, STREAM_WATCHDOG_TIMEOUT_MS)
-
-  eventSource.onmessage = (event) => {
-    const rawData = event.data
-
-    // 检查是否是当前会话的消息，如果不是则忽略
-    if (currentEventSourceChatId !== chatIdForThisMessage) {
-      return
-    }
-
-    // 从Map中获取该会话的消息列表
-    let chatMessages = chatMessagesMap.value.get(chatIdForThisMessage) || []
-
-    if (rawData && rawData !== '[DONE]') {
-      // 解析后端发送的 JSON 格式，提取 type 和 content
-      let segmentContent = rawData
-      let segmentType: MessageSegment['type'] = undefined
-      try {
-        const parsed = JSON.parse(rawData)
-        if (parsed.content !== undefined) {
-          segmentContent = parsed.content
-          segmentType = parsed.type
-        }
-      } catch {
-        // 兼容旧格式，直接当作普通文本
-      }
-
-      if (aiMessageIndex < chatMessages.length) {
-        // 创建新数组以确保响应式更新
-        const updatedMessages = [...chatMessages]
-        const targetMsg = updatedMessages[aiMessageIndex]
-        const newSegment: MessageSegment = { content: segmentContent, type: segmentType }
-        updatedMessages[aiMessageIndex] = {
-          ...targetMsg,
-          content: targetMsg.content + segmentContent,
-          segments: targetMsg.segments ? [...targetMsg.segments, newSegment] : undefined
-        }
-        chatMessagesMap.value.set(chatIdForThisMessage, updatedMessages)
-
-        // 如果是当前会话，更新显示的消息
-        if (currentChatId.value === chatIdForThisMessage) {
-          messages.value = updatedMessages
-          nextTick(() => scrollToBottom())
-        }
-      }
-    }
-    
-    if (rawData === '[DONE]') {
-      disarmStreamWatchdog()
-      const finalMessages = chatMessagesMap.value.get(chatIdForThisMessage) || chatMessages
-      if (isNewChat && userStore.isLoggedIn) {
-        updateChatTitleWithTypewriter(content, finalMessages[aiMessageIndex]?.content || '', userMessageIndex, chatIdForThisMessage)
-      }
-      chatLoadingMap.value.delete(chatIdForThisMessage)
-      isLoading.value = chatLoadingMap.value.get(currentChatId.value) || false
-      if (eventSource) {
-        eventSource.close()
-        eventSource = null
-        currentEventSourceChatId = ''
-      }
-    }
-  }
-
-  eventSource.onerror = handleStreamError
-}
-
-async function updateChatTitleWithTypewriter(userContent: string, aiContent: string, chatIndex: number, chatId: string): Promise<void> {
-  const title = await generateTitle(agentId.value, chatId, userContent + '\n' + aiContent)
-  
-  const chatItem = chatList.value.find(c => c.id === chatId)
-  if (!chatItem) return
-  
-  chatItem.title = ''
-  
-  for (let i = 0; i < title.length; i++) {
-    chatItem.title += title[i]
-    await new Promise(resolve => setTimeout(resolve, 50))
-  }
-}
-
-function generateConversationId(): string {
-  const timestamp = Date.now().toString()
-  const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
-  return timestamp + random
-}
-
-function generateUUID(): string {
-  return Math.floor(Math.random() * 100000000).toString()
-}
-
-function scrollToBottom(): void {
-  if (messagesRef.value) {
-    messagesRef.value.scrollTop = messagesRef.value.scrollHeight
-  }
-}
-
-function scrollToChatListTop(): void {
-  if (chatListRef.value) {
-    chatListRef.value.scrollTop = 0
-  }
-}
-
-function handleMouseEnter(msgId: string): void {
-  hoverMessageId.value = msgId
-  if (copiedMessageId.value && copiedMessageId.value !== msgId) {
-    copiedMessageId.value = ''
-  }
-}
-
-async function copyMessage(content: string, messageId: string): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(content)
-    copiedMessageId.value = messageId
-  } catch (e) {
-    console.error(e)
-    message.error('复制失败')
-  }
-}
-
-function shareChat(conversationId: string): void {
-  const shareUrl = `${window.location.origin}/share/${agentId.value}/${conversationId}`
-  navigator.clipboard.writeText(shareUrl).then(() => {
-    message.success('分享链接已复制到剪贴板')
-  }).catch(() => {
-    message.error('复制失败')
-  })
-}
-
-function confirmDeleteChat(conversationId: string): void {
-  pendingDeleteChatId.value = conversationId
-  deleteModalVisible.value = true
-}
-
-async function handleDeleteConfirm(): Promise<void> {
-  if (!pendingDeleteChatId.value) return
-  
-  deleteLoading.value = true
-  try {
-    await deleteChatApi(pendingDeleteChatId.value)
-    chatList.value = chatList.value.filter(c => c.id !== pendingDeleteChatId.value)
-    if (currentChatId.value === pendingDeleteChatId.value) {
-      createNewChat()
-    }
-    message.success('删除成功')
-    deleteModalVisible.value = false
-  } catch (e) {
-    console.error(e)
-    message.error('删除失败')
-  } finally {
-    deleteLoading.value = false
-    pendingDeleteChatId.value = ''
-  }
-}
-
-function formatMessage(content: string): string {
-  return safeMarkdown(content)
-}
-
-function formatTime(date: Date | string): string {
-  const d = new Date(date)
-  const now = new Date()
-  const diff = now.getTime() - d.getTime()
-  if (diff < 60000) return '刚刚'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`
-  return d.toLocaleDateString()
-}
-
-function toggleCollapse(): void {
-  isCollapsed.value = !isCollapsed.value
-}
-
-function goHome(): void {
-  router.push('/')
-}
-
-function goDashboard(): void {
-  router.push('/dashboard')
-}
-
-function goProfile(): void {
-  router.push('/dashboard/profile')
-}
-
-function showAuthModal(): void {
-  authModalVisible.value = true
-}
-
 function handleAuthSuccess(): void {
-  window.location.reload()
-}
-
-async function handleLogout(): Promise<void> {
-  await userStore.logout()
-  message.success('已退出登录')
   window.location.reload()
 }
 
@@ -978,19 +221,9 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyboardShortcut)
 })
 
-// 组件销毁前关闭连接
+// 组件销毁前关闭流式连接
 onBeforeUnmount(() => {
-  disarmStreamWatchdog()
-  if (eventSource) {
-    eventSource.close()
-    eventSource = null
-    currentEventSourceChatId = ''
-  }
-  if (activeStream) {
-    activeStream.close()
-    activeStream = null
-    currentStreamChatId = ''
-  }
+  cleanupStream()
 })
 </script>
 
@@ -999,385 +232,6 @@ onBeforeUnmount(() => {
   display: flex;
   height: 100vh;
   background: #f5f7fa;
-}
-
-.sidebar {
-  width: 280px;
-  background: #f9fafd;
-  display: flex;
-  flex-direction: column;
-  transition: width 0.3s;
-  border-right: 1px solid #e8eaed;
-
-  &.collapsed {
-    width: 64px;
-  }
-
-  .sidebar-top {
-    height: 64px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 16px;
-    border-bottom: 1px solid #e8eaed;
-
-    .logo-section {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-
-      .agent-avatar {
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        object-fit: cover;
-      }
-
-      .agent-name {
-        font-size: 16px;
-        font-weight: 600;
-        color: #202124;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-    }
-
-    .collapse-btn {
-      color: #5f6368;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 4px;
-
-      &:hover {
-        color: $primary-color;
-        background: rgba(42, 161, 169, 0.08);
-      }
-    }
-  }
-
-  &.collapsed {
-    .sidebar-top {
-      justify-content: center;
-      padding: 0;
-    }
-  }
-
-  .sidebar-content {
-    flex: 1;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    padding: 12px;
-
-    .sidebar-actions {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-bottom: 16px;
-    }
-
-    .new-chat-btn {
-      width: 100%;
-      height: 44px;
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
-      padding: 0 16px;
-      background: linear-gradient(135deg, rgba($primary-color, 0.1) 0%, rgba($primary-color, 0.05) 100%);
-      border: 1px solid $primary-color;
-      border-radius: 10px;
-      color: $primary-color;
-      font-size: 15px;
-      font-weight: 600;
-
-      &:hover {
-        background: linear-gradient(135deg, rgba($primary-color, 0.18) 0%, rgba($primary-color, 0.1) 100%);
-        border-color: darken($primary-color, 5%);
-        color: darken($primary-color, 5%);
-      }
-
-      .btn-text {
-        flex: 1;
-        text-align: left;
-      }
-
-      .shortcut-hint {
-        display: flex;
-        gap: 4px;
-
-        .key-box {
-          padding: 2px 6px;
-          background: rgba($primary-color, 0.15);
-          border: 1px solid rgba($primary-color, 0.3);
-          border-radius: 4px;
-          font-size: 11px;
-          color: $primary-color;
-          font-weight: 500;
-        }
-      }
-    }
-
-    .new-chat-btn-collapsed {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 40px;
-      height: 40px;
-      margin: 0 auto;
-      background: linear-gradient(135deg, rgba($primary-color, 0.1) 0%, rgba($primary-color, 0.05) 100%);
-      border: 1px solid $primary-color;
-      border-radius: 10px;
-      cursor: pointer;
-      color: $primary-color;
-
-      &:hover {
-        background: linear-gradient(135deg, rgba($primary-color, 0.18) 0%, rgba($primary-color, 0.1) 100%);
-        border-color: darken($primary-color, 5%);
-        color: darken($primary-color, 5%);
-      }
-    }
-
-    .app-square-btn {
-      width: 100%;
-      height: 40px;
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
-      padding: 0 16px;
-      background: #fff;
-      border: 1px solid #e5e6eb;
-      border-radius: 8px;
-      color: #5f6368;
-      font-size: 15px;
-      font-weight: 500;
-
-      &:hover {
-        background: rgba($primary-color, 0.08);
-        border-color: $primary-color;
-        color: $primary-color;
-      }
-
-      .btn-text {
-        flex: 1;
-        text-align: left;
-      }
-    }
-
-    .app-square-btn-collapsed {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 40px;
-      height: 40px;
-      margin: 0 auto;
-      background: #fff;
-      border: 1px solid #e5e6eb;
-      border-radius: 8px;
-      cursor: pointer;
-
-      &:hover {
-        background: rgba($primary-color, 0.08);
-        border-color: $primary-color;
-        color: $primary-color;
-      }
-    }
-
-    .chat-list-section {
-      flex: 1;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      border-top: 1px solid #e8eaed;
-      padding-top: 12px;
-
-      .section-title {
-        font-size: 12px;
-        color: #86909c;
-        padding: 0 4px;
-        margin-bottom: 8px;
-        font-weight: 500;
-      }
-    }
-
-    .chat-list {
-      flex: 1;
-      overflow-y: auto;
-      overflow-x: hidden;
-      scrollbar-width: thin;
-      scrollbar-color: transparent transparent;
-
-      &:hover {
-        scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
-      }
-
-      &::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
-      }
-
-      &::-webkit-scrollbar-button {
-        display: none;
-      }
-
-      &::-webkit-scrollbar-track {
-        background: transparent;
-      }
-
-      &::-webkit-scrollbar-thumb {
-        background: transparent;
-        border-radius: 3px;
-        transition: background 0.3s;
-      }
-
-      &:hover::-webkit-scrollbar-thumb {
-        background: rgba(0, 0, 0, 0.15);
-      }
-
-      &:hover::-webkit-scrollbar-thumb:hover {
-        background: rgba(0, 0, 0, 0.25);
-      }
-
-      .chat-item {
-        display: flex;
-        align-items: center;
-        padding: 10px 12px;
-        margin: 4px 0;
-        cursor: pointer;
-        color: #5f6368;
-        border-radius: 8px;
-        transition: all 0.2s;
-
-        &:hover {
-          background: rgba(42, 161, 169, 0.08);
-        }
-
-        &.active {
-          background: rgba(42, 161, 169, 0.12);
-          color: $primary-color;
-        }
-
-        &.chat-item-collapsed {
-          justify-content: center;
-          width: 40px;
-          height: 40px;
-          margin: 4px auto;
-          padding: 0;
-        }
-
-        .chat-item-content {
-          flex: 1;
-          min-width: 0;
-
-          .chat-item-title {
-            font-size: 14px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-          }
-
-          .chat-item-time {
-            font-size: 12px;
-            color: #909399;
-            margin-top: 2px;
-          }
-        }
-
-        .chat-item-more {
-          opacity: 0;
-          transition: opacity 0.2s;
-          rotate: 90deg;
-        }
-
-        &:hover .chat-item-more {
-          opacity: 1;
-        }
-      }
-
-      .chat-item-skeleton {
-        padding: 10px 12px;
-        margin: 4px 0;
-      }
-
-      .chat-list-loading {
-        display: flex;
-        justify-content: center;
-        padding: 12px 0;
-      }
-    }
-  }
-
-  .sidebar-footer {
-    padding: 16px;
-    border-top: 1px solid #e8eaed;
-
-    .user-info {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 8px;
-      cursor: pointer;
-      border-radius: 8px;
-      transition: background 0.3s;
-
-      &:hover {
-        background: rgba(42, 161, 169, 0.08);
-      }
-
-      .user-detail {
-        display: flex;
-        flex-direction: column;
-
-        .user-name {
-          font-size: 14px;
-          font-weight: 500;
-          color: #202124;
-        }
-
-        .user-role {
-          margin-top: 4px;
-          font-size: 12px;
-          color: #909399;
-        }
-      }
-
-      &.collapsed {
-        justify-content: center;
-        padding: 8px;
-      }
-    }
-
-    :deep(.ant-btn-primary) {
-      background: $primary-color;
-      border-color: $primary-color;
-
-      &:hover {
-        background: darken($primary-color, 10%);
-        border-color: darken($primary-color, 10%);
-      }
-    }
-  }
-
-  &.collapsed {
-    .sidebar-content {
-      padding: 8px;
-
-      .chat-list {
-        .chat-item {
-          justify-content: center;
-          padding: 10px;
-        }
-      }
-    }
-
-    .sidebar-footer {
-      padding: 8px;
-      display: flex;
-      justify-content: center;
-    }
-  }
 }
 
 .main-container {
@@ -1418,466 +272,5 @@ onBeforeUnmount(() => {
   flex-direction: column;
   overflow: hidden;
   position: relative;
-
-  .chat-messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 24px;
-    padding-bottom: 120px;
-
-    .messages-wrapper {
-      max-width: 800px;
-      margin: 0 auto;
-
-      .message {
-        display: flex;
-        gap: 16px;
-        margin-bottom: 24px;
-
-        &.user {
-          flex-direction: row-reverse;
-
-          .message-content {
-            align-items: flex-end;
-          }
-        }
-
-        .message-avatar {
-          flex-shrink: 0;
-
-          .agent-avatar-msg {
-            background: $primary-color;
-          }
-        }
-
-        .message-content {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          position: relative;
-
-          .message-text {
-            max-width: 70%;
-            padding: 12px 16px;
-            border-radius: 12px;
-            font-size: 14px;
-            line-height: 1.6;
-            word-break: break-word;
-
-            :deep(pre) {
-              background: #f6f8fa;
-              border-radius: 6px;
-              padding: 12px 16px;
-              overflow-x: auto;
-              margin: 8px 0;
-
-              code {
-                font-family: 'Consolas', 'Monaco', monospace;
-                font-size: 13px;
-              }
-            }
-
-            :deep(code) {
-              background: #f6f8fa;
-              padding: 2px 6px;
-              border-radius: 4px;
-              font-family: 'Consolas', 'Monaco', monospace;
-              font-size: 13px;
-            }
-
-            :deep(p) {
-              margin: 0 0 8px 0;
-
-              &:last-child {
-                margin-bottom: 0;
-              }
-            }
-
-            :deep(ul), :deep(ol) {
-              margin: 8px 0;
-              padding-left: 20px;
-            }
-
-            :deep(h1), :deep(h2), :deep(h3), :deep(h4), :deep(h5), :deep(h6) {
-              margin: 12px 0 8px 0;
-              font-weight: 600;
-            }
-
-            :deep(a) {
-              color: $primary-color;
-              text-decoration: none;
-
-              &:hover {
-                text-decoration: underline;
-              }
-            }
-
-            :deep(blockquote) {
-              border-left: 4px solid $primary-color;
-              padding-left: 12px;
-              margin: 8px 0;
-              color: #666;
-            }
-          }
-
-          .message-loading {
-            display: flex;
-            gap: 6px;
-            padding: 8px 0;
-
-            span {
-              width: 8px;
-              height: 8px;
-              background: $primary-color;
-              border-radius: 50%;
-              animation: loading-bounce 1.4s infinite ease-in-out both;
-
-              &:nth-child(1) {
-                animation-delay: -0.32s;
-              }
-              &:nth-child(2) {
-                animation-delay: -0.16s;
-              }
-              &:nth-child(3) {
-                animation-delay: 0s;
-              }
-            }
-          }
-
-          .message-actions {
-            min-height: 35px;
-            margin-top: 8px;
-            display: flex;
-            gap: 8px;
-            align-items: center;
-
-            .copy-btn {
-              color: #86909c;
-              padding: 4px 8px;
-              height: auto;
-              font-size: 14px;
-              transition: all 0.2s;
-
-              &:hover {
-                color: $primary-color;
-                background: rgba($primary-color, 0.08);
-              }
-
-              &.copied {
-                color: #52c41a;
-              }
-            }
-          }
-        }
-
-        &.user .message-text {
-          background: $primary-color;
-          color: #fff;
-
-          :deep(code) {
-            background: rgba(255, 255, 255, 0.2);
-          }
-
-          :deep(pre) {
-            background: rgba(255, 255, 255, 0.1);
-          }
-        }
-
-        &.assistant .message-text {
-          background: transparent;
-          color: #202124;
-          max-width: 100%;
-          padding: 0;
-        }
-      }
-    }
-  }
-
-  .chat-center-area {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    flex: 1;
-    padding: 24px;
-    width: 100%;
-    box-sizing: border-box;
-
-    &.has-messages {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      flex: none;
-      justify-content: flex-end;
-      padding: 16px 24px 24px;
-      background: linear-gradient(to top, #fff 80%, transparent);
-
-      .welcome-section {
-        display: none;
-      }
-    }
-
-    .welcome-section {
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      gap: 16px;
-      margin-bottom: 32px;
-
-      .welcome-avatar {
-        width: 48px;
-        height: 48px;
-        border-radius: 50%;
-        object-fit: cover;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        flex-shrink: 0;
-      }
-
-      .welcome-title {
-        font-size: 24px;
-        font-weight: 600;
-        color: #1d2129;
-        margin: 0;
-        white-space: nowrap;
-      }
-    }
-
-    .chat-input-wrapper {
-      width: 100%;
-      max-width: 800px;
-
-      .chat-input-container {
-        width: 100%;
-
-        .input-box {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          background: #fff;
-          border: 1px solid #e5e6eb;
-          border-radius: 24px;
-          padding: 14px 18px;
-          box-shadow: 0 4px 12px rgba(242, 243, 245, 1);
-          transition: all 0.2s;
-
-          &:focus-within {
-            border-color: $primary-color;
-            box-shadow: 0 4px 16px rgba(42, 161, 169, 0.2);
-          }
-
-          .chat-textarea {
-            flex: 1;
-            border: none;
-            background: transparent;
-            resize: none;
-            font-size: 16px;
-            line-height: 1.5;
-            color: #1d2129;
-
-            &:focus {
-              outline: none;
-              box-shadow: none;
-            }
-
-            &::placeholder {
-              color: #86909c;
-            }
-
-            :deep(.ant-input) {
-              border: none;
-              background: transparent;
-              padding: 0;
-
-              &:focus {
-                outline: none;
-                box-shadow: none;
-              }
-            }
-          }
-
-          .send-btn {
-            width: 40px;
-            height: 40px;
-            min-width: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: $primary-color;
-            border-color: $primary-color;
-            flex-shrink: 0;
-
-            &:hover:not(:disabled) {
-              background: darken($primary-color, 10%);
-              border-color: darken($primary-color, 10%);
-            }
-
-            &:disabled {
-              background: #c9cdd4;
-              border-color: #c9cdd4;
-            }
-
-            :deep(.anticon) {
-              font-size: 18px;
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-@media (max-width: 768px) {
-  .sidebar {
-    width: 240px;
-
-    &.collapsed {
-      width: 64px;
-    }
-  }
-
-  .chat-container {
-    .chat-center-area {
-      padding: 16px;
-
-      .welcome-section {
-        gap: 12px;
-
-        .welcome-avatar {
-          width: 40px;
-          height: 40px;
-        }
-
-        .welcome-title {
-          font-size: 20px;
-        }
-      }
-
-      .chat-input-wrapper {
-        .chat-input-container {
-          .input-box {
-            padding: 12px 14px;
-            border-radius: 20px;
-
-            .chat-textarea {
-              font-size: 14px;
-            }
-
-            .send-btn {
-              width: 36px;
-              height: 36px;
-              min-width: 36px;
-
-              :deep(.anticon) {
-                font-size: 16px;
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-@media (max-width: 480px) {
-  .sidebar {
-    position: absolute;
-    z-index: 100;
-    height: 100%;
-
-    &.collapsed {
-      width: 0;
-      overflow: hidden;
-    }
-  }
-
-  .chat-container {
-    .chat-center-area {
-      .welcome-section {
-        .welcome-title {
-          font-size: 20px;
-        }
-      }
-    }
-  }
-}
-
-@keyframes loading-bounce {
-  0%, 80%, 100% {
-    transform: scale(0);
-    opacity: 0.5;
-  }
-  40% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-:deep(ul), :deep(ol) {
-  list-style: decimal;
-}
-
-:deep(table) {
-  border: 1px solid #ccc;
-}
-:deep(table) td,
-:deep(table) th {
-  border-bottom: 1px solid #ccc;
-  border-right: 1px solid #ccc;
-  padding: 5px 10px;
-}
-:deep(table) th {
-  // border-bottom: 2px solid #ccc;
-  text-align: center;
-  background: #dee8ee;
-}
-:deep(table) th:last-child {
-  border-right: none;
-}
-:deep(table) td:last-child {
-  border-right: none;
-}
-
-:deep(table) tr:last-child td {
-  border-bottom: none;
-}
-:deep(table) tr:nth-child(even) {
-  background: #eff3f5;
-}
-/* blockquote 样式 */
-:deep(blockquote) {
-  display: block;
-  border-left: 8px solid #d0e5f2;
-  padding: 5px 10px;
-  margin: 10px 0;
-  line-height: 1.4;
-  font-size: 100%;
-  background-color: #f1f1f1;
-}
-
-.delete-menu-item {
-  color: #ff4d4f !important;
-
-  &:hover {
-    background-color: #fff1f0 !important;
-    color: #ff4d4f !important;
-  }
-
-  :deep(.ant-dropdown-menu-item-icon) {
-    color: #ff4d4f !important;
-  }
-}
-
-:deep(.delete-menu-item) {
-  color: #ff4d4f !important;
-
-  .ant-dropdown-menu-item-icon {
-    color: #ff4d4f !important;
-  }
-
-  &:hover {
-    background-color: #fff1f0 !important;
-    color: #ff4d4f !important;
-  }
 }
 </style>

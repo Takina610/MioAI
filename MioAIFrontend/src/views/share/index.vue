@@ -75,22 +75,10 @@ import { message } from 'ant-design-vue'
 import { safeMarkdown } from '@/utils/security'
 import { getChatHistory, getConversation } from '@/api/chatMemory'
 import { getAgentById } from '@/api/agent'
-import type { Agent } from '@/types'
+import type { Agent, ChatMessage } from '@/types'
 import { CopyOutlined, CheckOutlined, MessageOutlined } from '@ant-design/icons-vue'
-import MioManusMessage from '@/views/chat/MioManusMessage.vue'
-
-interface MessageSegment {
-  content: string
-  type?: 'thinking' | 'action' | 'final'
-}
-
-interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  createTime: Date
-  segments?: MessageSegment[]
-}
+import MioManusMessage from '@/views/chat/components/MioManusMessage.vue'
+import { mergeConsecutiveAssistantMessages } from '@/views/chat/composables/useChatMessages'
 
 const route = useRoute()
 const router = useRouter()
@@ -121,24 +109,6 @@ const formattedDate = computed(() => {
   const day = String(d.getDate()).padStart(2, '0')
   return `${year} 年 ${month} 月 ${day} 日`
 })
-
-function mergeConsecutiveAssistantMessages(msgs: ChatMessage[]): ChatMessage[] {
-  if (msgs.length === 0) return []
-  const result: ChatMessage[] = []
-  for (const msg of msgs) {
-    const last = result[result.length - 1]
-    if (msg.role === 'assistant' && last && last.role === 'assistant') {
-      if (!last.segments) {
-        last.segments = [{ content: last.content }]
-      }
-      last.segments.push({ content: msg.content })
-      last.content += msg.content
-    } else {
-      result.push({ ...msg })
-    }
-  }
-  return result
-}
 
 async function loadShareData(agentIdParam: string, conversationId: string): Promise<void> {
   loading.value = true

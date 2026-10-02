@@ -1,0 +1,285 @@
+import { nextTick, type Ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useUserStore } from '@/store/user'
+import {
+  chatWithCSApp,
+  chatWithDefaultAgent,
+  chatWithMioManus,
+  chatWithCustomAgent,
+  chatWithStream
+} from '@/api/chat'
+import type { ChatMessage, MessageSegment } from '@/types'
+import {
+  generateConversationId,
+  generateMessageId,
+  type ChatMessagesApi
+} from './useChatMessages'
+
+// 后端 SseEmitter 45s 超时，看门狗阈值需大于它，只在连接"挂死"时触发
+const STREAM_WATCHDOG_TIMEOUT_MS = 60000
+
+/**
+ * 消息发送与流式接收：SSE（服务端各智能体接口）与本地 Ollama 直连两种通道，
+ * 含流式看门狗（连接挂死时强制异常收尾）与多会话切换时的过期回调过滤。
+ */
+export function useChatStream(options: {
+  agentId: Ref<number>
+  messagesApi: ChatMessagesApi
+  ensureSession: (chatId: string) => void
+  updateTitle: (userContent: string, aiContent: string, chatId: string) => void
+  scrollToBottom: () => void
+  scrollToChatListTop: () => void
+}) {
+  const router = useRouter()
+  const userStore = useUserStore()
+  const { messagesApi } = options
+
+  let eventSource: EventSource | null = null
+  let currentEventSourceChatId = '' // 当前 EventSource 对应的会话ID
+  let activeStream: { close: () => void } | null = null
+  let currentStreamChatId = '' // 当前 Ollama 流式请求对应的会话ID
+  let streamWatchdogTimer: ReturnType<typeof setTimeout> | null = null // 流式看门狗：连接被异常中断且收不到任何事件时强制收尾
+
+  function disarmStreamWatchdog(): void {
+    if (streamWatchdogTimer) {
+      clearTimeout(streamWatchdogTimer)
+      streamWatchdogTimer = null
+    }
+  }
+
+  function sendMessage(content: string): void {
+    if (!content || messagesApi.isLoading.value) return
+
+    const isNewChat = !messagesApi.currentChatId.value
+    if (isNewChat) {
+      messagesApi.currentChatId.value = userStore.isLoggedIn
+        ? generateConversationId()
+        : 'temp_' + Date.now()
+    }
+    const chatId = messagesApi.currentChatId.value
+
+    const existingMessages = messagesApi.getChatMessages(chatId)
+    const userMessage: ChatMessage = {
+      id: generateMessageId(),
+      role: 'user',
+      content,
+      createTime: new Date()
+    }
+    const chatMessages = [...existingMessages, userMessage]
+    const aiMessageIndex = chatMessages.length
+    messagesApi.setChatMessages(chatId, chatMessages)
+
+    if (userStore.isLoggedIn) {
+      options.ensureSession(chatId)
+    }
+    if (isNewChat && userStore.isLoggedIn) {
+      router.push(`/chat/${options.agentId.value}/${chatId}`)
+    }
+
+    nextTick(() => {
+      options.scrollToBottom()
+      options.scrollToChatListTop()
+    })
+
+    messagesApi.setLoading(chatId, true)
+
+    const isMioManus = options.agentId.value === 3
+    const aiMessage: ChatMessage = {
+      id: generateMessageId(),
+      role: 'assistant',
+      content: '',
+      createTime: new Date(),
+      segments: isMioManus ? [] : undefined
+    }
+    messagesApi.setChatMessages(chatId, [...chatMessages, aiMessage])
+
+    const token: string = localStorage.getItem('token') || ''
+    const userId = userStore.userInfo?.id || null
+
+    // 本地大模型：Ollama 直连
+    const provider = localStorage.getItem('ai-model-provider') || 'dashscope'
+    if (provider === 'ollama') {
+      if (activeStream) {
+        activeStream.close()
+        activeStream = null
+      }
+      currentStreamChatId = chatId
+
+      const history = chatMessages
+        .filter(m => m.role === 'user' || (m.role === 'assistant' && m.content))
+        .map(m => ({ role: m.role, content: m.content }))
+
+      activeStream = chatWithStream(
+        content,
+        chatId,
+        options.agentId.value,
+        token,
+        userId,
+        history,
+        (rawData) => {
+          if (currentStreamChatId !== chatId) return
+          if (rawData && rawData !== '[DONE]') {
+            const msgs = messagesApi.getChatMessages(chatId)
+            if (aiMessageIndex < msgs.length) {
+              const updated = [...msgs]
+              updated[aiMessageIndex] = {
+                ...updated[aiMessageIndex],
+                content: updated[aiMessageIndex].content + rawData
+              }
+              messagesApi.setChatMessages(chatId, updated)
+              if (messagesApi.currentChatId.value === chatId) {
+                nextTick(() => options.scrollToBottom())
+              }
+            }
+          }
+          if (rawData === '[DONE]') {
+            messagesApi.setLoading(chatId, false)
+            activeStream = null
+            currentStreamChatId = ''
+          }
+        },
+        (error) => {
+          console.error('Ollama 错误:', error)
+          messagesApi.setLoading(chatId, false)
+          activeStream = null
+          currentStreamChatId = ''
+        }
+      )
+      return
+    }
+
+    // 关闭旧的 EventSource
+    if (eventSource) {
+      eventSource.close()
+      eventSource = null
+    }
+    currentEventSourceChatId = chatId
+
+    const agentId = options.agentId.value
+    if (agentId === 1) {
+      eventSource = chatWithDefaultAgent(content, chatId, agentId, userId)
+    } else if (agentId === 2) {
+      eventSource = chatWithCSApp(content, chatId, agentId, token)
+    } else if (agentId === 3) {
+      eventSource = chatWithMioManus(content, chatId, agentId, token)
+    } else {
+      eventSource = chatWithCustomAgent(content, chatId, agentId, token)
+    }
+    const es = eventSource
+
+    // 流式异常收尾：移除空的AI消息、尝试生成标题、复位加载状态
+    const handleStreamError = (error: Event) => {
+      console.error('SSE连接错误:', error)
+
+      // 不是当前会话的消息则忽略
+      if (currentEventSourceChatId !== chatId) {
+        return
+      }
+      // 该会话已不在加载中，说明消息已完成接收（[DONE]已处理），忽略此错误
+      if (!messagesApi.chatLoadingMap.value.get(chatId)) {
+        return
+      }
+
+      disarmStreamWatchdog()
+
+      // 移除空的AI消息
+      const errorMessages = messagesApi.getChatMessages(chatId)
+      const lastMsg = errorMessages[errorMessages.length - 1]
+      if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.content) {
+        messagesApi.setChatMessages(chatId, errorMessages.slice(0, -1))
+      }
+
+      if (isNewChat && userStore.isLoggedIn) {
+        const finalContent = messagesApi.getChatMessages(chatId)[aiMessageIndex]?.content || ''
+        options.updateTitle(content, finalContent, chatId)
+      }
+
+      messagesApi.setLoading(chatId, false)
+      es.close()
+      eventSource = null
+      currentEventSourceChatId = ''
+    }
+
+    // 连接被异常中断且收不到任何事件时（如代理未转发断连），看门狗强制走异常收尾
+    disarmStreamWatchdog()
+    streamWatchdogTimer = setTimeout(() => {
+      streamWatchdogTimer = null
+      if (messagesApi.chatLoadingMap.value.get(chatId)) {
+        handleStreamError(new Event('stream-watchdog'))
+      }
+    }, STREAM_WATCHDOG_TIMEOUT_MS)
+
+    es.onmessage = (event: MessageEvent) => {
+      const rawData = event.data
+
+      // 不是当前会话的消息则忽略
+      if (currentEventSourceChatId !== chatId) {
+        return
+      }
+
+      const chatMsgs = messagesApi.getChatMessages(chatId)
+
+      if (rawData && rawData !== '[DONE]') {
+        // 解析后端发送的 JSON 格式，提取 type 和 content
+        let segmentContent = rawData
+        let segmentType: MessageSegment['type'] = undefined
+        try {
+          const parsed = JSON.parse(rawData)
+          if (parsed.content !== undefined) {
+            segmentContent = parsed.content
+            segmentType = parsed.type
+          }
+        } catch {
+          // 兼容旧格式，直接当作普通文本
+        }
+
+        if (aiMessageIndex < chatMsgs.length) {
+          const updatedMessages = [...chatMsgs]
+          const targetMsg = updatedMessages[aiMessageIndex]
+          const newSegment: MessageSegment = { content: segmentContent, type: segmentType }
+          updatedMessages[aiMessageIndex] = {
+            ...targetMsg,
+            content: targetMsg.content + segmentContent,
+            segments: targetMsg.segments ? [...targetMsg.segments, newSegment] : undefined
+          }
+          messagesApi.setChatMessages(chatId, updatedMessages)
+
+          if (messagesApi.currentChatId.value === chatId) {
+            nextTick(() => options.scrollToBottom())
+          }
+        }
+      }
+
+      if (rawData === '[DONE]') {
+        disarmStreamWatchdog()
+        const finalMessages = messagesApi.getChatMessages(chatId)
+        if (isNewChat && userStore.isLoggedIn) {
+          options.updateTitle(content, finalMessages[aiMessageIndex]?.content || '', chatId)
+        }
+        messagesApi.setLoading(chatId, false)
+        es.close()
+        eventSource = null
+        currentEventSourceChatId = ''
+      }
+    }
+
+    es.onerror = handleStreamError
+  }
+
+  /** 组件卸载前关闭所有流式连接 */
+  function cleanup(): void {
+    disarmStreamWatchdog()
+    if (eventSource) {
+      eventSource.close()
+      eventSource = null
+      currentEventSourceChatId = ''
+    }
+    if (activeStream) {
+      activeStream.close()
+      activeStream = null
+      currentStreamChatId = ''
+    }
+  }
+
+  return { sendMessage, cleanup }
+}
