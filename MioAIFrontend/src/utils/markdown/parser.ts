@@ -2,6 +2,7 @@ import DOMPurify from 'dompurify'
 import MarkdownIt from 'markdown-it'
 import { katex } from '@mdit/plugin-katex'
 import cjkFriendly from 'markdown-it-cjk-friendly'
+import tasklists from 'markdown-it-task-lists'
 import hljs from 'highlight.js/lib/common'
 
 function escapeHtml(s: string): string {
@@ -12,7 +13,8 @@ function escapeHtml(s: string): string {
 
 /** 主流 AI Chat 渲染配置：GFM 表格/删除线、软换行转 <br>、链接识别、代码高亮、LaTeX 公式。
  *  html 放行裸 HTML（模型常用 <br> 换行表格单元格），危险内容由下方 DOMPurify 白名单过滤；
- *  cjkFriendly 修复全角标点相邻时 **加粗** 不解析（CommonMark 侧翼规则的 CJK 缺陷） */
+ *  cjkFriendly 修复全角标点相邻时 **加粗** 不解析（CommonMark 侧翼规则的 CJK 缺陷）；
+ *  tasklists 渲染 - [ ] 任务列表复选框；katex delimiters:all 同时支持 $…$ 与 \(…\)/\[…\] 定界符 */
 export const markdown = new MarkdownIt({
   html: true,
   linkify: true,
@@ -29,7 +31,9 @@ export const markdown = new MarkdownIt({
     const langClass = lang ? ` class="language-${escapeHtml(lang)}"` : ''
     return `<pre class="md-code"><code${langClass}>${escapeHtml(code)}</code></pre>`
   }
-}).use(katex, { throwOnError: false }).use(cjkFriendly)
+}).use(katex, { throwOnError: false, delimiters: 'all', mathFence: true })
+  .use(cjkFriendly)
+  .use(tasklists, { enabled: false })
 
 /** KaTeX 输出的 MathML/HTML 标签与属性 */
 const KATEX_TAGS = [
@@ -54,6 +58,7 @@ const SANITIZE_OPTIONS = {
     'a', 'img',
     'ul', 'ol', 'li',
     'blockquote', 'pre', 'code',
+    'details', 'summary',
     'table', 'thead', 'tbody', 'tr', 'th', 'td',
     'div', 'span', 'sup', 'sub',
     'input', // 任务列表复选框（disabled）
@@ -65,6 +70,7 @@ const SANITIZE_OPTIONS = {
     'class', 'id',
     'colspan', 'rowspan', 'align',
     'type', 'checked', 'disabled',
+    'open', // <details> 展开态
     ...KATEX_ATTRS
   ],
   ALLOW_DATA_ATTR: false

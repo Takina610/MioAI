@@ -251,6 +251,8 @@ function goToChat(): void {
 
         .message-content {
           flex: 1;
+          /* 允许 flex 项收缩：宽表格/代码块由内部滚动，避免被卡片 overflow:hidden 剪掉或撑破版心 */
+          min-width: 0;
           display: flex;
           flex-direction: column;
           position: relative;

@@ -15,3 +15,9 @@ declare module '@vue-office/docx/lib/v3/vue-office-docx.mjs' {
   const component: DefineComponent
   export default component
 }
+
+declare module 'markdown-it-task-lists' {
+  import type { MarkdownItPlugin } from 'markdown-it'
+  const tasklists: MarkdownItPlugin<{ enabled?: boolean; label?: boolean }>
+  export default tasklists
+}

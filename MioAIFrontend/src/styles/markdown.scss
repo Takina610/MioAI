@@ -46,6 +46,30 @@
     > ul, > ol {
       margin: 3px 0;
     }
+    /* 任务列表项：复选框替代项目符号 */
+    &.task-list-item {
+      list-style: none;
+
+      input[type='checkbox'] {
+        margin-right: 6px;
+        vertical-align: middle;
+        accent-color: $primary-color;
+      }
+    }
+  }
+
+  details {
+    margin: 10px 0;
+    border: 1px solid #e6eaf0;
+    border-radius: 8px;
+    padding: 6px 14px;
+    background: #fafbfd;
+
+    summary {
+      cursor: pointer;
+      font-weight: 500;
+      user-select: none;
+    }
   }
 
   a {
