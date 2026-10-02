@@ -336,6 +336,8 @@ let eventSource: EventSource | null = null
 let currentEventSourceChatId: string = '' // 当前 EventSource 对应的会话ID
 let activeStream: { close: () => void } | null = null
 let currentStreamChatId: string = '' // 当前 Ollama 流式请求对应的会话ID
+let streamWatchdogTimer: ReturnType<typeof setTimeout> | null = null // 流式看门狗：连接被异常中断且收不到任何事件时强制收尾
+const STREAM_WATCHDOG_TIMEOUT_MS = 60000 // 后端 SseEmitter 45s 超时，看门狗阈值需大于它，只在连接"挂死"时触发
 
 const currentChatTitle = computed(() => {
   const chat = chatList.value.find(c => c.id === currentChatId.value)
@@ -485,7 +487,8 @@ async function loadMessages(conversationId: string): Promise<void> {
   if (!userStore.isLoggedIn) return
 
   try {
-    const res = await getChatHistory(conversationId)
+    // 新会话刚发送首条消息时会与本请求竞态（后端会话记录尚未落库），此时静默失败并保留本地消息
+    const res = await getChatHistory(conversationId, { skipErrorMessage: true })
     if (!res) {
       return
     }
@@ -520,7 +523,10 @@ async function loadMessages(conversationId: string): Promise<void> {
     })
   } catch (e) {
     console.error(e)
-    message.error('加载消息失败')
+    // 本地已有该会话的消息（正在接收中或刚创建），不提示错误
+    if (!chatMessagesMap.value.get(conversationId)?.length) {
+      message.error('加载消息失败')
+    }
   }
 }
 
@@ -535,6 +541,13 @@ function handleKeyboardShortcut(e: KeyboardEvent): void {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault()
     createNewChat()
+  }
+}
+
+function disarmStreamWatchdog(): void {
+  if (streamWatchdogTimer) {
+    clearTimeout(streamWatchdogTimer)
+    streamWatchdogTimer = null
   }
 }
 
@@ -706,6 +719,61 @@ function sendMessage(): void {
     eventSource = chatWithCustomAgent(content, chatIdForThisMessage, agentId.value, token)
   }
 
+  // 流式异常收尾：移除空的AI消息、尝试生成标题、复位加载状态
+  const handleStreamError = (error: Event) => {
+    console.error('SSE连接错误:', error)
+
+    // 检查是否是当前会话的消息，如果不是则忽略
+    if (currentEventSourceChatId !== chatIdForThisMessage) {
+      return
+    }
+
+    // 如果该会话已经不在加载中了，说明消息已经完成接收（[DONE]已处理），忽略此错误
+    const isStillLoading = chatLoadingMap.value.get(chatIdForThisMessage)
+    if (!isStillLoading) {
+      return
+    }
+
+    disarmStreamWatchdog()
+
+    // 从Map中获取该会话的消息列表
+    const errorMessages = chatMessagesMap.value.get(chatIdForThisMessage) || []
+
+    // 移除空的AI消息
+    const lastMsg = errorMessages[errorMessages.length - 1]
+    if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.content) {
+      const updatedMessages = errorMessages.slice(0, -1)
+      chatMessagesMap.value.set(chatIdForThisMessage, updatedMessages)
+
+      // 如果是当前会话，更新显示的消息
+      if (currentChatId.value === chatIdForThisMessage) {
+        messages.value = updatedMessages
+      }
+    }
+
+    const finalErrorMessages = chatMessagesMap.value.get(chatIdForThisMessage) || []
+    if (isNewChat && userStore.isLoggedIn) {
+      updateChatTitleWithTypewriter(content, finalErrorMessages[aiMessageIndex]?.content || '', userMessageIndex, chatIdForThisMessage)
+    }
+
+    chatLoadingMap.value.delete(chatIdForThisMessage)
+    isLoading.value = chatLoadingMap.value.get(currentChatId.value) || false
+    if (eventSource) {
+      eventSource.close()
+      eventSource = null
+      currentEventSourceChatId = ''
+    }
+  }
+
+  // 连接被异常中断且收不到任何事件时（如代理未转发断连），看门狗强制走异常收尾
+  disarmStreamWatchdog()
+  streamWatchdogTimer = setTimeout(() => {
+    streamWatchdogTimer = null
+    if (chatLoadingMap.value.get(chatIdForThisMessage)) {
+      handleStreamError(new Event('stream-watchdog'))
+    }
+  }, STREAM_WATCHDOG_TIMEOUT_MS)
+
   eventSource.onmessage = (event) => {
     const rawData = event.data
 
@@ -752,6 +820,7 @@ function sendMessage(): void {
     }
     
     if (rawData === '[DONE]') {
+      disarmStreamWatchdog()
       const finalMessages = chatMessagesMap.value.get(chatIdForThisMessage) || chatMessages
       if (isNewChat && userStore.isLoggedIn) {
         updateChatTitleWithTypewriter(content, finalMessages[aiMessageIndex]?.content || '', userMessageIndex, chatIdForThisMessage)
@@ -765,52 +834,8 @@ function sendMessage(): void {
       }
     }
   }
-  
-  eventSource.onerror = (error) => {
-    console.error('SSE连接错误:', error)
-    
-    // 检查是否是当前会话的消息，如果不是则忽略
-    if (currentEventSourceChatId !== chatIdForThisMessage) {
-      return
-    }
-    
-    // 如果该会话已经不在加载中了，说明消息已经完成接收（[DONE]已处理），忽略此错误
-    const isStillLoading = chatLoadingMap.value.get(chatIdForThisMessage)
-    if (!isStillLoading) {
-      return
-    }
-    
-    // 从Map中获取该会话的消息列表
-    const errorMessages = chatMessagesMap.value.get(chatIdForThisMessage) || []
-    
-    // 移除空的AI消息
-    const lastMsg = errorMessages[errorMessages.length - 1]
-    if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.content) {
-      const updatedMessages = errorMessages.slice(0, -1)
-      chatMessagesMap.value.set(chatIdForThisMessage, updatedMessages)
-      
-      // 如果是当前会话，更新显示的消息
-      if (currentChatId.value === chatIdForThisMessage) {
-        messages.value = updatedMessages
-      }
-    }
-    
-    // 给用户提示
-    // message.error('消息发送失败，请重试')
-    
-    const finalErrorMessages = chatMessagesMap.value.get(chatIdForThisMessage) || []
-    if (isNewChat && userStore.isLoggedIn) {
-      updateChatTitleWithTypewriter(content, finalErrorMessages[aiMessageIndex]?.content || '', userMessageIndex, chatIdForThisMessage)
-    }
-    
-    chatLoadingMap.value.delete(chatIdForThisMessage)
-    isLoading.value = chatLoadingMap.value.get(currentChatId.value) || false
-    if (eventSource) {
-      eventSource.close()
-      eventSource = null
-      currentEventSourceChatId = ''
-    }
-  }
+
+  eventSource.onerror = handleStreamError
 }
 
 async function updateChatTitleWithTypewriter(userContent: string, aiContent: string, chatIndex: number, chatId: string): Promise<void> {
@@ -955,6 +980,7 @@ onUnmounted(() => {
 
 // 组件销毁前关闭连接
 onBeforeUnmount(() => {
+  disarmStreamWatchdog()
   if (eventSource) {
     eventSource.close()
     eventSource = null

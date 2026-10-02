@@ -78,12 +78,16 @@ request.interceptors.response.use(
           window.location.href = '/'
         }
       } else {
-        showErrorMessage(res.message || '请求失败')
+        const cfg = response.config as RequestConfig | undefined
+        if (!cfg?.skipErrorMessage) {
+          showErrorMessage(res.message || '请求失败')
+        }
       }
       return Promise.reject(new Error(res.message || '请求失败'))
     }
   },
   (error) => {
+    const cfg = error?.config as RequestConfig | undefined
     if (error.response) {
       switch (error.response.status) {
         case 401:
@@ -97,20 +101,20 @@ request.interceptors.response.use(
           }
           break
         case 403:
-          showErrorMessage('没有权限访问')
+          if (!cfg?.skipErrorMessage) showErrorMessage('没有权限访问')
           break
         case 404:
-          showErrorMessage('请求资源不存在')
+          if (!cfg?.skipErrorMessage) showErrorMessage('请求资源不存在')
           break
         case 500:
-          showErrorMessage('服务器错误')
+          if (!cfg?.skipErrorMessage) showErrorMessage('服务器错误')
           break
         default:
-          if (!isLoggingOut) {
+          if (!isLoggingOut && !cfg?.skipErrorMessage) {
             showErrorMessage(error.message || '网络错误')
           }
       }
-    } else if (!isLoggingOut) {
+    } else if (!isLoggingOut && !cfg?.skipErrorMessage) {
       showErrorMessage('网络连接失败')
     }
     return Promise.reject(error)

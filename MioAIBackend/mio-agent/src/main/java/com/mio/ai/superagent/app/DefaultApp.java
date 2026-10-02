@@ -1,6 +1,6 @@
 package com.mio.ai.superagent.app;
 
-import com.baomidou.mybatisplus.core.toolkit.StringUtils;
+import cn.hutool.core.util.StrUtil;
 import com.mio.ai.customagent.model.entity.AgentUsageLog;
 import com.mio.ai.customagent.service.log.AgentUsageLogService;
 import com.mio.ai.superagent.model.vo.ChatVO;
@@ -64,7 +64,14 @@ public class DefaultApp {
 
         return prompt.stream().chatResponse()
                 .doOnNext(response -> extractUsage(response, inputTokens, outputTokens))
-                .map(response -> response.getResult().getOutput().getText())
+                // Spring AI 2.0 流式末尾会推一条仅含 usage 的响应（getResult() 为 null），必须判空
+                .map(response -> {
+                    var generation = response.getResult();
+                    return generation == null || generation.getOutput() == null
+                            ? ""
+                            : generation.getOutput().getText();
+                })
+                .filter(StrUtil::isNotEmpty)
                 .doOnTerminate(() -> {
                     usageLog.setInputTokens(inputTokens.get());
                     usageLog.setOutputTokens(outputTokens.get());

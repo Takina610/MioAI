@@ -39,10 +39,14 @@ export function getChatIdsPage(agentId: string, current: number = 1, size: numbe
   })
 }
 
-export function getChatHistory(conversationId: string): Promise<MessageVO[]> {
+export function getChatHistory(
+  conversationId: string,
+  options?: { skipErrorMessage?: boolean }
+): Promise<MessageVO[]> {
   return request({
     url: `/memory/getChatHistory/${conversationId}`,
-    method: 'get'
+    method: 'get',
+    skipErrorMessage: options?.skipErrorMessage
   })
 }
 
