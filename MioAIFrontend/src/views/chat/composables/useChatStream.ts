@@ -1,4 +1,5 @@
 import { nextTick, type Ref } from 'vue'
+import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import {
@@ -140,6 +141,13 @@ export function useChatStream(options: {
         },
         (error) => {
           console.error('Ollama 错误:', error)
+          // 移除本轮发送的空 AI 消息，与 SSE 异常收尾行为一致
+          const ollamaMessages = messagesApi.getChatMessages(chatId)
+          const ollamaLast = ollamaMessages[ollamaMessages.length - 1]
+          if (ollamaLast && ollamaLast.role === 'assistant' && !ollamaLast.content) {
+            messagesApi.setChatMessages(chatId, ollamaMessages.slice(0, -1))
+          }
+          message.error('本地模型连接失败，请启动 Ollama 或在「个人设置」切换回在线模型')
           messagesApi.setLoading(chatId, false)
           activeStream = null
           currentStreamChatId = ''
@@ -187,6 +195,7 @@ export function useChatStream(options: {
       const lastMsg = errorMessages[errorMessages.length - 1]
       if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.content) {
         messagesApi.setChatMessages(chatId, errorMessages.slice(0, -1))
+        message.error('连接中断，请重试')
       }
 
       if (isNewChat && userStore.isLoggedIn) {

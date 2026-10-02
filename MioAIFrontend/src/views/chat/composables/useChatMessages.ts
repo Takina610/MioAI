@@ -37,7 +37,11 @@ export function mergeConsecutiveAssistantMessages(msgs: ChatMessage[]): ChatMess
  * 多会话消息管理：每个会话的消息与加载状态各自维护在 Map 中，
  * 仅当会话为当前会话时同步到展示用的 messages/isLoading。
  */
-export function useChatMessages(options: { scrollToBottom: () => void }) {
+export function useChatMessages(options: {
+  scrollToBottom: () => void
+  /** URL 携带的会话在服务端不存在（已删除或脏链接）时回调，由页面负责回到新对话 */
+  onConversationMissing?: (conversationId: string) => void
+}) {
   const userStore = useUserStore()
 
   const currentChatId = ref<string>('')
@@ -110,6 +114,15 @@ export function useChatMessages(options: { scrollToBottom: () => void }) {
       })
     } catch (e) {
       console.error(e)
+      // 会话打不开（不存在或非本人）：回到新对话并提示一次，避免弹误导性的“加载消息失败”
+      const bizCode = (e as Error & { code?: number }).code
+      if (bizCode === 40400 || bizCode === 40101) {
+        // 本地已有该会话消息说明是新会话首条消息的落库竞态，静默保留本地消息
+        if (!chatMessagesMap.value.get(conversationId)?.length) {
+          options.onConversationMissing?.(conversationId)
+        }
+        return
+      }
       // 本地已有该会话的消息（正在接收中或刚创建），不提示错误
       if (!chatMessagesMap.value.get(conversationId)?.length) {
         message.error('加载消息失败')

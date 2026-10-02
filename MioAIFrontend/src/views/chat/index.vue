@@ -57,6 +57,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getAgentById } from '@/api/agent'
 import { useUserStore } from '@/store/user'
@@ -89,7 +90,24 @@ function scrollToChatListTop(): void {
   sidebarRef.value?.scrollToTop()
 }
 
-const messagesApi = useChatMessages({ scrollToBottom })
+// 同一会话的缺失提示只弹一次（进入页面时 loadMessages 会被调两次）
+let lastMissingHint = { conversationId: '', at: 0 }
+
+const messagesApi = useChatMessages({
+  scrollToBottom,
+  // URL 携带的会话已不存在（被删除或脏链接）：提示一次并回到新对话
+  onConversationMissing: (conversationId) => {
+    const now = Date.now()
+    if (lastMissingHint.conversationId !== conversationId || now - lastMissingHint.at > 2000) {
+      message.warning('会话不存在或已删除')
+      lastMissingHint = { conversationId, at: now }
+    }
+    if (currentChatId.value === conversationId) {
+      switchChat('')
+      router.replace(`/chat/${agentId.value}`)
+    }
+  }
+})
 
 const {
   chatList,

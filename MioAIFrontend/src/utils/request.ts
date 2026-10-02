@@ -83,7 +83,10 @@ request.interceptors.response.use(
           showErrorMessage(res.message || '请求失败')
         }
       }
-      return Promise.reject(new Error(res.message || '请求失败'))
+      // 挂上业务错误码，调用方可按 code 分支处理（如会话不存在时自动回新对话）
+      const bizError = new Error(res.message || '请求失败') as Error & { code?: number }
+      bizError.code = res.code
+      return Promise.reject(bizError)
     }
   },
   (error) => {
