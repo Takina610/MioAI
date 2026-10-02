@@ -9,20 +9,28 @@ import com.mio.ai.customagent.model.dto.log.AgentUsageLogQueryRequest;
 import com.mio.ai.customagent.model.entity.AgentUsageLog;
 import com.mio.ai.customagent.model.vo.agent.AgentUsageLogVO;
 import com.mio.ai.customagent.service.log.AgentUsageLogService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
  * @author: Takina
- * @date: 2026/4/1
+ * @date: 2026/4/1 19:33
  * @description: 智能体使用日志服务实现类
  */
+@Slf4j
 @Service
 public class AgentUsageLogServiceImpl extends ServiceImpl<AgentUsageLogMapper, AgentUsageLog> implements AgentUsageLogService {
 
     @Override
-    public Long logUsage(AgentUsageLog log) {
-        this.save(log);
-        return log.getId();
+    public Long logUsage(AgentUsageLog usageLog) {
+        try {
+            this.save(usageLog);
+            return usageLog.getId();
+        } catch (Exception e) {
+            // 调用方在流式 doOnTerminate 中落库，抛异常会把正常 complete 变成 error，导致 [DONE] 发不出去
+            log.error("智能体使用日志落库失败 agentId={} conversationId={}", usageLog.getAgentId(), usageLog.getConversationId(), e);
+            return null;
+        }
     }
 
     @Override

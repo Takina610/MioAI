@@ -54,7 +54,8 @@ public class DefaultApp {
         long startTime = System.currentTimeMillis();
         AgentUsageLog usageLog = new AgentUsageLog();
         usageLog.setAgentId(chatVO.getAgentId());
-        usageLog.setUserId(chatVO.getUserId());
+        // 默认智能体对游客开放，user_id 非空约束下游客记为 0
+        usageLog.setUserId(chatVO.getUserId() != null ? chatVO.getUserId() : 0L);
         usageLog.setConversationId(parseConversationId(chatVO.getChatId()));
         usageLog.setStatus(1);
         usageLog.setCreateTime(new Date());
