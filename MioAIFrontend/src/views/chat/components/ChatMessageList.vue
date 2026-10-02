@@ -19,7 +19,12 @@
             :segments="msg.segments"
             :is-loading="isLoading"
           />
-          <div v-else class="message-text" v-html="formatMessage(msg.content)"></div>
+          <template v-else>
+            <MarkdownView class="message-text" :content="msg.content" />
+            <div v-if="msg.role === 'assistant' && msg.interrupted" class="stream-interrupted">
+              连接中断，本条回答可能不完整
+            </div>
+          </template>
           <div class="message-actions">
             <div class="copy-area" v-show="!isLoading && hoverMessageId === msg.id && msg.content">
               <a-tooltip :title="copiedMessageId === msg.id ? '已复制' : '复制'">
@@ -39,9 +44,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { safeMarkdown } from '@/utils/security'
 import { CopyOutlined, CheckOutlined } from '@ant-design/icons-vue'
 import type { ChatMessage } from '@/types'
+import MarkdownView from '@/components/MarkdownView.vue'
 import MioManusMessage from './MioManusMessage.vue'
 
 defineProps<{
@@ -74,10 +79,6 @@ async function copyMessage(content: string, messageId: string): Promise<void> {
     console.error(e)
     message.error('复制失败')
   }
-}
-
-function formatMessage(content: string): string {
-  return safeMarkdown(content)
 }
 
 defineExpose({ scrollToBottom })
@@ -128,61 +129,12 @@ defineExpose({ scrollToBottom })
           font-size: 14px;
           line-height: 1.6;
           word-break: break-word;
+        }
 
-          :deep(pre) {
-            background: #f6f8fa;
-            border-radius: 6px;
-            padding: 12px 16px;
-            overflow-x: auto;
-            margin: 8px 0;
-
-            code {
-              font-family: 'Consolas', 'Monaco', monospace;
-              font-size: 13px;
-            }
-          }
-
-          :deep(code) {
-            background: #f6f8fa;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 13px;
-          }
-
-          :deep(p) {
-            margin: 0 0 8px 0;
-
-            &:last-child {
-              margin-bottom: 0;
-            }
-          }
-
-          :deep(ul), :deep(ol) {
-            margin: 8px 0;
-            padding-left: 20px;
-          }
-
-          :deep(h1), :deep(h2), :deep(h3), :deep(h4), :deep(h5), :deep(h6) {
-            margin: 12px 0 8px 0;
-            font-weight: 600;
-          }
-
-          :deep(a) {
-            color: $primary-color;
-            text-decoration: none;
-
-            &:hover {
-              text-decoration: underline;
-            }
-          }
-
-          :deep(blockquote) {
-            border-left: 4px solid $primary-color;
-            padding-left: 12px;
-            margin: 8px 0;
-            color: #666;
-          }
+        .stream-interrupted {
+          font-size: 12px;
+          color: #d48806;
+          margin-top: 4px;
         }
 
         .message-loading {
@@ -245,8 +197,24 @@ defineExpose({ scrollToBottom })
           background: rgba(255, 255, 255, 0.2);
         }
 
-        :deep(pre) {
+        :deep(pre.md-code) {
           background: rgba(255, 255, 255, 0.1);
+          border-color: transparent;
+
+          code {
+            color: #fff;
+          }
+        }
+
+        :deep(a) {
+          color: #fff;
+          text-decoration: underline;
+        }
+
+        :deep(blockquote) {
+          background: rgba(255, 255, 255, 0.12);
+          color: rgba(255, 255, 255, 0.9);
+          border-left-color: rgba(255, 255, 255, 0.6);
         }
       }
 
@@ -269,47 +237,5 @@ defineExpose({ scrollToBottom })
     transform: scale(1);
     opacity: 1;
   }
-}
-
-:deep(ul), :deep(ol) {
-  list-style: decimal;
-}
-
-:deep(table) {
-  border: 1px solid #ccc;
-}
-:deep(table) td,
-:deep(table) th {
-  border-bottom: 1px solid #ccc;
-  border-right: 1px solid #ccc;
-  padding: 5px 10px;
-}
-:deep(table) th {
-  // border-bottom: 2px solid #ccc;
-  text-align: center;
-  background: #dee8ee;
-}
-:deep(table) th:last-child {
-  border-right: none;
-}
-:deep(table) td:last-child {
-  border-right: none;
-}
-
-:deep(table) tr:last-child td {
-  border-bottom: none;
-}
-:deep(table) tr:nth-child(even) {
-  background: #eff3f5;
-}
-/* blockquote 样式 */
-:deep(blockquote) {
-  display: block;
-  border-left: 8px solid #d0e5f2;
-  padding: 5px 10px;
-  margin: 10px 0;
-  line-height: 1.4;
-  font-size: 100%;
-  background-color: #f1f1f1;
 }
 </style>

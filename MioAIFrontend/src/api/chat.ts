@@ -130,27 +130,38 @@ export const chatWithStream = (
       }
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
+      let lineBuffer = ''
+
+      const handleLine = (line: string): void => {
+        if (!line.trim()) return
+        try {
+          const data = JSON.parse(line)
+          if (data.message?.content) {
+            onMessage(data.message.content)
+          }
+          if (data.done) {
+            onMessage('[DONE]')
+          }
+        } catch {
+          // 忽略解析失败的行
+        }
+      }
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n').filter(line => line.trim())
+        lineBuffer += decoder.decode(value, { stream: true })
+        const lines = lineBuffer.split('\n')
+        // 最后一段可能被 TCP 分包截断，留到下一轮拼接，避免丢 token
+        lineBuffer = lines.pop() ?? ''
 
         for (const line of lines) {
-          try {
-            const data = JSON.parse(line)
-            if (data.message?.content) {
-              onMessage(data.message.content)
-            }
-            if (data.done) {
-              onMessage('[DONE]')
-            }
-          } catch {
-            // 忽略解析失败的行
-          }
+          handleLine(line)
         }
+      }
+      if (lineBuffer) {
+        handleLine(lineBuffer)
       }
     }).catch(onError)
 

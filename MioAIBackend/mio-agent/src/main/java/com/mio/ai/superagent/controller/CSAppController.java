@@ -4,6 +4,7 @@ import com.mio.ai.common.aop.annotation.LogInfo;
 import com.mio.ai.user.utils.RedisComponent;
 import com.mio.ai.superagent.app.CSApp;
 import com.mio.ai.superagent.model.vo.ChatVO;
+import com.mio.ai.superagent.util.SseStreams;
 import jakarta.annotation.Resource;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -12,8 +13,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-
-import java.io.IOException;
 /**
  * @author: Takina
  * @date: 2026/3/29 20:54
@@ -49,24 +48,9 @@ public class CSAppController {
         chatVO.setAgentId(agentId);
         chatVO.setUserId(redisComponent.getUserId(token));
 
-        // 创建一个超时时间较长的 SseEmitter
-        SseEmitter sseEmitter = new SseEmitter(45000L); // 1.5 分钟超时
-        // 获取 Flux 响应式数据流并且直接通过订阅推送给 SseEmitter
-        csApp.doChat(chatVO)
-                .subscribe(chunk -> {
-                    try {
-                        sseEmitter.send(chunk);
-                    } catch (IOException e) {
-                        sseEmitter.completeWithError(e);
-                    }
-                }, sseEmitter::completeWithError, () -> {
-                    try {
-                        sseEmitter.send("[DONE]");
-                    } catch (IOException e) {
-                        // ignore
-                    }
-                    sseEmitter.complete();
-                });
+        // 创建 SseEmitter 并把模型流推送出去（发送失败不取消上游，保证落库）
+        SseEmitter sseEmitter = new SseEmitter(SseStreams.CHAT_TIMEOUT_MS);
+        SseStreams.pipe(csApp.doChat(chatVO), sseEmitter);
         // 返回
         return sseEmitter;
     }

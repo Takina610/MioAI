@@ -108,5 +108,8 @@ input, textarea {
   }
 }
 
+/* Markdown 正文公共排版 */
+@import './markdown';
+
 /* dashboard 管理界面公共样式 */
 @import './dashboard';

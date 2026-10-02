@@ -24,7 +24,9 @@
             <pre>{{ textContent }}</pre>
           </div>
 
-          <div v-else-if="fileType === 'md'" class="markdown-preview" v-html="htmlContent"></div>
+          <div v-else-if="fileType === 'md'" class="markdown-preview">
+            <MarkdownView :content="textContent" />
+          </div>
 
           <div v-else-if="fileType === 'pdf'" class="pdf-preview">
             <vue-office-pdf :src="proxyUrl" @rendered="handleRendered" @error="handlePreviewError" />
@@ -47,7 +49,7 @@
 import { ref, watch, computed } from 'vue'
 import { message } from 'ant-design-vue'
 import { DownloadOutlined } from '@ant-design/icons-vue'
-import { safeMarkdown } from '@/utils/security'
+import MarkdownView from '@/components/MarkdownView.vue'
 import VueOfficePdf from "@vue-office/pdf/lib/v3/vue-office-pdf.mjs"
 import VueOfficeDocx from "@vue-office/docx/lib/v3/vue-office-docx.mjs"
 import "@vue-office/docx/lib/v3/index.css"
@@ -69,7 +71,6 @@ const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
 const loading = ref(false)
 const error = ref('')
 const textContent = ref('')
-const htmlContent = ref('')
 
 const fileType = computed(() => {
   const name = props.fileName.toLowerCase()
@@ -109,9 +110,6 @@ async function loadPreview(): Promise<void> {
       }
       const text = await response.text()
       textContent.value = text
-      if (type === 'md') {
-        htmlContent.value = safeMarkdown(text)
-      }
     } catch (e) {
       error.value = e instanceof Error ? e.message : '文件加载失败'
     } finally {
@@ -127,7 +125,6 @@ function resetState(): void {
   loading.value = false
   error.value = ''
   textContent.value = ''
-  htmlContent.value = ''
 }
 
 function handleRendered(): void {

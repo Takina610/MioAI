@@ -29,7 +29,7 @@
                     :segments="msg.segments"
                     :is-loading="false"
                   />
-                  <div v-else class="message-text" v-html="formatMessage(msg.content)"></div>
+                  <MarkdownView v-else class="message-text" :content="msg.content" />
                   <div class="message-actions">
                     <div class="copy-area" v-show="hoverMessageId === msg.id && msg.content">
                       <a-tooltip :title="copiedMessageId === msg.id ? '已复制' : '复制'">
@@ -72,12 +72,12 @@
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { safeMarkdown } from '@/utils/security'
 import { getChatHistory, getConversation } from '@/api/chatMemory'
 import { getAgentById } from '@/api/agent'
 import type { Agent, ChatMessage } from '@/types'
 import { CopyOutlined, CheckOutlined, MessageOutlined } from '@ant-design/icons-vue'
 import MioManusMessage from '@/views/chat/components/MioManusMessage.vue'
+import MarkdownView from '@/components/MarkdownView.vue'
 import { mergeConsecutiveAssistantMessages } from '@/views/chat/composables/useChatMessages'
 
 const route = useRoute()
@@ -158,10 +158,6 @@ async function loadShareData(agentIdParam: string, conversationId: string): Prom
   } finally {
     loading.value = false
   }
-}
-
-function formatMessage(content: string): string {
-  return safeMarkdown(content)
 }
 
 async function copyMessage(content: string, messageId: string): Promise<void> {

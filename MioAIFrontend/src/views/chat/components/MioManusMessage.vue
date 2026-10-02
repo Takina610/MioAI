@@ -1,7 +1,7 @@
 <template>
   <div class="mio-manus-message">
     <!-- 无 type 信息且只有单段/无段，直接渲染 -->
-    <div v-if="!useSegmentRender" class="manus-message-text" v-html="formatContent(content)"></div>
+    <MarkdownView v-if="!useSegmentRender" class="manus-message-text" :content="content" />
 
     <!-- 组合渲染：有 type 信息 或 多段 -->
     <div v-else class="manus-segments">
@@ -19,7 +19,7 @@
           >
             <div class="segment-step">
               <span class="step-badge">{{ index + 1 }}</span>
-              <div class="segment-text" v-html="formatContent(segment.content)"></div>
+              <MarkdownView class="segment-text" :content="segment.content" />
             </div>
           </div>
           <!-- 正在思考中 -->
@@ -29,14 +29,9 @@
         </div>
       </div>
 
-      <!-- 最终结果 -->
-      <div v-if="finalSegments.length > 0" class="final-answer">
-        <div
-          v-for="(segment, index) in finalSegments"
-          :key="index"
-          class="final-content manus-message-text"
-          v-html="formatContent(segment.content)"
-        ></div>
+      <!-- 最终结果：合并为一个完整 Markdown 文档渲染，避免跨段结构被割裂 -->
+      <div v-if="finalContent" class="final-answer">
+        <MarkdownView class="final-content manus-message-text" :content="finalContent" />
       </div>
     </div>
   </div>
@@ -44,13 +39,9 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { safeMarkdown } from '@/utils/security'
 import { CaretRightOutlined } from '@ant-design/icons-vue'
-
-interface MessageSegment {
-  content: string
-  type?: 'thinking' | 'action' | 'final'
-}
+import MarkdownView from '@/components/MarkdownView.vue'
+import type { MessageSegment } from '@/types'
 
 interface Props {
   content: string
@@ -73,16 +64,16 @@ const hasTypeInfo = computed(() => {
 // 是否使用分段渲染：有 type 信息时始终使用；无 type 时只有多段才使用
 const useSegmentRender = computed(() => {
   if (hasTypeInfo.value) return true
-  return props.segments && props.segments.length > 1
+  return props.segments.length > 1
 })
 
 // 是否还在思考中（正在加载且没有最终结果）
 const isThinking = computed(() => {
-  return props.isLoading && finalSegments.value.length === 0
+  return props.isLoading && !finalContent.value
 })
 
 const thinkingSegments = computed(() => {
-  if (!props.segments || props.segments.length === 0) return []
+  if (props.segments.length === 0) return []
 
   if (hasTypeInfo.value) {
     // 有 type 信息：thinking 和 action 都归入思考过程
@@ -93,23 +84,22 @@ const thinkingSegments = computed(() => {
   return props.segments.slice(0, -1)
 })
 
-const finalSegments = computed(() => {
-  if (!props.segments || props.segments.length === 0) {
-    return [{ content: props.content }]
+const finalContent = computed(() => {
+  if (props.segments.length === 0) {
+    return props.content
   }
 
   if (hasTypeInfo.value) {
-    // 有 type 信息：只取 final 类型
-    return props.segments.filter(s => s.type === 'final')
+    // 有 type 信息：合并所有 final 段
+    return props.segments
+      .filter(s => s.type === 'final')
+      .map(s => s.content)
+      .join('')
   }
 
   // 无 type 信息（历史消息）：最后一段作为最终结果
-  return [props.segments[props.segments.length - 1]]
+  return props.segments[props.segments.length - 1].content
 })
-
-function formatContent(content: string): string {
-  return safeMarkdown(content)
-}
 </script>
 
 <style scoped lang="scss">
@@ -184,6 +174,10 @@ function formatContent(content: string): string {
     &:nth-child(2) {
       animation-delay: -0.16s;
     }
+
+    &:nth-child(3) {
+      animation-delay: 0s;
+    }
   }
 }
 
@@ -223,29 +217,6 @@ function formatContent(content: string): string {
     font-size: 13px;
     line-height: 1.6;
     color: #444;
-
-    :deep(p) {
-      margin: 0 0 8px;
-
-      &:last-child {
-        margin-bottom: 0;
-      }
-    }
-
-    :deep(pre) {
-      background: #f0f0f0;
-      padding: 10px;
-      border-radius: 6px;
-      overflow-x: auto;
-      font-size: 12px;
-    }
-
-    :deep(code) {
-      background: #f0f0f0;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-size: 12px;
-    }
   }
 }
 
@@ -254,49 +225,8 @@ function formatContent(content: string): string {
   padding: 8px 4px;
 }
 
-.final-content {
-  :deep(p) {
-    margin: 0 0 10px;
-
-    &:last-child {
-      margin-bottom: 0;
-    }
-  }
-
-  :deep(pre) {
-    background: #f6f8fa;
-    padding: 12px;
-    border-radius: 6px;
-    overflow-x: auto;
-  }
-
-  :deep(code) {
-    background: #f0f0f0;
-    padding: 2px 6px;
-    border-radius: 4px;
-  }
-}
-
+.final-content,
 .manus-message-text {
-  :deep(p) {
-    margin: 0 0 10px;
-
-    &:last-child {
-      margin-bottom: 0;
-    }
-  }
-
-  :deep(pre) {
-    background: #f6f8fa;
-    padding: 12px;
-    border-radius: 6px;
-    overflow-x: auto;
-  }
-
-  :deep(code) {
-    background: #f0f0f0;
-    padding: 2px 6px;
-    border-radius: 4px;
-  }
+  font-size: 14px;
 }
 </style>

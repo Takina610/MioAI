@@ -23,6 +23,8 @@ export interface ChatMessage {
   content: string
   createTime: Date
   segments?: MessageSegment[]
+  /** 流式传输异常中断（已有部分内容时置位，界面提示回答可能不完整） */
+  interrupted?: boolean
 }
 
 export interface ChatSession {

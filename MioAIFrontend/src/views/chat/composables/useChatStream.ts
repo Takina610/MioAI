@@ -141,11 +141,15 @@ export function useChatStream(options: {
         },
         (error) => {
           console.error('Ollama 错误:', error)
-          // 移除本轮发送的空 AI 消息，与 SSE 异常收尾行为一致
+          // 移除本轮发送的空 AI 消息；已有部分内容则保留并标记中断，与 SSE 异常收尾行为一致
           const ollamaMessages = messagesApi.getChatMessages(chatId)
           const ollamaLast = ollamaMessages[ollamaMessages.length - 1]
           if (ollamaLast && ollamaLast.role === 'assistant' && !ollamaLast.content) {
             messagesApi.setChatMessages(chatId, ollamaMessages.slice(0, -1))
+          } else if (ollamaLast && ollamaLast.role === 'assistant') {
+            const updatedMessages = [...ollamaMessages]
+            updatedMessages[updatedMessages.length - 1] = { ...ollamaLast, interrupted: true }
+            messagesApi.setChatMessages(chatId, updatedMessages)
           }
           message.error('本地模型连接失败，请启动 Ollama 或在「个人设置」切换回在线模型')
           messagesApi.setLoading(chatId, false)
@@ -190,12 +194,16 @@ export function useChatStream(options: {
 
       disarmStreamWatchdog()
 
-      // 移除空的AI消息
+      // 移除空的AI消息；已有部分内容则保留并标记中断
       const errorMessages = messagesApi.getChatMessages(chatId)
       const lastMsg = errorMessages[errorMessages.length - 1]
       if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.content) {
         messagesApi.setChatMessages(chatId, errorMessages.slice(0, -1))
         message.error('连接中断，请重试')
+      } else if (lastMsg && lastMsg.role === 'assistant') {
+        const updatedMessages = [...errorMessages]
+        updatedMessages[updatedMessages.length - 1] = { ...lastMsg, interrupted: true }
+        messagesApi.setChatMessages(chatId, updatedMessages)
       }
 
       if (isNewChat && userStore.isLoggedIn) {

@@ -2,6 +2,8 @@ package com.mio.ai.superagent.controller;
 
 import com.mio.ai.superagent.app.DefaultApp;
 import com.mio.ai.superagent.model.vo.ChatVO;
+import com.mio.ai.superagent.util.SseStreams;
+import jakarta.annotation.Resource;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -11,8 +13,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-
-import java.io.IOException;
 
 /**
  * @author: Takina
@@ -38,24 +38,9 @@ public class DefaultController {
         chatVO.setAgentId(agentId);
         chatVO.setUserId(userId);
 
-        // 创建一个超时时间较长的 SseEmitter
-        SseEmitter sseEmitter = new SseEmitter(45000L); // 1.5 分钟超时
-        // 获取 Flux 响应式数据流并且直接通过订阅推送给 SseEmitter
-        defaultApp.doChat(chatVO)
-                .subscribe(chunk -> {
-                    try {
-                        sseEmitter.send(chunk);
-                    } catch (IOException e) {
-                        sseEmitter.completeWithError(e);
-                    }
-                }, sseEmitter::completeWithError, () -> {
-                    try {
-                        sseEmitter.send("[DONE]");
-                    } catch (IOException e) {
-                        // ignore
-                    }
-                    sseEmitter.complete();
-                });
+        // 创建 SseEmitter 并把模型流推送出去（发送失败不取消上游，保证落库）
+        SseEmitter sseEmitter = new SseEmitter(SseStreams.CHAT_TIMEOUT_MS);
+        SseStreams.pipe(defaultApp.doChat(chatVO), sseEmitter);
         // 返回
         return sseEmitter;
     }
