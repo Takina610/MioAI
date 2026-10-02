@@ -138,6 +138,7 @@ import { message, type FormInstance } from 'ant-design-vue'
 import type { Rule } from 'ant-design-vue/es/form'
 import { ToolOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons-vue'
 import { validateMcpConfig } from '@/api/mcpTool'
+import { formatValidateError } from '@/utils/mcpTool'
 import type { McpTool, McpToolAddRequest, McpValidateResult } from '@/types'
 
 const props = defineProps<{
@@ -201,21 +202,7 @@ function syncScroll(): void {
 }
 
 function getErrorMessage(result: McpValidateResult): string {
-  const errorType = result.errorType
-  const errorMsg = result.errorMessage || '未知错误'
-  
-  switch (errorType) {
-    case 'CONFIG_INVALID':
-      return `配置无效: ${errorMsg}`
-    case 'CONNECTION_FAILED':
-      return `连接失败: ${errorMsg}`
-    case 'AUTH_FAILED':
-      return `认证失败: ${errorMsg}`
-    case 'TIMEOUT':
-      return `连接超时: ${errorMsg}`
-    default:
-      return errorMsg
-  }
+  return formatValidateError(result.errorType, result.errorMessage)
 }
 
 async function handleNext(): Promise<void> {

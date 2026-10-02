@@ -7,6 +7,7 @@ import com.mio.ai.customagent.model.dto.mcptool.McpValidateRequest;
 import com.mio.ai.customagent.model.vo.mcp.McpValidateResultVO;
 import com.mio.ai.customagent.service.mcp.McpValidateService;
 import com.mio.ai.framework.mcp.McpClientFactory;
+import com.mio.ai.framework.mcp.McpHttpErrorProbe;
 import io.modelcontextprotocol.spec.McpSchema;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -97,7 +98,7 @@ public class McpValidateServiceImpl implements McpValidateService {
             }
         } catch (Exception e) {
             log.error("MCP校验失败: {}", serverName, e);
-            McpValidateResultVO error = buildErrorResult(e);
+            McpValidateResultVO error = buildErrorResult(e, serverConfig);
             error.setWarnings(warnings);
             return error;
         }
@@ -128,29 +129,102 @@ public class McpValidateServiceImpl implements McpValidateService {
         return serverInfo;
     }
 
-    private McpValidateResultVO buildErrorResult(Exception e) {
+    private static final int MESSAGE_MAX = 200;
+
+    /**
+     * 错误分类与还原（包级可见便于测试）：
+     * HTTP 型配置用探针拿服务端真实状态码/响应体；STDIO 走 cause 链，把根因透出到错误消息里
+     */
+    McpValidateResultVO buildErrorResult(Exception e, JSONObject serverConfig) {
         McpValidateResultVO result = new McpValidateResultVO();
         result.setSuccess(false);
 
-        String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-        String lower = errorMsg.toLowerCase();
+        String url = serverConfig.getStr("url");
+        if (url != null && !url.isBlank()) {
+            return buildHttpErrorResult(result, serverConfig, collectCauseMessages(e));
+        }
+        String messages = collectCauseMessages(e);
+        return applyType(result, messages, "校验失败：" + messages);
+    }
+
+    private McpValidateResultVO buildHttpErrorResult(McpValidateResultVO result, JSONObject serverConfig,
+                                                     String sdkMessage) {
+        McpHttpErrorProbe.ProbeResult probe = McpHttpErrorProbe.probe(serverConfig);
+        if (probe.networkFailed()) {
+            return applyType(result, probe.networkError(), "连接失败：" + probe.networkError());
+        }
+        int status = probe.statusCode();
+        if (status == 401 || status == 403) {
+            result.setErrorType("AUTH_FAILED");
+            result.setErrorMessage("认证失败：服务端返回 " + withBody(status, probe.bodyExcerpt())
+                    + "，需在配置 headers 中提供令牌");
+            return result;
+        }
+        if (status == 404 || status == 405) {
+            // 405 常见于把 SSE 端点配成 type=http：SSE 端点不接受 POST
+            result.setErrorType("CONNECTION_FAILED");
+            String hint = status == 405 ? "，URL 可能不是 MCP 端点或需要 type=sse" : "，URL 可能不是 MCP 端点";
+            result.setErrorMessage("连接失败：服务端返回 " + withBody(status, probe.bodyExcerpt()) + hint);
+            return result;
+        }
+        if (status >= 400) {
+            result.setErrorType("UNKNOWN");
+            result.setErrorMessage("校验失败：服务端返回 " + withBody(status, probe.bodyExcerpt()));
+            return result;
+        }
+        // 2xx/3xx：端点可达但 SDK 握手失败，多为协议版本不兼容或非 MCP 端点
+        result.setErrorType("UNKNOWN");
+        result.setErrorMessage("服务器可达但 MCP 握手失败（" + sdkMessage + "），可能协议版本不兼容");
+        return result;
+    }
+
+    /** 按关键字定 errorType；消息自带类型前缀，前端不再二次拼接 */
+    private McpValidateResultVO applyType(McpValidateResultVO result, String keywordText, String displayMessage) {
+        String lower = keywordText.toLowerCase();
+        String prefix;
         if (lower.contains("timeout") || lower.contains("timed out")) {
             result.setErrorType("TIMEOUT");
-            result.setErrorMessage("连接超时，请检查网络或服务器状态");
+            prefix = "连接超时：";
         } else if (lower.contains("401") || lower.contains("403") || lower.contains("unauthorized")
                 || lower.contains("forbidden") || lower.contains("api key") || lower.contains("apikey")
                 || lower.contains("auth")) {
             result.setErrorType("AUTH_FAILED");
-            result.setErrorMessage("认证失败，请检查 API Key 或 headers 配置");
+            prefix = "认证失败：";
         } else if (lower.contains("404") || lower.contains("refused") || lower.contains("unreachable")
                 || lower.contains("enoent") || lower.contains("not found") || lower.contains("connection")
-                || lower.contains("unknown host") || lower.contains("unknownhost")) {
+                || lower.contains("unknown host") || lower.contains("unknownhost")
+                || lower.contains("cannot run program") || lower.contains("createprocess")) {
             result.setErrorType("CONNECTION_FAILED");
-            result.setErrorMessage("连接失败，请检查服务器地址、命令路径或网络连接");
+            prefix = "连接失败：";
         } else {
             result.setErrorType("UNKNOWN");
-            result.setErrorMessage("校验失败: " + errorMsg);
+            prefix = "校验失败：";
         }
+        result.setErrorMessage(prefix + displayMessage);
         return result;
+    }
+
+    private String withBody(int status, String bodyExcerpt) {
+        return bodyExcerpt == null || bodyExcerpt.isEmpty()
+                ? String.valueOf(status)
+                : status + "（" + bodyExcerpt + "）";
+    }
+
+    /** 收集异常链上各级消息（SDK/ProcessBuilder 常把真实原因放在 cause 里），去重后拼接并截断 */
+    private String collectCauseMessages(Throwable e) {
+        StringBuilder sb = new StringBuilder();
+        Throwable cur = e;
+        while (cur != null) {
+            String msg = cur.getMessage() != null && !cur.getMessage().isBlank()
+                    ? cur.getMessage() : cur.getClass().getSimpleName();
+            if (sb.indexOf(msg) < 0) {
+                if (sb.length() > 0) {
+                    sb.append(" | ");
+                }
+                sb.append(msg);
+            }
+            cur = cur.getCause() == cur ? null : cur.getCause();
+        }
+        return sb.length() > MESSAGE_MAX ? sb.substring(0, MESSAGE_MAX) + "..." : sb.toString();
     }
 }

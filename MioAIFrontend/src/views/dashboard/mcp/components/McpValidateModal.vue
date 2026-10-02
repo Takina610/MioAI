@@ -43,6 +43,7 @@
 
 <script setup lang="ts">
 import { CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons-vue'
+import { formatValidateError } from '@/utils/mcpTool'
 import type { McpValidateResult } from '@/types'
 import McpToolList from './McpToolList.vue'
 
@@ -56,15 +57,7 @@ const emit = defineEmits<{
 }>()
 
 function getErrorMessage(result: McpValidateResult): string {
-  const messages: Record<string, string> = {
-    CONFIG_INVALID: '配置无效',
-    CONNECTION_FAILED: '连接失败',
-    AUTH_FAILED: '认证失败',
-    TIMEOUT: '连接超时'
-  }
-  const prefix = result.errorType ? messages[result.errorType] : undefined
-  const errorMsg = result.errorMessage || '未知错误'
-  return prefix ? `${prefix}: ${errorMsg}` : errorMsg
+  return formatValidateError(result.errorType, result.errorMessage)
 }
 </script>
 

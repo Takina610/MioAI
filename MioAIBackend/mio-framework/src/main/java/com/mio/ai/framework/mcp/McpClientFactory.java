@@ -204,7 +204,8 @@ public class McpClientFactory {
         }
     }
 
-    private Map<String, String> parseStringMap(JSONObject obj) {
+    /** headers/env 节点转字符串 Map（值一律 toString）；供 HTTP 传输与错误探测共用 */
+    public static Map<String, String> parseStringMap(JSONObject obj) {
         if (obj == null || obj.isEmpty()) {
             return Map.of();
         }
