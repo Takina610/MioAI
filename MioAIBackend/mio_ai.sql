@@ -5,7 +5,7 @@
    不包含任何真实聊天记录、文档、密钥或用户数据。
  - 默认管理员：账号 admin / 密码 admin123456（MD5 加盐存储，
    首次登录成功后会自动升级为 BCrypt，请登录后立即修改密码）。
- - 向量数据存于 Redis（RedisStack），聊天记忆存于 spring_ai_chat_memory，
+ - 向量数据存于 PostgreSQL（pgvector），聊天记忆存于 spring_ai_chat_memory，
    均由应用启动时自动建表/建索引，无需在此维护。
 */
 
@@ -264,7 +264,9 @@ CREATE TABLE IF NOT EXISTS SPRING_AI_CHAT_MEMORY (
     `content` TEXT NOT NULL,
     `type` VARCHAR(10) NOT NULL,
     `timestamp` TIMESTAMP NOT NULL,
-    INDEX `SPRING_AI_CHAT_MEMORY_CONVERSATION_ID_TIMESTAMP_IDX` (`conversation_id`, `timestamp`)
+    `sequence_id` BIGINT NOT NULL,
+    INDEX `SPRING_AI_CHAT_MEMORY_CONVERSATION_ID_TIMESTAMP_IDX` (`conversation_id`, `timestamp`),
+    INDEX `SPRING_AI_CHAT_MEMORY_CONVERSATION_ID_SEQUENCE_ID_IDX` (`conversation_id`, `sequence_id`)
 );
 
 SET FOREIGN_KEY_CHECKS = 1;

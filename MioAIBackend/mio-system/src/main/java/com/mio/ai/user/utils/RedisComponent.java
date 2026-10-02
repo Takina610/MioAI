@@ -59,6 +59,17 @@ public class RedisComponent {
     }
 
     /**
+     * 通过 token 获取用户 ID，未登录或 token 失效时返回 null 而不抛异常，
+     * 供允许游客访问的公开内容接口（如公开智能体详情）使用
+     * @param token 用户token
+     * @return 用户ID，未登录时为 null
+     */
+    public Long getUserIdNullable(String token) {
+        LoginUserVO currentUser = getUserInfoByToken(token);
+        return currentUser == null || currentUser.getId() == null ? null : currentUser.getId();
+    }
+
+    /**
      * 通过向量文档ID获取文档名称
      * @param vectorDocId 向量文档ID，格式如 "doc_15_3"
      * @return 文档名称

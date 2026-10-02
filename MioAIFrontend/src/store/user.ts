@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { userLogin, userLogout, getLoginUser, userRegister } from '@/api/user'
-import { setLoggingOut } from '@/utils/request'
+import { setLoggingOut, UNAUTHORIZED_EVENT } from '@/utils/request'
 import type { LoginRequest, RegisterRequest, LoginResponse, UserVO } from '@/types'
 
 export const useUserStore = defineStore('user', () => {
@@ -11,6 +11,10 @@ export const useUserStore = defineStore('user', () => {
   const isLoggedIn = computed<boolean>(() => !!token.value)
   const userName = computed<string>(() => userInfo.value?.userName || '用户')
   const userAvatar = computed<string>(() => userInfo.value?.userAvatar || '')
+
+  // 登录态在服务端失效（40100）时，把内存态一并清掉，页面立即降级为游客视图；
+  // store 与应用同生命周期，监听器无需注销
+  window.addEventListener(UNAUTHORIZED_EVENT, () => clearUser())
 
   function setToken(newToken: string): void {
     token.value = newToken

@@ -1,6 +1,10 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig, type InternalAxiosRequestConfig, type AxiosResponse } from 'axios'
 import { message } from 'ant-design-vue'
+import router from '@/router'
 import type { BaseResponse } from '@/types'
+
+/** 登录态失效事件：store 监听后同步清理内存态，页面随之降级为游客视图 */
+export const UNAUTHORIZED_EVENT = 'mio:unauthorized'
 
 interface RequestConfig extends AxiosRequestConfig {
   params?: Record<string, unknown>
@@ -67,8 +71,12 @@ request.interceptors.response.use(
         }
         localStorage.removeItem('token')
         localStorage.removeItem('userInfo')
+        window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
         showErrorMessage(res.message || '未登录')
-        window.location.href = '/'
+        // 仅在需要登录的页面强制回首页；公开页面（首页/对话页）就地降级为游客态
+        if (router.currentRoute.value.meta.requiresAuth) {
+          window.location.href = '/'
+        }
       } else {
         showErrorMessage(res.message || '请求失败')
       }

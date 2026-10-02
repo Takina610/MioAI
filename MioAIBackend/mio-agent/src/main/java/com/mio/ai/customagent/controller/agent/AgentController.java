@@ -86,16 +86,17 @@ public class AgentController {
     @GetMapping("/{id:\\d+}")
     @Cacheable(value = "agents", key = "#id")
     public BaseResponse<AgentVO> getAgent(@PathVariable Long id, HttpServletRequest httpRequest) {
-        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
-        // 可见性校验：所有者/内置/公开已发布（在读取缓存前执行）
-        accessGuardService.checkAgentUsable(id, userId);
+        // 游客也可读取内置/公开已发布的智能体（chat 页未登录可见）
+        Long userId = redisComponent.getUserIdNullable(httpRequest.getHeader("token"));
+        accessGuardService.checkAgentReadable(id, userId);
         AgentVO agent = agentService.getAgentById(id);
         return ResultUtils.success(agent);
     }
 
     @GetMapping("/{id:\\d+}/detail")
     public BaseResponse<AgentDetailVO> getAgentDetail(@PathVariable Long id, HttpServletRequest httpRequest) {
-        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        Long userId = redisComponent.getUserIdNullable(httpRequest.getHeader("token"));
+        accessGuardService.checkAgentReadable(id, userId);
         AgentDetailVO agent = agentService.getAgentDetailById(id, userId);
         return ResultUtils.success(agent);
     }
