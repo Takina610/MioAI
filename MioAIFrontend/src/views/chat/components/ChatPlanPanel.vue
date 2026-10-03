@@ -1,32 +1,38 @@
 <template>
-  <Transition name="plan-slide">
-    <div v-if="plan && plan.length" class="chat-plan-panel">
-      <div class="plan-header">
-        <OrderedListOutlined class="plan-icon" />
-        <span class="plan-title">任务清单</span>
-        <span class="plan-progress">{{ doneCount }}/{{ plan.length }}</span>
-      </div>
-      <div class="plan-steps">
-        <div v-for="step in plan" :key="step.index" class="plan-step" :class="step.status">
-          <span class="step-mark">
-            <ZcodeSpinner v-if="step.status === 'in_progress'" :size="13" />
-            <CheckOutlined v-else-if="step.status === 'done'" />
-            <CloseOutlined v-else-if="step.status === 'failed'" />
-            <span v-else class="step-dot"></span>
-          </span>
-          <span class="step-text">{{ step.description }}</span>
-        </div>
+  <div v-if="plan && plan.length" class="chat-plan-panel">
+    <div class="plan-header">
+      <OrderedListOutlined class="plan-icon" />
+      <span class="plan-title">任务清单</span>
+      <span class="plan-progress">{{ doneCount }}/{{ plan.length }}</span>
+      <button
+        class="plan-toggle"
+        :title="collapsed ? '展开任务清单' : '收起任务清单'"
+        @click="collapsed = !collapsed"
+      >
+        <DownOutlined :class="{ 'is-collapsed': collapsed }" />
+      </button>
+    </div>
+    <div v-show="!collapsed" class="plan-steps">
+      <div v-for="step in plan" :key="step.index" class="plan-step" :class="step.status">
+        <span class="step-mark">
+          <ZcodeSpinner v-if="step.status === 'in_progress'" :size="13" />
+          <CheckOutlined v-else-if="step.status === 'done'" />
+          <CloseOutlined v-else-if="step.status === 'failed'" />
+          <span v-else class="step-dot"></span>
+        </span>
+        <span class="step-text">{{ step.description }}</span>
       </div>
     </div>
-  </Transition>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
   OrderedListOutlined,
   CheckOutlined,
-  CloseOutlined
+  CloseOutlined,
+  DownOutlined
 } from '@ant-design/icons-vue'
 import ZcodeSpinner from '@/components/ZcodeSpinner.vue'
 import type { PlanStep } from '@/types'
@@ -36,30 +42,29 @@ const props = defineProps<{
   plan?: PlanStep[] | null
 }>()
 
+const collapsed = ref(false)
 const doneCount = computed(() => props.plan?.filter(s => s.status === 'done').length ?? 0)
+
+// 换了新清单（新一轮任务开始）时自动展开
+watch(() => props.plan?.[0]?.description, () => {
+  collapsed.value = false
+})
 </script>
 
 <style lang="scss" scoped>
+// 融合在输入框容器内的任务清单区（无边框卡片，与下方输入框一体）
 .chat-plan-panel {
-  width: 100%;
-  max-width: 800px;
-  margin: 0 auto 8px;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(6px);
-  border: 1px solid #e3e6ea;
-  border-radius: 12px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  padding: 10px 16px;
+  padding: 10px 16px 8px;
+  border-bottom: 1px dashed #eef0f3;
 
   .plan-header {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 8px;
 
     .plan-icon {
       color: $primary-color;
-      font-size: 14px;
+      font-size: 13px;
     }
 
     .plan-title {
@@ -69,10 +74,38 @@ const doneCount = computed(() => props.plan?.filter(s => s.status === 'done').le
     }
 
     .plan-progress {
-      margin-left: auto;
       font-size: 12px;
       color: #86909c;
       font-variant-numeric: tabular-nums;
+    }
+
+    .plan-toggle {
+      margin-left: auto;
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      background: transparent;
+      border-radius: 6px;
+      color: #86909c;
+      cursor: pointer;
+      font-size: 11px;
+      transition: all 0.2s;
+
+      &:hover {
+        background: #f2f3f5;
+        color: $primary-color;
+      }
+
+      .is-collapsed {
+        transform: rotate(-90deg);
+      }
+
+      svg {
+        transition: transform 0.2s;
+      }
     }
   }
 
@@ -80,7 +113,8 @@ const doneCount = computed(() => props.plan?.filter(s => s.status === 'done').le
     display: flex;
     flex-direction: column;
     gap: 6px;
-    max-height: 180px;
+    margin-top: 8px;
+    max-height: 168px;
     overflow-y: auto;
   }
 
@@ -131,17 +165,5 @@ const doneCount = computed(() => props.plan?.filter(s => s.status === 'done').le
       color: #f53f3f;
     }
   }
-}
-
-// 出现/收起动画
-.plan-slide-enter-active,
-.plan-slide-leave-active {
-  transition: all 0.25s ease;
-}
-
-.plan-slide-enter-from,
-.plan-slide-leave-to {
-  opacity: 0;
-  transform: translateY(6px);
 }
 </style>

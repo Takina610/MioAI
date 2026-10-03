@@ -4,10 +4,10 @@
       <img :src="agentAvatar || '/favicon.ico'" alt="Agent" class="welcome-avatar" />
       <h2 class="welcome-title">我能帮什么忙吗，{{ userStore.userName }}？</h2>
     </div>
-    <!-- 输入框上方融合区（当前会话的任务清单面板等） -->
-    <slot name="above-input" />
+    <!-- 与输入框融合的上区（任务清单等，共享同一容器边框） -->
     <div class="chat-input-wrapper">
       <div class="chat-input-container">
+        <slot name="above-input" />
         <div class="input-box">
           <a-textarea
             v-model:value="value"
@@ -76,15 +76,10 @@ function handleEnter(e: KeyboardEvent): void {
   width: 100%;
   box-sizing: border-box;
 
+  // 有消息时组合器固定在底部（常规流布局，消息区不再被遮挡）
   &.has-messages {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
     flex: none;
-    justify-content: flex-end;
-    padding: 16px 24px 24px;
-    background: linear-gradient(to top, #fff 80%, transparent);
+    padding: 12px 24px 20px;
 
     .welcome-section {
       display: none;
@@ -120,24 +115,25 @@ function handleEnter(e: KeyboardEvent): void {
     width: 100%;
     max-width: 800px;
 
+    // 融合容器：任务清单（插槽）与输入框共处一个边框内
     .chat-input-container {
       width: 100%;
+      background: #fff;
+      border: 1px solid #e5e6eb;
+      border-radius: 16px;
+      box-shadow: 0 4px 12px rgba(242, 243, 245, 1);
+      transition: all 0.2s;
+
+      &:focus-within {
+        border-color: $primary-color;
+        box-shadow: 0 4px 16px rgba(42, 161, 169, 0.2);
+      }
 
       .input-box {
         display: flex;
         align-items: center;
         gap: 12px;
-        background: #fff;
-        border: 1px solid #e5e6eb;
-        border-radius: 24px;
-        padding: 14px 18px;
-        box-shadow: 0 4px 12px rgba(242, 243, 245, 1);
-        transition: all 0.2s;
-
-        &:focus-within {
-          border-color: $primary-color;
-          box-shadow: 0 4px 16px rgba(42, 161, 169, 0.2);
-        }
+        padding: 12px 14px 12px 18px;
 
         .chat-textarea {
           flex: 1;

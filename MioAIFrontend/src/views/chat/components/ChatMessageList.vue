@@ -95,7 +95,8 @@ defineExpose({ scrollToBottom, isNearBottom })
   overflow-y: auto;
   overflow-x: hidden;
   padding: 24px;
-  padding-bottom: 120px;
+  // 组合器已是常规流布局，不再需要为悬浮输入框预留大片底部空间
+  padding-bottom: 24px;
 
   .messages-wrapper {
     max-width: 800px;

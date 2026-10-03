@@ -3,6 +3,7 @@ import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { chatWithMioBot, chatWithStream } from '@/api/chat'
+import { getChatHistory } from '@/api/chatMemory'
 import type { ChatMessage, MessageBlock, PlanStep } from '@/types'
 import {
   generateConversationId,
@@ -13,6 +14,12 @@ import {
 // 看门狗：连续该时长收不到任何事件（含心跳）才判定连接挂死。
 // 后端每 15s 发一次 heartbeat，长工具执行期间也会被持续喂狗。
 const STREAM_WATCHDOG_TIMEOUT_MS = 60000
+
+// 断线自愈：连接被浏览器/代理掐断时后端仍在执行并落库，
+// 静默轮询会话历史把内容补回界面；连续无增长视为已结束。
+const RECOVERY_POLL_INTERVAL_MS = 4000
+const RECOVERY_STABLE_POLLS = 8
+const RECOVERY_MAX_WAIT_MS = 240000
 
 /**
  * 消息发送与流式接收：智能体 SSE（ZCode 风格事件流）与本地 Ollama 直连两种通道。
@@ -162,7 +169,7 @@ export function useChatStream(options: {
     eventSource = chatWithMioBot(content, chatId, options.agentId.value, token)
     const es = eventSource
 
-    // 流式异常收尾：移除空的AI消息、尝试生成标题、复位加载状态
+    // 流式异常处理：连接被掐断时后端通常仍在执行——启动静默自愈而不是报错
     const handleStreamError = (error: Event) => {
       console.error('SSE连接错误:', error)
 
@@ -176,8 +183,42 @@ export function useChatStream(options: {
       }
 
       disarmStreamWatchdog()
-      handleEmptyOrPartial(chatId, aiMessageIndex)
-      finishStream()
+      es.close()
+      eventSource = null
+      currentEventSourceChatId = ''
+
+      const partial = messagesApi.getChatMessages(chatId)[aiMessageIndex]
+      const empty = !partial || (!partial.content && !(partial.blocks && partial.blocks.length))
+      if (empty) {
+        messagesApi.setChatMessages(chatId, messagesApi.getChatMessages(chatId)
+          .filter((_, i) => i !== aiMessageIndex))
+        message.error('连接中断，请重试')
+        messagesApi.setLoading(chatId, false)
+        return
+      }
+
+      startRecoveryPolling(chatId, aiMessageIndex, () => {
+        // 自愈失败（后端真挂了/始终无新内容）：保留已有内容并标记中断
+        patchMessage(chatId, aiMessageIndex, (msg) => ({ ...msg, interrupted: true }))
+        if (isNewChat && userStore.isLoggedIn) {
+          options.updateTitle(content, messagesApi.getChatMessages(chatId)[aiMessageIndex]?.content || '', chatId)
+        }
+        messagesApi.setLoading(chatId, false)
+      }, (finalText) => {
+        // 自愈完成：以后端落库的完整内容收尾，用户无感
+        patchMessage(chatId, aiMessageIndex, (msg) => ({
+          ...msg,
+          content: finalText,
+          blocks: undefined
+        }))
+        if (messagesApi.currentChatId.value === chatId) {
+          nextTick(() => options.followStream())
+        }
+        if (isNewChat && userStore.isLoggedIn) {
+          options.updateTitle(content, finalText, chatId)
+        }
+        messagesApi.setLoading(chatId, false)
+      })
     }
 
     // 初始挂一次看门狗；此后每个事件（含心跳）到达都会重挂
@@ -381,6 +422,89 @@ export function useChatStream(options: {
     } else {
       patchMessage(chatId, aiMessageIndex, (msg) => ({ ...msg, interrupted: true }))
     }
+  }
+
+  /**
+   * 断线自愈：连接被掐断后后端仍在执行并持续落库，
+   * 轮询会话历史把内容静默补回；连续无增长视为执行结束，超时放弃才提示中断。
+   */
+  function startRecoveryPolling(
+    chatId: string,
+    aiMessageIndex: number,
+    onGiveUp: () => void,
+    onRecovered: (finalText: string) => void
+  ): void {
+    const startTime = Date.now()
+    let stableCount = 0
+    let lastLen = -1
+    let lastText = ''
+    let everGrew = false
+
+    const timer = setInterval(async () => {
+      // 加载状态被其他路径复位（如用户切走/删除）则停止
+      if (!messagesApi.chatLoadingMap.value.get(chatId)) {
+        clearInterval(timer)
+        return
+      }
+      const elapsed = Date.now() - startTime
+      try {
+        const history = await getChatHistory(chatId, { skipErrorMessage: true })
+        const text = assistantTextOfLastTurn(history ?? [])
+        if (text.length > lastLen) {
+          if (text.length > 0) {
+            everGrew = true
+            lastText = text
+            patchMessage(chatId, aiMessageIndex, (msg) => ({
+              ...msg,
+              content: text,
+              blocks: undefined
+            }))
+            if (messagesApi.currentChatId.value === chatId) {
+              nextTick(() => options.followStream())
+            }
+          }
+          lastLen = text.length
+          stableCount = 0
+        } else {
+          stableCount++
+        }
+
+        if (stableCount >= RECOVERY_STABLE_POLLS
+            && elapsed > RECOVERY_STABLE_POLLS * RECOVERY_POLL_INTERVAL_MS) {
+          clearInterval(timer)
+          if (everGrew) onRecovered(lastText)
+          else onGiveUp()
+          return
+        }
+        if (elapsed > RECOVERY_MAX_WAIT_MS) {
+          clearInterval(timer)
+          if (everGrew) onRecovered(lastText)
+          else onGiveUp()
+        }
+      } catch {
+        // 轮询失败（后端暂不可达）：继续尝试直到超时
+        if (elapsed > RECOVERY_MAX_WAIT_MS) {
+          clearInterval(timer)
+          onGiveUp()
+        }
+      }
+    }, RECOVERY_POLL_INTERVAL_MS)
+  }
+
+  /** 取历史里最后一个用户消息之后的全部助手文本（与本轮流式消息对应） */
+  function assistantTextOfLastTurn(history: Array<{ role: string; content: string }>): string {
+    let lastUser = -1
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].role === 'user') {
+        lastUser = i
+        break
+      }
+    }
+    return history
+      .slice(lastUser + 1)
+      .filter(m => m.role === 'assistant')
+      .map(m => m.content)
+      .join('\n\n')
   }
 
   /** 组件卸载前关闭所有流式连接 */
