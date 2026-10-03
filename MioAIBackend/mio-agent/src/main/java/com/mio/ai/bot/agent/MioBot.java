@@ -32,14 +32,18 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * MioBot：MioAI 唯一的智能体，具备完整 Agent 能力。
- * <p>运行在"思考 → 行动 → 观察"的流式循环里：每轮模型输出边生成边推送
- * （推理增量 thinking / 正文增量 answer），模型发起的工具调用由
- * {@link ToolCallingManager} 手动执行（tool_call / tool_result 事件实时可见），
- * 结果回填上下文后进入下一轮，直到模型不再调用工具（给出最终回答）或达到步数上限。
+ * MioBot：ZCode 风格的流式 Agent 引擎，MioBot（内置）与用户自定义智能体共用。
+ * <p>一次 run = 一个助手回合，由事件块流构成：正文/推理增量实时推送，
+ * 工具调用在生成阶段即出现（tool_use）并流式输出参数（tool_args），
+ * 执行结果以 tool_result 回填；循环"模型 → 工具 → 模型"直到模型不再调用工具。
+ * <p>保活：整个运行期间每 {@link #HEARTBEAT_INTERVAL_SECONDS} 秒发送一次 heartbeat 事件，
+ * 长工具执行（如 PDF 生成+上传）期间连接不会因无数据被代理/看门狗掐断。
  * <p>规划：复杂任务通过 {@link PlanningTool} 维护任务清单，清单变化以 plan 事件推送前端；
  * 记忆：会话历史经 {@link ChatMemory} 跨请求持久化，运行开始时回读为上下文。
  * <p>由调用方按请求创建实例，不作为 Spring Bean 管理。
@@ -55,6 +59,17 @@ public class MioBot {
 
     /** SSE 工具结果事件的预览长度：完整结果已进入模型上下文，前端只需可读摘要 */
     private static final int TOOL_RESULT_PREVIEW_LENGTH = 400;
+
+    /** 心跳间隔：小于常见代理/网关的空闲超时，保证长工具执行期间连接存活 */
+    private static final long HEARTBEAT_INTERVAL_SECONDS = 15;
+
+    /** 心跳调度器（daemon 单线程，所有 run 共享；任务本身只做一次轻量发送） */
+    private static final java.util.concurrent.ScheduledExecutorService HEARTBEAT_SCHEDULER =
+            Executors.newSingleThreadScheduledExecutor(runnable -> {
+                Thread thread = new Thread(runnable, "mio-bot-heartbeat");
+                thread.setDaemon(true);
+                return thread;
+            });
 
     private final ChatModel chatModel;
     private final ChatMemory chatMemory;
@@ -102,7 +117,7 @@ public class MioBot {
     /**
      * 执行一轮对话任务，流式返回全过程事件。
      *
-     * @param userPrompt      用户输入
+     * @param userPrompt       用户输入
      * @param knowledgeContext 知识库检索命中的上下文（可为空），注入系统提示词
      */
     public SseEmitter run(String userPrompt, String knowledgeContext) {
@@ -114,6 +129,8 @@ public class MioBot {
             long startTime = System.currentTimeMillis();
             int totalInputTokens = 0;
             int totalOutputTokens = 0;
+            ScheduledFuture<?> heartbeat = HEARTBEAT_SCHEDULER.scheduleAtFixedRate(
+                    this::emitHeartbeat, HEARTBEAT_INTERVAL_SECONDS, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
             try {
                 List<Message> messages = new ArrayList<>(loadHistory());
                 UserMessage userMessage = new UserMessage(userPrompt);
@@ -127,7 +144,9 @@ public class MioBot {
                     Prompt prompt = new Prompt(messages, buildChatOptions())
                             .augmentSystemMessage(systemPrompt + planSection());
 
-                    StreamTurnCollector collector = new StreamTurnCollector(this::emitThinkingDelta, this::emitAnswerDelta);
+                    StreamTurnCollector collector = new StreamTurnCollector(
+                            this::emitThinkingDelta, this::emitAnswerDelta,
+                            this::emitToolUse, this::emitToolArgs);
                     chatModel.stream(prompt).doOnNext(collector::accept).blockLast();
 
                     ChatResponse response = collector.build();
@@ -139,15 +158,20 @@ public class MioBot {
                     logUsage(response, step);
 
                     AssistantMessage assistant = response.getResult().getOutput();
-                    persist(assistant);
 
                     // 模型不再调用工具 = 最终回答已流式输出完毕，任务结束
                     if (!assistant.hasToolCalls()) {
+                        persist(assistant);
                         finished = true;
                         break;
                     }
 
-                    emitToolCalls(assistant.getToolCalls());
+                    // JdbcChatMemoryRepository 不支持工具调用消息：落一份"纯文本"副本保留叙述，供跨请求历史回看
+                    if (StrUtil.isNotBlank(assistant.getText())) {
+                        persist(new AssistantMessage(assistant.getText()));
+                    }
+
+                    logToolCalls(assistant.getToolCalls());
                     ToolExecutionResult toolResult = toolCallingManager.executeToolCalls(prompt, response);
                     ToolResponseMessage toolResponseMessage =
                             (ToolResponseMessage) toolResult.conversationHistory()
@@ -156,7 +180,6 @@ public class MioBot {
                     // 上下文回填：用户消息 + 助手工具调用 + 工具结果（剔除 augment 注入的系统消息，避免逐轮堆积）
                     messages.add(assistant);
                     messages.add(toolResponseMessage);
-                    persist(toolResponseMessage);
                     emitToolResults(toolResponseMessage);
                 }
 
@@ -171,6 +194,8 @@ public class MioBot {
                 log.error("MioBot 执行异常", e);
                 emit(SseChunk.content("error", "执行出错：" + e.getMessage()).fields());
                 complete();
+            } finally {
+                heartbeat.cancel(false);
             }
         });
 
@@ -290,27 +315,22 @@ public class MioBot {
         agentUsageLogService.logUsage(usageLog);
     }
 
-    private void emitToolCalls(List<AssistantMessage.ToolCall> toolCalls) {
-        for (AssistantMessage.ToolCall toolCall : toolCalls) {
-            emit(SseChunk.toolCall(toolCall.id(), toolCall.name(), toolCall.arguments()).fields());
-            logToolCall(toolCall);
-        }
-    }
-
-    private void logToolCall(AssistantMessage.ToolCall toolCall) {
+    private void logToolCalls(List<AssistantMessage.ToolCall> toolCalls) {
         if (toolCallLogService == null) {
             return;
         }
-        ToolCallLog toolCallLog = new ToolCallLog();
-        toolCallLog.setAgentId(agentId);
-        toolCallLog.setUserId(userId);
-        toolCallLog.setConversationId(parseConversationId());
-        toolCallLog.setToolId(0L);
-        toolCallLog.setName(toolCall.name());
-        toolCallLog.setInputParams(toolCall.arguments());
-        toolCallLog.setStatus(1);
-        toolCallLog.setCreateTime(new Date());
-        toolCallLogService.logToolCall(toolCallLog);
+        for (AssistantMessage.ToolCall toolCall : toolCalls) {
+            ToolCallLog toolCallLog = new ToolCallLog();
+            toolCallLog.setAgentId(agentId);
+            toolCallLog.setUserId(userId);
+            toolCallLog.setConversationId(parseConversationId());
+            toolCallLog.setToolId(0L);
+            toolCallLog.setName(toolCall.name());
+            toolCallLog.setInputParams(toolCall.arguments());
+            toolCallLog.setStatus(1);
+            toolCallLog.setCreateTime(new Date());
+            toolCallLogService.logToolCall(toolCallLog);
+        }
     }
 
     private void emitToolResults(ToolResponseMessage toolResponseMessage) {
@@ -339,6 +359,18 @@ public class MioBot {
 
     private void emitAnswerDelta(String delta) {
         emit(SseChunk.delta("answer", delta).fields());
+    }
+
+    private void emitToolUse(String id, String tool) {
+        emit(SseChunk.toolUse(id, tool).fields());
+    }
+
+    private void emitToolArgs(String id, String delta) {
+        emit(SseChunk.toolArgs(id, delta).fields());
+    }
+
+    private void emitHeartbeat() {
+        emit(SseChunk.heartbeat().fields());
     }
 
     /** 发送一条信封事件（连接断开时静默跳过，不影响执行与落库） */

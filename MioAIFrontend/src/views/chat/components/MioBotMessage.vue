@@ -12,7 +12,7 @@
         <div class="plan-steps">
           <div v-for="step in plan" :key="step.index" class="plan-step" :class="step.status">
             <span class="step-mark">
-              <LoadingOutlined v-if="step.status === 'in_progress'" spin />
+              <ZcodeSpinner v-if="step.status === 'in_progress'" :size="14" />
               <CheckOutlined v-else-if="step.status === 'done'" />
               <CloseOutlined v-else-if="step.status === 'failed'" />
               <span v-else class="step-dot"></span>
@@ -32,12 +32,12 @@
         <div v-show="thinkingExpanded" class="thinking-text">{{ thinking }}</div>
       </div>
 
-      <!-- 工具调用时间线 -->
+      <!-- 工具调用时间线（参数实时增长） -->
       <div v-if="tools && tools.length" class="tools-timeline">
         <div v-for="(tool, index) in tools" :key="tool.id ?? index" class="tool-card">
           <div class="tool-row" @click="toggleTool(index)">
             <span class="tool-status">
-              <LoadingOutlined v-if="tool.status === 'running'" spin />
+              <ZcodeSpinner v-if="tool.status === 'running'" :size="14" />
               <CheckCircleOutlined v-else class="tool-done" />
             </span>
             <ToolOutlined class="tool-icon" />
@@ -62,9 +62,9 @@
     <!-- 最终回答 -->
     <MarkdownView v-if="content" class="answer-content" :content="content" />
 
-    <!-- 流式中：尚无任何输出时的等待指示 -->
-    <div v-if="isLoading && !hasOutput" class="message-loading">
-      <span></span><span></span><span></span>
+    <!-- 加载指示：流式期间始终显示在消息尾部（ZCode 同款 spinner） -->
+    <div v-if="isLoading" class="tail-spinner">
+      <ZcodeSpinner :size="16" />
     </div>
 
     <div v-if="interrupted" class="stream-interrupted">连接中断，本条回答可能不完整</div>
@@ -80,10 +80,10 @@ import {
   CheckOutlined,
   CheckCircleOutlined,
   CloseOutlined,
-  LoadingOutlined,
   OrderedListOutlined
 } from '@ant-design/icons-vue'
 import MarkdownView from '@/components/MarkdownView.vue'
+import ZcodeSpinner from '@/components/ZcodeSpinner.vue'
 import type { ToolEvent } from '@/types'
 
 interface Props {
@@ -115,8 +115,6 @@ const expandedTools = ref<Set<number>>(new Set())
 const hasProcess = computed(() =>
   (props.plan?.length ?? 0) > 0 || !!props.thinking || (props.tools?.length ?? 0) > 0
 )
-
-const hasOutput = computed(() => !!props.content || hasProcess.value)
 
 const doneCount = computed(
   () => props.plan?.filter(s => s.status === 'done').length ?? 0
@@ -328,15 +326,15 @@ function prettyJson(args: string): string {
     }
 
     .tool-status {
-      font-size: 13px;
-      color: $primary-color;
       width: 16px;
       display: flex;
       justify-content: center;
+      align-items: center;
     }
 
     .tool-done {
       color: #00b42a;
+      font-size: 14px;
     }
 
     .tool-icon {
@@ -409,43 +407,12 @@ function prettyJson(args: string): string {
   padding: 0 4px;
 }
 
-.message-loading {
+// 消息尾部加载指示：流式期间常显（有内容时跟在内容后，无内容时独立成行）
+.tail-spinner {
+  padding: 2px 4px;
+  min-height: 20px;
   display: flex;
-  gap: 6px;
-  padding: 8px 4px;
-
-  span {
-    width: 8px;
-    height: 8px;
-    background: $primary-color;
-    border-radius: 50%;
-    animation: loading-bounce 1.4s infinite ease-in-out both;
-
-    &:nth-child(1) {
-      animation-delay: -0.32s;
-    }
-
-    &:nth-child(2) {
-      animation-delay: -0.16s;
-    }
-
-    &:nth-child(3) {
-      animation-delay: 0s;
-    }
-  }
-}
-
-@keyframes loading-bounce {
-  0%,
-  80%,
-  100% {
-    transform: scale(0);
-    opacity: 0.5;
-  }
-  40% {
-    transform: scale(1);
-    opacity: 1;
-  }
+  align-items: center;
 }
 
 .stream-interrupted {

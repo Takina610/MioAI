@@ -5,20 +5,21 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * SSE 统一消息信封：MioBot 的流式事件序列化为一行 JSON。
+ * SSE 统一消息信封：MioBot 引擎的流式事件序列化为一行 JSON（ZCode 风格的块流）。
  *
  * type 取值：
  *  answer      正文增量        {delta}
- *  thinking    思考/推理增量    {delta}（推理模型；工具调用前的步骤说明也走此通道）
- *  tool_call   工具调用开始     {id, tool, args}
+ *  thinking    思考/推理增量    {delta}
+ *  tool_use    工具调用出现     {id, tool}（参数开始流式输出）
+ *  tool_args   工具参数增量     {id, delta}
  *  tool_result 工具执行结果     {id, tool, content}
  *  plan        任务清单快照     {steps:[{index,description,status}]}
+ *  heartbeat   保活心跳        {}（长工具执行期间维持连接，前端忽略内容仅重挂看门狗）
  *  usage       用量尾块        {inputTokens, outputTokens, durationMs}
  *  done        结束标记        {}
  *  error       错误            {content}
  *
- * tool_call / tool_result 携带同一 id 用于前后配对（端点未返回 id 时回退按顺序配对）。
- * 扩展新类型时前端对未知 type 会按过程步骤兜底展示，无需同步发版。
+ * tool_use / tool_args / tool_result 携带同一 id 配对（端点未返回 id 时回退按顺序配对）。
  */
 public record SseChunk(Map<String, Object> fields) {
 
@@ -36,12 +37,19 @@ public record SseChunk(Map<String, Object> fields) {
         return new SseChunk(map);
     }
 
-    public static SseChunk toolCall(String id, String tool, String args) {
+    public static SseChunk toolUse(String id, String tool) {
         Map<String, Object> map = new LinkedHashMap<>();
-        map.put("type", "tool_call");
+        map.put("type", "tool_use");
         putIfNotBlank(map, "id", id);
         map.put("tool", tool);
-        map.put("args", args);
+        return new SseChunk(map);
+    }
+
+    public static SseChunk toolArgs(String id, String delta) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("type", "tool_args");
+        putIfNotBlank(map, "id", id);
+        map.put("delta", delta);
         return new SseChunk(map);
     }
 
@@ -51,6 +59,12 @@ public record SseChunk(Map<String, Object> fields) {
         putIfNotBlank(map, "id", id);
         map.put("tool", tool);
         map.put("content", content);
+        return new SseChunk(map);
+    }
+
+    public static SseChunk heartbeat() {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("type", "heartbeat");
         return new SseChunk(map);
     }
 

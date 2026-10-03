@@ -10,13 +10,15 @@ import {
   type ChatMessagesApi
 } from './useChatMessages'
 
-// 流式看门狗：连接挂死（收不到任何事件）时强制异常收尾
-const STREAM_WATCHDOG_TIMEOUT_MS = 90000
+// 看门狗：连续该时长收不到任何事件（含心跳）才判定连接挂死。
+// 后端每 15s 发一次 heartbeat，长工具执行期间也会被持续喂狗。
+const STREAM_WATCHDOG_TIMEOUT_MS = 60000
 
 /**
- * 消息发送与流式接收：MioBot SSE（信封协议）与本地 Ollama 直连两种通道。
- * <p>信封处理：answer/thinking 增量累积，tool_call/tool_result 按 id 配对成
- * 工具卡片，plan 覆盖为最新任务清单快照；多会话切换时按 chatId 过滤过期回调。
+ * 消息发送与流式接收：智能体 SSE（ZCode 风格事件流）与本地 Ollama 直连两种通道。
+ * <p>事件处理：answer/thinking 增量累积；tool_use 建立工具卡片、tool_args 实时追加参数、
+ * tool_result 按 id 配对收尾；plan 覆盖为最新任务清单快照；heartbeat 仅用于喂狗。
+ * 看门狗在每个事件到达时重挂，只在真正静默超时时触发异常收尾。
  */
 export function useChatStream(options: {
   agentId: Ref<number>
@@ -35,6 +37,19 @@ export function useChatStream(options: {
   let activeStream: { close: () => void } | null = null
   let currentStreamChatId = ''
   let streamWatchdogTimer: ReturnType<typeof setTimeout> | null = null
+
+  /** 事件驱动的静默看门狗：每收到任何事件重挂；超时仍未收到才触发异常收尾 */
+  function rearmStreamWatchdog(chatId: string, onStall: () => void): void {
+    if (streamWatchdogTimer) {
+      clearTimeout(streamWatchdogTimer)
+    }
+    streamWatchdogTimer = setTimeout(() => {
+      streamWatchdogTimer = null
+      if (messagesApi.chatLoadingMap.value.get(chatId)) {
+        onStall()
+      }
+    }, STREAM_WATCHDOG_TIMEOUT_MS)
+  }
 
   function disarmStreamWatchdog(): void {
     if (streamWatchdogTimer) {
@@ -165,14 +180,8 @@ export function useChatStream(options: {
       finishStream()
     }
 
-    // 连接被异常中断且收不到任何事件时，看门狗强制走异常收尾
-    disarmStreamWatchdog()
-    streamWatchdogTimer = setTimeout(() => {
-      streamWatchdogTimer = null
-      if (messagesApi.chatLoadingMap.value.get(chatId)) {
-        handleStreamError(new Event('stream-watchdog'))
-      }
-    }, STREAM_WATCHDOG_TIMEOUT_MS)
+    // 初始挂一次看门狗；此后每个事件（含心跳）到达都会重挂
+    rearmStreamWatchdog(chatId, () => handleStreamError(new Event('stream-watchdog')))
 
     es.onmessage = (event: MessageEvent) => {
       const rawData = event.data
@@ -181,6 +190,8 @@ export function useChatStream(options: {
       if (currentEventSourceChatId !== chatId) {
         return
       }
+      // 任何事件都证明连接活着：喂狗
+      rearmStreamWatchdog(chatId, () => handleStreamError(new Event('stream-watchdog')))
 
       let parsed: Record<string, any> | null = null
       try {
@@ -198,9 +209,10 @@ export function useChatStream(options: {
         finished = true
       }))
 
-      scrollIfCurrent(chatId)
       if (finished) {
         finishStream()
+      } else {
+        scrollIfCurrent(chatId)
       }
     }
 
@@ -231,14 +243,21 @@ export function useChatStream(options: {
         return { ...msg, content: msg.content + String(parsed.delta ?? parsed.content ?? '') }
       case 'thinking':
         return { ...msg, thinking: (msg.thinking || '') + String(parsed.delta ?? parsed.content ?? '') }
-      case 'tool_call': {
+      case 'tool_use': {
         const toolEvent: ToolEvent = {
           id: parsed.id ? String(parsed.id) : undefined,
           tool: String(parsed.tool ?? ''),
-          args: parsed.args !== undefined ? String(parsed.args) : undefined,
+          args: '',
           status: 'running'
         }
         return { ...msg, tools: [...(msg.tools ?? []), toolEvent] }
+      }
+      case 'tool_args': {
+        const id = parsed.id ? String(parsed.id) : ''
+        const delta = String(parsed.delta ?? '')
+        const tools = (msg.tools ?? []).map(t =>
+          t.id && t.id === id ? { ...t, args: (t.args || '') + delta } : t)
+        return { ...msg, tools }
       }
       case 'tool_result': {
         const tools = matchToolResult(msg.tools ?? [], parsed)
@@ -255,6 +274,8 @@ export function useChatStream(options: {
             durationMs: Number(parsed.durationMs) || undefined
           }
         }
+      case 'heartbeat':
+        return msg
       case 'done':
         markFinished()
         return msg

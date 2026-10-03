@@ -8,18 +8,22 @@ import org.springframework.ai.chat.model.Generation;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
- * 单轮模型流式响应的增量收集器。
- * <p>一边把推理/正文增量推给前端，一边把流分片聚合成完整的 ChatResponse：
- * 文本按序拼接；工具调用分片按 OpenAI 流式协议合并——首个分片携带 id/name，
- * 后续分片仅有参数续片；流末尾仅含 usage 的空响应只取用量不并入内容。
+ * 单轮模型流式响应的增量收集器（ZCode 风格块流）。
+ * <p>推理/正文增量实时外抛；工具调用同样实时外抛——首个分片（携带 id/name）触发
+ * {@code onToolUse}，后续参数分片逐段触发 {@code onToolArgs}；同时聚合成完整
+ * ChatResponse 供工具执行与记忆落库：文本按序拼接，工具调用按"id 出现即新调用、
+ * 无 id 视为参数续片"合并（OpenAI 流式协议），末尾仅含 usage 的空响应只取用量。
  */
 public class StreamTurnCollector {
 
     private final Consumer<String> thinkingDeltaSink;
     private final Consumer<String> answerDeltaSink;
+    private final BiConsumer<String, String> toolUseSink;
+    private final BiConsumer<String, String> toolArgsSink;
 
     private final StringBuilder text = new StringBuilder();
     private final StringBuilder reasoning = new StringBuilder();
@@ -33,9 +37,14 @@ public class StreamTurnCollector {
 
     private Usage usage;
 
-    public StreamTurnCollector(Consumer<String> thinkingDeltaSink, Consumer<String> answerDeltaSink) {
+    public StreamTurnCollector(Consumer<String> thinkingDeltaSink,
+                               Consumer<String> answerDeltaSink,
+                               BiConsumer<String, String> toolUseSink,
+                               BiConsumer<String, String> toolArgsSink) {
         this.thinkingDeltaSink = thinkingDeltaSink;
         this.answerDeltaSink = answerDeltaSink;
+        this.toolUseSink = toolUseSink;
+        this.toolArgsSink = toolArgsSink;
     }
 
     public void accept(ChatResponse chunk) {
@@ -81,11 +90,16 @@ public class StreamTurnCollector {
                 pendingToolCallType = delta.type();
                 pendingToolCallName = delta.name();
                 appendArgs(delta);
+                // 新调用出现即通知前端（参数随后逐段流入）
+                if (pendingToolCallName != null && !pendingToolCallName.isBlank()) {
+                    toolUseSink.accept(pendingToolCallId, pendingToolCallName);
+                }
             } else if (pendingToolCallName != null) {
                 // 参数续片：个别实现会把 name 补在后续分片上
                 appendArgs(delta);
                 if (pendingToolCallName.isBlank() && delta.name() != null && !delta.name().isBlank()) {
                     pendingToolCallName = delta.name();
+                    toolUseSink.accept(pendingToolCallId, pendingToolCallName);
                 }
             } else {
                 // 首个分片就没带 id（个别兼容端点的行为），照样开一个新调用
@@ -93,13 +107,17 @@ public class StreamTurnCollector {
                 pendingToolCallType = delta.type();
                 pendingToolCallName = delta.name() != null ? delta.name() : "";
                 appendArgs(delta);
+                if (!pendingToolCallName.isBlank()) {
+                    toolUseSink.accept(pendingToolCallId, pendingToolCallName);
+                }
             }
         }
     }
 
     private void appendArgs(AssistantMessage.ToolCall delta) {
-        if (delta.arguments() != null) {
+        if (delta.arguments() != null && !delta.arguments().isEmpty()) {
             pendingToolCallArgs.append(delta.arguments());
+            toolArgsSink.accept(pendingToolCallId, delta.arguments());
         }
     }
 
