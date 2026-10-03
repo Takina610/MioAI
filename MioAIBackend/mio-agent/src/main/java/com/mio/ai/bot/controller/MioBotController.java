@@ -7,8 +7,10 @@ import com.mio.ai.bot.model.vo.ChatVO;
 import com.mio.ai.bot.repository.ChatHistoryRepository;
 import com.mio.ai.bot.service.BotResourceService;
 import com.mio.ai.bot.util.SseStreams;
+import com.mio.ai.resource.model.entity.Agent;
 import com.mio.ai.resource.service.log.AgentUsageLogService;
 import com.mio.ai.resource.service.log.ToolCallLogService;
+import com.mio.ai.resource.service.security.AccessGuardService;
 import com.mio.ai.user.utils.RedisComponent;
 import jakarta.annotation.Resource;
 import jakarta.validation.constraints.NotBlank;
@@ -28,8 +30,9 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * MioBot 对话入口（全站唯一聊天端点）。
- * <p>登录用户按 token 解析身份并落会话记录；游客可对话但不落会话（消息仅在本次连接内可见）。
+ * 统一对话入口：MioBot（系统内置智能体，id=1）与用户自定义智能体共用同一套流式 Agent 引擎。
+ * <p>MioBot 游客可对话（不落会话记录）；自定义智能体要求登录并校验使用权（所有者/公开已发布），
+ * 使用其绑定的 MCP 工具与知识库，身份提示词取 agent.system_prompt。
  */
 @Validated
 @RestController
@@ -63,6 +66,9 @@ public class MioBotController {
     private BotResourceService botResourceService;
 
     @Autowired
+    private AccessGuardService accessGuardService;
+
+    @Autowired
     private AgentUsageLogService agentUsageLogService;
 
     @Autowired
@@ -71,15 +77,24 @@ public class MioBotController {
     @GetMapping("/bot/chat")
     public SseEmitter chat(@RequestParam @NotBlank @Size(max = 64) String chatId,
                            @RequestParam @NotBlank @Size(max = 20000) String content,
+                           @RequestParam(required = false) Long agentId,
                            @RequestParam(required = false) String token) {
         Long userId = StrUtil.isBlank(token) ? null : redisComponent.getUserId(token);
+        long resolvedAgentId = agentId != null ? agentId : MioBot.AGENT_ID;
+
+        // MioBot 游客可用；自定义智能体要求登录且有权使用（所有者/公开已发布）
+        String customSystemPrompt = null;
+        if (resolvedAgentId != MioBot.AGENT_ID) {
+            Agent agent = accessGuardService.checkAgentUsable(resolvedAgentId, userId);
+            customSystemPrompt = agent.getSystemPrompt();
+        }
 
         // 会话记录：仅登录用户落库（游客会话不产生列表项）
         if (userId != null) {
             ChatVO chatVO = new ChatVO();
             chatVO.setChatId(chatId);
             chatVO.setMessage(content);
-            chatVO.setAgentId(MioBot.AGENT_ID);
+            chatVO.setAgentId(resolvedAgentId);
             chatVO.setUserId(userId);
             chatHistoryRepository.save(chatVO);
         }
@@ -88,11 +103,12 @@ public class MioBotController {
             return emitSingleReply(SENSITIVE_REPLY);
         }
 
-        ToolCallback[] mcpTools = botResourceService.getPublicMcpToolCallbacks();
-        String knowledgeContext = botResourceService.buildKnowledgeContext(userId, content);
+        ToolCallback[] mcpTools = botResourceService.getMcpToolCallbacks(resolvedAgentId);
+        String knowledgeContext = botResourceService.buildKnowledgeContext(resolvedAgentId, userId, content);
 
         MioBot mioBot = new MioBot(chatModel, jdbcChatMemory, commonTools,
-                List.of(mcpTools), agentUsageLogService, toolCallLogService, chatId, userId);
+                List.of(mcpTools), agentUsageLogService, toolCallLogService,
+                chatId, userId, resolvedAgentId, customSystemPrompt);
         return mioBot.run(content, knowledgeContext);
     }
 

@@ -17,9 +17,9 @@ public interface ChatHistoryRepository {
 
     void clearByChatId(String chatId);
 
-    List<ChatConversationDO> getChats(Long userId);
+    List<ChatConversationDO> getChats(Long userId, Long agentId);
 
-    Page<ChatConversationDO> getChatsPage(Long userId, long current, long size);
+    Page<ChatConversationDO> getChatsPage(Long userId, Long agentId, long current, long size);
 
     ChatConversationDO getChatByConversationId(String conversationId);
 }

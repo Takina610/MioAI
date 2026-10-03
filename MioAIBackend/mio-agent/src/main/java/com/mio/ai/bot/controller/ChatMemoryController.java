@@ -42,12 +42,12 @@ public class ChatMemoryController {
     /**
      * 获取会话列表
      */
-    @GetMapping("/getChatIds")
+    @GetMapping("/getChatIds/{agentId}")
     @LogInfo
-    public BaseResponse<List<ChatConversationDO>> getChatIds(HttpServletRequest request){
+    public BaseResponse<List<ChatConversationDO>> getChatIds(@PathVariable Long agentId, HttpServletRequest request){
         return ResultUtils
                 .success(chatHistoryRepository
-                        .getChats(redisComponent.getUserId(request.getHeader("token"))));
+                        .getChats(redisComponent.getUserId(request.getHeader("token")), agentId));
     }
 
     /**
@@ -57,15 +57,16 @@ public class ChatMemoryController {
      * @param request HTTP请求
      * @return 分页会话列表
      */
-    @GetMapping("/getChatIdsPage")
+    @GetMapping("/getChatIdsPage/{agentId}")
     @LogInfo
     public BaseResponse<Page<ChatConversationDO>> getChatIdsPage(
+            @PathVariable Long agentId,
             @RequestParam(defaultValue = "1") long current,
             @RequestParam(defaultValue = "10") long size,
             HttpServletRequest request) {
         return ResultUtils
             .success(chatHistoryRepository
-            .getChatsPage(redisComponent.getUserId(request.getHeader("token")), current, size));
+            .getChatsPage(redisComponent.getUserId(request.getHeader("token")), agentId, current, size));
     }
 
     /**

@@ -63,6 +63,8 @@ public class MioBot {
 
     private final String chatId;
     private final Long userId;
+    private final Long agentId;
+    private final String baseSystemPrompt;
     private final ToolCallback[] tools;
 
     private final AgentPlan plan = new AgentPlan();
@@ -72,6 +74,10 @@ public class MioBot {
     private SseEmitter emitter;
     private final AtomicInteger seq = new AtomicInteger();
 
+    /**
+     * @param baseSystemPrompt 自定义智能体的身份提示词（空则用 MioBot 默认身份）；
+     *                         Agent 循环纪律（工作方式/结束条件）始终追加，保证每个智能体都有完整 Agent 能力
+     */
     public MioBot(ChatModel chatModel,
                   ChatMemory chatMemory,
                   ToolCallback[] builtInTools,
@@ -79,13 +85,17 @@ public class MioBot {
                   AgentUsageLogService agentUsageLogService,
                   ToolCallLogService toolCallLogService,
                   String chatId,
-                  Long userId) {
+                  Long userId,
+                  Long agentId,
+                  String baseSystemPrompt) {
         this.chatModel = chatModel;
         this.chatMemory = chatMemory;
         this.agentUsageLogService = agentUsageLogService;
         this.toolCallLogService = toolCallLogService;
         this.chatId = chatId;
         this.userId = userId;
+        this.agentId = agentId != null ? agentId : AGENT_ID;
+        this.baseSystemPrompt = baseSystemPrompt;
         this.tools = concatTools(builtInTools, mcpTools, ToolCallbacks.from(new PlanningTool(plan))[0]);
     }
 
@@ -182,8 +192,15 @@ public class MioBot {
     }
 
     private String buildSystemPrompt(String knowledgeContext) {
-        StringBuilder sb = new StringBuilder("""
-                你是 MioBot，MioAI 的智能助手，具备完整的 Agent 能力：自主规划任务、调用工具、根据结果迭代执行，直到真正完成用户的需求。
+        StringBuilder sb = new StringBuilder();
+        if (StrUtil.isNotBlank(baseSystemPrompt)) {
+            sb.append(baseSystemPrompt.strip());
+        } else {
+            sb.append("""
+                    你是 MioBot，MioAI 的智能助手，具备完整的 Agent 能力：自主规划任务、调用工具、根据结果迭代执行，直到真正完成用户的需求。\
+                    """);
+        }
+        sb.append("""
 
                 # 工作方式
                 - 你运行在"思考 → 行动 → 观察"的循环里：每轮可先简述你要做什么，然后调用工具，拿到结果后决定下一步。
@@ -256,7 +273,7 @@ public class MioBot {
             return;
         }
         AgentUsageLog usageLog = new AgentUsageLog();
-        usageLog.setAgentId(AGENT_ID);
+        usageLog.setAgentId(agentId);
         usageLog.setUserId(userId);
         usageLog.setConversationId(parseConversationId());
         usageLog.setStatus(1);
@@ -285,7 +302,7 @@ public class MioBot {
             return;
         }
         ToolCallLog toolCallLog = new ToolCallLog();
-        toolCallLog.setAgentId(AGENT_ID);
+        toolCallLog.setAgentId(agentId);
         toolCallLog.setUserId(userId);
         toolCallLog.setConversationId(parseConversationId());
         toolCallLog.setToolId(0L);

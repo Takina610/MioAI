@@ -1,5 +1,6 @@
 package com.mio.ai.bot.service;
 
+import com.mio.ai.bot.agent.MioBot;
 import com.mio.ai.common.utils.JacksonUtil;
 import com.mio.ai.framework.rag.KnowledgeRetrievalResult;
 import com.mio.ai.resource.model.entity.RagRetrievalLog;
@@ -15,9 +16,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * MioBot 的动态资源装配：公共 MCP 工具池 + 公共知识库检索上下文。
- * <p>MioBot 是全站共享的唯一智能体，不维护私有绑定——
- * 公开的 MCP 工具（is_public=1）进入其工具池，公开的知识库进入检索范围。
+ * MioBot 引擎的动态资源装配。
+ * <p>MioBot（内置智能体）是全站共享的：工具池 = 公开 MCP，检索范围 = 公开知识库；
+ * 自定义智能体则按其绑定（agent_mcp / agent_knowledge）装配各自的工具池与检索范围。
  */
 @Slf4j
 @Service
@@ -46,37 +47,45 @@ public class BotResourceService {
     }
 
     /**
-     * 获取公共 MCP 工具回调；初始化失败时返回空数组（MioBot 仍可用内置工具工作）
+     * 获取智能体的 MCP 工具回调；初始化失败时返回空数组（智能体仍可用内置工具工作）
      */
-    public ToolCallback[] getPublicMcpToolCallbacks() {
+    public ToolCallback[] getMcpToolCallbacks(Long agentId) {
         try {
-            return mcpClientManagerService.getPublicMcpToolCallbacks();
+            if (agentId == null || agentId == MioBot.AGENT_ID) {
+                return mcpClientManagerService.getPublicMcpToolCallbacks();
+            }
+            return mcpClientManagerService.initMcpToolCallbacks(
+                    mcpClientManagerService.getAgentMcpTools(agentId));
         } catch (Exception e) {
-            log.error("装配公共 MCP 工具失败，本轮仅使用内置工具", e);
+            log.error("装配 MCP 工具失败，本轮仅使用内置工具, agentId={}", agentId, e);
             return new ToolCallback[0];
         }
     }
 
     /**
-     * 在公共知识库中检索并拼装可注入系统提示词的上下文；同时落 rag_retrieval_log
+     * 检索并拼装可注入系统提示词的上下文；同时落 rag_retrieval_log
      */
-    public String buildKnowledgeContext(Long userId, String query) {
+    public String buildKnowledgeContext(Long agentId, Long userId, String query) {
         long startTime = System.currentTimeMillis();
         List<KnowledgeRetrievalResult> results;
         try {
-            results = knowledgeRetrievalService.retrieveForPublic(query);
+            if (agentId == null || agentId == MioBot.AGENT_ID) {
+                results = knowledgeRetrievalService.retrieveForPublic(query);
+            } else {
+                results = knowledgeRetrievalService.retrieveForAgent(agentId, query);
+            }
         } catch (Exception e) {
-            log.error("公共知识库检索失败", e);
+            log.error("知识库检索失败, agentId={}", agentId, e);
             return "";
         }
         if (results.isEmpty()) {
             return "";
         }
-        logRetrieval(userId, query, results, startTime);
+        logRetrieval(agentId, userId, query, results, startTime);
         return renderContext(results);
     }
 
-    private void logRetrieval(Long userId, String query,
+    private void logRetrieval(Long agentId, Long userId, String query,
                               List<KnowledgeRetrievalResult> results, long startTime) {
         try {
             List<Map<String, Object>> chunks = results.stream()
@@ -90,7 +99,7 @@ public class BotResourceService {
                     .toList();
 
             RagRetrievalLog retrievalLog = new RagRetrievalLog();
-            retrievalLog.setAgentId(1L);
+            retrievalLog.setAgentId(agentId != null ? agentId : MioBot.AGENT_ID);
             retrievalLog.setUserId(userId);
             retrievalLog.setKbId(results.get(0).getKbId() != null ? results.get(0).getKbId() : 0L);
             retrievalLog.setQuery(query);

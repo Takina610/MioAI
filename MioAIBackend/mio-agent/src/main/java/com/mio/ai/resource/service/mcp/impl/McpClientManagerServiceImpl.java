@@ -4,7 +4,9 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mio.ai.framework.mcp.McpClientFactory;
+import com.mio.ai.resource.mapper.agent.AgentMcpMapper;
 import com.mio.ai.resource.mapper.mcp.McpToolMapper;
+import com.mio.ai.resource.model.entity.AgentMcp;
 import com.mio.ai.resource.model.entity.McpTool;
 import com.mio.ai.resource.service.mcp.McpClientManagerService;
 import lombok.extern.slf4j.Slf4j;
@@ -31,12 +33,90 @@ public class McpClientManagerServiceImpl implements McpClientManagerService {
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
     @Autowired
+    private AgentMcpMapper agentMcpMapper;
+
+    @Autowired
     private McpToolMapper mcpToolMapper;
 
     @Autowired
     private McpClientFactory mcpClientFactory;
 
     private final ConcurrentHashMap<Long, McpClientFactory.McpClientHandle> clientCache = new ConcurrentHashMap<>();
+
+    @Override
+    public List<McpTool> getAgentMcpTools(Long agentId) {
+        LambdaQueryWrapper<AgentMcp> amWrapper = new LambdaQueryWrapper<>();
+        amWrapper.eq(AgentMcp::getAgentId, agentId)
+                .eq(AgentMcp::getEnabled, 1);
+        List<AgentMcp> amList = agentMcpMapper.selectList(amWrapper);
+
+        if (amList.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        List<Long> mcpIds = amList.stream().map(AgentMcp::getMcpId).toList();
+        LambdaQueryWrapper<McpTool> mcpWrapper = new LambdaQueryWrapper<>();
+        mcpWrapper.in(McpTool::getId, mcpIds)
+                .eq(McpTool::getStatus, 1);
+        Map<Long, McpTool> toolById = mcpToolMapper.selectList(mcpWrapper).stream()
+                .collect(java.util.stream.Collectors.toMap(McpTool::getId, t -> t));
+
+        // agent_mcp.config_override 真正生效：把绑定上的覆盖配置合并进工具的原始配置
+        List<McpTool> result = new ArrayList<>();
+        for (AgentMcp binding : amList) {
+            McpTool tool = toolById.get(binding.getMcpId());
+            if (tool == null) {
+                continue;
+            }
+            if (binding.getConfigOverride() != null && !binding.getConfigOverride().isBlank()) {
+                tool.setConfig(mergeConfigOverride(tool.getConfig(), binding.getConfigOverride()));
+            }
+            result.add(tool);
+        }
+        return result;
+    }
+
+    /**
+     * 将绑定上的覆盖配置合并进 MCP 工具的原始配置。
+     * 按 mcpServers 下同名（或第一个）服务节点合并：env 按键覆盖、args/url/command 存在则整体替换。
+     */
+    private String mergeConfigOverride(String baseConfig, String overrideConfig) {
+        try {
+            JSONObject base = JSONUtil.parseObj(baseConfig);
+            JSONObject override = JSONUtil.parseObj(overrideConfig);
+            JSONObject baseServers = base.getJSONObject("mcpServers");
+            JSONObject overrideServers = override.getJSONObject("mcpServers");
+            if (baseServers == null || baseServers.isEmpty() || overrideServers == null || overrideServers.isEmpty()) {
+                return baseConfig;
+            }
+            String serverName = baseServers.keySet().iterator().next();
+            JSONObject overrideServer = overrideServers.containsKey(serverName)
+                    ? overrideServers.getJSONObject(serverName)
+                    : overrideServers.getJSONObject(overrideServers.keySet().iterator().next());
+            if (overrideServer == null) {
+                return baseConfig;
+            }
+            JSONObject baseServer = baseServers.getJSONObject(serverName);
+            JSONObject overrideEnv = overrideServer.getJSONObject("env");
+            if (overrideEnv != null) {
+                JSONObject env = baseServer.getJSONObject("env");
+                if (env == null) {
+                    baseServer.set("env", overrideEnv);
+                } else {
+                    env.putAll(overrideEnv);
+                }
+            }
+            for (String key : List.of("args", "url", "command")) {
+                if (overrideServer.containsKey(key)) {
+                    baseServer.set(key, overrideServer.get(key));
+                }
+            }
+            return base.toString();
+        } catch (Exception e) {
+            log.warn("合并 configOverride 失败，使用原始配置: {}", e.getMessage());
+            return baseConfig;
+        }
+    }
 
     @Override
     public ToolCallback[] getPublicMcpToolCallbacks() {

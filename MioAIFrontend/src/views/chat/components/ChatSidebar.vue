@@ -2,8 +2,8 @@
   <aside class="sidebar" :class="{ collapsed: isCollapsed }">
     <div class="sidebar-top">
       <div class="logo-section" v-show="!isCollapsed">
-        <img src="/favicon.ico" alt="MioBot" class="agent-avatar" />
-        <span class="agent-name">MioBot</span>
+        <img :src="agentInfo?.avatar || '/favicon.ico'" alt="Avatar" class="agent-avatar" />
+        <span class="agent-name">{{ agentInfo?.name || 'MioBot' }}</span>
       </div>
       <a-button
         type="text"
@@ -36,14 +36,14 @@
 
         <div class="app-square-btn-wrapper" v-show="!isCollapsed">
           <a-button class="app-square-btn" @click="goDashboard">
-            <DashboardOutlined />
-            <span class="btn-text">控制台</span>
+            <RobotOutlined />
+            <span class="btn-text">智能体广场</span>
           </a-button>
         </div>
         <a-tooltip placement="right" v-if="isCollapsed">
-          <template #title>控制台</template>
+          <template #title>智能体广场</template>
           <div class="app-square-btn-collapsed" @click="goDashboard">
-            <DashboardOutlined />
+            <RobotOutlined />
           </div>
         </a-tooltip>
       </div>
@@ -109,13 +109,13 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useUserStore } from '@/store/user'
-import type { ChatSession } from '@/types'
+import type { Agent, ChatSession } from '@/types'
 import ChatSessionList from './ChatSessionList.vue'
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   HomeOutlined,
-  DashboardOutlined,
+  RobotOutlined,
   SettingOutlined,
   LogoutOutlined,
   UserOutlined,
@@ -123,6 +123,7 @@ import {
 } from '@ant-design/icons-vue'
 
 defineProps<{
+  agentInfo: Agent | null
   chatList: ChatSession[]
   currentChatId: string
   chatListLoading: boolean

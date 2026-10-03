@@ -49,16 +49,18 @@ public class ChatHistoryRepositoryImpl implements ChatHistoryRepository {
     }
 
     @Override
-    public List<ChatConversationDO> getChats(Long userId) {
+    public List<ChatConversationDO> getChats(Long userId, Long agentId) {
         QueryWrapper<ChatConversationDO> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("user_id", userId);
+        queryWrapper.eq("user_id", userId)
+                .eq("agent_id", agentId);
         return chatConversationDOMapper.selectList(queryWrapper);
     }
 
     @Override
-    public Page<ChatConversationDO> getChatsPage(Long userId, long current, long size) {
+    public Page<ChatConversationDO> getChatsPage(Long userId, Long agentId, long current, long size) {
         QueryWrapper<ChatConversationDO> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("user_id", userId)
+                .eq("agent_id", agentId)
                 .orderByDesc("update_time");
         return chatConversationDOMapper.selectPage(new Page<>(current, size), queryWrapper);
     }

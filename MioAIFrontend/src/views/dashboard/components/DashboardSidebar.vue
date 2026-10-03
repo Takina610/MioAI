@@ -100,6 +100,7 @@ const isCollapsed = ref(false)
 /** 退出登录后，受保护页面需要回退到对应的公开列表页 */
 const logoutRouteMap: Record<string, string> = {
   KnowledgeDetail: '/dashboard/knowledge',
+  AgentEdit: '/dashboard/agent',
   KnowledgeMarketDetail: '/dashboard/knowledge/market',
   McpDetail: '/dashboard/mcp',
   McpMarketDetail: '/dashboard/mcp/market',

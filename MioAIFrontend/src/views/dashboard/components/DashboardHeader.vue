@@ -32,6 +32,7 @@ const isAdmin = computed(() => userStore.userInfo?.userRole === 'admin')
 /** 管理后台跳转入口 */
 const adminEntries = [
   { path: '/admin/user', label: '用户管理' },
+  { path: '/admin/agent', label: '智能体管理' },
   { path: '/admin/mcp', label: 'MCP 管理' },
   { path: '/admin/knowledge', label: '知识库管理' },
   { path: '/admin/usage', label: '记录管理' }

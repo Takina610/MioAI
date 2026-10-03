@@ -36,22 +36,28 @@ export const connectSSE = (
   return eventSource
 }
 
-/** 与 MioBot 对话（全站唯一聊天端点，SSE 信封流式返回全过程） */
+/**
+ * 与智能体对话（统一走 MioBot 流式 Agent 引擎，SSE 信封返回全过程）：
+ * MioBot（agentId=1，系统内置）与用户自定义智能体共用 /bot/chat
+ */
 export const chatWithMioBot = (
   content: string,
   chatId: string,
+  agentId: number,
   token: string
 ): EventSource => {
-  return connectSSE('/bot/chat', { content, chatId, token })
+  return connectSSE('/bot/chat', { content, chatId, agentId, token })
 }
 
 export const generateTitle = async (
+  agentId: number,
   conversationId: string,
   content: string
 ): Promise<string> => {
   try {
     const response = await request.post<string>('/summary', {
       conversationId,
+      agentId,
       content
     } satisfies ChatMessageRequest)
     return response || '新对话'
@@ -69,6 +75,7 @@ export interface ChatStreamController {
 export const chatWithStream = (
   content: string,
   chatId: string,
+  agentId: number,
   token: string,
   history: Array<{ role: string; content: string }>,
   onMessage: (data: string) => void,
@@ -137,7 +144,7 @@ export const chatWithStream = (
     return { close: () => abortController.abort() }
   }
 
-  const es = chatWithMioBot(content, chatId, token)
+  const es = chatWithMioBot(content, chatId, agentId, token)
   es.onmessage = (event: MessageEvent) => {
     onMessage(event.data)
   }

@@ -50,13 +50,13 @@
         <button class="text-btn" @click="goToChat">
           <MessageOutlined />
           <div class="text">
-            和 MioBot 继续聊
+            {{ agentInfo?.name || 'MioBot' }}继续聊
           </div>
         </button>
       </div>
 
       <div class="footer-section">
-        <p class="copyright">MioBot • 你的AI助手</p>
+        <p class="copyright">{{ agentInfo?.name || 'MioBot' }} • 你的AI助手</p>
       </div>
     </div>
   </div>
@@ -67,7 +67,8 @@ import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { getChatHistory, getConversation } from '@/api/chatMemory'
-import type { ChatMessage } from '@/types'
+import { getAgentById } from '@/api/agent'
+import type { Agent, ChatMessage } from '@/types'
 import { CopyOutlined, CheckOutlined, MessageOutlined } from '@ant-design/icons-vue'
 import MarkdownView from '@/components/MarkdownView.vue'
 import { mergeConsecutiveAssistantMessages } from '@/views/chat/composables/useChatMessages'
@@ -80,13 +81,15 @@ const conversationTitle = ref<string>('')
 const hoverMessageId = ref<string>('')
 const copiedMessageId = ref<string>('')
 const messages = ref<ChatMessage[]>([])
+const agentInfo = ref<Agent | null>(null)
 const conversationDate = ref<Date>(new Date())
+const agentId = ref<number>(0)
 
 watch(
-  () => route.params.conversationId,
-  (conversationId) => {
-    if (conversationId && typeof conversationId === 'string') {
-      loadShareData(conversationId)
+  () => [route.params.agentId, route.params.conversationId],
+  ([agentIdParam, conversationId]) => {
+    if (agentIdParam && conversationId && typeof agentIdParam === 'string' && typeof conversationId === 'string') {
+      loadShareData(agentIdParam, conversationId)
     }
   },
   { immediate: true }
@@ -100,9 +103,16 @@ const formattedDate = computed(() => {
   return `${year} 年 ${month} 月 ${day} 日`
 })
 
-async function loadShareData(conversationId: string): Promise<void> {
+async function loadShareData(agentIdParam: string, conversationId: string): Promise<void> {
   loading.value = true
   try {
+    agentId.value = Number(agentIdParam)
+    try {
+      agentInfo.value = await getAgentById(agentId.value)
+    } catch {
+      agentInfo.value = null
+    }
+
     const conversationRes = await getConversation(conversationId)
     if (conversationRes && conversationRes.title) {
       conversationTitle.value = conversationRes.title
@@ -156,7 +166,7 @@ async function copyMessage(content: string, messageId: string): Promise<void> {
 }
 
 function goToChat(): void {
-  router.push('/chat')
+  router.push(`/chat/${agentId.value || 1}`)
 }
 </script>
 

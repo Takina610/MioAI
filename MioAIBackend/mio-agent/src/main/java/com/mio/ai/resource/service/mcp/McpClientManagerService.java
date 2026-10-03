@@ -1,6 +1,9 @@
 package com.mio.ai.resource.service.mcp;
 
+import com.mio.ai.resource.model.entity.McpTool;
 import org.springframework.ai.tool.ToolCallback;
+
+import java.util.List;
 
 /**
  * @author: Takina
@@ -8,6 +11,13 @@ import org.springframework.ai.tool.ToolCallback;
  * @description: MCP客户端管理服务
  */
 public interface McpClientManagerService {
+
+    /**
+     * 获取智能体绑定的 MCP 工具列表（enabled=1 且工具 status=1，合并 agent_mcp.config_override）
+     * @param agentId 智能体ID
+     * @return MCP工具列表
+     */
+    List<McpTool> getAgentMcpTools(Long agentId);
 
     /**
      * 初始化全部公共 MCP 工具的客户端并返回工具回调
@@ -23,7 +33,7 @@ public interface McpClientManagerService {
      * @param mcpTools MCP工具列表
      * @return 工具回调数组
      */
-    ToolCallback[] initMcpToolCallbacks(java.util.List<com.mio.ai.resource.model.entity.McpTool> mcpTools);
+    ToolCallback[] initMcpToolCallbacks(List<McpTool> mcpTools);
 
     /**
      * 关闭所有MCP客户端

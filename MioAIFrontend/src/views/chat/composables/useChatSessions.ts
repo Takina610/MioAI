@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, type Ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { getChatIdsPage, deleteChat as deleteChatApi } from '@/api/chatMemory'
 import { generateTitle } from '@/api/chat'
@@ -9,6 +9,7 @@ import type { ChatSession } from '@/types'
  * 侧边栏会话列表：分页加载、置顶/新建占位、删除确认、分享链接、标题打字机。
  */
 export function useChatSessions(options: {
+  agentId: Ref<number>
   /** 删除的是当前会话时，由页面负责回到新对话状态 */
   onCurrentChatDeleted: () => void
 }) {
@@ -35,7 +36,7 @@ export function useChatSessions(options: {
 
     try {
       const current = isLoadMore ? chatListCurrent.value + 1 : 1
-      const res = await getChatIdsPage(current, chatListPageSize.value)
+      const res = await getChatIdsPage(options.agentId.value, current, chatListPageSize.value)
 
       const newChats = res.records.map((item: any) => ({
         id: item.conversationId,
@@ -81,7 +82,7 @@ export function useChatSessions(options: {
     aiContent: string,
     chatId: string
   ): Promise<void> {
-    const title = await generateTitle(chatId, userContent + '\n' + aiContent)
+    const title = await generateTitle(options.agentId.value, chatId, userContent + '\n' + aiContent)
 
     const chatItem = chatList.value.find(c => c.id === chatId)
     if (!chatItem) return
@@ -95,7 +96,7 @@ export function useChatSessions(options: {
   }
 
   function shareChat(conversationId: string): void {
-    const shareUrl = `${window.location.origin}/share/${conversationId}`
+    const shareUrl = `${window.location.origin}/share/${options.agentId.value}/${conversationId}`
     navigator.clipboard.writeText(shareUrl).then(() => {
       message.success('分享链接已复制到剪贴板')
     }).catch(() => {

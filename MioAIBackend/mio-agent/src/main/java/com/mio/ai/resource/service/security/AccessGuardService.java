@@ -2,8 +2,11 @@ package com.mio.ai.resource.service.security;
 
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
+import com.mio.ai.resource.model.entity.Agent;
 import com.mio.ai.resource.model.entity.KnowledgeBase;
 import com.mio.ai.resource.model.entity.McpTool;
+import com.mio.ai.resource.model.enums.AgentStatusEnum;
+import com.mio.ai.resource.service.agent.AgentService;
 import com.mio.ai.resource.service.knowledge.KnowledgeBaseService;
 import com.mio.ai.resource.service.mcp.McpToolService;
 import jakarta.annotation.Resource;
@@ -16,17 +19,73 @@ import org.springframework.stereotype.Service;
  * <p>统一收敛"谁能读/改哪个资源"的判断逻辑：
  * <ul>
  *   <li>写操作：只允许资源所有者本人</li>
- *   <li>读操作：所有者本人，或公开（is_public = 1）的资源</li>
+ *   <li>读操作：所有者本人，或公开（is_public = 1）且处于已发布状态的资源</li>
+ *   <li>系统内置智能体（user_id 为空，即 MioBot）对所有用户（含游客）可见</li>
  * </ul>
  */
 @Service
 public class AccessGuardService {
 
     @Resource
+    private AgentService agentService;
+
+    @Resource
     private KnowledgeBaseService knowledgeBaseService;
 
     @Resource
     private McpToolService mcpToolService;
+
+    /**
+     * 校验用户对智能体的写权限（编辑/删除/绑定关系变更）
+     */
+    public Agent checkAgentOwner(Long agentId, Long userId) {
+        if (agentId == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "智能体ID不能为空");
+        }
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
+        }
+        Agent agent = agentService.getById(agentId);
+        if (agent == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "智能体不存在");
+        }
+        if (agent.getUserId() == null || !agent.getUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限操作该智能体");
+        }
+        return agent;
+    }
+
+    /**
+     * 校验用户能否使用该智能体对话（要求已登录；所有者、内置智能体、或公开且已发布）
+     */
+    public Agent checkAgentUsable(Long agentId, Long userId) {
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
+        }
+        return checkAgentReadable(agentId, userId);
+    }
+
+    /**
+     * 校验能否查看该智能体详情：所有者、内置、或公开且已发布；
+     * 未登录（userId 为 null）按游客处理，仅可查看内置与公开已发布的智能体。
+     */
+    public Agent checkAgentReadable(Long agentId, Long userId) {
+        if (agentId == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "智能体ID不能为空");
+        }
+        Agent agent = agentService.getById(agentId);
+        if (agent == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "智能体不存在");
+        }
+        boolean owner = userId != null && agent.getUserId() != null && agent.getUserId().equals(userId);
+        boolean builtin = agent.getUserId() == null;
+        boolean publicPublished = Integer.valueOf(1).equals(agent.getIsPublic())
+                && Integer.valueOf(AgentStatusEnum.PUBLISHED.getCode()).equals(agent.getStatus());
+        if (!owner && !builtin && !publicPublished) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权使用该智能体");
+        }
+        return agent;
+    }
 
     /**
      * 校验用户能否读取知识库（所有者，或公开知识库）

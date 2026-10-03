@@ -1,4 +1,4 @@
-import { nextTick } from 'vue'
+import { nextTick, type Ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
@@ -19,6 +19,7 @@ const STREAM_WATCHDOG_TIMEOUT_MS = 90000
  * 工具卡片，plan 覆盖为最新任务清单快照；多会话切换时按 chatId 过滤过期回调。
  */
 export function useChatStream(options: {
+  agentId: Ref<number>
   messagesApi: ChatMessagesApi
   ensureSession: (chatId: string) => void
   updateTitle: (userContent: string, aiContent: string, chatId: string) => void
@@ -68,7 +69,7 @@ export function useChatStream(options: {
       options.ensureSession(chatId)
     }
     if (isNewChat && userStore.isLoggedIn) {
-      router.push(`/chat/${chatId}`)
+      router.push(`/chat/${options.agentId.value}/${chatId}`)
     }
 
     nextTick(() => {
@@ -106,6 +107,7 @@ export function useChatStream(options: {
       activeStream = chatWithStream(
         content,
         chatId,
+        options.agentId.value,
         token,
         history,
         (rawData) => {
@@ -142,7 +144,7 @@ export function useChatStream(options: {
     }
     currentEventSourceChatId = chatId
 
-    eventSource = chatWithMioBot(content, chatId, token)
+    eventSource = chatWithMioBot(content, chatId, options.agentId.value, token)
     const es = eventSource
 
     // 流式异常收尾：移除空的AI消息、尝试生成标题、复位加载状态

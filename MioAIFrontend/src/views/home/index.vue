@@ -157,6 +157,11 @@ const features: Feature[] = [
     desc: '自主规划任务清单，逐步调用工具执行，失败自动重试，直到完成你的需求'
   },
   {
+    icon: RobotOutlined,
+    title: '定制智能体',
+    desc: '创建专属智能体，绑定你的 MCP 工具与知识库，同样具备完整 Agent 能力'
+  },
+  {
     icon: DatabaseOutlined,
     title: '知识库',
     desc: '上传文档构建知识库，让 AI 拥有专业知识背景'

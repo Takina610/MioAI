@@ -15,6 +15,15 @@ import java.util.List;
 public interface KnowledgeRetrievalService {
 
     /**
+     * 按智能体绑定的知识库及其各自的检索配置进行检索（自定义智能体的检索范围）
+     *
+     * @param agentId 智能体ID
+     * @param query   用户查询
+     * @return 按相似度降序的命中分块（多知识库合并去重后）
+     */
+    List<KnowledgeRetrievalResult> retrieveForAgent(Long agentId, String query);
+
+    /**
      * 在全部公共知识库中检索（MioBot 的默认检索范围）
      *
      * @param query 用户查询

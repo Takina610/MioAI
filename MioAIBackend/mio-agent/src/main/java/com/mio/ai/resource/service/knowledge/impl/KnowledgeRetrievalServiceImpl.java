@@ -1,10 +1,12 @@
 package com.mio.ai.resource.service.knowledge.impl;
 
 import com.baomidou.mybatisplus.core.toolkit.StringUtils;
+import com.mio.ai.resource.model.entity.AgentKnowledge;
 import com.mio.ai.resource.model.entity.KnowledgeBase;
 import com.mio.ai.framework.rag.KnowledgeRetrievalResult;
 import com.mio.ai.framework.rag.RerankClient;
 import com.mio.ai.framework.rag.RetrievalConfig;
+import com.mio.ai.resource.service.agent.AgentKnowledgeService;
 import com.mio.ai.resource.service.knowledge.KnowledgeBaseService;
 import com.mio.ai.resource.service.knowledge.KnowledgeRetrievalService;
 import jakarta.annotation.Resource;
@@ -21,8 +23,11 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * @author: Takina
@@ -44,6 +49,9 @@ public class KnowledgeRetrievalServiceImpl implements KnowledgeRetrievalService 
     private VectorStore vectorStore;
 
     @Resource
+    private AgentKnowledgeService agentKnowledgeService;
+
+    @Resource
     private KnowledgeBaseService knowledgeBaseService;
 
     @Autowired
@@ -63,6 +71,49 @@ public class KnowledgeRetrievalServiceImpl implements KnowledgeRetrievalService 
      */
     @Value("${mio.ai.rag.rerank-top-n:5}")
     private int rerankTopN;
+
+    @Override
+    public List<KnowledgeRetrievalResult> retrieveForAgent(Long agentId, String query) {
+        if (agentId == null || StringUtils.isBlank(query)) {
+            return List.of();
+        }
+        List<AgentKnowledge> bindings = agentKnowledgeService.getEnabledBindingsByAgentId(agentId);
+        if (bindings.isEmpty()) {
+            return List.of();
+        }
+
+        // 逐绑定按各自配置检索，再合并（每个知识库可以有自己的 topK/阈值/重排开关）
+        Map<String, KnowledgeRetrievalResult> merged = new LinkedHashMap<>();
+        boolean anyRerank = false;
+        int maxTopK = 0;
+        for (AgentKnowledge binding : bindings) {
+            KnowledgeBase kb = knowledgeBaseService.getById(binding.getKbId());
+            if (kb == null) {
+                continue;
+            }
+            RetrievalConfig config = RetrievalConfig.fromJson(binding.getRetrievalConfig());
+            anyRerank = anyRerank || config.isEnableRerank();
+            maxTopK = Math.max(maxTopK, config.getTopK());
+
+            List<KnowledgeRetrievalResult> hits = searchByKbIds(List.of(kb.getId()), query,
+                    config.getTopK(), config.getThreshold());
+            for (KnowledgeRetrievalResult hit : hits) {
+                merged.putIfAbsent(hit.getChunkId(), hit);
+            }
+        }
+        if (merged.isEmpty()) {
+            return List.of();
+        }
+
+        List<KnowledgeRetrievalResult> results = new ArrayList<>(merged.values());
+        results.sort(Comparator.comparing(KnowledgeRetrievalResult::getScore,
+                Comparator.nullsLast(Comparator.reverseOrder())));
+
+        if (anyRerank && rerankEnabled) {
+            results = rerank(query, results, Math.max(maxTopK, rerankTopN));
+        }
+        return results;
+    }
 
     @Override
     public List<KnowledgeRetrievalResult> retrieveForPublic(String query) {

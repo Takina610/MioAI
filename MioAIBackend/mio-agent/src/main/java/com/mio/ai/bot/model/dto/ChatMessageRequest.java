@@ -24,6 +24,12 @@ public class ChatMessageRequest {
     private String conversationId;
 
     /**
+     * 智能体ID
+     */
+    @NotNull(message = "智能体ID不能为空")
+    private Long agentId;
+
+    /**
      * 消息内容
      */
     @NotBlank(message = "消息内容不能为空")

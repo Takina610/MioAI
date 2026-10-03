@@ -51,6 +51,7 @@ public class SummaryController {
         // 保存标题到本地
         UpdateWrapper<ChatConversationDO> updateWrapper = new UpdateWrapper<>();
         updateWrapper.lambda()
+                .eq(ChatConversationDO::getAgentId, chatMessageRequest.getAgentId())
                 .eq(ChatConversationDO::getConversationId, chatMessageRequest.getConversationId())
                 .set(ChatConversationDO::getTitle, title);
         chatConversationDOMapper.update(updateWrapper);
