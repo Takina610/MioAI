@@ -1,16 +1,32 @@
 <template>
   <div class="mio-bot-message">
-    <!-- 内容块按时间顺序顺着显示（ZCode 风格）：文本 → 工具卡 → 文本 → … -->
-    <template v-if="blocks.length">
-      <template v-for="(block, index) in blocks" :key="index">
-        <!-- 文本块 -->
+    <!-- 状态行：进行中显示已工作时长；完成后显示总结行并可展开工作过程 -->
+    <div v-if="isLoading" class="status-line running">
+      <ZcodeSpinner :size="13" />
+      <span>已工作 {{ elapsedText }}</span>
+    </div>
+    <div
+      v-else-if="processBlocks.length"
+      class="status-line done"
+      @click="processExpanded = !processExpanded"
+    >
+      <CheckCircleOutlined class="done-icon" />
+      <span>已完成 · 用时 {{ durationText }}</span>
+      <span class="done-meta">{{ toolCount }} 个工具</span>
+      <CaretRightOutlined :rotate="processExpanded ? 90 : 0" class="caret-icon" />
+    </div>
+
+    <!-- 工作过程（进行中顺着流式显示；完成后默认收起，点击状态行展开逐个查看） -->
+    <template v-if="processBlocks.length && (isLoading || processExpanded)">
+      <template v-for="(block, index) in processBlocks" :key="index">
+        <!-- 文本块（过程中的叙述） -->
         <MarkdownView
           v-if="block.type === 'text'"
-          class="answer-content"
+          class="answer-content narration"
           :content="block.text"
         />
 
-        <!-- 思考块（流式中且为当前末块时自动展开，被后续内容顶替后收起） -->
+        <!-- 思考块 -->
         <div v-else-if="block.type === 'thinking'" class="thinking-block">
           <div class="block-header" @click="toggleThinking(index)">
             <CaretRightOutlined :rotate="isThinkingExpanded(index) ? 90 : 0" class="caret-icon" />
@@ -20,7 +36,7 @@
           <div v-show="isThinkingExpanded(index)" class="thinking-text">{{ block.text }}</div>
         </div>
 
-        <!-- 工具块（参数实时增长） -->
+        <!-- 工具块 -->
         <div v-else class="tool-card">
           <div class="tool-row" @click="toggleTool(index)">
             <span class="tool-status">
@@ -46,20 +62,23 @@
       </template>
     </template>
 
-    <!-- 历史消息（无块信息）：直接渲染正文 -->
-    <MarkdownView v-else-if="content" class="answer-content" :content="content" />
+    <!-- 最终回答（最后一个过程块之后的文本；无过程块时渲染全部文本） -->
+    <MarkdownView
+      v-if="finalText"
+      class="answer-content"
+      :class="{ 'with-process': processBlocks.length > 0 }"
+      :content="finalText"
+    />
 
-    <!-- 加载指示：流式期间始终显示在消息尾部（ZCode 同款 spinner） -->
-    <div v-if="isLoading" class="tail-spinner">
-      <ZcodeSpinner :size="16" />
-    </div>
+    <!-- 历史消息（无块信息）：直接渲染正文 -->
+    <MarkdownView v-else-if="!processBlocks.length && content" class="answer-content" :content="content" />
 
     <div v-if="interrupted" class="stream-interrupted">连接中断，本条回答可能不完整</div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import {
   CaretRightOutlined,
   BulbOutlined,
@@ -74,19 +93,79 @@ interface Props {
   content: string
   blocks?: MessageBlock[]
   isLoading?: boolean
+  /** 本条回复耗时（毫秒，usage/持久化提供） */
+  durationMs?: number
+  /** 消息创建时间（进行中据此计算已工作时长） */
+  createTime?: Date
   /** 流式传输异常中断（界面提示回答可能不完整） */
   interrupted?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   blocks: () => [],
-  isLoading: false
+  isLoading: false,
+  createTime: () => new Date()
 })
 
+const processExpanded = ref(false)
 const expandedTools = ref<Set<number>>(new Set())
 const manuallyExpandedThinking = ref<Set<number>>(new Set())
 
-/** 当前块流中的最后一个思考块（流式收尾时自动展开的就是它） */
+/** 过程块 = 最后一个非文本块及其之前的全部（叙述/思考/工具）；其后的是最终回答 */
+const lastNonTextIndex = computed(() => {
+  for (let i = props.blocks.length - 1; i >= 0; i--) {
+    if (props.blocks[i].type !== 'text') return i
+  }
+  return -1
+})
+
+const processBlocks = computed(() =>
+  lastNonTextIndex.value >= 0 ? props.blocks.slice(0, lastNonTextIndex.value + 1) : []
+)
+
+const finalText = computed(() => {
+  if (!props.blocks.length) return ''
+  const tail = lastNonTextIndex.value >= 0
+    ? props.blocks.slice(lastNonTextIndex.value + 1)
+    : props.blocks
+  return tail.filter(b => b.type === 'text').map(b => b.text).join('')
+})
+
+const toolCount = computed(() => processBlocks.value.filter(b => b.type === 'tool').length)
+
+// ---------- 时长 ----------
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.max(0, Math.round(ms / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return minutes > 0 ? `${minutes}分${seconds}秒` : `${seconds}秒`
+}
+
+const durationText = computed(() =>
+  props.durationMs ? formatDuration(props.durationMs) : '')
+
+// 进行中：每秒跳动计算"已工作 X分Y秒"
+const now = ref(Date.now())
+let elapsedTimer: number | undefined
+watch(
+  () => props.isLoading,
+  (loading) => {
+    if (loading) {
+      elapsedTimer = window.setInterval(() => { now.value = Date.now() }, 1000)
+    } else if (elapsedTimer !== undefined) {
+      clearInterval(elapsedTimer)
+      elapsedTimer = undefined
+    }
+  },
+  { immediate: true }
+)
+onUnmounted(() => {
+  if (elapsedTimer !== undefined) clearInterval(elapsedTimer)
+})
+
+const elapsedText = computed(() => formatDuration(now.value - props.createTime.getTime()))
+
+// ---------- 展开/收起 ----------
 const lastThinkingIndex = computed(() => {
   for (let i = props.blocks.length - 1; i >= 0; i--) {
     if (props.blocks[i].type === 'thinking') return i
@@ -96,7 +175,6 @@ const lastThinkingIndex = computed(() => {
 
 function isThinkingExpanded(index: number): boolean {
   if (manuallyExpandedThinking.value.has(index)) return true
-  // 流式中且尚无后续内容块：自动展开；被文本/工具块顶替后自然收起
   return props.isLoading && index === lastThinkingIndex.value
 }
 
@@ -140,6 +218,43 @@ function prettyJson(args: string): string {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+// 状态行（进行中计时 / 完成总结行）
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #86909c;
+  user-select: none;
+
+  &.done {
+    cursor: pointer;
+    padding: 4px 8px;
+    margin: 0 -8px;
+    border-radius: 8px;
+    color: #4e5969;
+    transition: background 0.2s;
+
+    &:hover {
+      background: #f2f3f5;
+    }
+
+    .done-icon {
+      color: #00b42a;
+      font-size: 14px;
+    }
+
+    .done-meta {
+      color: #a9aeb8;
+      font-size: 12px;
+    }
+
+    .caret-icon {
+      margin-left: auto;
+    }
+  }
 }
 
 .block-header {
@@ -287,14 +402,12 @@ function prettyJson(args: string): string {
 .answer-content {
   font-size: 14px;
   padding: 0 4px;
-}
 
-// 消息尾部加载指示：流式期间常显（有内容时跟在内容后，无内容时独立成行）
-.tail-spinner {
-  padding: 2px 4px;
-  min-height: 20px;
-  display: flex;
-  align-items: center;
+  // 过程中的叙述文本弱化，与最终回答区分
+  &.narration {
+    font-size: 13px;
+    color: #6b7280;
+  }
 }
 
 .stream-interrupted {

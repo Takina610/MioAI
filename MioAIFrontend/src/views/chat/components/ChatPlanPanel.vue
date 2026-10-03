@@ -52,10 +52,12 @@ watch(() => props.plan?.[0]?.description, () => {
 </script>
 
 <style lang="scss" scoped>
-// 融合在输入框容器内的任务清单区（无边框卡片，与下方输入框一体）
+// 融合在输入框容器内的任务清单区（与下方输入框同一连续形体：共侧边框，虚线分隔）
 .chat-plan-panel {
   padding: 10px 16px 8px;
-  border-bottom: 1px dashed #eef0f3;
+  background: #fafbfc;
+  border-bottom: 1px dashed #e3e6eb;
+  border-radius: 15px 15px 0 0;
 
   .plan-header {
     display: flex;

@@ -79,7 +79,7 @@ function handleEnter(e: KeyboardEvent): void {
   // 有消息时组合器固定在底部（常规流布局，消息区不再被遮挡）
   &.has-messages {
     flex: none;
-    padding: 12px 24px 20px;
+    padding: 20px 24px 20px;
 
     .welcome-section {
       display: none;

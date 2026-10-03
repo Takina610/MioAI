@@ -46,6 +46,8 @@ export interface ChatMessage {
   blocks?: MessageBlock[]
   /** 最近一次任务清单快照（融合在输入框上方展示） */
   plan?: PlanStep[]
+  /** 本条回复耗时（毫秒，完成后展示） */
+  durationMs?: number
   /** 流式传输异常中断（已有部分内容时置位，界面提示回答可能不完整） */
   interrupted?: boolean
   /** 回复完成后的用量统计 */

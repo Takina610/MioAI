@@ -145,6 +145,28 @@ CREATE TABLE `chat_conversation`  (
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '智能体-对话会话表' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
+-- Table structure for agent_message
+-- 智能体消息完整持久化（展示用，区别于供模型上下文的 SPRING_AI_CHAT_MEMORY）：
+-- assistant 行携带完整内容块（文本/思考/工具调用及结果）、任务清单快照与耗时
+-- ----------------------------
+DROP TABLE IF EXISTS `agent_message`;
+CREATE TABLE `agent_message`  (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `conversation_id` varchar(64) NOT NULL COMMENT '会话ID',
+  `agent_id` bigint NOT NULL COMMENT '智能体ID',
+  `user_id` bigint NULL DEFAULT NULL COMMENT '用户ID（游客不落库）',
+  `role` varchar(16) NOT NULL COMMENT 'user / assistant',
+  `seq` int NOT NULL COMMENT '会话内递增序号',
+  `blocks` json NULL COMMENT '内容块JSON数组: [{type:text|thinking|tool,...}]',
+  `plan` json NULL COMMENT '任务清单快照JSON: [{index,description,status}]',
+  `duration_ms` int NULL DEFAULT NULL COMMENT '本条消息耗时(毫秒)',
+  `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_conv_seq`(`conversation_id` ASC, `seq` ASC) USING BTREE,
+  INDEX `idx_conversation_id`(`conversation_id` ASC) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '智能体消息完整持久化(展示用)' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
 -- Table structure for document
 -- ----------------------------
 DROP TABLE IF EXISTS `document`;

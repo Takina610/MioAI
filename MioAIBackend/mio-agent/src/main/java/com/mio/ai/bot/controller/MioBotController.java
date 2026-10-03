@@ -3,10 +3,17 @@ package com.mio.ai.bot.controller;
 import cn.hutool.core.util.StrUtil;
 import com.mio.ai.bot.agent.MioBot;
 import com.mio.ai.bot.model.dto.SseChunk;
+import com.mio.ai.bot.model.entity.AgentMessageDO;
 import com.mio.ai.bot.model.vo.ChatVO;
 import com.mio.ai.bot.repository.ChatHistoryRepository;
+import com.mio.ai.bot.service.AgentMessageService;
 import com.mio.ai.bot.service.BotResourceService;
 import com.mio.ai.bot.util.SseStreams;
+import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.exception.BusinessException;
+import com.mio.ai.common.exception.ErrorCode;
+import com.mio.ai.common.utils.JacksonUtil;
+import com.mio.ai.common.utils.ResultUtils;
 import com.mio.ai.resource.model.entity.Agent;
 import com.mio.ai.resource.service.log.AgentUsageLogService;
 import com.mio.ai.resource.service.log.ToolCallLogService;
@@ -22,11 +29,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -74,6 +84,9 @@ public class MioBotController {
     @Autowired
     private ToolCallLogService toolCallLogService;
 
+    @Autowired
+    private AgentMessageService agentMessageService;
+
     @GetMapping("/bot/chat")
     public SseEmitter chat(@RequestParam @NotBlank @Size(max = 64) String chatId,
                            @RequestParam @NotBlank @Size(max = 20000) String content,
@@ -107,9 +120,52 @@ public class MioBotController {
         String knowledgeContext = botResourceService.buildKnowledgeContext(resolvedAgentId, userId, content);
 
         MioBot mioBot = new MioBot(chatModel, jdbcChatMemory, commonTools,
-                List.of(mcpTools), agentUsageLogService, toolCallLogService,
+                List.of(mcpTools), agentUsageLogService, toolCallLogService, agentMessageService,
                 chatId, userId, resolvedAgentId, customSystemPrompt);
         return mioBot.run(content, knowledgeContext);
+    }
+
+    /**
+     * 会话的完整消息（含工具调用/任务清单等工作过程），刷新/回看时原样还原。
+     * 仅会话所有者可读；老会话无记录时返回空数组（前端回退旧文本接口）。
+     */
+    @GetMapping("/bot/messages/{conversationId}")
+    public BaseResponse<List<Map<String, Object>>> getMessages(
+            @PathVariable @NotBlank String conversationId,
+            jakarta.servlet.http.HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        com.mio.ai.bot.model.entity.ChatConversationDO conversation =
+                chatHistoryRepository.getChatByConversationId(conversationId);
+        if (conversation == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "会话不存在");
+        }
+        if (conversation.getUserId() == null || !conversation.getUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限访问该会话");
+        }
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (AgentMessageDO message : agentMessageService.listByConversation(conversationId)) {
+            Map<String, Object> row = new java.util.LinkedHashMap<>();
+            row.put("role", message.getRole());
+            row.put("seq", message.getSeq());
+            row.put("blocks", parseJson(message.getBlocks()));
+            row.put("plan", parseJson(message.getPlan()));
+            row.put("durationMs", message.getDurationMs());
+            row.put("createTime", message.getCreateTime());
+            rows.add(row);
+        }
+        return ResultUtils.success(rows);
+    }
+
+    private Object parseJson(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return JacksonUtil.readValue(json, Object.class);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private boolean containsSensitiveWord(String content) {

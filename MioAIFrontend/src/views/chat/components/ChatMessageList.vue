@@ -16,6 +16,8 @@
             :content="msg.content"
             :blocks="msg.blocks"
             :is-loading="isLoading"
+            :duration-ms="msg.durationMs"
+            :create-time="msg.createTime"
             :interrupted="msg.interrupted"
           />
           <template v-else>

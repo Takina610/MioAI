@@ -332,6 +332,7 @@ export function useChatStream(options: {
       case 'usage':
         return {
           ...msg,
+          durationMs: Number(parsed.durationMs) || undefined,
           usage: {
             inputTokens: Number(parsed.inputTokens) || undefined,
             outputTokens: Number(parsed.outputTokens) || undefined,

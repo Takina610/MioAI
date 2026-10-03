@@ -2,7 +2,10 @@ package com.mio.ai.bot.agent;
 
 import cn.hutool.core.util.StrUtil;
 import com.mio.ai.bot.model.dto.SseChunk;
+import com.mio.ai.bot.model.entity.AgentMessageDO;
+import com.mio.ai.bot.service.AgentMessageService;
 import com.mio.ai.bot.util.SseStreams;
+import com.mio.ai.common.utils.JacksonUtil;
 import com.mio.ai.framework.plan.AgentPlan;
 import com.mio.ai.framework.plan.PlanningTool;
 import com.mio.ai.resource.model.entity.AgentUsageLog;
@@ -75,6 +78,7 @@ public class MioBot {
     private final ChatMemory chatMemory;
     private final AgentUsageLogService agentUsageLogService;
     private final ToolCallLogService toolCallLogService;
+    private final AgentMessageService agentMessageService;
 
     private final String chatId;
     private final Long userId;
@@ -84,6 +88,10 @@ public class MioBot {
 
     private final AgentPlan plan = new AgentPlan();
     private final ToolCallingManager toolCallingManager = ToolCallingManager.builder().build();
+
+    // 展示持久化：与本轮 SSE 事件同构的内容块（文本/思考/工具）+ 最终清单快照 + 耗时
+    private final List<Map<String, Object>> displayBlocks = new ArrayList<>();
+    private List<Map<String, Object>> displayPlan;
 
     // 当前运行的 SSE 连接与事件序号
     private SseEmitter emitter;
@@ -99,6 +107,7 @@ public class MioBot {
                   List<ToolCallback> mcpTools,
                   AgentUsageLogService agentUsageLogService,
                   ToolCallLogService toolCallLogService,
+                  AgentMessageService agentMessageService,
                   String chatId,
                   Long userId,
                   Long agentId,
@@ -107,6 +116,7 @@ public class MioBot {
         this.chatMemory = chatMemory;
         this.agentUsageLogService = agentUsageLogService;
         this.toolCallLogService = toolCallLogService;
+        this.agentMessageService = agentMessageService;
         this.chatId = chatId;
         this.userId = userId;
         this.agentId = agentId != null ? agentId : AGENT_ID;
@@ -136,6 +146,7 @@ public class MioBot {
                 UserMessage userMessage = new UserMessage(userPrompt);
                 messages.add(userMessage);
                 persist(userMessage);
+                persistDisplayMessage("user", userPrompt, null);
 
                 String systemPrompt = buildSystemPrompt(knowledgeContext);
                 boolean finished = false;
@@ -186,12 +197,14 @@ public class MioBot {
                 if (!finished) {
                     emitAnswerDelta("\n\n（已达到单轮任务的最大执行步数，以上是目前的执行结果，可以继续提问让我接着完成。）");
                 }
-                emit(SseChunk.usage(totalInputTokens, totalOutputTokens,
-                        System.currentTimeMillis() - startTime).fields());
+                long durationMs = System.currentTimeMillis() - startTime;
+                persistDisplayMessage("assistant", null, durationMs);
+                emit(SseChunk.usage(totalInputTokens, totalOutputTokens, durationMs).fields());
                 emit(SseChunk.done().fields());
                 complete();
             } catch (Exception e) {
                 log.error("MioBot 执行异常", e);
+                persistDisplayMessage("assistant", null, System.currentTimeMillis() - startTime);
                 emit(SseChunk.content("error", "执行出错：" + e.getMessage()).fields());
                 complete();
             } finally {
@@ -335,8 +348,9 @@ public class MioBot {
 
     private void emitToolResults(ToolResponseMessage toolResponseMessage) {
         for (ToolResponseMessage.ToolResponse response : toolResponseMessage.getResponses()) {
-            emit(SseChunk.toolResult(response.id(), response.name(),
-                    truncate(response.responseData(), TOOL_RESULT_PREVIEW_LENGTH)).fields());
+            String preview = truncate(response.responseData(), TOOL_RESULT_PREVIEW_LENGTH);
+            completeDisplayTool(response.id(), response.name(), preview);
+            emit(SseChunk.toolResult(response.id(), response.name(), preview).fields());
         }
     }
 
@@ -350,23 +364,107 @@ public class MioBot {
             item.put("status", step.status().name().toLowerCase());
             steps.add(item);
         }
+        displayPlan = steps;
         emit(SseChunk.plan(steps).fields());
     }
 
     private void emitThinkingDelta(String delta) {
+        appendDisplayText("thinking", delta);
         emit(SseChunk.delta("thinking", delta).fields());
     }
 
     private void emitAnswerDelta(String delta) {
+        appendDisplayText("text", delta);
         emit(SseChunk.delta("answer", delta).fields());
     }
 
     private void emitToolUse(String id, String tool) {
+        Map<String, Object> block = new LinkedHashMap<>();
+        block.put("type", "tool");
+        if (id != null && !id.isBlank()) {
+            block.put("id", id);
+        }
+        block.put("tool", tool);
+        block.put("args", "");
+        block.put("status", "running");
+        displayBlocks.add(block);
         emit(SseChunk.toolUse(id, tool).fields());
     }
 
     private void emitToolArgs(String id, String delta) {
+        displayBlocks.stream()
+                .filter(b -> "tool".equals(b.get("type")) && id != null && id.equals(b.get("id")))
+                .forEach(b -> b.put("args", String.valueOf(b.get("args")) + delta));
         emit(SseChunk.toolArgs(id, delta).fields());
+    }
+
+    private void completeDisplayTool(String id, String tool, String result) {
+        for (int i = displayBlocks.size() - 1; i >= 0; i--) {
+            Map<String, Object> b = displayBlocks.get(i);
+            if (!"tool".equals(b.get("type")) || !"running".equals(b.get("status"))) {
+                continue;
+            }
+            boolean idMatch = id != null && id.equals(b.get("id"));
+            boolean nameMatch = tool != null && tool.equals(b.get("tool"));
+            if (idMatch || nameMatch) {
+                b.put("status", "done");
+                b.put("result", result);
+                return;
+            }
+        }
+        // 没有配对的调用块（异常兜底）：补一个已完成块保证结果不丢
+        Map<String, Object> block = new LinkedHashMap<>();
+        block.put("type", "tool");
+        block.put("tool", tool);
+        block.put("result", result);
+        block.put("status", "done");
+        displayBlocks.add(block);
+    }
+
+    /** 展示块文本增量：合并同类末块（与前端渲染逻辑同构） */
+    private void appendDisplayText(String type, String delta) {
+        if (!displayBlocks.isEmpty()) {
+            Map<String, Object> last = displayBlocks.get(displayBlocks.size() - 1);
+            if (type.equals(last.get("type"))) {
+                last.put("text", String.valueOf(last.get("text")) + delta);
+                return;
+            }
+        }
+        Map<String, Object> block = new LinkedHashMap<>();
+        block.put("type", type);
+        block.put("text", delta);
+        displayBlocks.add(block);
+    }
+
+    /** 展示持久化：完整 blocks/plan/duration 落 agent_message（游客不落库） */
+    private void persistDisplayMessage(String role, String text, Long durationMs) {
+        if (agentMessageService == null || userId == null) {
+            return;
+        }
+        try {
+            AgentMessageDO row = new AgentMessageDO();
+            row.setConversationId(chatId);
+            row.setAgentId(agentId);
+            row.setUserId(userId);
+            row.setRole(role);
+            if (text != null) {
+                List<Map<String, Object>> blocks = new ArrayList<>();
+                Map<String, Object> block = new LinkedHashMap<>();
+                block.put("type", "text");
+                block.put("text", text);
+                blocks.add(block);
+                row.setBlocks(JacksonUtil.writeValueAsString(blocks));
+            } else {
+                row.setBlocks(JacksonUtil.writeValueAsString(displayBlocks));
+                if (displayPlan != null && !displayPlan.isEmpty()) {
+                    row.setPlan(JacksonUtil.writeValueAsString(displayPlan));
+                }
+                row.setDurationMs(durationMs != null ? durationMs.intValue() : null);
+            }
+            agentMessageService.append(row);
+        } catch (Exception e) {
+            log.warn("展示消息落库失败: {}", e.getMessage());
+        }
     }
 
     private void emitHeartbeat() {

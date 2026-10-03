@@ -38,6 +38,9 @@ public class ChatMemoryController {
     @Autowired
     RedisComponent redisComponent;
 
+    @Autowired
+    com.mio.ai.bot.service.AgentMessageService agentMessageService;
+
 
     /**
      * 获取会话列表
@@ -102,6 +105,7 @@ public class ChatMemoryController {
         try {
             chatHistoryRepository.clearByChatId(chatId);
             chatMemory.clear(chatId);
+            agentMessageService.deleteByConversation(chatId);
         } catch (Exception e){
             return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
         }
