@@ -57,14 +57,24 @@ const collapsed = ref(props.streaming === true ? false : true)
 const dismissed = ref(false)
 const doneCount = computed(() => props.plan?.filter(s => s.status === 'done').length ?? 0)
 
-// 换了新清单（新一轮任务开始）时自动展开并重新出现；
-// 历史数据首载（还原已完成会话）保持进入页面时的默认收缩
-watch(() => props.plan?.[0]?.description, (val, old) => {
-  if (!val) return
-  if (old === undefined && !props.streaming) return
-  collapsed.value = false
-  dismissed.value = false
+// 新一轮工作开始：关闭状态解除（保持收缩态，清单重新可见）
+watch(() => props.streaming, (val, old) => {
+  if (val && !old) {
+    dismissed.value = false
+  }
 })
+
+// 清单步骤集合变化（新一轮任务的新清单）时自动展开并重新出现；
+// 历史数据首载（还原已完成会话）保持进入页面时的默认收缩
+watch(
+  () => props.plan?.map(s => s.description).join('\u0001') ?? '',
+  (val, old) => {
+    if (!val) return
+    if (old === '' && !props.streaming) return
+    collapsed.value = false
+    dismissed.value = false
+  }
+)
 </script>
 
 <style lang="scss" scoped>

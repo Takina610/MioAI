@@ -15,8 +15,10 @@
       <CaretRightOutlined :rotate="processExpanded ? 90 : 0" class="caret-icon" />
     </div>
 
-    <!-- 工作过程（进行中顺着流式显示；完成后默认收起，点击状态行展开逐个查看） -->
-    <CollapseTransition :open="isLoading || processExpanded">
+    <!-- 工作过程（进行中顺着流式显示；完成后默认收起，点击状态行展开逐个查看）。
+         页面在后台时浏览器抑制 CSS 过渡（会瞬收），故完成瞬间若页面隐藏则先保持展开，
+         等用户切回页面可见时再播放收缩动画 -->
+    <CollapseTransition :open="isLoading || processExpanded || holdProcessOpen">
       <div v-if="processBlocks.length" class="process-list">
         <template v-for="(block, index) in processBlocks" :key="index">
           <!-- 文本块（过程中的叙述） -->
@@ -38,9 +40,9 @@
             </CollapseTransition>
           </div>
 
-          <!-- 工具块：语义化行 + 友好结果卡片，点开可看原始参数/结果 -->
+          <!-- 工具块：语义化行 + 可跳转的来源链接（随过程收起/展开） -->
           <div v-else class="tool-block">
-            <div class="tool-row" @click="toggleTool(index)">
+            <div class="tool-row">
               <span class="tool-status">
                 <ZcodeSpinner v-if="block.status === 'running'" :size="14" />
                 <component :is="toolIcon(block.tool)" v-else class="tool-icon" />
@@ -49,31 +51,24 @@
               <span v-if="shownMeta(index, block)" class="tool-meta">
                 {{ shownMeta(index, block) }}<span v-if="typing(index, block)" class="tw-cursor"></span>
               </span>
-              <CaretRightOutlined :rotate="expandedTools.has(index) ? 90 : 0" class="caret-icon tool-caret" />
             </div>
 
-            <!-- 友好结果卡片（联网搜索/阅读网页） -->
-            <div v-if="block.status === 'done' && resultCards(block).length" class="tool-results">
-              <div v-for="(card, ci) in resultCards(block)" :key="ci" class="result-card">
-                <div class="rc-title">{{ card.title }}</div>
-                <div v-if="card.snippet" class="rc-snippet">{{ card.snippet }}</div>
-                <div v-if="card.host" class="rc-host">{{ card.host }}</div>
-              </div>
-              <div v-if="extraResultCount(block)" class="rc-more">还有 {{ extraResultCount(block) }} 条结果，点击行展开查看</div>
+            <!-- 来源链接（DeepSeek 式：点击直接跳转网页） -->
+            <div v-if="block.status === 'done' && sourceChips(block).length" class="tool-sources">
+              <a
+                v-for="(chip, ci) in sourceChips(block)"
+                :key="ci"
+                :href="chip.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="source-chip"
+                :title="chip.title"
+              >
+                <GlobalOutlined class="chip-icon" />
+                <span class="chip-title">{{ chip.title || chip.host }}</span>
+                <span class="chip-idx">{{ ci + 1 }}</span>
+              </a>
             </div>
-
-            <CollapseTransition :open="expandedTools.has(index)">
-              <div class="tool-detail">
-                <div v-if="block.args" class="detail-section">
-                  <span class="detail-label">调用参数</span>
-                  <pre class="detail-content">{{ prettyJson(block.args) }}</pre>
-                </div>
-                <div v-if="block.result" class="detail-section">
-                  <span class="detail-label">返回结果</span>
-                  <pre class="detail-content">{{ block.result }}</pre>
-                </div>
-              </div>
-            </CollapseTransition>
           </div>
         </template>
       </div>
@@ -89,6 +84,11 @@
 
     <!-- 历史消息（无块信息）：直接渲染正文 -->
     <MarkdownView v-else-if="!processBlocks.length && content" class="answer-content" :content="content" />
+
+    <!-- 流式尾部加载动画 -->
+    <div v-if="isLoading" class="stream-tail">
+      <ZcodeSpinner :size="14" />
+    </div>
 
     <div v-if="interrupted" class="stream-interrupted">连接中断，本条回答可能不完整</div>
   </div>
@@ -110,7 +110,8 @@ import {
   PictureOutlined,
   CodeOutlined,
   DownloadOutlined,
-  ToolOutlined
+  ToolOutlined,
+  GlobalOutlined
 } from '@ant-design/icons-vue'
 import MarkdownView from '@/components/MarkdownView.vue'
 import ZcodeSpinner from '@/components/ZcodeSpinner.vue'
@@ -121,7 +122,7 @@ interface Props {
   content: string
   blocks?: MessageBlock[]
   isLoading?: boolean
-  /** 本条回复耗时（毫秒，usage/持久化提供） */
+  /** 本条回复耗时（毫秒），usage/持久化提供） */
   durationMs?: number
   /** 消息创建时间（进行中据此计算已工作时长） */
   createTime?: Date
@@ -136,8 +137,38 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const processExpanded = ref(false)
-const expandedTools = ref<Set<number>>(new Set())
 const manuallyExpandedThinking = ref<Set<number>>(new Set())
+
+// 完成于后台标签页时暂缓收缩：等页面重新可见再收（动画才不会被浏览器吞掉）
+const holdProcessOpen = ref(false)
+let holdVisibleListener: (() => void) | null = null
+
+watch(
+  () => props.isLoading,
+  (loading) => {
+    if (!loading && typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      holdProcessOpen.value = true
+      const onVisible = () => {
+        if (document.visibilityState !== 'visible') return
+        holdProcessOpen.value = false
+        document.removeEventListener('visibilitychange', onVisible)
+        holdVisibleListener = null
+      }
+      if (holdVisibleListener) {
+        document.removeEventListener('visibilitychange', holdVisibleListener)
+      }
+      document.addEventListener('visibilitychange', onVisible)
+      holdVisibleListener = onVisible
+    }
+  }
+)
+
+onUnmounted(() => {
+  if (holdVisibleListener) {
+    document.removeEventListener('visibilitychange', holdVisibleListener)
+    holdVisibleListener = null
+  }
+})
 
 /** 过程块 = 最后一个非文本块及其之前的全部（叙述/思考/工具）；其后的是最终回答 */
 const lastNonTextIndex = computed(() => {
@@ -252,75 +283,56 @@ function toolMeta(block: ToolBlock): string {
   }
 }
 
-interface ResultCard {
+// ---------- 来源链接（DeepSeek 式可跳转源） ----------
+interface SourceChip {
   title: string
-  snippet: string
+  url: string
   host: string
 }
 
-/** 联网搜索结果 → 卡片（title/snippet/url 的 JSON 行；最多展示 3 张） */
-function searchResultCards(result?: string): ResultCard[] {
+const MAX_CHIPS = 6
+
+/** 联网搜索结果 → 来源链接（title/url 的 JSON 行） */
+function searchSourceChips(result?: string): SourceChip[] {
   if (!result) return []
   const pick = (part: string, key: string): string => {
     const m = part.match(new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`))
     return m ? m[1].replace(/\\"/g, '"').replace(/\\n/g, ' ') : ''
   }
-  const cards: ResultCard[] = []
+  const chips: SourceChip[] = []
   for (const part of result.split(/\},\s*\{/)) {
-    const title = pick(part, 'title')
-    if (!title) continue
     const url = pick(part, 'url') || pick(part, 'link')
-    cards.push({ title, snippet: pick(part, 'snippet'), host: hostOf(url) })
-    if (totalSearchResults(result) && cards.length >= 3) break
+    const title = pick(part, 'title')
+    if (!url) continue
+    chips.push({ title: title || hostOf(url), url, host: hostOf(url) })
+    if (chips.length >= MAX_CHIPS) break
   }
-  return cards.slice(0, 3)
+  return chips
 }
 
-function totalSearchResults(result: string): number {
-  return result.split(/\},\s*\{/).filter(p => /"title"\s*:/.test(p)).length
-}
-
-function extraResultCount(block: ToolBlock): number {
-  if (block.tool !== 'searchWeb' || !block.result) return 0
-  return Math.max(0, totalSearchResults(block.result) - 3)
-}
-
-/** 阅读网页 → 卡片（HTML 提取 <title> 与正文摘要） */
-function scrapeCard(block: ToolBlock): ResultCard | null {
-  const result = block.result
-  if (!result || result.startsWith('抓取网页错误')) return null
+/** 阅读网页 → 单个来源链接（HTML 提取 <title>） */
+function scrapeSourceChip(block: ToolBlock): SourceChip[] {
   const a = parseArgs(block)
-  const host = hostOf(a?.url)
-  const titleMatch = result.match(/<title[^>]*>([^<]*)<\/title>/i)
-  const text = result
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-  if (!text) return null
-  return {
-    title: titleMatch ? titleMatch[1].trim() : host,
-    snippet: text.slice(0, 110),
-    host
-  }
+  const url = a?.url
+  if (!url) return []
+  const titleMatch = block.result?.match(/<title[^>]*>([^<]*)<\/title>/i)
+  return [{ title: titleMatch ? titleMatch[1].trim() : hostOf(url), url, host: hostOf(url) }]
 }
 
-const resultCardsCache = new Map<string, ResultCard[]>()
-function resultCards(block: ToolBlock): ResultCard[] {
+const sourceChipsCache = new Map<string, SourceChip[]>()
+function sourceChips(block: ToolBlock): SourceChip[] {
   // 以工具+结果内容为键缓存解析结果（无 id 的兜底块也不会互相串卡）
   const key = `${block.tool}|${block.result?.length ?? 0}|${block.result?.slice(0, 50) ?? ''}`
-  const cached = resultCardsCache.get(key)
+  const cached = sourceChipsCache.get(key)
   if (cached) return cached
-  let cards: ResultCard[] = []
+  let chips: SourceChip[] = []
   if (block.tool === 'searchWeb') {
-    cards = searchResultCards(block.result)
+    chips = searchSourceChips(block.result)
   } else if (block.tool === 'scrapeWebPage') {
-    const card = scrapeCard(block)
-    cards = card ? [card] : []
+    chips = scrapeSourceChip(block)
   }
-  resultCardsCache.set(key, cards)
-  return cards
+  sourceChipsCache.set(key, chips)
+  return chips
 }
 
 // ---------- 打字机效果 ----------
@@ -441,24 +453,6 @@ function toggleThinking(index: number): void {
   }
   manuallyExpandedThinking.value = next
 }
-
-function toggleTool(index: number): void {
-  const next = new Set(expandedTools.value)
-  if (next.has(index)) {
-    next.delete(index)
-  } else {
-    next.add(index)
-  }
-  expandedTools.value = next
-}
-
-function prettyJson(args: string): string {
-  try {
-    return JSON.stringify(JSON.parse(args), null, 2)
-  } catch {
-    return args
-  }
-}
 </script>
 
 <style lang="scss" scoped>
@@ -556,7 +550,7 @@ function prettyJson(args: string): string {
   }
 }
 
-// 工具块：时间线条目 + 友好结果卡片
+// 工具块：时间线条目 + 可跳转来源链接
 .tool-block {
   user-select: none;
   animation: tool-in 0.18s ease;
@@ -568,13 +562,7 @@ function prettyJson(args: string): string {
     padding: 3px 8px;
     margin: 0 -8px;
     border-radius: 6px;
-    cursor: pointer;
-    transition: background 0.2s;
     min-width: 0;
-
-    &:hover {
-      background: #f7f8fa;
-    }
   }
 
   .tool-status {
@@ -616,100 +604,58 @@ function prettyJson(args: string): string {
     animation: blink 0.8s step-end infinite;
   }
 
-  .tool-caret {
-    flex-shrink: 0;
-  }
-
-  // 结果卡片（搜索/阅读网页）：标题加粗 + 摘要灰字截断 + 站点
-  .tool-results {
-    margin: 4px 0 0 24px;
+  // 来源链接：点击直接跳转网页（随工作过程收起/展开）
+  .tool-sources {
+    margin-top: 4px;
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: 6px;
 
-    .result-card {
-      padding: 8px 12px;
+    .source-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 240px;
+      padding: 4px 10px;
       background: #f7f8fa;
-      border-radius: 10px;
-      cursor: pointer;
+      border-radius: 8px;
+      text-decoration: none;
       transition: background 0.2s;
-      user-select: none;
 
       &:hover {
-        background: #f2f3f5;
+        background: #eef1f4;
+
+        .chip-title {
+          color: $primary-color;
+        }
       }
 
-      .rc-title {
-        font-size: 13px;
-        font-weight: 600;
-        color: #1d2129;
-        line-height: 1.5;
-        display: -webkit-box;
-        -webkit-line-clamp: 1;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-      }
-
-      .rc-snippet {
-        margin-top: 2px;
+      .chip-icon {
         font-size: 12px;
         color: #86909c;
-        line-height: 1.5;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
+        flex-shrink: 0;
       }
 
-      .rc-host {
-        margin-top: 4px;
-        font-size: 11px;
-        color: #a9aeb8;
-        font-family: 'Consolas', 'Monaco', monospace;
-      }
-    }
-
-    .rc-more {
-      font-size: 12px;
-      color: #a9aeb8;
-      padding-left: 4px;
-    }
-  }
-
-  .tool-detail {
-    margin: 4px 0 0 23px;
-    padding: 10px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    background: #f7f8fa;
-    border-radius: 8px;
-    user-select: text;
-
-    .detail-section {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-
-      .detail-label {
+      .chip-title {
         font-size: 12px;
-        color: #86909c;
-      }
-
-      .detail-content {
-        margin: 0;
-        padding: 8px 10px;
-        background: #fff;
-        border-radius: 6px;
-        font-size: 12px;
-        line-height: 1.5;
         color: #4e5969;
-        font-family: 'Consolas', 'Monaco', monospace;
-        white-space: pre-wrap;
-        word-break: break-word;
-        max-height: 240px;
-        overflow-y: auto;
-        @include thin-scrollbar;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .chip-idx {
+        flex-shrink: 0;
+        min-width: 14px;
+        height: 14px;
+        padding: 0 3px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        color: #86909c;
+        background: #e8eaee;
+        border-radius: 7px;
       }
     }
   }
@@ -718,6 +664,14 @@ function prettyJson(args: string): string {
 .answer-content {
   font-size: 14px;
   padding: 0 4px;
+}
+
+// 流式尾部加载动画
+.stream-tail {
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  user-select: none;
 }
 
 .stream-interrupted {

@@ -16,7 +16,7 @@ const props = defineProps<{
 }>()
 void props
 
-const DURATION = 220
+const DURATION = 300
 
 function resetStyle(el: Element): void {
   const node = el as HTMLElement
