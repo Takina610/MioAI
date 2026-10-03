@@ -18,7 +18,7 @@ export interface MetricCardItem {
 export const metricLabelMap: Record<TabKey, Record<LineMetric, string>> = {
   agent: {
     count: '使用成功次数',
-    agentCount: '使用智能体数',
+    agentCount: '对话次数',
     tokens: 'Token 总量',
     avgTokens: '平均单次请求 Token 量'
   },
@@ -38,7 +38,7 @@ export const metricLabelMap: Record<TabKey, Record<LineMetric, string>> = {
 
 const metricCardLabelMap: Record<TabKey, Record<string, string>> = {
   agent: {
-    agentCount: '使用智能体数',
+    agentCount: '对话次数',
     successCount: '使用成功次数',
     tokenCount: 'Token 总量',
     avgTokens: '平均单次请求 Token 量'
@@ -111,7 +111,7 @@ export function useUsageStats() {
 
   const pieChartTitle = computed(() => {
     const map: Record<TabKey, string> = {
-      agent: '智能体调用次数分布',
+      agent: 'MioBot 调用次数分布',
       knowledge: '知识库检索次数分布',
       mcp: 'MCP 调用次数分布'
     }
@@ -120,7 +120,7 @@ export function useUsageStats() {
 
   const rankTitle = computed(() => {
     const map: Record<TabKey, string> = {
-      agent: '智能体调用排行榜',
+      agent: 'MioBot 调用排行榜',
       knowledge: '知识库检索排行榜',
       mcp: 'MCP 调用排行榜'
     }

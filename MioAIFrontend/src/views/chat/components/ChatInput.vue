@@ -1,7 +1,7 @@
 <template>
   <div class="chat-center-area" :class="{ 'has-messages': hasMessages }">
     <div class="welcome-section" v-if="!hasMessages && !loading">
-      <img :src="agentAvatar || '/favicon.ico'" alt="Agent" class="welcome-avatar" />
+      <img src="/favicon.ico" alt="MioBot" class="welcome-avatar" />
       <h2 class="welcome-title">我能帮什么忙吗，{{ userStore.userName }}？</h2>
     </div>
     <div class="chat-input-wrapper">
@@ -9,7 +9,7 @@
         <div class="input-box">
           <a-textarea
             v-model:value="value"
-            :placeholder="`给 ${agentName || '智能体'} 发送消息`"
+            placeholder="给 MioBot 发送消息"
             :auto-size="{ minRows: 1, maxRows: 6 }"
             @pressEnter="handleEnter"
             class="chat-textarea"
@@ -37,8 +37,6 @@ import { ArrowUpOutlined } from '@ant-design/icons-vue'
 
 const props = defineProps<{
   modelValue: string
-  agentName?: string
-  agentAvatar?: string
   hasMessages: boolean
   loading: boolean
 }>()

@@ -24,16 +24,16 @@ export interface PageResponse<T> {
   pages: number
 }
 
-export function getChatIds(agentId: string): Promise<ChatConversation[]> {
+export function getChatIds(): Promise<ChatConversation[]> {
   return request({
-    url: `/memory/getChatIds/${agentId}`,
+    url: '/memory/getChatIds',
     method: 'get'
   })
 }
 
-export function getChatIdsPage(agentId: string, current: number = 1, size: number = 10): Promise<PageResponse<ChatConversation>> {
+export function getChatIdsPage(current: number = 1, size: number = 10): Promise<PageResponse<ChatConversation>> {
   return request({
-    url: `/memory/getChatIdsPage/${agentId}`,
+    url: '/memory/getChatIdsPage',
     method: 'get',
     params: { current, size }
   })

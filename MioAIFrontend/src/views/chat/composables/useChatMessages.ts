@@ -14,17 +14,13 @@ export function generateMessageId(): string {
   return Math.floor(Math.random() * 100000000).toString()
 }
 
-/** 合并连续的 assistant 消息（MioManus 的多步回复） */
+/** 合并连续的 assistant 消息（MioBot 多步回复的历史加载形态：中间步骤文本与最终回答连排） */
 export function mergeConsecutiveAssistantMessages(msgs: ChatMessage[]): ChatMessage[] {
   if (msgs.length === 0) return []
   const result: ChatMessage[] = []
   for (const msg of msgs) {
     const last = result[result.length - 1]
     if (msg.role === 'assistant' && last && last.role === 'assistant') {
-      if (!last.segments) {
-        last.segments = [{ content: last.content }]
-      }
-      last.segments.push({ content: msg.content })
       last.content += msg.content
     } else {
       result.push({ ...msg })

@@ -44,11 +44,11 @@
       <section class="hero-section">
         <div class="hero-content">
           <h1 class="hero-title">
-            智能体开发平台
-            <span class="highlight">MioAI</span>
+            会思考、能行动的 AI 助手
+            <span class="highlight">MioBot</span>
           </h1>
           <p class="hero-desc">
-            构建你的AI智能体，连接知识库与工具，打造专属AI助手
+            自主规划任务、联网搜索、抓取网页、生成文件——像真人助理一样把事情做完
           </p>
           <div class="hero-actions">
             <a-button type="primary" size="large" @click="handleStart">
@@ -153,8 +153,8 @@ async function handleLogout(): Promise<void> {
 const features: Feature[] = [
   {
     icon: RobotOutlined,
-    title: '智能体管理',
-    desc: '创建和管理你的 AI 智能体，配置系统提示词和行为'
+    title: '完整 Agent 能力',
+    desc: '自主规划任务清单，逐步调用工具执行，失败自动重试，直到完成你的需求'
   },
   {
     icon: DatabaseOutlined,
@@ -179,7 +179,7 @@ const features: Feature[] = [
   {
     icon: ThunderboltOutlined,
     title: '高效响应',
-    desc: '流式响应技术，实时获取 AI 回复'
+    desc: '全流程流式输出，思考、工具调用与回答实时可见'
   }
 ]
 </script>

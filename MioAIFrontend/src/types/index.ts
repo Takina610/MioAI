@@ -1,6 +1,5 @@
 export * from './common'
 export * from './user'
-export * from './agent'
 export * from './mcpTool'
 export * from './knowledgeBase'
 export * from './chat'

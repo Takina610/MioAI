@@ -10,14 +10,13 @@
         @mouseleave="hoverMessageId = ''"
       >
         <div class="message-content">
-          <div v-if="msg.role === 'assistant' && isLoading && !msg.content" class="message-loading">
-            <span></span><span></span><span></span>
-          </div>
-          <!-- assistant 固定走分段渲染组件（无分段时回退渲染正文），流式期间分支稳定不切换 -->
-          <MioManusMessage
-            v-else-if="msg.role === 'assistant'"
+          <!-- assistant 固定走 MioBot 渲染组件（过程区 + 正文），流式期间分支稳定不切换 -->
+          <MioBotMessage
+            v-if="msg.role === 'assistant'"
             :content="msg.content"
-            :segments="msg.segments"
+            :thinking="msg.thinking"
+            :tools="msg.tools"
+            :plan="msg.plan"
             :is-loading="isLoading"
             :interrupted="msg.interrupted"
           />
@@ -46,7 +45,7 @@ import { message } from 'ant-design-vue'
 import { CopyOutlined, CheckOutlined } from '@ant-design/icons-vue'
 import type { ChatMessage } from '@/types'
 import MarkdownView from '@/components/MarkdownView.vue'
-import MioManusMessage from './MioManusMessage.vue'
+import MioBotMessage from './MioBotMessage.vue'
 
 defineProps<{
   messages: ChatMessage[]

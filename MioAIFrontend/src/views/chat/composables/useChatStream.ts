@@ -1,30 +1,24 @@
-import { nextTick, type Ref } from 'vue'
+import { nextTick } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
-import {
-  chatWithCSApp,
-  chatWithDefaultAgent,
-  chatWithMioManus,
-  chatWithCustomAgent,
-  chatWithStream
-} from '@/api/chat'
-import type { ChatMessage, MessageSegment } from '@/types'
+import { chatWithMioBot, chatWithStream } from '@/api/chat'
+import type { ChatMessage, PlanStep, ToolEvent } from '@/types'
 import {
   generateConversationId,
   generateMessageId,
   type ChatMessagesApi
 } from './useChatMessages'
 
-// 后端 SseEmitter 45s 超时，看门狗阈值需大于它，只在连接"挂死"时触发
-const STREAM_WATCHDOG_TIMEOUT_MS = 60000
+// 流式看门狗：连接挂死（收不到任何事件）时强制异常收尾
+const STREAM_WATCHDOG_TIMEOUT_MS = 90000
 
 /**
- * 消息发送与流式接收：SSE（服务端各智能体接口）与本地 Ollama 直连两种通道，
- * 含流式看门狗（连接挂死时强制异常收尾）与多会话切换时的过期回调过滤。
+ * 消息发送与流式接收：MioBot SSE（信封协议）与本地 Ollama 直连两种通道。
+ * <p>信封处理：answer/thinking 增量累积，tool_call/tool_result 按 id 配对成
+ * 工具卡片，plan 覆盖为最新任务清单快照；多会话切换时按 chatId 过滤过期回调。
  */
 export function useChatStream(options: {
-  agentId: Ref<number>
   messagesApi: ChatMessagesApi
   ensureSession: (chatId: string) => void
   updateTitle: (userContent: string, aiContent: string, chatId: string) => void
@@ -36,10 +30,10 @@ export function useChatStream(options: {
   const { messagesApi } = options
 
   let eventSource: EventSource | null = null
-  let currentEventSourceChatId = '' // 当前 EventSource 对应的会话ID
+  let currentEventSourceChatId = ''
   let activeStream: { close: () => void } | null = null
-  let currentStreamChatId = '' // 当前 Ollama 流式请求对应的会话ID
-  let streamWatchdogTimer: ReturnType<typeof setTimeout> | null = null // 流式看门狗：连接被异常中断且收不到任何事件时强制收尾
+  let currentStreamChatId = ''
+  let streamWatchdogTimer: ReturnType<typeof setTimeout> | null = null
 
   function disarmStreamWatchdog(): void {
     if (streamWatchdogTimer) {
@@ -74,7 +68,7 @@ export function useChatStream(options: {
       options.ensureSession(chatId)
     }
     if (isNewChat && userStore.isLoggedIn) {
-      router.push(`/chat/${options.agentId.value}/${chatId}`)
+      router.push(`/chat/${chatId}`)
     }
 
     nextTick(() => {
@@ -84,20 +78,19 @@ export function useChatStream(options: {
 
     messagesApi.setLoading(chatId, true)
 
-    const isMioManus = options.agentId.value === 3
     const aiMessage: ChatMessage = {
       id: generateMessageId(),
       role: 'assistant',
       content: '',
-      createTime: new Date(),
-      segments: isMioManus ? [] : undefined
+      thinking: '',
+      tools: [],
+      createTime: new Date()
     }
     messagesApi.setChatMessages(chatId, [...chatMessages, aiMessage])
 
     const token: string = localStorage.getItem('token') || ''
-    const userId = userStore.userInfo?.id || null
 
-    // 本地大模型：Ollama 直连
+    // 本地大模型：Ollama 直连（仅正文流）
     const provider = localStorage.getItem('ai-model-provider') || 'dashscope'
     if (provider === 'ollama') {
       if (activeStream) {
@@ -113,25 +106,16 @@ export function useChatStream(options: {
       activeStream = chatWithStream(
         content,
         chatId,
-        options.agentId.value,
         token,
-        userId,
         history,
         (rawData) => {
           if (currentStreamChatId !== chatId) return
           if (rawData && rawData !== '[DONE]') {
-            const msgs = messagesApi.getChatMessages(chatId)
-            if (aiMessageIndex < msgs.length) {
-              const updated = [...msgs]
-              updated[aiMessageIndex] = {
-                ...updated[aiMessageIndex],
-                content: updated[aiMessageIndex].content + rawData
-              }
-              messagesApi.setChatMessages(chatId, updated)
-              if (messagesApi.currentChatId.value === chatId) {
-                nextTick(() => options.scrollToBottom())
-              }
-            }
+            patchMessage(chatId, aiMessageIndex, (msg) => ({
+              ...msg,
+              content: msg.content + rawData
+            }))
+            scrollIfCurrent(chatId)
           }
           if (rawData === '[DONE]') {
             messagesApi.setLoading(chatId, false)
@@ -141,16 +125,7 @@ export function useChatStream(options: {
         },
         (error) => {
           console.error('Ollama 错误:', error)
-          // 移除本轮发送的空 AI 消息；已有部分内容则保留并标记中断，与 SSE 异常收尾行为一致
-          const ollamaMessages = messagesApi.getChatMessages(chatId)
-          const ollamaLast = ollamaMessages[ollamaMessages.length - 1]
-          if (ollamaLast && ollamaLast.role === 'assistant' && !ollamaLast.content) {
-            messagesApi.setChatMessages(chatId, ollamaMessages.slice(0, -1))
-          } else if (ollamaLast && ollamaLast.role === 'assistant') {
-            const updatedMessages = [...ollamaMessages]
-            updatedMessages[updatedMessages.length - 1] = { ...ollamaLast, interrupted: true }
-            messagesApi.setChatMessages(chatId, updatedMessages)
-          }
+          handleEmptyOrPartial(chatId, aiMessageIndex)
           message.error('本地模型连接失败，请启动 Ollama 或在「个人设置」切换回在线模型')
           messagesApi.setLoading(chatId, false)
           activeStream = null
@@ -167,16 +142,7 @@ export function useChatStream(options: {
     }
     currentEventSourceChatId = chatId
 
-    const agentId = options.agentId.value
-    if (agentId === 1) {
-      eventSource = chatWithDefaultAgent(content, chatId, agentId, userId)
-    } else if (agentId === 2) {
-      eventSource = chatWithCSApp(content, chatId, agentId, token)
-    } else if (agentId === 3) {
-      eventSource = chatWithMioManus(content, chatId, agentId, token)
-    } else {
-      eventSource = chatWithCustomAgent(content, chatId, agentId, token)
-    }
+    eventSource = chatWithMioBot(content, chatId, token)
     const es = eventSource
 
     // 流式异常收尾：移除空的AI消息、尝试生成标题、复位加载状态
@@ -187,37 +153,17 @@ export function useChatStream(options: {
       if (currentEventSourceChatId !== chatId) {
         return
       }
-      // 该会话已不在加载中，说明消息已完成接收（[DONE]已处理），忽略此错误
+      // 该会话已不在加载中，说明消息已完成接收，忽略此错误
       if (!messagesApi.chatLoadingMap.value.get(chatId)) {
         return
       }
 
       disarmStreamWatchdog()
-
-      // 移除空的AI消息；已有部分内容则保留并标记中断
-      const errorMessages = messagesApi.getChatMessages(chatId)
-      const lastMsg = errorMessages[errorMessages.length - 1]
-      if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.content) {
-        messagesApi.setChatMessages(chatId, errorMessages.slice(0, -1))
-        message.error('连接中断，请重试')
-      } else if (lastMsg && lastMsg.role === 'assistant') {
-        const updatedMessages = [...errorMessages]
-        updatedMessages[updatedMessages.length - 1] = { ...lastMsg, interrupted: true }
-        messagesApi.setChatMessages(chatId, updatedMessages)
-      }
-
-      if (isNewChat && userStore.isLoggedIn) {
-        const finalContent = messagesApi.getChatMessages(chatId)[aiMessageIndex]?.content || ''
-        options.updateTitle(content, finalContent, chatId)
-      }
-
-      messagesApi.setLoading(chatId, false)
-      es.close()
-      eventSource = null
-      currentEventSourceChatId = ''
+      handleEmptyOrPartial(chatId, aiMessageIndex)
+      finishStream()
     }
 
-    // 连接被异常中断且收不到任何事件时（如代理未转发断连），看门狗强制走异常收尾
+    // 连接被异常中断且收不到任何事件时，看门狗强制走异常收尾
     disarmStreamWatchdog()
     streamWatchdogTimer = setTimeout(() => {
       streamWatchdogTimer = null
@@ -234,85 +180,23 @@ export function useChatStream(options: {
         return
       }
 
-      // 旧协议结束标记
-      if (rawData === '[DONE]') {
-        finishStream()
-        return
-      }
-
-      const chatMsgs = messagesApi.getChatMessages(chatId)
-      if (aiMessageIndex >= chatMsgs.length) {
-        return
-      }
-
       let parsed: Record<string, any> | null = null
       try {
         const obj = JSON.parse(rawData)
         if (obj && typeof obj === 'object') parsed = obj
       } catch {
-        // 旧协议：裸文本 chunk，按正文增量处理
+        parsed = null
       }
-
-      const updated = [...chatMsgs]
-      const target = updated[aiMessageIndex]
-      // 无分段事件时保持 undefined：空数组也是 truthy，会导致消息在
-      // MarkdownView 与 MioManusMessage 两个分支间切换、组件补丁崩溃
-      let segments = target.segments
-      let content = target.content
-      let usage = target.usage
-      let finished = false
-
       if (!parsed) {
-        content += rawData
-      } else {
-        const type = String(parsed.type ?? '')
-        switch (type) {
-          case 'answer':
-            // 正文增量
-            content += String(parsed.delta ?? parsed.content ?? '')
-            break
-          case 'usage':
-            usage = {
-              inputTokens: Number(parsed.inputTokens) || undefined,
-              outputTokens: Number(parsed.outputTokens) || undefined,
-              durationMs: Number(parsed.durationMs) || undefined
-            }
-            break
-          case 'done':
-            finished = true
-            break
-          default: {
-            // 其余类型归入分段：delta 语义合并到同类末段，content 语义为整段新增
-            const next = [...(segments ?? [])]
-            const isDelta = parsed.delta !== undefined
-            const text = String(parsed.delta ?? parsed.content ?? '')
-            const last = next[next.length - 1]
-            if (isDelta && last && last.type === type) {
-              next[next.length - 1] = { ...last, content: last.content + text }
-            } else {
-              next.push({
-                type: (type || undefined) as MessageSegment['type'],
-                content: text,
-                tool: parsed.tool,
-                args: parsed.args
-              })
-            }
-            segments = next
-            // 思考/动作整段与最终回复计入 content（标题生成、复制仍可用）
-            if (!isDelta && (type === 'thinking' || type === 'action' || type === 'final')) {
-              content += text
-            }
-            break
-          }
-        }
+        return
       }
 
-      updated[aiMessageIndex] = { ...target, content, segments, usage }
-      messagesApi.setChatMessages(chatId, updated)
+      let finished = false
+      patchMessage(chatId, aiMessageIndex, (msg) => applyEnvelope(msg, parsed!, () => {
+        finished = true
+      }))
 
-      if (messagesApi.currentChatId.value === chatId) {
-        nextTick(() => options.scrollToBottom())
-      }
+      scrollIfCurrent(chatId)
       if (finished) {
         finishStream()
       }
@@ -332,6 +216,114 @@ export function useChatStream(options: {
     }
 
     es.onerror = handleStreamError
+  }
+
+  /** 把一条信封事件应用到 AI 消息上，返回新消息对象 */
+  function applyEnvelope(
+    msg: ChatMessage,
+    parsed: Record<string, any>,
+    markFinished: () => void
+  ): ChatMessage {
+    switch (String(parsed.type ?? '')) {
+      case 'answer':
+        return { ...msg, content: msg.content + String(parsed.delta ?? parsed.content ?? '') }
+      case 'thinking':
+        return { ...msg, thinking: (msg.thinking || '') + String(parsed.delta ?? parsed.content ?? '') }
+      case 'tool_call': {
+        const toolEvent: ToolEvent = {
+          id: parsed.id ? String(parsed.id) : undefined,
+          tool: String(parsed.tool ?? ''),
+          args: parsed.args !== undefined ? String(parsed.args) : undefined,
+          status: 'running'
+        }
+        return { ...msg, tools: [...(msg.tools ?? []), toolEvent] }
+      }
+      case 'tool_result': {
+        const tools = matchToolResult(msg.tools ?? [], parsed)
+        return { ...msg, tools }
+      }
+      case 'plan':
+        return { ...msg, plan: (parsed.steps ?? []) as PlanStep[] }
+      case 'usage':
+        return {
+          ...msg,
+          usage: {
+            inputTokens: Number(parsed.inputTokens) || undefined,
+            outputTokens: Number(parsed.outputTokens) || undefined,
+            durationMs: Number(parsed.durationMs) || undefined
+          }
+        }
+      case 'done':
+        markFinished()
+        return msg
+      case 'error':
+        markFinished()
+        return { ...msg, interrupted: true }
+      default:
+        return msg
+    }
+  }
+
+  /** tool_result 配对：优先按 id，其次按同名工具中最后一个 running，最后按最后一个 running */
+  function matchToolResult(tools: ToolEvent[], parsed: Record<string, any>): ToolEvent[] {
+    const id = parsed.id ? String(parsed.id) : ''
+    const tool = String(parsed.tool ?? '')
+    let targetIndex = -1
+    if (id) {
+      targetIndex = tools.findIndex(t => t.id === id)
+    }
+    if (targetIndex === -1) {
+      const running = tools.map((t, i) => ({ t, i })).filter(x => x.t.status === 'running')
+      const byName = running.filter(x => x.t.tool === tool)
+      const picked = byName.length > 0 ? byName[byName.length - 1] : running[running.length - 1]
+      targetIndex = picked ? picked.i : -1
+    }
+    if (targetIndex === -1) {
+      // 没有配对的调用：补一张已完成卡片，保证结果不丢
+      return [...tools, {
+        tool,
+        result: parsed.content !== undefined ? String(parsed.content) : undefined,
+        status: 'done'
+      }]
+    }
+    return tools.map((t, i) => i === targetIndex
+      ? { ...t, status: 'done', result: parsed.content !== undefined ? String(parsed.content) : t.result }
+      : t)
+  }
+
+  /** 局部更新某条消息，避免整表深拷贝 */
+  function patchMessage(
+    chatId: string,
+    index: number,
+    patch: (msg: ChatMessage) => ChatMessage
+  ): void {
+    const msgs = messagesApi.getChatMessages(chatId)
+    if (index < 0 || index >= msgs.length) {
+      return
+    }
+    const updated = [...msgs]
+    updated[index] = patch(updated[index])
+    messagesApi.setChatMessages(chatId, updated)
+  }
+
+  function scrollIfCurrent(chatId: string): void {
+    if (messagesApi.currentChatId.value === chatId) {
+      nextTick(() => options.scrollToBottom())
+    }
+  }
+
+  /** 异常收尾：空 AI 消息移除；已有内容则保留并标记中断 */
+  function handleEmptyOrPartial(chatId: string, aiMessageIndex: number): void {
+    const msgs = messagesApi.getChatMessages(chatId)
+    const last = msgs[aiMessageIndex]
+    if (!last) return
+    const empty = !last.content && !(last.tools && last.tools.length) && !last.thinking
+    if (empty) {
+      messagesApi.setChatMessages(chatId, msgs.filter((_, i) => i !== aiMessageIndex))
+      message.error('连接中断，请重试')
+    } else {
+      patchMessage(chatId, aiMessageIndex, (msg) => ({ ...msg, interrupted: true }))
+    }
   }
 
   /** 组件卸载前关闭所有流式连接 */

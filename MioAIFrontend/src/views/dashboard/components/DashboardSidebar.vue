@@ -101,7 +101,6 @@ const isCollapsed = ref(false)
 const logoutRouteMap: Record<string, string> = {
   KnowledgeDetail: '/dashboard/knowledge',
   KnowledgeMarketDetail: '/dashboard/knowledge/market',
-  AgentEdit: '/dashboard/agent',
   McpDetail: '/dashboard/mcp',
   McpMarketDetail: '/dashboard/mcp/market',
   Usage: '/dashboard/usage',

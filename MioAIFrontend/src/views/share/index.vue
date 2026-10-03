@@ -8,9 +8,9 @@
             {{ formattedDate }} · 内容由 AI 生成，不能完全保障真实
           </p>
         </div>
-        
+
         <div class="card-divider"></div>
-        
+
         <div class="card-content" ref="contentRef">
           <div class="chat-messages" ref="messagesRef" v-if="messages.length > 0">
             <div class="messages-wrapper">
@@ -23,13 +23,7 @@
                 @mouseleave="hoverMessageId = ''"
               >
                 <div class="message-content">
-                  <MioManusMessage
-                    v-if="msg.role === 'assistant' && msg.segments"
-                    :content="msg.content"
-                    :segments="msg.segments"
-                    :is-loading="false"
-                  />
-                  <MarkdownView v-else class="message-text" :content="msg.content" />
+                  <MarkdownView v-if="msg.content" class="message-text" :content="msg.content" />
                   <div class="message-actions">
                     <div class="copy-area" v-show="hoverMessageId === msg.id && msg.content">
                       <a-tooltip :title="copiedMessageId === msg.id ? '已复制' : '复制'">
@@ -44,25 +38,25 @@
               </div>
             </div>
           </div>
-          
+
           <div class="conversation-loading" v-if="loading">
             <a-spin size="large" />
             <p>加载中...</p>
           </div>
         </div>
       </div>
-      
+
       <div class="action-buttons fixed">
         <button class="text-btn" @click="goToChat">
           <MessageOutlined />
           <div class="text">
-            {{ agentInfo?.name || '智能体' }}继续聊
+            和 MioBot 继续聊
           </div>
         </button>
       </div>
 
-      <div class="footer-section" >
-        <p class="copyright">{{ agentInfo?.name || '智能体' }} • 你的AI助手</p>
+      <div class="footer-section">
+        <p class="copyright">MioBot • 你的AI助手</p>
       </div>
     </div>
   </div>
@@ -73,10 +67,8 @@ import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { getChatHistory, getConversation } from '@/api/chatMemory'
-import { getAgentById } from '@/api/agent'
-import type { Agent, ChatMessage } from '@/types'
+import type { ChatMessage } from '@/types'
 import { CopyOutlined, CheckOutlined, MessageOutlined } from '@ant-design/icons-vue'
-import MioManusMessage from '@/views/chat/components/MioManusMessage.vue'
 import MarkdownView from '@/components/MarkdownView.vue'
 import { mergeConsecutiveAssistantMessages } from '@/views/chat/composables/useChatMessages'
 
@@ -88,15 +80,13 @@ const conversationTitle = ref<string>('')
 const hoverMessageId = ref<string>('')
 const copiedMessageId = ref<string>('')
 const messages = ref<ChatMessage[]>([])
-const agentInfo = ref<Agent | null>(null)
 const conversationDate = ref<Date>(new Date())
-const agentId = ref<number>(0)
 
 watch(
-  () => [route.params.agentId, route.params.conversationId],
-  ([agentIdParam, conversationId]) => {
-    if (agentIdParam && conversationId && typeof agentIdParam === 'string' && typeof conversationId === 'string') {
-      loadShareData(agentIdParam, conversationId)
+  () => route.params.conversationId,
+  (conversationId) => {
+    if (conversationId && typeof conversationId === 'string') {
+      loadShareData(conversationId)
     }
   },
   { immediate: true }
@@ -110,24 +100,19 @@ const formattedDate = computed(() => {
   return `${year} 年 ${month} 月 ${day} 日`
 })
 
-async function loadShareData(agentIdParam: string, conversationId: string): Promise<void> {
+async function loadShareData(conversationId: string): Promise<void> {
   loading.value = true
   try {
-    agentId.value = Number(agentIdParam)
-    
-    const agentRes = await getAgentById(agentId.value)
-    agentInfo.value = agentRes
-    
     const conversationRes = await getConversation(conversationId)
     if (conversationRes && conversationRes.title) {
       conversationTitle.value = conversationRes.title
       document.title = `${conversationRes.title} - MioAI`
     }
-    
+
     if (conversationRes && conversationRes.createTime) {
       conversationDate.value = new Date(conversationRes.createTime)
     }
-    
+
     const res = await getChatHistory(conversationId)
 
     if (!res) {
@@ -142,7 +127,7 @@ async function loadShareData(agentIdParam: string, conversationId: string): Prom
         createTime: new Date()
       }))
 
-      // 合并连续的 assistant 消息（MioManus 的多步回复）
+      // 合并连续的 assistant 消息（MioBot 的多步回复）
       loadedMessages = mergeConsecutiveAssistantMessages(loadedMessages)
 
       messages.value = loadedMessages
@@ -171,11 +156,7 @@ async function copyMessage(content: string, messageId: string): Promise<void> {
 }
 
 function goToChat(): void {
-  if (agentId.value) {
-    router.push(`/chat/${agentId.value}`)
-  } else {
-    router.push('/')
-  }
+  router.push('/chat')
 }
 </script>
 
@@ -209,7 +190,7 @@ function goToChat(): void {
 
 .card-header {
   padding: 28px 32px 24px;
-  
+
   .conversation-title {
     font-size: 30px;
     font-weight: 600;
@@ -217,7 +198,7 @@ function goToChat(): void {
     margin: 0 0 12px 0;
     line-height: 1.4;
   }
-  
+
   .conversation-meta {
     font-size: 13px;
     color: #c1c1c1;
@@ -233,7 +214,7 @@ function goToChat(): void {
 
 .card-content {
   padding: 24px 32px;
-  
+
   .chat-messages {
     .messages-wrapper {
       .message {
@@ -375,7 +356,7 @@ function goToChat(): void {
   justify-content: center;
   padding: 60px 24px;
   color: #86909c;
-  
+
   p {
     margin-top: 16px;
     font-size: 14px;
@@ -385,7 +366,7 @@ function goToChat(): void {
 .footer-section {
   margin-top: 24px;
   text-align: center;
-  
+
   .copyright {
     font-size: 12px;
     color: #86909c;
@@ -412,7 +393,7 @@ function goToChat(): void {
     margin: 0;
     padding: 12px 0;
   }
-  
+
   .text-btn {
     display: flex;
     align-items: center;
@@ -427,7 +408,7 @@ function goToChat(): void {
     font-weight: 500;
     color: #fff;
     transition: all 0.2s;
-    
+
     &:hover {
       background: darken($primary-color, 8%);
     }
@@ -442,38 +423,27 @@ function goToChat(): void {
   .share-page {
     padding: 20px 16px 100px;
   }
-  
+
   .card-header {
     padding: 20px 20px 16px;
-    
+
     .conversation-title {
       font-size: 18px;
     }
-    
+
     .conversation-meta {
       font-size: 12px;
     }
   }
-  
+
   .card-divider {
     margin: 0 20px;
   }
-  
+
   .card-content {
     padding: 20px;
-    
-    .message-item {
-      .message-bubble {
-        max-width: 85%;
-        padding: 12px 14px;
-        
-        .message-text {
-          font-size: 14px;
-        }
-      }
-    }
   }
-  
+
   .footer-section {
     .action-buttons {
       .text-btn {
@@ -499,7 +469,6 @@ function goToChat(): void {
   padding: 5px 10px;
 }
 :deep(table) th {
-  // border-bottom: 2px solid #ccc;
   text-align: center;
   background: #dee8ee;
 }

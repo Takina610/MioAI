@@ -2,7 +2,6 @@
   <div class="chat-layout">
     <ChatSidebar
       ref="sidebarRef"
-      :agent-info="agentInfo"
       :chat-list="chatList"
       :current-chat-id="currentChatId"
       :chat-list-loading="chatListLoading"
@@ -27,8 +26,6 @@
         <ChatMessageList ref="messageListRef" :messages="messages" :is-loading="isLoading" />
         <ChatInput
           v-model="inputMessage"
-          :agent-name="agentInfo?.name"
-          :agent-avatar="agentInfo?.avatar"
           :has-messages="messages.length > 0"
           :loading="isLoading"
           @send="handleSend"
@@ -59,9 +56,7 @@
 import { ref, computed, onMounted, onUnmounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getAgentById } from '@/api/agent'
 import { useUserStore } from '@/store/user'
-import type { Agent } from '@/types'
 import AuthModal from '@/components/AuthModal.vue'
 import ChatSidebar from './components/ChatSidebar.vue'
 import ChatMessageList from './components/ChatMessageList.vue'
@@ -74,8 +69,6 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 
-const agentId = ref<number>(0)
-const agentInfo = ref<Agent | null>(null)
 const authModalVisible = ref<boolean>(false)
 const inputMessage = ref<string>('')
 
@@ -104,7 +97,7 @@ const messagesApi = useChatMessages({
     }
     if (currentChatId.value === conversationId) {
       switchChat('')
-      router.replace(`/chat/${agentId.value}`)
+      router.replace('/chat')
     }
   }
 })
@@ -121,12 +114,10 @@ const {
   requestDelete,
   confirmDelete
 } = useChatSessions({
-  agentId,
   onCurrentChatDeleted: createNewChat
 })
 
 const { sendMessage, cleanup: cleanupStream } = useChatStream({
-  agentId,
   messagesApi,
   ensureSession,
   updateTitle: updateChatTitleWithTypewriter,
@@ -142,17 +133,6 @@ const currentChatTitle = computed(() => {
 })
 
 watch(
-  () => route.params.id,
-  (id) => {
-    if (id) {
-      agentId.value = Number(id)
-      loadAgentInfo()
-    }
-  },
-  { immediate: true }
-)
-
-watch(
   () => route.params.conversationId,
   (conversationId) => {
     if (conversationId && typeof conversationId === 'string') {
@@ -165,21 +145,11 @@ watch(
   { immediate: true }
 )
 
-async function loadAgentInfo(): Promise<void> {
-  try {
-    agentInfo.value = await getAgentById(agentId.value)
-    await loadSessions()
-
-    const conversationId = route.params.conversationId
-    if (conversationId && typeof conversationId === 'string') {
-      switchChat(conversationId)
-      loadMessages(conversationId)
-    }
-  } catch (e) {
-    console.error(e)
-    router.push('/404')
+onMounted(() => {
+  if (userStore.isLoggedIn) {
+    loadSessions()
   }
-}
+})
 
 /** 加载会话列表；仅在真实拉取过后检查列表是否撑满一屏，避免游客/无更多页时空转 */
 async function loadSessions(isLoadMore: boolean = false): Promise<void> {
@@ -193,25 +163,18 @@ async function loadSessions(isLoadMore: boolean = false): Promise<void> {
 function createNewChat(): void {
   switchChat('')
   inputMessage.value = ''
-  router.push(`/chat/${agentId.value}`)
+  router.push('/chat')
 }
 
 function selectChat(conversationId: string): void {
   switchChat(conversationId)
-  router.push(`/chat/${agentId.value}/${conversationId}`)
+  router.push(`/chat/${conversationId}`)
   loadMessages(conversationId)
 }
 
 function handleSend(): void {
   const content = inputMessage.value.trim()
   if (!content || isLoading.value) return
-
-  // 游客仅默认智能体可直接对话，其余引导登录
-  if (agentId.value !== 1 && !userStore.isLoggedIn) {
-    authModalVisible.value = true
-    return
-  }
-
   sendMessage(content)
   inputMessage.value = ''
 }

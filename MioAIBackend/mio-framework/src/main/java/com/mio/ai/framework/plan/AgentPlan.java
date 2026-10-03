@@ -40,6 +40,20 @@ public class AgentPlan {
     private final List<String> descriptions = new ArrayList<>();
     private final List<StepStatus> statuses = new ArrayList<>();
 
+    /** 清单变化回调（MioBot 注册，用于把 plan 快照实时推送给前端） */
+    private volatile Runnable changeListener;
+
+    public synchronized void setChangeListener(Runnable changeListener) {
+        this.changeListener = changeListener;
+    }
+
+    private void fireChange() {
+        Runnable listener = changeListener;
+        if (listener != null) {
+            listener.run();
+        }
+    }
+
     public synchronized void createPlan(List<String> steps) {
         descriptions.clear();
         statuses.clear();
@@ -51,6 +65,7 @@ public class AgentPlan {
                 }
             }
         }
+        fireChange();
     }
 
     public synchronized boolean isEmpty() {
@@ -66,6 +81,7 @@ public class AgentPlan {
             return false;
         }
         statuses.set(stepIndex - 1, status);
+        fireChange();
         return true;
     }
 

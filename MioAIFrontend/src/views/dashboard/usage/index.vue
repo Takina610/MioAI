@@ -4,7 +4,7 @@
 
     <div class="tabs-header">
       <a-tabs v-model:activeKey="activeTab" class="usage-tabs">
-        <a-tab-pane key="agent" tab="智能体"></a-tab-pane>
+        <a-tab-pane key="agent" tab="MioBot"></a-tab-pane>
         <a-tab-pane key="knowledge" tab="知识库"></a-tab-pane>
         <a-tab-pane key="mcp" tab="MCP"></a-tab-pane>
       </a-tabs>

@@ -9,7 +9,7 @@ import java.util.List;
 /**
  * @author: Takina
  * @date: 2026/9/29
- * @description: 任务清单管理工具（MioManus 专用，按实例注入，非 Spring Bean）
+ * @description: 任务清单管理工具（MioBot 按实例注入，非 Spring Bean）
  * <p>供 LLM 显式地创建计划、更新步骤状态、查看当前计划。
  * 每个动作都有明确的返回值（渲染后的计划），模型能据此自我校验。
  */

@@ -19,22 +19,18 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/chat',
-    redirect: '/chat/1'
-  },
-  {
-    path: '/chat/:id',
     name: 'Chat',
     component: () => import('@/views/chat/index.vue'),
-    meta: { title: '智能体对话', requiresAuth: false }
+    meta: { title: 'MioBot 对话', requiresAuth: false }
   },
   {
-    path: '/chat/:id/:conversationId',
+    path: '/chat/:conversationId',
     name: 'ChatConversation',
     component: () => import('@/views/chat/index.vue'),
-    meta: { title: '智能体对话', requiresAuth: false }
+    meta: { title: 'MioBot 对话', requiresAuth: false }
   },
   {
-    path: '/share/:agentId/:conversationId',
+    path: '/share/:conversationId',
     name: 'ShareConversation',
     component: () => import('@/views/share/index.vue'),
     meta: { title: '分享对话', requiresAuth: false }
@@ -44,26 +40,8 @@ const routes: RouteRecordRaw[] = [
     name: 'Dashboard',
     component: () => import('@/views/dashboard/index.vue'),
     meta: { title: '总览', requiresAuth: false },
-    redirect: '/dashboard/agent-market',
+    redirect: '/dashboard/mcp-market',
     children: [
-      {
-        path: 'agent-market',
-        name: 'AgentMarket',
-        component: () => import('@/views/dashboard/agent/market.vue'),
-        meta: { title: '应用广场', requiresAuth: false }
-      },
-      {
-        path: 'agent',
-        name: 'AgentManage',
-        component: () => import('@/views/dashboard/agent/manage.vue'),
-        meta: { title: '我的应用', requiresAuth: false }
-      },
-      {
-        path: 'agent/:id',
-        name: 'AgentEdit',
-        component: () => import('@/views/dashboard/agent/edit.vue'),
-        meta: { title: '智能体编辑', requiresAuth: false }
-      },
       {
         path: 'mcp-market',
         name: 'McpMarket',
@@ -149,12 +127,6 @@ const routes: RouteRecordRaw[] = [
         name: 'AdminUser',
         component: () => import('@/views/admin/user/index.vue'),
         meta: { title: '用户管理', requiresAuth: true, requiresAdmin: true }
-      },
-      {
-        path: 'agent',
-        name: 'AdminAgent',
-        component: () => import('@/views/admin/agent/index.vue'),
-        meta: { title: '智能体管理', requiresAuth: true, requiresAdmin: true }
       },
       {
         path: 'mcp',

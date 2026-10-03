@@ -11,7 +11,7 @@
 
     <div class="tabs-header">
       <a-tabs v-model:activeKey="activeTab" class="usage-tabs" @change="onTabChange">
-        <a-tab-pane key="agent" tab="智能体"></a-tab-pane>
+        <a-tab-pane key="agent" tab="MioBot"></a-tab-pane>
         <a-tab-pane key="knowledge" tab="知识库"></a-tab-pane>
         <a-tab-pane key="mcp" tab="MCP"></a-tab-pane>
       </a-tabs>
@@ -140,7 +140,7 @@ const metricKeyMap: Record<LineMetric, string> = {
 const metricLabelMap: Record<TabKey, Record<LineMetric, string>> = {
   agent: {
     count: '使用成功次数',
-    agentCount: '使用智能体数',
+    agentCount: '对话次数',
     tokens: 'Token 总量',
     avgTokens: '平均单次请求 Token 量'
   },
@@ -179,7 +179,7 @@ interface MetricCardItem {
 }
 
 const metricCards = ref<MetricCardItem[]>([
-  { key: 'agentCount', label: '使用智能体数', value: 0, displayValue: 0, unit: '个', trend: 0 },
+  { key: 'agentCount', label: '对话次数', value: 0, displayValue: 0, unit: '个', trend: 0 },
   { key: 'successCount', label: '使用成功次数', value: 0, displayValue: 0, unit: '次', trend: 0 },
   { key: 'tokenCount', label: 'Token 总量', value: 0, displayValue: 0, unit: 'tokens', trend: 0 },
   { key: 'avgTokens', label: '平均单次请求 Token 量', value: 0, displayValue: 0, unit: 'tokens', trend: 0 }
@@ -195,7 +195,7 @@ const chartTitle = computed(() => {
 
 const pieChartTitle = computed(() => {
   const map: Record<TabKey, string> = {
-    agent: '智能体调用次数分布',
+    agent: 'MioBot 调用次数分布',
     knowledge: '知识库检索次数分布',
     mcp: 'MCP 调用次数分布'
   }
@@ -204,7 +204,7 @@ const pieChartTitle = computed(() => {
 
 const rankTitle = computed(() => {
   const map: Record<TabKey, string> = {
-    agent: '智能体调用排行榜',
+    agent: 'MioBot 调用排行榜',
     knowledge: '知识库检索排行榜',
     mcp: 'MCP 调用排行榜'
   }
@@ -245,7 +245,7 @@ function formatNumberWithUnit(value: number): { value: string; unit: string } {
 function buildMetricCards(metrics: Record<string, MetricValue>, type: TabKey) {
   const labelMap: Record<TabKey, Record<string, string>> = {
     agent: {
-      agentCount: '使用智能体数',
+      agentCount: '对话次数',
       successCount: '使用成功次数',
       tokenCount: 'Token 总量',
       avgTokens: '平均单次请求 Token 量'

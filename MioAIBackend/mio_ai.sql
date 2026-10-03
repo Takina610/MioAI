@@ -67,45 +67,9 @@ CREATE TABLE `agent`  (
 ) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '智能体表' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
--- Records of agent（内置智能体）
+-- Records of agent（唯一智能体 MioBot）
 -- ----------------------------
-INSERT INTO `agent` VALUES (1, NULL, 'Mio', 'Mio 默认助手，支持日常问答与对话记忆', NULL, 0, NULL, 1, 1, 0, '1.0.0', 0, NOW(), NOW());
-INSERT INTO `agent` VALUES (2, NULL, 'CS游戏助手', 'CS游戏助手智能体，专注于CS游戏数据分析、战术指导、选手统计等功能（内置RAG知识库）。', NULL, 0, NULL, 1, 1, 0, '1.0.0', 0, NOW(), NOW());
-INSERT INTO `agent` VALUES (3, NULL, 'MioManus', '全能型AI助手，致力于解决用户提出的任何任务。可以调用各种工具，高效完成复杂需求，拥有显式任务规划能力。', NULL, 0, NULL, 1, 1, 0, '1.0.0', 0, NOW(), NOW());
-
--- ----------------------------
--- Table structure for agent_knowledge
--- ----------------------------
-DROP TABLE IF EXISTS `agent_knowledge`;
-CREATE TABLE `agent_knowledge`  (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `agent_id` bigint NOT NULL COMMENT '智能体ID',
-  `kb_id` bigint NOT NULL COMMENT '知识库ID',
-  `retrieval_config` json NULL COMMENT '检索配置: {topK, threshold, enableRerank}',
-  `enabled` tinyint NULL DEFAULT 1 COMMENT '是否启用',
-  `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_agent_kb`(`agent_id` ASC, `kb_id` ASC) USING BTREE,
-  INDEX `idx_agent_id`(`agent_id` ASC) USING BTREE,
-  INDEX `idx_kb_id`(`kb_id` ASC) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '智能体-知识库关联表' ROW_FORMAT = Dynamic;
-
--- ----------------------------
--- Table structure for agent_mcp
--- ----------------------------
-DROP TABLE IF EXISTS `agent_mcp`;
-CREATE TABLE `agent_mcp`  (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `agent_id` bigint NOT NULL COMMENT '智能体ID',
-  `mcp_id` bigint NOT NULL COMMENT 'MCP工具ID',
-  `enabled` tinyint NULL DEFAULT 1 COMMENT '是否启用',
-  `config_override` json NULL COMMENT '配置覆盖(可选，用于覆盖原始配置中的部分参数)',
-  `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_agent_mcp`(`agent_id` ASC, `mcp_id` ASC) USING BTREE,
-  INDEX `idx_agent_id`(`agent_id` ASC) USING BTREE,
-  INDEX `idx_mcp_id`(`mcp_id` ASC) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '智能体-MCP工具关联表' ROW_FORMAT = Dynamic;
+INSERT INTO `agent` VALUES (1, NULL, 'MioBot', 'MioAI 智能助手：自主规划、调用工具、迭代执行的完整 Agent，具备联网搜索、网页抓取、文件生成、终端、任务清单等能力。', NULL, 0, NULL, 1, 1, 0, '2.0.0', 0, NOW(), NOW());
 
 -- ----------------------------
 -- Table structure for agent_usage_log

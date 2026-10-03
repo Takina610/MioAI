@@ -5,84 +5,55 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
 // 定义参数类型
 interface ConnectSSEParams {
-  [key: string]: string | number | boolean;  // 支持多种参数类型
+  [key: string]: string | number | boolean
 }
 
-// 定义回调函数类型
-type OnMessageCallback = (data: string) => void;
-type OnErrorCallback = (error: Event) => void;
+type OnMessageCallback = (data: string) => void
+type OnErrorCallback = (error: Event) => void
 
-// 连接 SSE 函数
+/** 连接 SSE（GET + query 参数；token 缺省时后端按游客处理） */
 export const connectSSE = (
   url: string,
   params: ConnectSSEParams,
   onMessage?: OnMessageCallback,
   onError?: OnErrorCallback
 ): EventSource => {
-  // 构建带参数的URL
-  const queryParams = { ...params }
-  
-  const queryString = Object.keys(queryParams)
-    .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(String(queryParams[key]))}`)
+  const queryString = Object.keys(params)
+    .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(String(params[key]))}`)
     .join('&')
-  
-  const fullUrl = `${BASE_URL}${url}?${queryString}`
-  
-  // 创建EventSource
-  const eventSource = new EventSource(fullUrl)
-  
+
+  const eventSource = new EventSource(`${BASE_URL}${url}?${queryString}`)
+
   eventSource.onmessage = (event: MessageEvent) => {
-    const data = event.data
-    
-    // 检查是否是特殊标记
-    if (data === '[DONE]') {
-      onMessage?.('[DONE]')
-    } else {
-      // 处理普通消息
-      onMessage?.(data)
-    }
+    onMessage?.(event.data)
   }
-  
+
   eventSource.onerror = (error: Event) => {
     onError?.(error)
     eventSource.close()
   }
-  
-  // 返回eventSource实例，以便后续可以关闭连接
+
   return eventSource
 }
 
-export const chatWithCSApp = (content: string, chatId: string, agentId: number, token: string
+/** 与 MioBot 对话（全站唯一聊天端点，SSE 信封流式返回全过程） */
+export const chatWithMioBot = (
+  content: string,
+  chatId: string,
+  token: string
 ): EventSource => {
-  return connectSSE('/cs/chat', { content, chatId, agentId, token })
-}
-
-export const chatWithMioManus = (content: string, chatId: string, agentId: number, token: string
-): EventSource => {
-  return connectSSE('/mio/chat', { content, chatId, agentId, token })
-}
-
-export const chatWithDefaultAgent = (content: string, chatId: string, agentId: number, userId: number | null
-): EventSource => {
-  return connectSSE('/chat', { content, chatId, agentId, userId: userId ?? '' })
-}
-
-export const chatWithCustomAgent = (content: string, chatId: string, agentId: number, token: string
-): EventSource => {
-  return connectSSE('/custom/chat', { content, chatId, agentId, token })
+  return connectSSE('/bot/chat', { content, chatId, token })
 }
 
 export const generateTitle = async (
-  agentId: number,
   conversationId: string,
   content: string
 ): Promise<string> => {
   try {
     const response = await request.post<string>('/summary', {
       conversationId,
-      agentId,
       content
-    })
+    } satisfies ChatMessageRequest)
     return response || '新对话'
   } catch (error) {
     console.error('Failed to generate title:', error)
@@ -90,16 +61,15 @@ export const generateTitle = async (
   }
 }
 
-// 走本地大模型的情况
+// 本地大模型（Ollama 直连）
 export interface ChatStreamController {
   close: () => void
 }
+
 export const chatWithStream = (
   content: string,
   chatId: string,
-  agentId: number,
   token: string,
-  userId: number | null,
   history: Array<{ role: string; content: string }>,
   onMessage: (data: string) => void,
   onError: (error: any) => void
@@ -150,7 +120,6 @@ export const chatWithStream = (
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-
         lineBuffer += decoder.decode(value, { stream: true })
         const lines = lineBuffer.split('\n')
         // 最后一段可能被 TCP 分包截断，留到下一轮拼接，避免丢 token
@@ -168,44 +137,11 @@ export const chatWithStream = (
     return { close: () => abortController.abort() }
   }
 
-  // 原有的 SSE 逻辑
-  const isDefaultAgent = agentId === 1
-  let url = ''
-  let params: Record<string, any> = {}
-
-  if (isDefaultAgent) {
-    url = '/chat'
-    params = { content, chatId, agentId, userId: userId ?? '' }
-  } else if (agentId === 2) {
-    url = '/cs/chat'
-    params = { content, chatId, agentId, token }
-  } else if (agentId === 3) {
-    url = '/mio/chat'
-    params = { content, chatId, agentId, token }
-  } else {
-    url = '/custom/chat'
-    params = { content, chatId, agentId, token }
-  }
-
-  const es = connectSSE(url, params)
+  const es = chatWithMioBot(content, chatId, token)
   es.onmessage = (event: MessageEvent) => {
-    const data = event.data
-    if (data === '[DONE]') {
-      onMessage('[DONE]')
-    } else {
-      onMessage(data)
-    }
+    onMessage(event.data)
   }
   es.onerror = onError
 
   return { close: () => es.close() }
-}
-
-export default {
-  chatWithCSApp,
-  chatWithDefaultAgent,
-  chatWithMioManus,
-  chatWithCustomAgent,
-  generateTitle,
-  chatWithStream
 }

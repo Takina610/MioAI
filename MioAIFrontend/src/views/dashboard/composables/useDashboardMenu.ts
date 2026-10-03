@@ -1,8 +1,6 @@
 import { ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  RobotOutlined,
-  AppstoreOutlined,
   ShopOutlined,
   ToolOutlined,
   GlobalOutlined,
@@ -24,13 +22,6 @@ export interface MenuGroup {
 
 /** 侧边栏菜单配置：key/label/图标/路由统一在此维护 */
 const menuGroups: MenuGroup[] = [
-  {
-    title: '智能体',
-    items: [
-      { key: 'agent-market', label: '智能体广场', icon: RobotOutlined, path: '/dashboard/agent-market' },
-      { key: 'agent', label: '我的智能体', icon: AppstoreOutlined, path: '/dashboard/agent' }
-    ]
-  },
   {
     title: 'MCP',
     items: [
