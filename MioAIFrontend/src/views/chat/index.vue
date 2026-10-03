@@ -34,7 +34,7 @@
           @send="handleSend"
         >
           <template #above-input>
-            <ChatPlanPanel :plan="activePlan" />
+            <ChatPlanPanel :plan="activePlan" :streaming="isLoading" />
           </template>
         </ChatInput>
       </div>

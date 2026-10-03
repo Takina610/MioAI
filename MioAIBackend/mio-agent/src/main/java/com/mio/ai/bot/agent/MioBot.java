@@ -197,6 +197,7 @@ public class MioBot {
                 if (!finished) {
                     emitAnswerDelta("\n\n（已达到单轮任务的最大执行步数，以上是目前的执行结果，可以继续提问让我接着完成。）");
                 }
+                finalizePlan();
                 long durationMs = System.currentTimeMillis() - startTime;
                 persistDisplayMessage("assistant", null, durationMs);
                 emit(SseChunk.usage(totalInputTokens, totalOutputTokens, durationMs).fields());
@@ -366,6 +367,18 @@ public class MioBot {
         }
         displayPlan = steps;
         emit(SseChunk.plan(steps).fields());
+    }
+
+    /**
+     * 收尾同步：模型给出最终回答却没把清单余下步骤标记完成时，
+     * 统一补成已完成（每次 updateStatus 触发 emitPlan），保证前端清单与结论一致。
+     */
+    private void finalizePlan() {
+        for (AgentPlan.Step step : plan.snapshot()) {
+            if (step.status() != AgentPlan.StepStatus.DONE && step.status() != AgentPlan.StepStatus.FAILED) {
+                plan.updateStatus(step.index(), AgentPlan.StepStatus.DONE);
+            }
+        }
     }
 
     private void emitThinkingDelta(String delta) {

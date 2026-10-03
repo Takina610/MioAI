@@ -99,6 +99,7 @@ defineExpose({ scrollToBottom, isNearBottom })
   padding: 24px;
   // 组合器已是常规流布局，不再需要为悬浮输入框预留大片底部空间
   padding-bottom: 24px;
+  @include thin-scrollbar;
 
   .messages-wrapper {
     max-width: 800px;

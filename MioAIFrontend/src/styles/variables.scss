@@ -30,3 +30,27 @@ $spacing-xl: 32px;
 @function lighten($color, $amount) {
     @return color.scale($color, $lightness: $amount);
 }
+
+// 细滚动条：替换浏览器默认样式（消息区/思考/工具详情等内部滚动容器）
+@mixin thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #d4d7dc transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #d4d7dc;
+    border-radius: 3px;
+
+    &:hover {
+      background: #b8bcc4;
+    }
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}

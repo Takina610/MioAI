@@ -38,26 +38,38 @@
             </CollapseTransition>
           </div>
 
-          <!-- 工具块 -->
+          <!-- 工具块：语义化行 + 友好结果卡片，点开可看原始参数/结果 -->
           <div v-else class="tool-block">
             <div class="tool-row" @click="toggleTool(index)">
               <span class="tool-status">
                 <ZcodeSpinner v-if="block.status === 'running'" :size="14" />
-                <span v-else class="tool-dot"></span>
+                <component :is="toolIcon(block.tool)" v-else class="tool-icon" />
               </span>
               <span class="tool-name">{{ toolLabel(block.tool) }}</span>
-              <span v-if="argsPreview(block.args)" class="tool-args-preview">({{ argsPreview(block.args) }})</span>
-              <span v-if="block.status === 'done'" class="tool-done-hint">· 已完成</span>
+              <span v-if="shownMeta(index, block)" class="tool-meta">
+                {{ shownMeta(index, block) }}<span v-if="typing(index, block)" class="tw-cursor"></span>
+              </span>
               <CaretRightOutlined :rotate="expandedTools.has(index) ? 90 : 0" class="caret-icon tool-caret" />
             </div>
+
+            <!-- 友好结果卡片（联网搜索/阅读网页） -->
+            <div v-if="block.status === 'done' && resultCards(block).length" class="tool-results">
+              <div v-for="(card, ci) in resultCards(block)" :key="ci" class="result-card">
+                <div class="rc-title">{{ card.title }}</div>
+                <div v-if="card.snippet" class="rc-snippet">{{ card.snippet }}</div>
+                <div v-if="card.host" class="rc-host">{{ card.host }}</div>
+              </div>
+              <div v-if="extraResultCount(block)" class="rc-more">还有 {{ extraResultCount(block) }} 条结果，点击行展开查看</div>
+            </div>
+
             <CollapseTransition :open="expandedTools.has(index)">
               <div class="tool-detail">
                 <div v-if="block.args" class="detail-section">
-                  <span class="detail-label">参数</span>
+                  <span class="detail-label">调用参数</span>
                   <pre class="detail-content">{{ prettyJson(block.args) }}</pre>
                 </div>
                 <div v-if="block.result" class="detail-section">
-                  <span class="detail-label">结果</span>
+                  <span class="detail-label">返回结果</span>
                   <pre class="detail-content">{{ block.result }}</pre>
                 </div>
               </div>
@@ -83,11 +95,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, markRaw, onUnmounted, ref, watch } from 'vue'
+import type { Component } from 'vue'
 import {
   CaretRightOutlined,
   BulbOutlined,
-  CheckCircleOutlined
+  CheckCircleOutlined,
+  OrderedListOutlined,
+  SearchOutlined,
+  ReadOutlined,
+  FilePdfOutlined,
+  FileTextOutlined,
+  EditOutlined,
+  PictureOutlined,
+  CodeOutlined,
+  DownloadOutlined,
+  ToolOutlined
 } from '@ant-design/icons-vue'
 import MarkdownView from '@/components/MarkdownView.vue'
 import ZcodeSpinner from '@/components/ZcodeSpinner.vue'
@@ -136,7 +159,7 @@ const finalText = computed(() => {
   return tail.filter(b => b.type === 'text').map(b => b.text).join('')
 })
 
-// ---------- 工具行的语义化名称 ----------
+// ---------- 工具语义化展示 ----------
 const TOOL_LABELS: Record<string, string> = {
   managePlan: '任务清单',
   searchWeb: '联网搜索',
@@ -154,6 +177,214 @@ function toolLabel(tool: string): string {
   if (TOOL_LABELS[tool]) return TOOL_LABELS[tool]
   const spaced = tool.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
   return spaced.charAt(0).toUpperCase() + spaced.slice(1)
+}
+
+const TOOL_ICONS: Record<string, Component> = markRaw({
+  managePlan: OrderedListOutlined,
+  searchWeb: SearchOutlined,
+  scrapeWebPage: ReadOutlined,
+  generatePDF: FilePdfOutlined,
+  readFile: FileTextOutlined,
+  writeFile: EditOutlined,
+  searchImage: PictureOutlined,
+  executeTerminalCommand: CodeOutlined,
+  downloadResource: DownloadOutlined
+})
+
+function toolIcon(tool: string): Component {
+  return TOOL_ICONS[tool] ?? ToolOutlined
+}
+
+type ToolBlock = Extract<MessageBlock, { type: 'tool' }>
+
+function parseArgs(block: ToolBlock): Record<string, any> | null {
+  try {
+    return JSON.parse(block.args || '')
+  } catch {
+    return null
+  }
+}
+
+function hostOf(url?: string): string {
+  if (!url) return ''
+  try {
+    return new URL(url).hostname
+  } catch {
+    return url.replace(/^https?:\/\//, '').slice(0, 40)
+  }
+}
+
+/** 工具行元信息：从参数提取人话摘要，不暴露原始 JSON */
+function toolMeta(block: ToolBlock): string {
+  const a = parseArgs(block)
+  switch (block.tool) {
+    case 'managePlan': {
+      const action = a?.action
+      if (action === 'create') {
+        const n = String(a?.steps ?? '').split('\n').filter(s => s.trim()).length
+        return n ? `创建 ${n} 个步骤` : '创建任务清单'
+      }
+      if (action === 'update') {
+        const idx = Number(a?.stepIndex)
+        return idx ? `第 ${idx} 步${a?.status === 'done' ? '已完成' : '已更新'}` : '更新任务清单'
+      }
+      return '更新任务清单'
+    }
+    case 'searchWeb':
+      return a?.query ? `“${a.query}”` : ''
+    case 'scrapeWebPage':
+      return hostOf(a?.url) || a?.url || ''
+    case 'generatePDF':
+      return a?.fileName ? `“${a.fileName}”` : ''
+    case 'readFile':
+    case 'writeFile':
+      return a?.fileName ?? ''
+    case 'searchImage':
+      return a?.query ? `“${a.query}”` : ''
+    case 'executeTerminalCommand':
+      return a?.command ? `$ ${a.command}` : ''
+    case 'downloadResource':
+      return a?.fileName || hostOf(a?.url) || ''
+    default: {
+      const raw = (block.args ?? '').replace(/\s+/g, ' ').trim()
+      return raw ? raw.slice(0, 50) : ''
+    }
+  }
+}
+
+interface ResultCard {
+  title: string
+  snippet: string
+  host: string
+}
+
+/** 联网搜索结果 → 卡片（title/snippet/url 的 JSON 行；最多展示 3 张） */
+function searchResultCards(result?: string): ResultCard[] {
+  if (!result) return []
+  const pick = (part: string, key: string): string => {
+    const m = part.match(new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`))
+    return m ? m[1].replace(/\\"/g, '"').replace(/\\n/g, ' ') : ''
+  }
+  const cards: ResultCard[] = []
+  for (const part of result.split(/\},\s*\{/)) {
+    const title = pick(part, 'title')
+    if (!title) continue
+    const url = pick(part, 'url') || pick(part, 'link')
+    cards.push({ title, snippet: pick(part, 'snippet'), host: hostOf(url) })
+    if (totalSearchResults(result) && cards.length >= 3) break
+  }
+  return cards.slice(0, 3)
+}
+
+function totalSearchResults(result: string): number {
+  return result.split(/\},\s*\{/).filter(p => /"title"\s*:/.test(p)).length
+}
+
+function extraResultCount(block: ToolBlock): number {
+  if (block.tool !== 'searchWeb' || !block.result) return 0
+  return Math.max(0, totalSearchResults(block.result) - 3)
+}
+
+/** 阅读网页 → 卡片（HTML 提取 <title> 与正文摘要） */
+function scrapeCard(block: ToolBlock): ResultCard | null {
+  const result = block.result
+  if (!result || result.startsWith('抓取网页错误')) return null
+  const a = parseArgs(block)
+  const host = hostOf(a?.url)
+  const titleMatch = result.match(/<title[^>]*>([^<]*)<\/title>/i)
+  const text = result
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!text) return null
+  return {
+    title: titleMatch ? titleMatch[1].trim() : host,
+    snippet: text.slice(0, 110),
+    host
+  }
+}
+
+const resultCardsCache = new Map<string, ResultCard[]>()
+function resultCards(block: ToolBlock): ResultCard[] {
+  // 以工具+结果内容为键缓存解析结果（无 id 的兜底块也不会互相串卡）
+  const key = `${block.tool}|${block.result?.length ?? 0}|${block.result?.slice(0, 50) ?? ''}`
+  const cached = resultCardsCache.get(key)
+  if (cached) return cached
+  let cards: ResultCard[] = []
+  if (block.tool === 'searchWeb') {
+    cards = searchResultCards(block.result)
+  } else if (block.tool === 'scrapeWebPage') {
+    const card = scrapeCard(block)
+    cards = card ? [card] : []
+  }
+  resultCardsCache.set(key, cards)
+  return cards
+}
+
+// ---------- 打字机效果 ----------
+// 流式中的工具行元信息逐字显示（带光标）；历史还原直接完整显示
+const TYPE_INTERVAL_MS = 28
+const revealMap = ref<Record<number, number>>({})
+let revealTimer: number | undefined
+
+watch(
+  () => props.isLoading,
+  (loading) => {
+    if (loading && revealTimer === undefined) {
+      revealTimer = window.setInterval(advanceReveal, TYPE_INTERVAL_MS)
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  processBlocks,
+  (blocks) => {
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i]
+      if (b.type === 'tool' && !(i in revealMap.value)) {
+        revealMap.value[i] = props.isLoading ? 0 : toolMeta(b).length
+      }
+    }
+  },
+  { immediate: true }
+)
+
+function advanceReveal(): void {
+  const blocks = processBlocks.value
+  let pending = false
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i]
+    if (b.type !== 'tool') continue
+    const full = toolMeta(b).length
+    const shown = revealMap.value[i] ?? full
+    if (shown < full) {
+      revealMap.value[i] = Math.min(full, shown + 1)
+      pending = true
+    }
+  }
+  if (!pending && !props.isLoading && revealTimer !== undefined) {
+    clearInterval(revealTimer)
+    revealTimer = undefined
+  }
+}
+
+onUnmounted(() => {
+  if (revealTimer !== undefined) clearInterval(revealTimer)
+})
+
+function shownMeta(index: number, block: ToolBlock): string {
+  const full = toolMeta(block)
+  const shown = revealMap.value[index]
+  return shown === undefined ? full : full.slice(0, shown)
+}
+
+function typing(index: number, block: ToolBlock): boolean {
+  const full = toolMeta(block).length
+  const shown = revealMap.value[index] ?? full
+  return shown < full
 }
 
 // ---------- 时长 ----------
@@ -219,12 +450,6 @@ function toggleTool(index: number): void {
     next.add(index)
   }
   expandedTools.value = next
-}
-
-function argsPreview(args: string | undefined): string {
-  if (!args) return ''
-  const oneLine = args.replace(/\s+/g, ' ').trim()
-  return oneLine.length > 60 ? oneLine.slice(0, 60) + '…' : oneLine
 }
 
 function prettyJson(args: string): string {
@@ -322,6 +547,7 @@ function prettyJson(args: string): string {
     word-break: break-word;
     max-height: 260px;
     overflow-y: auto;
+    @include thin-scrollbar;
   }
 
   .block-icon {
@@ -330,9 +556,10 @@ function prettyJson(args: string): string {
   }
 }
 
-// 工具块：单行时间线条目（无卡片边框），点开可见参数与结果
+// 工具块：时间线条目 + 友好结果卡片
 .tool-block {
   user-select: none;
+  animation: tool-in 0.18s ease;
 
   .tool-row {
     display: flex;
@@ -351,18 +578,16 @@ function prettyJson(args: string): string {
   }
 
   .tool-status {
-    width: 15px;
+    width: 16px;
     flex-shrink: 0;
     display: flex;
     justify-content: center;
     align-items: center;
   }
 
-  .tool-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: $primary-color;
+  .tool-icon {
+    font-size: 13px;
+    color: $primary-color;
   }
 
   .tool-name {
@@ -371,25 +596,84 @@ function prettyJson(args: string): string {
     color: $primary-color;
   }
 
-  .tool-args-preview {
+  .tool-meta {
     flex: 1;
     min-width: 0;
     font-size: 12px;
-    color: #a9aeb8;
+    color: #86909c;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-family: 'Consolas', 'Monaco', monospace;
   }
 
-  .tool-done-hint {
-    flex-shrink: 0;
-    font-size: 12px;
-    color: #c9cdd4;
+  .tw-cursor {
+    display: inline-block;
+    width: 1px;
+    height: 12px;
+    margin-left: 1px;
+    vertical-align: -1px;
+    background: $primary-color;
+    animation: blink 0.8s step-end infinite;
   }
 
   .tool-caret {
     flex-shrink: 0;
+  }
+
+  // 结果卡片（搜索/阅读网页）：标题加粗 + 摘要灰字截断 + 站点
+  .tool-results {
+    margin: 4px 0 0 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    .result-card {
+      padding: 8px 12px;
+      background: #f7f8fa;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s;
+      user-select: none;
+
+      &:hover {
+        background: #f2f3f5;
+      }
+
+      .rc-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #1d2129;
+        line-height: 1.5;
+        display: -webkit-box;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+
+      .rc-snippet {
+        margin-top: 2px;
+        font-size: 12px;
+        color: #86909c;
+        line-height: 1.5;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+
+      .rc-host {
+        margin-top: 4px;
+        font-size: 11px;
+        color: #a9aeb8;
+        font-family: 'Consolas', 'Monaco', monospace;
+      }
+    }
+
+    .rc-more {
+      font-size: 12px;
+      color: #a9aeb8;
+      padding-left: 4px;
+    }
   }
 
   .tool-detail {
@@ -425,6 +709,7 @@ function prettyJson(args: string): string {
         word-break: break-word;
         max-height: 240px;
         overflow-y: auto;
+        @include thin-scrollbar;
       }
     }
   }
@@ -438,5 +723,22 @@ function prettyJson(args: string): string {
 .stream-interrupted {
   font-size: 12px;
   color: #d48806;
+}
+
+@keyframes tool-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
 }
 </style>

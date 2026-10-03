@@ -49,14 +49,19 @@ import type { PlanStep } from '@/types'
 const props = defineProps<{
   /** 最近一次任务清单快照 */
   plan?: PlanStep[] | null
+  /** 对应会话是否正在执行（进入页面时：执行中默认展开，已完成默认收缩） */
+  streaming?: boolean
 }>()
 
-const collapsed = ref(false)
+const collapsed = ref(props.streaming === true ? false : true)
 const dismissed = ref(false)
 const doneCount = computed(() => props.plan?.filter(s => s.status === 'done').length ?? 0)
 
-// 换了新清单（新一轮任务开始）时自动展开并重新出现
-watch(() => props.plan?.[0]?.description, () => {
+// 换了新清单（新一轮任务开始）时自动展开并重新出现；
+// 历史数据首载（还原已完成会话）保持进入页面时的默认收缩
+watch(() => props.plan?.[0]?.description, (val, old) => {
+  if (!val) return
+  if (old === undefined && !props.streaming) return
   collapsed.value = false
   dismissed.value = false
 })
@@ -141,6 +146,7 @@ watch(() => props.plan?.[0]?.description, () => {
     padding-bottom: 2px;
     max-height: 168px;
     overflow-y: auto;
+    @include thin-scrollbar;
   }
 
   .plan-step {
