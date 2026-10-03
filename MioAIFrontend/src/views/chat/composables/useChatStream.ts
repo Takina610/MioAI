@@ -3,7 +3,7 @@ import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { chatWithMioBot, chatWithStream } from '@/api/chat'
-import type { ChatMessage, PlanStep, ToolEvent } from '@/types'
+import type { ChatMessage, MessageBlock, PlanStep } from '@/types'
 import {
   generateConversationId,
   generateMessageId,
@@ -16,8 +16,10 @@ const STREAM_WATCHDOG_TIMEOUT_MS = 60000
 
 /**
  * 消息发送与流式接收：智能体 SSE（ZCode 风格事件流）与本地 Ollama 直连两种通道。
- * <p>事件处理：answer/thinking 增量累积；tool_use 建立工具卡片、tool_args 实时追加参数、
- * tool_result 按 id 配对收尾；plan 覆盖为最新任务清单快照；heartbeat 仅用于喂狗。
+ * <p>事件按到达顺序写入消息的内容块（blocks）：文本/思考增量合并到同类末块、
+ * tool_use 追加工具块、tool_args 流式补参数、tool_result 按 id 配对收尾——
+ * 渲染时顺着块顺序显示，过程信息不再堆在回答上方。
+ * <p>滚动：发送时跳到底部一次；流式期间仅在用户本就贴底时跟随，不强制拉滚动条。
  * 看门狗在每个事件到达时重挂，只在真正静默超时时触发异常收尾。
  */
 export function useChatStream(options: {
@@ -26,6 +28,8 @@ export function useChatStream(options: {
   ensureSession: (chatId: string) => void
   updateTitle: (userContent: string, aiContent: string, chatId: string) => void
   scrollToBottom: () => void
+  /** 流式期间的贴底跟随：用户已滚离底部时不应拉动滚动条（由页面实现判断） */
+  followStream: () => void
   scrollToChatListTop: () => void
 }) {
   const router = useRouter()
@@ -98,8 +102,7 @@ export function useChatStream(options: {
       id: generateMessageId(),
       role: 'assistant',
       content: '',
-      thinking: '',
-      tools: [],
+      blocks: [],
       createTime: new Date()
     }
     messagesApi.setChatMessages(chatId, [...chatMessages, aiMessage])
@@ -128,11 +131,8 @@ export function useChatStream(options: {
         (rawData) => {
           if (currentStreamChatId !== chatId) return
           if (rawData && rawData !== '[DONE]') {
-            patchMessage(chatId, aiMessageIndex, (msg) => ({
-              ...msg,
-              content: msg.content + rawData
-            }))
-            scrollIfCurrent(chatId)
+            patchMessage(chatId, aiMessageIndex, (msg) => appendTextDelta(msg, rawData))
+            followIfCurrent(chatId)
           }
           if (rawData === '[DONE]') {
             messagesApi.setLoading(chatId, false)
@@ -212,7 +212,7 @@ export function useChatStream(options: {
       if (finished) {
         finishStream()
       } else {
-        scrollIfCurrent(chatId)
+        followIfCurrent(chatId)
       }
     }
 
@@ -232,6 +232,27 @@ export function useChatStream(options: {
     es.onerror = handleStreamError
   }
 
+  /** 文本增量：content 累积 + 合并进同类末块（块序即显示序） */
+  function appendTextDelta(msg: ChatMessage, delta: string): ChatMessage {
+    return {
+      ...msg,
+      content: msg.content + delta,
+      blocks: appendBlockDelta(msg.blocks, 'text', delta)
+    }
+  }
+
+  /** 向同类末块合并增量；末块类型不同或无块时新开一块 */
+  function appendBlockDelta(blocks: MessageBlock[] | undefined, type: 'text' | 'thinking', delta: string): MessageBlock[] {
+    const next = [...(blocks ?? [])]
+    const last = next[next.length - 1]
+    if (last && last.type === type) {
+      next[next.length - 1] = { ...last, text: last.text + delta } as MessageBlock
+    } else {
+      next.push({ type, text: delta })
+    }
+    return next
+  }
+
   /** 把一条信封事件应用到 AI 消息上，返回新消息对象 */
   function applyEnvelope(
     msg: ChatMessage,
@@ -240,28 +261,30 @@ export function useChatStream(options: {
   ): ChatMessage {
     switch (String(parsed.type ?? '')) {
       case 'answer':
-        return { ...msg, content: msg.content + String(parsed.delta ?? parsed.content ?? '') }
+        return appendTextDelta(msg, String(parsed.delta ?? parsed.content ?? ''))
       case 'thinking':
-        return { ...msg, thinking: (msg.thinking || '') + String(parsed.delta ?? parsed.content ?? '') }
+        return { ...msg, blocks: appendBlockDelta(msg.blocks, 'thinking', String(parsed.delta ?? parsed.content ?? '')) }
       case 'tool_use': {
-        const toolEvent: ToolEvent = {
+        const blocks = [...(msg.blocks ?? [])]
+        blocks.push({
+          type: 'tool',
           id: parsed.id ? String(parsed.id) : undefined,
           tool: String(parsed.tool ?? ''),
           args: '',
           status: 'running'
-        }
-        return { ...msg, tools: [...(msg.tools ?? []), toolEvent] }
+        })
+        return { ...msg, blocks }
       }
       case 'tool_args': {
         const id = parsed.id ? String(parsed.id) : ''
         const delta = String(parsed.delta ?? '')
-        const tools = (msg.tools ?? []).map(t =>
-          t.id && t.id === id ? { ...t, args: (t.args || '') + delta } : t)
-        return { ...msg, tools }
+        const blocks = (msg.blocks ?? []).map(b =>
+          b.type === 'tool' && b.id && b.id === id ? { ...b, args: (b.args || '') + delta } : b)
+        return { ...msg, blocks }
       }
       case 'tool_result': {
-        const tools = matchToolResult(msg.tools ?? [], parsed)
-        return { ...msg, tools }
+        const blocks = matchToolResult(msg.blocks ?? [], parsed)
+        return { ...msg, blocks }
       }
       case 'plan':
         return { ...msg, plan: (parsed.steps ?? []) as PlanStep[] }
@@ -288,30 +311,41 @@ export function useChatStream(options: {
   }
 
   /** tool_result 配对：优先按 id，其次按同名工具中最后一个 running，最后按最后一个 running */
-  function matchToolResult(tools: ToolEvent[], parsed: Record<string, any>): ToolEvent[] {
+  function matchToolResult(blocks: MessageBlock[], parsed: Record<string, any>): MessageBlock[] {
+    type ToolBlock = Extract<MessageBlock, { type: 'tool' }>
     const id = parsed.id ? String(parsed.id) : ''
     const tool = String(parsed.tool ?? '')
+    const toolBlocks = blocks
+      .map((b, i) => ({ b, i }))
+      .filter((x): x is { b: ToolBlock; i: number } => x.b.type === 'tool')
     let targetIndex = -1
     if (id) {
-      targetIndex = tools.findIndex(t => t.id === id)
+      const byId = toolBlocks.find(x => x.b.id === id)
+      if (byId) targetIndex = byId.i
     }
     if (targetIndex === -1) {
-      const running = tools.map((t, i) => ({ t, i })).filter(x => x.t.status === 'running')
-      const byName = running.filter(x => x.t.tool === tool)
+      const running = toolBlocks.filter(x => x.b.status === 'running')
+      const byName = running.filter(x => x.b.tool === tool)
       const picked = byName.length > 0 ? byName[byName.length - 1] : running[running.length - 1]
-      targetIndex = picked ? picked.i : -1
+      if (picked) targetIndex = picked.i
     }
     if (targetIndex === -1) {
       // 没有配对的调用：补一张已完成卡片，保证结果不丢
-      return [...tools, {
+      return [...blocks, {
+        type: 'tool',
         tool,
         result: parsed.content !== undefined ? String(parsed.content) : undefined,
         status: 'done'
       }]
     }
-    return tools.map((t, i) => i === targetIndex
-      ? { ...t, status: 'done', result: parsed.content !== undefined ? String(parsed.content) : t.result }
-      : t)
+    return blocks.map((b, i) => {
+      if (i !== targetIndex || b.type !== 'tool') return b
+      return {
+        ...b,
+        status: 'done',
+        result: parsed.content !== undefined ? String(parsed.content) : b.result
+      }
+    })
   }
 
   /** 局部更新某条消息，避免整表深拷贝 */
@@ -329,9 +363,9 @@ export function useChatStream(options: {
     messagesApi.setChatMessages(chatId, updated)
   }
 
-  function scrollIfCurrent(chatId: string): void {
+  function followIfCurrent(chatId: string): void {
     if (messagesApi.currentChatId.value === chatId) {
-      nextTick(() => options.scrollToBottom())
+      nextTick(() => options.followStream())
     }
   }
 
@@ -340,7 +374,7 @@ export function useChatStream(options: {
     const msgs = messagesApi.getChatMessages(chatId)
     const last = msgs[aiMessageIndex]
     if (!last) return
-    const empty = !last.content && !(last.tools && last.tools.length) && !last.thinking
+    const empty = !last.content && !(last.blocks && last.blocks.length)
     if (empty) {
       messagesApi.setChatMessages(chatId, msgs.filter((_, i) => i !== aiMessageIndex))
       message.error('连接中断，请重试')

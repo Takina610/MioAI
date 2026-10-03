@@ -32,7 +32,11 @@
           :has-messages="messages.length > 0"
           :loading="isLoading"
           @send="handleSend"
-        />
+        >
+          <template #above-input>
+            <ChatPlanPanel :plan="activePlan" />
+          </template>
+        </ChatInput>
       </div>
     </div>
 
@@ -66,6 +70,7 @@ import AuthModal from '@/components/AuthModal.vue'
 import ChatSidebar from './components/ChatSidebar.vue'
 import ChatMessageList from './components/ChatMessageList.vue'
 import ChatInput from './components/ChatInput.vue'
+import ChatPlanPanel from './components/ChatPlanPanel.vue'
 import { useChatSessions } from './composables/useChatSessions'
 import { useChatMessages } from './composables/useChatMessages'
 import { useChatStream } from './composables/useChatStream'
@@ -84,6 +89,13 @@ const messageListRef = ref<InstanceType<typeof ChatMessageList> | null>(null)
 
 function scrollToBottom(): void {
   messageListRef.value?.scrollToBottom()
+}
+
+/** 流式期间的贴底跟随：用户滚上去阅读时不拉动滚动条 */
+function followStream(): void {
+  if (messageListRef.value?.isNearBottom()) {
+    messageListRef.value?.scrollToBottom()
+  }
 }
 
 function scrollToChatListTop(): void {
@@ -131,6 +143,7 @@ const { sendMessage, cleanup: cleanupStream } = useChatStream({
   ensureSession,
   updateTitle: updateChatTitleWithTypewriter,
   scrollToBottom,
+  followStream,
   scrollToChatListTop
 })
 
@@ -139,6 +152,17 @@ const { currentChatId, messages, isLoading, switchChat, loadMessages } = message
 const currentChatTitle = computed(() => {
   const chat = chatList.value.find(c => c.id === currentChatId.value)
   return chat?.title || '新对话'
+})
+
+/** 当前会话最近一次任务清单（取最后一条携带 plan 的消息，随流式实时更新） */
+const activePlan = computed(() => {
+  for (let i = messages.value.length - 1; i >= 0; i--) {
+    const plan = messages.value[i].plan
+    if (plan && plan.length) {
+      return plan
+    }
+  }
+  return null
 })
 
 watch(

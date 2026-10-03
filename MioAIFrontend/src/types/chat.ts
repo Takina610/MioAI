@@ -4,7 +4,7 @@ export interface ChatMessageRequest {
   content: string
 }
 
-/** Agent 执行过程中的单次工具调用（tool_call 与 tool_result 按 id/顺序配对） */
+/** Agent 执行过程中的单次工具调用（tool_use 与 tool_result 按 id/顺序配对） */
 export interface ToolEvent {
   /** 与 tool_result 配对的调用 id（端点未返回时为空，按顺序兜底配对） */
   id?: string
@@ -14,7 +14,16 @@ export interface ToolEvent {
   result?: string
 }
 
-/** 任务清单步骤（SSE plan 事件快照） */
+/**
+ * 消息内按时间序排列的内容块（ZCode 风格：文本/思考/工具顺着流式顺序显示，
+ * 不再把过程信息堆在回答上方）。
+ */
+export type MessageBlock =
+  | { type: 'text'; text: string }
+  | { type: 'thinking'; text: string }
+  | (ToolEvent & { type: 'tool' })
+
+/** 任务清单步骤（SSE plan 事件快照，渲染于输入框上方） */
 export interface PlanStep {
   index: number
   description: string
@@ -33,11 +42,9 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   createTime: Date
-  /** 推理/思考增量累积文本 */
-  thinking?: string
-  /** 按时间序排列的工具调用（已配对结果） */
-  tools?: ToolEvent[]
-  /** 最近一次任务清单快照 */
+  /** 按时间序的内容块（流式渲染用；历史消息无块时回退渲染 content） */
+  blocks?: MessageBlock[]
+  /** 最近一次任务清单快照（融合在输入框上方展示） */
   plan?: PlanStep[]
   /** 流式传输异常中断（已有部分内容时置位，界面提示回答可能不完整） */
   interrupted?: boolean

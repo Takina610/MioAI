@@ -10,13 +10,11 @@
         @mouseleave="hoverMessageId = ''"
       >
         <div class="message-content">
-          <!-- assistant 固定走 MioBot 渲染组件（过程区 + 正文），流式期间分支稳定不切换 -->
+          <!-- assistant 按内容块顺序渲染（文本/思考/工具顺着显示），流式期间分支稳定不切换 -->
           <MioBotMessage
             v-if="msg.role === 'assistant'"
             :content="msg.content"
-            :thinking="msg.thinking"
-            :tools="msg.tools"
-            :plan="msg.plan"
+            :blocks="msg.blocks"
             :is-loading="isLoading"
             :interrupted="msg.interrupted"
           />
@@ -62,6 +60,15 @@ function scrollToBottom(): void {
   }
 }
 
+/** 用户是否贴在底部（留少量阈值）：流式跟随只在贴底时拉滚动，滚上去阅读时不打扰 */
+function isNearBottom(): boolean {
+  if (!messagesRef.value) {
+    return true
+  }
+  const el = messagesRef.value
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 120
+}
+
 function handleMouseEnter(msgId: string): void {
   hoverMessageId.value = msgId
   if (copiedMessageId.value && copiedMessageId.value !== msgId) {
@@ -79,7 +86,7 @@ async function copyMessage(content: string, messageId: string): Promise<void> {
   }
 }
 
-defineExpose({ scrollToBottom })
+defineExpose({ scrollToBottom, isNearBottom })
 </script>
 
 <style lang="scss" scoped>

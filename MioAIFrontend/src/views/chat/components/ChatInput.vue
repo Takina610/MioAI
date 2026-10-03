@@ -4,6 +4,8 @@
       <img :src="agentAvatar || '/favicon.ico'" alt="Agent" class="welcome-avatar" />
       <h2 class="welcome-title">我能帮什么忙吗，{{ userStore.userName }}？</h2>
     </div>
+    <!-- 输入框上方融合区（当前会话的任务清单面板等） -->
+    <slot name="above-input" />
     <div class="chat-input-wrapper">
       <div class="chat-input-container">
         <div class="input-box">
