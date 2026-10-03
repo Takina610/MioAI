@@ -7,17 +7,14 @@ import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.user.utils.RedisComponent;
 import com.mio.ai.common.utils.ResultUtils;import com.mio.ai.bot.model.entity.ChatConversationDO;
-import com.mio.ai.bot.model.vo.MessageVO;
 import com.mio.ai.bot.repository.ChatHistoryRepository;
 import com.mio.ai.user.model.vo.LoginUserVO;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.messages.Message;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * @author: Takina
@@ -70,26 +67,6 @@ public class ChatMemoryController {
         return ResultUtils
             .success(chatHistoryRepository
             .getChatsPage(redisComponent.getUserId(request.getHeader("token")), agentId, current, size));
-    }
-
-    /**
-     * 获取会话记录（仅会话所有者可读）
-     * @param chatId
-     */
-    @GetMapping("/getChatHistory/{chatId}")
-    @LogInfo
-    public BaseResponse<List<MessageVO>> getChatHistory(@PathVariable String chatId, HttpServletRequest request){
-        Long userId = redisComponent.getUserId(request.getHeader("token"));
-        checkChatOwner(chatId, userId);
-        List<Message> messages = chatMemory.get(chatId);
-        if (messages.isEmpty()) {
-            return ResultUtils.success(null);
-        }
-        return ResultUtils
-                .success(messages.stream()
-                        .map(MessageVO::new)
-                        .filter(vo -> !vo.isToolMessage())
-                        .collect(Collectors.toList()));
     }
 
     /**

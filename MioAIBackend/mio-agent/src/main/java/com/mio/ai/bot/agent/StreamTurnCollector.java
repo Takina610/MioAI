@@ -89,27 +89,27 @@ public class StreamTurnCollector {
                 pendingToolCallId = delta.id();
                 pendingToolCallType = delta.type();
                 pendingToolCallName = delta.name();
-                appendArgs(delta);
-                // 新调用出现即通知前端（参数随后逐段流入）
+                // 新调用出现即通知前端（必须先于参数分片，保证前端/持久化先建好工具块）
                 if (pendingToolCallName != null && !pendingToolCallName.isBlank()) {
                     toolUseSink.accept(pendingToolCallId, pendingToolCallName);
                 }
+                appendArgs(delta);
             } else if (pendingToolCallName != null) {
                 // 参数续片：个别实现会把 name 补在后续分片上
-                appendArgs(delta);
                 if (pendingToolCallName.isBlank() && delta.name() != null && !delta.name().isBlank()) {
                     pendingToolCallName = delta.name();
                     toolUseSink.accept(pendingToolCallId, pendingToolCallName);
                 }
+                appendArgs(delta);
             } else {
                 // 首个分片就没带 id（个别兼容端点的行为），照样开一个新调用
                 pendingToolCallId = delta.id();
                 pendingToolCallType = delta.type();
                 pendingToolCallName = delta.name() != null ? delta.name() : "";
-                appendArgs(delta);
                 if (!pendingToolCallName.isBlank()) {
                     toolUseSink.accept(pendingToolCallId, pendingToolCallName);
                 }
+                appendArgs(delta);
             }
         }
     }

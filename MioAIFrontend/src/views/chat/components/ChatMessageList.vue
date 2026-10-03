@@ -2,7 +2,7 @@
   <div class="chat-messages" ref="messagesRef" v-if="messages.length > 0">
     <div class="messages-wrapper">
       <div
-        v-for="msg in messages"
+        v-for="(msg, index) in messages"
         :key="msg.id"
         class="message"
         :class="msg.role"
@@ -15,7 +15,7 @@
             v-if="msg.role === 'assistant'"
             :content="msg.content"
             :blocks="msg.blocks"
-            :is-loading="isLoading"
+            :is-loading="isLoading && index === messages.length - 1"
             :duration-ms="msg.durationMs"
             :create-time="msg.createTime"
             :interrupted="msg.interrupted"

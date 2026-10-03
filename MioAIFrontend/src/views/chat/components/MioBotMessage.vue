@@ -12,55 +12,60 @@
     >
       <CheckCircleOutlined class="done-icon" />
       <span>已完成 · 用时 {{ durationText }}</span>
-      <span class="done-meta">{{ toolCount }} 个工具</span>
       <CaretRightOutlined :rotate="processExpanded ? 90 : 0" class="caret-icon" />
     </div>
 
     <!-- 工作过程（进行中顺着流式显示；完成后默认收起，点击状态行展开逐个查看） -->
-    <template v-if="processBlocks.length && (isLoading || processExpanded)">
-      <template v-for="(block, index) in processBlocks" :key="index">
-        <!-- 文本块（过程中的叙述） -->
-        <MarkdownView
-          v-if="block.type === 'text'"
-          class="answer-content narration"
-          :content="block.text"
-        />
+    <CollapseTransition :open="isLoading || processExpanded">
+      <div v-if="processBlocks.length" class="process-list">
+        <template v-for="(block, index) in processBlocks" :key="index">
+          <!-- 文本块（过程中的叙述） -->
+          <MarkdownView
+            v-if="block.type === 'text'"
+            class="answer-content"
+            :content="block.text"
+          />
 
-        <!-- 思考块 -->
-        <div v-else-if="block.type === 'thinking'" class="thinking-block">
-          <div class="block-header" @click="toggleThinking(index)">
-            <CaretRightOutlined :rotate="isThinkingExpanded(index) ? 90 : 0" class="caret-icon" />
-            <BulbOutlined class="block-icon" />
-            <span class="block-title">思考过程</span>
+          <!-- 思考块 -->
+          <div v-else-if="block.type === 'thinking'" class="thinking-block">
+            <div class="block-header" @click="toggleThinking(index)">
+              <CaretRightOutlined :rotate="isThinkingExpanded(index) ? 90 : 0" class="caret-icon" />
+              <BulbOutlined class="block-icon" />
+              <span class="block-title">思考过程</span>
+            </div>
+            <CollapseTransition :open="isThinkingExpanded(index)">
+              <div class="thinking-text">{{ block.text }}</div>
+            </CollapseTransition>
           </div>
-          <div v-show="isThinkingExpanded(index)" class="thinking-text">{{ block.text }}</div>
-        </div>
 
-        <!-- 工具块 -->
-        <div v-else class="tool-card">
-          <div class="tool-row" @click="toggleTool(index)">
-            <span class="tool-status">
-              <ZcodeSpinner v-if="block.status === 'running'" :size="14" />
-              <CheckCircleOutlined v-else class="tool-done" />
-            </span>
-            <ToolOutlined class="tool-icon" />
-            <span class="tool-name">{{ block.tool }}</span>
-            <span v-if="block.args" class="tool-args-preview">{{ argsPreview(block.args) }}</span>
-            <CaretRightOutlined :rotate="expandedTools.has(index) ? 90 : 0" class="caret-icon tool-caret" />
-          </div>
-          <div v-if="expandedTools.has(index)" class="tool-detail">
-            <div v-if="block.args" class="detail-section">
-              <span class="detail-label">参数</span>
-              <pre class="detail-content">{{ prettyJson(block.args) }}</pre>
+          <!-- 工具块 -->
+          <div v-else class="tool-block">
+            <div class="tool-row" @click="toggleTool(index)">
+              <span class="tool-status">
+                <ZcodeSpinner v-if="block.status === 'running'" :size="14" />
+                <span v-else class="tool-dot"></span>
+              </span>
+              <span class="tool-name">{{ toolLabel(block.tool) }}</span>
+              <span v-if="argsPreview(block.args)" class="tool-args-preview">({{ argsPreview(block.args) }})</span>
+              <span v-if="block.status === 'done'" class="tool-done-hint">· 已完成</span>
+              <CaretRightOutlined :rotate="expandedTools.has(index) ? 90 : 0" class="caret-icon tool-caret" />
             </div>
-            <div v-if="block.result" class="detail-section">
-              <span class="detail-label">结果</span>
-              <pre class="detail-content">{{ block.result }}</pre>
-            </div>
+            <CollapseTransition :open="expandedTools.has(index)">
+              <div class="tool-detail">
+                <div v-if="block.args" class="detail-section">
+                  <span class="detail-label">参数</span>
+                  <pre class="detail-content">{{ prettyJson(block.args) }}</pre>
+                </div>
+                <div v-if="block.result" class="detail-section">
+                  <span class="detail-label">结果</span>
+                  <pre class="detail-content">{{ block.result }}</pre>
+                </div>
+              </div>
+            </CollapseTransition>
           </div>
-        </div>
-      </template>
-    </template>
+        </template>
+      </div>
+    </CollapseTransition>
 
     <!-- 最终回答（最后一个过程块之后的文本；无过程块时渲染全部文本） -->
     <MarkdownView
@@ -82,11 +87,11 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import {
   CaretRightOutlined,
   BulbOutlined,
-  ToolOutlined,
   CheckCircleOutlined
 } from '@ant-design/icons-vue'
 import MarkdownView from '@/components/MarkdownView.vue'
 import ZcodeSpinner from '@/components/ZcodeSpinner.vue'
+import CollapseTransition from '@/components/CollapseTransition.vue'
 import type { MessageBlock } from '@/types'
 
 interface Props {
@@ -131,7 +136,25 @@ const finalText = computed(() => {
   return tail.filter(b => b.type === 'text').map(b => b.text).join('')
 })
 
-const toolCount = computed(() => processBlocks.value.filter(b => b.type === 'tool').length)
+// ---------- 工具行的语义化名称 ----------
+const TOOL_LABELS: Record<string, string> = {
+  managePlan: '任务清单',
+  searchWeb: '联网搜索',
+  scrapeWebPage: '阅读网页',
+  generatePDF: '生成 PDF',
+  readFile: '读取文件',
+  writeFile: '写入文件',
+  searchImage: '搜索图片',
+  executeTerminalCommand: '执行命令',
+  downloadResource: '下载资源'
+}
+
+/** 未登记的工具（如自定义 MCP）：camelCase 拆词作展示名，不暴露原始方法名 */
+function toolLabel(tool: string): string {
+  if (TOOL_LABELS[tool]) return TOOL_LABELS[tool]
+  const spaced = tool.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1)
+}
 
 // ---------- 时长 ----------
 function formatDuration(ms: number): string {
@@ -198,9 +221,10 @@ function toggleTool(index: number): void {
   expandedTools.value = next
 }
 
-function argsPreview(args: string): string {
+function argsPreview(args: string | undefined): string {
+  if (!args) return ''
   const oneLine = args.replace(/\s+/g, ' ').trim()
-  return oneLine.length > 80 ? oneLine.slice(0, 80) + '…' : oneLine
+  return oneLine.length > 60 ? oneLine.slice(0, 60) + '…' : oneLine
 }
 
 function prettyJson(args: string): string {
@@ -233,6 +257,7 @@ function prettyJson(args: string): string {
     cursor: pointer;
     padding: 4px 8px;
     margin: 0 -8px;
+    width: fit-content;
     border-radius: 8px;
     color: #4e5969;
     transition: background 0.2s;
@@ -246,15 +271,16 @@ function prettyJson(args: string): string {
       font-size: 14px;
     }
 
-    .done-meta {
-      color: #a9aeb8;
-      font-size: 12px;
-    }
-
     .caret-icon {
-      margin-left: auto;
+      font-size: 11px;
     }
   }
+}
+
+.process-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .block-header {
@@ -262,6 +288,7 @@ function prettyJson(args: string): string {
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
+  margin: 0 -8px;
   border-radius: 6px;
   cursor: pointer;
   user-select: none;
@@ -283,7 +310,7 @@ function prettyJson(args: string): string {
 // 思考块
 .thinking-block {
   .thinking-text {
-    margin: 6px 0 0 24px;
+    margin: 6px 0 0 20px;
     padding: 10px 14px;
     background: #f7f8fa;
     border-left: 3px solid #e5e6eb;
@@ -303,20 +330,20 @@ function prettyJson(args: string): string {
   }
 }
 
-// 工具块
-.tool-card {
-  background: #fff;
-  border: 1px solid #eef0f3;
-  border-radius: 10px;
-  overflow: hidden;
+// 工具块：单行时间线条目（无卡片边框），点开可见参数与结果
+.tool-block {
+  user-select: none;
 
   .tool-row {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 9px 14px;
+    gap: 8px;
+    padding: 3px 8px;
+    margin: 0 -8px;
+    border-radius: 6px;
     cursor: pointer;
     transition: background 0.2s;
+    min-width: 0;
 
     &:hover {
       background: #f7f8fa;
@@ -324,28 +351,24 @@ function prettyJson(args: string): string {
   }
 
   .tool-status {
-    width: 16px;
+    width: 15px;
+    flex-shrink: 0;
     display: flex;
     justify-content: center;
     align-items: center;
   }
 
-  .tool-done {
-    color: #00b42a;
-    font-size: 14px;
-  }
-
-  .tool-icon {
-    font-size: 13px;
-    color: #86909c;
+  .tool-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: $primary-color;
   }
 
   .tool-name {
     flex-shrink: 0;
     font-size: 13px;
-    font-weight: 500;
-    color: #4e5969;
-    font-family: 'Consolas', 'Monaco', monospace;
+    color: $primary-color;
   }
 
   .tool-args-preview {
@@ -359,17 +382,25 @@ function prettyJson(args: string): string {
     font-family: 'Consolas', 'Monaco', monospace;
   }
 
+  .tool-done-hint {
+    flex-shrink: 0;
+    font-size: 12px;
+    color: #c9cdd4;
+  }
+
   .tool-caret {
     flex-shrink: 0;
   }
 
   .tool-detail {
-    border-top: 1px dashed #eef0f3;
-    padding: 10px 14px;
+    margin: 4px 0 0 23px;
+    padding: 10px 12px;
     display: flex;
     flex-direction: column;
     gap: 10px;
-    background: #fafbfc;
+    background: #f7f8fa;
+    border-radius: 8px;
+    user-select: text;
 
     .detail-section {
       display: flex;
@@ -384,7 +415,7 @@ function prettyJson(args: string): string {
       .detail-content {
         margin: 0;
         padding: 8px 10px;
-        background: #f2f3f5;
+        background: #fff;
         border-radius: 6px;
         font-size: 12px;
         line-height: 1.5;
@@ -402,12 +433,6 @@ function prettyJson(args: string): string {
 .answer-content {
   font-size: 14px;
   padding: 0 4px;
-
-  // 过程中的叙述文本弱化，与最终回答区分
-  &.narration {
-    font-size: 13px;
-    color: #6b7280;
-  }
 }
 
 .stream-interrupted {

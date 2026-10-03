@@ -392,9 +392,29 @@ public class MioBot {
     }
 
     private void emitToolArgs(String id, String delta) {
-        displayBlocks.stream()
-                .filter(b -> "tool".equals(b.get("type")) && id != null && id.equals(b.get("id")))
-                .forEach(b -> b.put("args", String.valueOf(b.get("args")) + delta));
+        // 优先按 id 配对；无 id 的兼容端点则落到最后一个 running 工具块
+        Map<String, Object> target = null;
+        if (id != null && !id.isBlank()) {
+            for (int i = displayBlocks.size() - 1; i >= 0; i--) {
+                Map<String, Object> b = displayBlocks.get(i);
+                if ("tool".equals(b.get("type")) && id.equals(b.get("id"))) {
+                    target = b;
+                    break;
+                }
+            }
+        }
+        if (target == null) {
+            for (int i = displayBlocks.size() - 1; i >= 0; i--) {
+                Map<String, Object> b = displayBlocks.get(i);
+                if ("tool".equals(b.get("type")) && "running".equals(b.get("status"))) {
+                    target = b;
+                    break;
+                }
+            }
+        }
+        if (target != null) {
+            target.put("args", String.valueOf(target.get("args")) + delta);
+        }
         emit(SseChunk.toolArgs(id, delta).fields());
     }
 

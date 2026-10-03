@@ -1,6 +1,5 @@
 import { ref, nextTick } from 'vue'
 import { message } from 'ant-design-vue'
-import { getChatHistory } from '@/api/chatMemory'
 import { getBotMessages } from '@/api/botMessages'
 import { useUserStore } from '@/store/user'
 import type { ChatMessage, MessageBlock } from '@/types'
@@ -15,27 +14,12 @@ export function generateMessageId(): string {
   return Math.floor(Math.random() * 100000000).toString()
 }
 
-/** 内容块的文本拼接（复制/标题生成用的 content） */
-function textOfBlocks(blocks: MessageBlock[]): string {
+/** 内容块的文本拼接（复制/标题生成/分享页用的 content） */
+export function textOfBlocks(blocks: MessageBlock[]): string {
   return blocks
     .filter(b => b.type === 'text')
     .map(b => b.text)
     .join('')
-}
-
-/** 合并连续的 assistant 消息（MioBot 多步回复的历史加载形态：中间步骤文本与最终回答连排） */
-export function mergeConsecutiveAssistantMessages(msgs: ChatMessage[]): ChatMessage[] {
-  if (msgs.length === 0) return []
-  const result: ChatMessage[] = []
-  for (const msg of msgs) {
-    const last = result[result.length - 1]
-    if (msg.role === 'assistant' && last && last.role === 'assistant') {
-      last.content += msg.content
-    } else {
-      result.push({ ...msg })
-    }
-  }
-  return result
 }
 
 /**
@@ -89,41 +73,25 @@ export function useChatMessages(options: {
     if (!userStore.isLoggedIn) return
 
     try {
-      // 新持久化接口优先：完整还原工作过程（内容块/任务清单/耗时）；老会话无记录时回退旧文本接口
+      // agent_message 完整持久化：还原工作过程（内容块/任务清单/耗时）。
+      // 新会话刚发送首条消息时与本请求存在落库竞态，空结果静默保留本地消息。
       let loadedMessages: ChatMessage[] | null = null
-      try {
-        const rows = await getBotMessages(conversationId, { skipErrorMessage: true })
-        if (rows && rows.length > 0) {
-          loadedMessages = rows.map((row, index) => {
-            const blocks = (row.blocks ?? undefined) as MessageBlock[] | undefined
-            return {
-              id: `${conversationId}_${row.seq ?? index}`,
-              role: row.role === 'user' ? 'user' : 'assistant',
-              content: textOfBlocks(blocks ?? []),
-              createTime: row.createTime ? new Date(row.createTime) : new Date(),
-              blocks,
-              plan: (row.plan ?? undefined) as ChatMessage['plan'],
-              durationMs: row.durationMs ?? undefined
-            }
-          })
-        }
-      } catch {
-        loadedMessages = null
-      }
-
-      if (!loadedMessages) {
-        // 新会话刚发送首条消息时会与本请求竞态（后端会话记录尚未落库），此时静默失败并保留本地消息
-        const res = await getChatHistory(conversationId, { skipErrorMessage: true })
-        if (!res) {
-          return
-        }
-        loadedMessages = res.map((item: any, index: number) => ({
-          id: `${conversationId}_${index}`,
-          role: item.role,
-          content: item.content,
-          createTime: new Date()
-        }))
-        loadedMessages = mergeConsecutiveAssistantMessages(loadedMessages)
+      const rows = await getBotMessages(conversationId, { skipErrorMessage: true })
+      if (rows && rows.length > 0) {
+        loadedMessages = rows.map((row, index) => {
+          const blocks = (row.blocks ?? undefined) as MessageBlock[] | undefined
+          return {
+            id: `${conversationId}_${row.seq ?? index}`,
+            role: row.role === 'user' ? 'user' : 'assistant',
+            content: textOfBlocks(blocks ?? []),
+            createTime: row.createTime ? new Date(row.createTime) : new Date(),
+            blocks,
+            plan: (row.plan ?? undefined) as ChatMessage['plan'],
+            durationMs: row.durationMs ?? undefined
+          }
+        })
+      } else {
+        return
       }
 
       // 该会话正在流式接收中时不覆盖 Map，仅刷新展示

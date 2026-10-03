@@ -10,12 +10,6 @@ export interface ChatConversation {
   updateTime?: string
 }
 
-export interface MessageVO {
-  role: string
-  content: string
-  messageType: string
-}
-
 export interface PageResponse<T> {
   records: T[]
   total: number
@@ -34,19 +28,8 @@ export function getChatIds(agentId: number | string): Promise<ChatConversation[]
 export function getChatIdsPage(agentId: number | string, current: number = 1, size: number = 10): Promise<PageResponse<ChatConversation>> {
   return request({
     url: `/memory/getChatIdsPage/${agentId}`,
-    method: 'get',
-    params: { current, size }
-  })
-}
-
-export function getChatHistory(
-  conversationId: string,
-  options?: { skipErrorMessage?: boolean }
-): Promise<MessageVO[]> {
-  return request({
-    url: `/memory/getChatHistory/${conversationId}`,
-    method: 'get',
-    skipErrorMessage: options?.skipErrorMessage
+    params: { current, size },
+    method: 'get'
   })
 }
 

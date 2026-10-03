@@ -66,12 +66,13 @@
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { getChatHistory, getConversation } from '@/api/chatMemory'
+import { getConversation } from '@/api/chatMemory'
+import { getBotMessages } from '@/api/botMessages'
 import { getAgentById } from '@/api/agent'
-import type { Agent, ChatMessage } from '@/types'
+import type { Agent, ChatMessage, MessageBlock } from '@/types'
 import { CopyOutlined, CheckOutlined, MessageOutlined } from '@ant-design/icons-vue'
 import MarkdownView from '@/components/MarkdownView.vue'
-import { mergeConsecutiveAssistantMessages } from '@/views/chat/composables/useChatMessages'
+import { textOfBlocks } from '@/views/chat/composables/useChatMessages'
 
 const route = useRoute()
 const router = useRouter()
@@ -123,27 +124,29 @@ async function loadShareData(agentIdParam: string, conversationId: string): Prom
       conversationDate.value = new Date(conversationRes.createTime)
     }
 
-    const res = await getChatHistory(conversationId)
+    const rows = await getBotMessages(conversationId)
 
-    if (!res) {
+    if (!rows || rows.length === 0) {
       router.push('/404')
+      return
     }
 
-    if (res && res.length > 0) {
-      let loadedMessages = res.map((item: any, index: number) => ({
-        id: `${conversationId}_${index}`,
-        role: item.role,
-        content: item.content,
-        createTime: new Date()
-      }))
+    messages.value = rows.map((row, index) => {
+      const blocks = (row.blocks ?? undefined) as MessageBlock[] | undefined
+      return {
+        id: `${conversationId}_${row.seq ?? index}`,
+        role: row.role === 'user' ? 'user' : 'assistant',
+        content: textOfBlocks(blocks ?? []),
+        createTime: row.createTime ? new Date(row.createTime) : new Date(),
+        blocks
+      } as ChatMessage
+    })
 
-      // 合并连续的 assistant 消息（MioBot 的多步回复）
-      loadedMessages = mergeConsecutiveAssistantMessages(loadedMessages)
-
-      messages.value = loadedMessages
-
-      if (!conversationTitle.value && res[0].content) {
-        conversationTitle.value = res[0].content.slice(0, 30) + (res[0].content.length > 30 ? '...' : '')
+    if (!conversationTitle.value) {
+      const firstUser = rows.find(r => r.role === 'user')
+      const firstUserContent = firstUser ? textOfBlocks(firstUser.blocks ?? []) : ''
+      if (firstUserContent) {
+        conversationTitle.value = firstUserContent.slice(0, 30) + (firstUserContent.length > 30 ? '...' : '')
         document.title = `${conversationTitle.value} - MioAI`
       }
     }

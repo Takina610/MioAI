@@ -1,29 +1,37 @@
 <template>
-  <div v-if="plan && plan.length" class="chat-plan-panel">
-    <div class="plan-header">
-      <OrderedListOutlined class="plan-icon" />
-      <span class="plan-title">任务清单</span>
-      <span class="plan-progress">{{ doneCount }}/{{ plan.length }}</span>
-      <button
-        class="plan-toggle"
-        :title="collapsed ? '展开任务清单' : '收起任务清单'"
-        @click="collapsed = !collapsed"
-      >
-        <DownOutlined :class="{ 'is-collapsed': collapsed }" />
-      </button>
-    </div>
-    <div v-show="!collapsed" class="plan-steps">
-      <div v-for="step in plan" :key="step.index" class="plan-step" :class="step.status">
-        <span class="step-mark">
-          <ZcodeSpinner v-if="step.status === 'in_progress'" :size="13" />
-          <CheckOutlined v-else-if="step.status === 'done'" />
-          <CloseOutlined v-else-if="step.status === 'failed'" />
-          <span v-else class="step-dot"></span>
-        </span>
-        <span class="step-text">{{ step.description }}</span>
+  <CollapseTransition v-if="plan && plan.length" :open="!dismissed" class="plan-collapse">
+    <div class="chat-plan-panel">
+      <div class="plan-header">
+        <OrderedListOutlined class="plan-icon" />
+        <span class="plan-title">任务清单</span>
+        <span class="plan-progress">{{ doneCount }}/{{ plan.length }}</span>
+        <button
+          class="plan-toggle"
+          :title="collapsed ? '展开任务清单' : '收起任务清单'"
+          @mousedown.prevent
+          @click="collapsed = !collapsed"
+        >
+          <DownOutlined :class="{ 'is-collapsed': collapsed }" />
+        </button>
+        <button class="plan-close" title="关闭任务清单" @mousedown.prevent @click="dismissed = true">
+          <CloseOutlined />
+        </button>
       </div>
+      <CollapseTransition :open="!collapsed">
+        <div class="plan-steps">
+          <div v-for="step in plan" :key="step.index" class="plan-step" :class="step.status">
+            <span class="step-mark">
+              <ZcodeSpinner v-if="step.status === 'in_progress'" :size="13" />
+              <CheckOutlined v-else-if="step.status === 'done'" />
+              <CloseOutlined v-else-if="step.status === 'failed'" />
+              <span v-else class="step-dot"></span>
+            </span>
+            <span class="step-text">{{ step.description }}</span>
+          </div>
+        </div>
+      </CollapseTransition>
     </div>
-  </div>
+  </CollapseTransition>
 </template>
 
 <script setup lang="ts">
@@ -35,6 +43,7 @@ import {
   DownOutlined
 } from '@ant-design/icons-vue'
 import ZcodeSpinner from '@/components/ZcodeSpinner.vue'
+import CollapseTransition from '@/components/CollapseTransition.vue'
 import type { PlanStep } from '@/types'
 
 const props = defineProps<{
@@ -43,11 +52,13 @@ const props = defineProps<{
 }>()
 
 const collapsed = ref(false)
+const dismissed = ref(false)
 const doneCount = computed(() => props.plan?.filter(s => s.status === 'done').length ?? 0)
 
-// 换了新清单（新一轮任务开始）时自动展开
+// 换了新清单（新一轮任务开始）时自动展开并重新出现
 watch(() => props.plan?.[0]?.description, () => {
   collapsed.value = false
+  dismissed.value = false
 })
 </script>
 
@@ -63,6 +74,7 @@ watch(() => props.plan?.[0]?.description, () => {
     display: flex;
     align-items: center;
     gap: 8px;
+    user-select: none;
 
     .plan-icon {
       color: $primary-color;
@@ -81,8 +93,8 @@ watch(() => props.plan?.[0]?.description, () => {
       font-variant-numeric: tabular-nums;
     }
 
-    .plan-toggle {
-      margin-left: auto;
+    .plan-toggle,
+    .plan-close {
       width: 22px;
       height: 22px;
       display: flex;
@@ -100,14 +112,24 @@ watch(() => props.plan?.[0]?.description, () => {
         background: #f2f3f5;
         color: $primary-color;
       }
+    }
 
-      .is-collapsed {
-        transform: rotate(-90deg);
-      }
+    .plan-toggle {
+      margin-left: auto;
+    }
 
-      svg {
-        transition: transform 0.2s;
+    .plan-close {
+      &:hover {
+        color: #f53f3f;
       }
+    }
+
+    .is-collapsed {
+      transform: rotate(-90deg);
+    }
+
+    .plan-toggle svg {
+      transition: transform 0.2s;
     }
   }
 
@@ -116,6 +138,7 @@ watch(() => props.plan?.[0]?.description, () => {
     flex-direction: column;
     gap: 6px;
     margin-top: 8px;
+    padding-bottom: 2px;
     max-height: 168px;
     overflow-y: auto;
   }

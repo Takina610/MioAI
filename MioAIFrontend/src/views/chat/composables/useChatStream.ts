@@ -3,11 +3,12 @@ import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { chatWithMioBot, chatWithStream } from '@/api/chat'
-import { getChatHistory } from '@/api/chatMemory'
+import { getBotMessages, type BotMessageRow } from '@/api/botMessages'
 import type { ChatMessage, MessageBlock, PlanStep } from '@/types'
 import {
   generateConversationId,
   generateMessageId,
+  textOfBlocks,
   type ChatMessagesApi
 } from './useChatMessages'
 
@@ -15,10 +16,10 @@ import {
 // 后端每 15s 发一次 heartbeat，长工具执行期间也会被持续喂狗。
 const STREAM_WATCHDOG_TIMEOUT_MS = 60000
 
-// 断线自愈：连接被浏览器/代理掐断时后端仍在执行并落库，
-// 静默轮询会话历史把内容补回界面；连续无增长视为已结束。
+// 断线自愈：连接被浏览器/代理掐断时后端仍在执行，
+// 结束时会把完整工作过程一次性落库到 agent_message——静默轮询该表，
+// 本轮 assistant 行出现即代表执行完成，取整行还原界面；超时才提示中断。
 const RECOVERY_POLL_INTERVAL_MS = 4000
-const RECOVERY_STABLE_POLLS = 8
 const RECOVERY_MAX_WAIT_MS = 240000
 
 /**
@@ -204,18 +205,21 @@ export function useChatStream(options: {
           options.updateTitle(content, messagesApi.getChatMessages(chatId)[aiMessageIndex]?.content || '', chatId)
         }
         messagesApi.setLoading(chatId, false)
-      }, (finalText) => {
-        // 自愈完成：以后端落库的完整内容收尾，用户无感
+      }, (row) => {
+        // 自愈完成：以后端落库的完整工作过程收尾，用户无感
         patchMessage(chatId, aiMessageIndex, (msg) => ({
           ...msg,
-          content: finalText,
-          blocks: undefined
+          content: textOfBlocks(row.blocks ?? []),
+          blocks: (row.blocks ?? undefined) as MessageBlock[] | undefined,
+          plan: (row.plan ?? undefined) as ChatMessage['plan'],
+          durationMs: row.durationMs ?? undefined,
+          interrupted: false
         }))
         if (messagesApi.currentChatId.value === chatId) {
           nextTick(() => options.followStream())
         }
         if (isNewChat && userStore.isLoggedIn) {
-          options.updateTitle(content, finalText, chatId)
+          options.updateTitle(content, textOfBlocks(row.blocks ?? []), chatId)
         }
         messagesApi.setLoading(chatId, false)
       })
@@ -319,8 +323,27 @@ export function useChatStream(options: {
       case 'tool_args': {
         const id = parsed.id ? String(parsed.id) : ''
         const delta = String(parsed.delta ?? '')
-        const blocks = (msg.blocks ?? []).map(b =>
-          b.type === 'tool' && b.id && b.id === id ? { ...b, args: (b.args || '') + delta } : b)
+        if (!delta) return msg
+        const blocks = [...(msg.blocks ?? [])]
+        // 优先按 id 配对；无 id 的兼容端点落到最后一个 running 工具块
+        let targetIndex = -1
+        if (id) {
+          for (let i = blocks.length - 1; i >= 0; i--) {
+            const b = blocks[i]
+            if (b.type === 'tool' && b.id === id) { targetIndex = i; break }
+          }
+        }
+        if (targetIndex === -1) {
+          for (let i = blocks.length - 1; i >= 0; i--) {
+            if (blocks[i].type === 'tool' && (blocks[i] as { status?: string }).status === 'running') {
+              targetIndex = i
+              break
+            }
+          }
+        }
+        if (targetIndex === -1) return msg
+        const target = blocks[targetIndex] as Extract<MessageBlock, { type: 'tool' }>
+        blocks[targetIndex] = { ...target, args: (target.args || '') + delta }
         return { ...msg, blocks }
       }
       case 'tool_result': {
@@ -426,20 +449,17 @@ export function useChatStream(options: {
   }
 
   /**
-   * 断线自愈：连接被掐断后后端仍在执行并持续落库，
-   * 轮询会话历史把内容静默补回；连续无增长视为执行结束，超时放弃才提示中断。
+   * 断线自愈：连接被掐断后后端仍在执行，结束时把本轮完整工作过程
+   * （内容块/清单/耗时）一次性写入 agent_message——轮询该表直到本轮
+   * assistant 行出现即取整行还原；超时放弃才提示中断。
    */
   function startRecoveryPolling(
     chatId: string,
     aiMessageIndex: number,
     onGiveUp: () => void,
-    onRecovered: (finalText: string) => void
+    onRecovered: (row: BotMessageRow) => void
   ): void {
     const startTime = Date.now()
-    let stableCount = 0
-    let lastLen = -1
-    let lastText = ''
-    let everGrew = false
 
     const timer = setInterval(async () => {
       // 加载状态被其他路径复位（如用户切走/删除）则停止
@@ -449,38 +469,24 @@ export function useChatStream(options: {
       }
       const elapsed = Date.now() - startTime
       try {
-        const history = await getChatHistory(chatId, { skipErrorMessage: true })
-        const text = assistantTextOfLastTurn(history ?? [])
-        if (text.length > lastLen) {
-          if (text.length > 0) {
-            everGrew = true
-            lastText = text
-            patchMessage(chatId, aiMessageIndex, (msg) => ({
-              ...msg,
-              content: text,
-              blocks: undefined
-            }))
-            if (messagesApi.currentChatId.value === chatId) {
-              nextTick(() => options.followStream())
-            }
-          }
-          lastLen = text.length
-          stableCount = 0
-        } else {
-          stableCount++
+        const rows = await getBotMessages(chatId, { skipErrorMessage: true })
+        // 本轮 = 最后一个 user 行之后的首个 assistant 行（assistant 行只在运行结束时落库）
+        let lastUserSeq = -1
+        for (const row of rows ?? []) {
+          if (row.role === 'user' && (row.seq ?? 0) > lastUserSeq) lastUserSeq = row.seq ?? 0
         }
+        const row = [...(rows ?? [])]
+          .reverse()
+          .find(r => r.role === 'assistant' && (r.seq ?? 0) > lastUserSeq)
 
-        if (stableCount >= RECOVERY_STABLE_POLLS
-            && elapsed > RECOVERY_STABLE_POLLS * RECOVERY_POLL_INTERVAL_MS) {
+        if (row) {
           clearInterval(timer)
-          if (everGrew) onRecovered(lastText)
-          else onGiveUp()
+          onRecovered(row)
           return
         }
         if (elapsed > RECOVERY_MAX_WAIT_MS) {
           clearInterval(timer)
-          if (everGrew) onRecovered(lastText)
-          else onGiveUp()
+          onGiveUp()
         }
       } catch {
         // 轮询失败（后端暂不可达）：继续尝试直到超时
@@ -490,22 +496,6 @@ export function useChatStream(options: {
         }
       }
     }, RECOVERY_POLL_INTERVAL_MS)
-  }
-
-  /** 取历史里最后一个用户消息之后的全部助手文本（与本轮流式消息对应） */
-  function assistantTextOfLastTurn(history: Array<{ role: string; content: string }>): string {
-    let lastUser = -1
-    for (let i = history.length - 1; i >= 0; i--) {
-      if (history[i].role === 'user') {
-        lastUser = i
-        break
-      }
-    }
-    return history
-      .slice(lastUser + 1)
-      .filter(m => m.role === 'assistant')
-      .map(m => m.content)
-      .join('\n\n')
   }
 
   /** 组件卸载前关闭所有流式连接 */
