@@ -126,6 +126,9 @@ public class MioBot {
 
         CompletableFuture.runAsync(() -> {
             long startTime = System.currentTimeMillis();
+            // 已正常收尾标记：okhttp 会在流正常结束后"补抛"曾到点的超时（StreamReset: CANCEL），
+            // 该类滞后异常不应触发异常收尾（避免 done 之后重复落库/误发 error）
+            java.util.concurrent.atomic.AtomicBoolean completedCleanly = new java.util.concurrent.atomic.AtomicBoolean(false);
             ScheduledFuture<?> heartbeat = HEARTBEAT_SCHEDULER.scheduleAtFixedRate(
                     channel::heartbeat, HEARTBEAT_INTERVAL_SECONDS, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
             try {
@@ -152,10 +155,15 @@ public class MioBot {
                 channel.usage((int) result.inputTokens(), (int) result.outputTokens(), durationMs);
                 channel.done();
                 complete(sseEmitter);
+                completedCleanly.set(true);
             } catch (Exception e) {
-                log.error("MioBot 执行异常", e);
-                channel.persistDisplay("assistant", null, System.currentTimeMillis() - startTime);
-                channel.error("执行出错：" + e.getMessage());
+                if (!completedCleanly.get()) {
+                    log.error("MioBot 执行异常, chatId={}", chatId, e);
+                    channel.persistDisplay("assistant", null, System.currentTimeMillis() - startTime);
+                    channel.error("执行出错：" + e.getMessage());
+                } else {
+                    log.warn("忽略收尾后的滞后异常（内容已完整送达）: {}", e.getMessage());
+                }
                 complete(sseEmitter);
             } finally {
                 heartbeat.cancel(false);

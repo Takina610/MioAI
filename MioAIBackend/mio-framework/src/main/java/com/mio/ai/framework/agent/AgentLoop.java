@@ -13,6 +13,7 @@ import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 
+import java.time.Duration;
 import java.util.List;
 
 /**
@@ -28,7 +29,11 @@ public class AgentLoop {
     private static final String STEP_LIMIT_HINT =
             "[system] 已达到单轮最大执行步数。本轮禁止再调用任何工具，请立即基于已获得的信息输出总结与后续建议。";
 
+    /** 单次模型流式调用（含超长生成全程）的 okhttp callTimeout，与 SSE 会话超时对齐 */
+    private static final long DEFAULT_STREAM_TIMEOUT_SECONDS = 600;
+
     private final ToolCallingManager toolCallingManager = ToolCallingManager.builder().build();
+    private final long streamTimeoutSeconds;
 
     /** 循环事件监听：上层负责流式展示、持久化与用量日志 */
     public interface Listener {
@@ -49,6 +54,14 @@ public class AgentLoop {
 
     /** 循环结果：是否自然完成（模型主动收尾）与用量统计 */
     public record Result(boolean finished, int steps, long inputTokens, long outputTokens) {
+    }
+
+    public AgentLoop() {
+        this(DEFAULT_STREAM_TIMEOUT_SECONDS);
+    }
+
+    public AgentLoop(long streamTimeoutSeconds) {
+        this.streamTimeoutSeconds = streamTimeoutSeconds > 0 ? streamTimeoutSeconds : DEFAULT_STREAM_TIMEOUT_SECONDS;
     }
 
     /**
@@ -112,15 +125,20 @@ public class AgentLoop {
      * 以模型默认配置（yml 里的模型名）为基础挂上可用工具。
      * 必须用 OpenAiChatOptions：模型内部会强转 prompt.options，且裸 builder
      * 默认 model=gpt-5-mini，会覆盖 yml 里的 dashscope 模型名导致 404。
+     * <p>timeout 显式设置：经 buildRequestOptions → RequestOptions → okhttp callTimeout 链
+     * 逐级传递（字节码验证），不设则 okhttp 层 60s 默认值会掐断超长流式生成。
      */
     private OpenAiChatOptions buildOptions(ChatModel chatModel, ToolCallback[] tools) {
+        Duration streamTimeout = Duration.ofSeconds(streamTimeoutSeconds);
         if (chatModel.getDefaultOptions() instanceof OpenAiChatOptions defaults) {
-            return defaults.mutate()
-                    .toolCallbacks(List.of(tools))
-                    .build();
+            OpenAiChatOptions.Builder mutated = defaults.mutate()
+                    .toolCallbacks(List.of(tools));
+            mutated.timeout(streamTimeout);
+            return mutated.build();
         }
         return OpenAiChatOptions.builder()
                 .toolCallbacks(List.of(tools))
+                .timeout(streamTimeout)
                 .build();
     }
 }
