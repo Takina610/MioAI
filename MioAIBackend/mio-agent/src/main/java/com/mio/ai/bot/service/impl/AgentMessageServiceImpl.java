@@ -47,6 +47,14 @@ public class AgentMessageServiceImpl implements AgentMessageService {
         agentMessageMapper.delete(wrapper);
     }
 
+    @Override
+    public void deleteAfterSeq(String conversationId, long keepThroughSeq) {
+        QueryWrapper<AgentMessageDO> wrapper = new QueryWrapper<>();
+        wrapper.eq("conversation_id", conversationId)
+                .gt("seq", keepThroughSeq);
+        agentMessageMapper.delete(wrapper);
+    }
+
     private int nextSeq(String conversationId) {
         QueryWrapper<AgentMessageDO> wrapper = new QueryWrapper<>();
         wrapper.eq("conversation_id", conversationId)

@@ -1,11 +1,9 @@
 package com.mio.ai.bot.agent;
 
 import cn.hutool.core.util.StrUtil;
-import com.mio.ai.bot.model.dto.SseChunk;
 import com.mio.ai.bot.model.entity.AgentMessageDO;
 import com.mio.ai.bot.service.AgentMessageService;
 import com.mio.ai.bot.util.SseStreams;
-import com.mio.ai.common.utils.JacksonUtil;
 import com.mio.ai.framework.plan.AgentPlan;
 import com.mio.ai.framework.plan.PlanningTool;
 import com.mio.ai.resource.model.entity.AgentUsageLog;
@@ -29,6 +27,11 @@ import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -38,17 +41,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * MioBot：ZCode 风格的流式 Agent 引擎，MioBot（内置）与用户自定义智能体共用。
- * <p>一次 run = 一个助手回合，由事件块流构成：正文/推理增量实时推送，
- * 工具调用在生成阶段即出现（tool_use）并流式输出参数（tool_args），
+ * <p>一次 run = 一个助手回合：正文/推理增量实时推送，工具调用在生成阶段即出现并流式输出参数，
  * 执行结果以 tool_result 回填；循环"模型 → 工具 → 模型"直到模型不再调用工具。
- * <p>保活：整个运行期间每 {@link #HEARTBEAT_INTERVAL_SECONDS} 秒发送一次 heartbeat 事件，
- * 长工具执行（如 PDF 生成+上传）期间连接不会因无数据被代理/看门狗掐断。
- * <p>规划：复杂任务通过 {@link PlanningTool} 维护任务清单，清单变化以 plan 事件推送前端；
- * 记忆：会话历史经 {@link ChatMemory} 跨请求持久化，运行开始时回读为上下文。
+ * <p>系统提示词 = 身份（自定义或默认）+ Agent 纪律（classpath:prompts/miobot-system.txt）
+ * + 环境信息（当前时间/沙箱可用性，模型无需再查时间）+ 知识库上下文 + 任务清单。
  * <p>由调用方按请求创建实例，不作为 Spring Bean 管理。
  */
 @Slf4j
@@ -60,13 +59,17 @@ public class MioBot {
     /** 单轮任务的最大思考-行动循环步数（防止失控循环） */
     private static final int MAX_STEPS = 30;
 
-    /** SSE 工具结果事件的预览长度：完整结果已进入模型上下文，前端只需可读摘要 */
-    private static final int TOOL_RESULT_PREVIEW_LENGTH = 400;
-
     /** 心跳间隔：小于常见代理/网关的空闲超时，保证长工具执行期间连接存活 */
     private static final long HEARTBEAT_INTERVAL_SECONDS = 15;
 
-    /** 心跳调度器（daemon 单线程，所有 run 共享；任务本身只做一次轻量发送） */
+    /** Agent 循环纪律（外置资源文件，参考 opencode 的 prompt 组织方式） */
+    private static final String AGENT_DISCIPLINE = loadDiscipline();
+
+    /** 达到步数上限前的最后一轮提示：禁止再调工具，强制输出总结 */
+    private static final String STEP_LIMIT_HINT =
+            "[system] 已达到单轮最大执行步数。本轮禁止再调用任何工具，请立即基于已获得的信息输出总结与后续建议。";
+
+    /** 心跳调度器（daemon 单线程，所有 run 共享） */
     private static final java.util.concurrent.ScheduledExecutorService HEARTBEAT_SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(runnable -> {
                 Thread thread = new Thread(runnable, "mio-bot-heartbeat");
@@ -78,32 +81,21 @@ public class MioBot {
     private final ChatMemory chatMemory;
     private final AgentUsageLogService agentUsageLogService;
     private final ToolCallLogService toolCallLogService;
-    private final AgentMessageService agentMessageService;
 
     private final String chatId;
     private final Long userId;
     private final Long agentId;
     private final String baseSystemPrompt;
+    private final boolean sandboxAvailable;
     private final ToolCallback[] tools;
 
     private final AgentPlan plan = new AgentPlan();
     private final ToolCallingManager toolCallingManager = ToolCallingManager.builder().build();
-
-    // 展示持久化：与本轮 SSE 事件同构的内容块（文本/思考/工具）+ 最终清单快照 + 耗时
-    private final List<Map<String, Object>> displayBlocks = new ArrayList<>();
+    private final BotEventChannel channel;
 
     /** 任务结束（含异常）回调：控制器借此解除会话占用（防重复执行闸门） */
     private volatile Runnable onFinish;
-    private List<Map<String, Object>> displayPlan;
 
-    // 当前运行的 SSE 连接与事件序号
-    private SseEmitter emitter;
-    private final AtomicInteger seq = new AtomicInteger();
-
-    /**
-     * @param baseSystemPrompt 自定义智能体的身份提示词（空则用 MioBot 默认身份）；
-     *                         Agent 循环纪律（工作方式/结束条件）始终追加，保证每个智能体都有完整 Agent 能力
-     */
     public MioBot(ChatModel chatModel,
                   ChatMemory chatMemory,
                   ToolCallback[] builtInTools,
@@ -114,28 +106,32 @@ public class MioBot {
                   String chatId,
                   Long userId,
                   Long agentId,
-                  String baseSystemPrompt) {
+                  String baseSystemPrompt,
+                  boolean sandboxAvailable) {
         this.chatModel = chatModel;
         this.chatMemory = chatMemory;
         this.agentUsageLogService = agentUsageLogService;
         this.toolCallLogService = toolCallLogService;
-        this.agentMessageService = agentMessageService;
         this.chatId = chatId;
         this.userId = userId;
         this.agentId = agentId != null ? agentId : AGENT_ID;
         this.baseSystemPrompt = baseSystemPrompt;
-        this.tools = concatTools(builtInTools, mcpTools, ToolCallbacks.from(new PlanningTool(plan))[0]);
+        this.sandboxAvailable = sandboxAvailable;
+        this.tools = concatTools(builtInTools, mcpTools,
+                ToolCallbacks.from(new PlanningTool(plan))[0]);
+        this.channel = new BotEventChannel(agentMessageService, chatId, userId, agentId);
     }
 
     /**
      * 执行一轮对话任务，流式返回全过程事件。
      *
-     * @param userPrompt       用户输入
-     * @param knowledgeContext 知识库检索命中的上下文（可为空），注入系统提示词
+     * @param userPrompt        用户输入
+     * @param knowledgeContext  知识库检索命中的上下文（可为空），注入系统提示词
+     * @param persistUserMessage 为 false 时不重复落库用户消息（重新生成场景：截断后重发）
      */
-    public SseEmitter run(String userPrompt, String knowledgeContext) {
+    public SseEmitter run(String userPrompt, String knowledgeContext, boolean persistUserMessage) {
         SseEmitter sseEmitter = new SseEmitter(SseStreams.CHAT_TIMEOUT_MS);
-        this.emitter = sseEmitter;
+        channel.bind(sseEmitter);
         plan.setChangeListener(this::emitPlan);
 
         CompletableFuture.runAsync(() -> {
@@ -143,24 +139,29 @@ public class MioBot {
             int totalInputTokens = 0;
             int totalOutputTokens = 0;
             ScheduledFuture<?> heartbeat = HEARTBEAT_SCHEDULER.scheduleAtFixedRate(
-                    this::emitHeartbeat, HEARTBEAT_INTERVAL_SECONDS, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
+                    channel::heartbeat, HEARTBEAT_INTERVAL_SECONDS, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
             try {
                 List<Message> messages = new ArrayList<>(loadHistory());
                 UserMessage userMessage = new UserMessage(userPrompt);
                 messages.add(userMessage);
-                persist(userMessage);
-                persistDisplayMessage("user", userPrompt, null);
+                if (persistUserMessage) {
+                    persist(userMessage);
+                    channel.persistDisplay("user", userPrompt, null);
+                }
 
                 String systemPrompt = buildSystemPrompt(knowledgeContext);
                 boolean finished = false;
 
                 for (int step = 1; step <= MAX_STEPS && !finished; step++) {
+                    if (step == MAX_STEPS) {
+                        messages.add(new UserMessage(STEP_LIMIT_HINT));
+                    }
                     Prompt prompt = new Prompt(messages, buildChatOptions())
                             .augmentSystemMessage(systemPrompt + planSection());
 
                     StreamTurnCollector collector = new StreamTurnCollector(
-                            this::emitThinkingDelta, this::emitAnswerDelta,
-                            this::emitToolUse, this::emitToolArgs);
+                            channel::thinkingDelta, channel::answerDelta,
+                            channel::toolUse, channel::toolArgs);
                     chatModel.stream(prompt).doOnNext(collector::accept).blockLast();
 
                     ChatResponse response = collector.build();
@@ -191,26 +192,26 @@ public class MioBot {
                             (ToolResponseMessage) toolResult.conversationHistory()
                                     .get(toolResult.conversationHistory().size() - 1);
 
-                    // 上下文回填：用户消息 + 助手工具调用 + 工具结果（剔除 augment 注入的系统消息，避免逐轮堆积）
+                    // 上下文回填：助手工具调用 + 工具结果（剔除 augment 注入的系统消息，避免逐轮堆积）
                     messages.add(assistant);
                     messages.add(toolResponseMessage);
-                    emitToolResults(toolResponseMessage);
+                    channel.toolResults(toolResponseMessage);
                 }
 
                 if (!finished) {
-                    emitAnswerDelta("\n\n（已达到单轮任务的最大执行步数，以上是目前的执行结果，可以继续提问让我接着完成。）");
+                    channel.answerDelta("\n\n（已达到单轮任务的最大执行步数，以上是目前的执行结果，可以继续提问让我接着完成。）");
                 }
                 finalizePlan();
                 long durationMs = System.currentTimeMillis() - startTime;
-                persistDisplayMessage("assistant", null, durationMs);
-                emit(SseChunk.usage(totalInputTokens, totalOutputTokens, durationMs).fields());
-                emit(SseChunk.done().fields());
-                complete();
+                channel.persistDisplay("assistant", null, durationMs);
+                channel.usage(totalInputTokens, totalOutputTokens, durationMs);
+                channel.done();
+                complete(sseEmitter);
             } catch (Exception e) {
                 log.error("MioBot 执行异常", e);
-                persistDisplayMessage("assistant", null, System.currentTimeMillis() - startTime);
-                emit(SseChunk.content("error", "执行出错：" + e.getMessage()).fields());
-                complete();
+                channel.persistDisplay("assistant", null, System.currentTimeMillis() - startTime);
+                channel.error("执行出错：" + e.getMessage());
+                complete(sseEmitter);
             } finally {
                 heartbeat.cancel(false);
                 if (onFinish != null) {
@@ -228,7 +229,7 @@ public class MioBot {
     }
 
     /**
-     * 回读会话历史作为本轮上下文（修复旧实现跨请求失忆的问题）；失败时降级为空历史
+     * 回读会话历史作为本轮上下文（跨请求不失忆）；失败时降级为空历史
      */
     private List<Message> loadHistory() {
         try {
@@ -245,25 +246,26 @@ public class MioBot {
         if (StrUtil.isNotBlank(baseSystemPrompt)) {
             sb.append(baseSystemPrompt.strip());
         } else {
-            sb.append("""
-                    你是 MioBot，MioAI 的智能助手，具备完整的 Agent 能力：自主规划任务、调用工具、根据结果迭代执行，直到真正完成用户的需求。\
-                    """);
+            sb.append("你是 MioBot，MioAI 的智能助手，具备完整的 Agent 能力：自主规划任务、调用工具、根据结果迭代执行，直到真正完成用户的需求。");
         }
-        sb.append("""
-
-                # 工作方式
-                - 你运行在"思考 → 行动 → 观察"的循环里：每轮可先简述你要做什么，然后调用工具，拿到结果后决定下一步。
-                - 涉及多步骤的任务，开始时先调用 managePlan 创建任务清单，随进度更新每个步骤的状态。
-                - 工具调用失败时分析原因重试或换方案，不要静默放弃，也不要编造结果。
-                - 需要事实性、时效性信息（新闻、价格、文档细节等）时主动使用搜索/抓取工具，不要凭记忆猜测。
-                - 最终回答用 Markdown 排版：重点加粗、列表分点、代码放代码块、对比数据用表格。
-                - 使用中文回答，语气自然干练，不写套话。
-
-                # 结束条件
-                当所有子任务完成、任务清单全部标记 done 后，直接输出面向用户的最终回答（不再调用任何工具）。\
-                """);
+        sb.append("\n\n").append(AGENT_DISCIPLINE);
+        sb.append("\n\n").append(environmentSection());
         if (StrUtil.isNotBlank(knowledgeContext)) {
             sb.append("\n\n").append(knowledgeContext);
+        }
+        return sb.toString();
+    }
+
+    /** 环境信息块：当前时间直接注入，模型无需再调用工具查询 */
+    private String environmentSection() {
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Shanghai"));
+        String[] weekDays = {"一", "二", "三", "四", "五", "六", "日"};
+        String time = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+                + " 星期" + weekDays[now.getDayOfWeek().getValue() - 1];
+        StringBuilder sb = new StringBuilder("# 环境信息\n- 当前时间：").append(time).append("（北京时间）");
+        if (sandboxAvailable) {
+            sb.append("\n- 沙箱：可用 runInSandbox / writeSandboxFile 在 Linux 沙箱服务器上执行命令与写文件，")
+              .append("适合运行代码、处理数据、验证想法；工作目录内文件互相独立于本服务。");
         }
         return sb.toString();
     }
@@ -357,15 +359,7 @@ public class MioBot {
         }
     }
 
-    private void emitToolResults(ToolResponseMessage toolResponseMessage) {
-        for (ToolResponseMessage.ToolResponse response : toolResponseMessage.getResponses()) {
-            String preview = truncate(response.responseData(), TOOL_RESULT_PREVIEW_LENGTH);
-            completeDisplayTool(response.id(), response.name(), preview);
-            emit(SseChunk.toolResult(response.id(), response.name(), preview).fields());
-        }
-    }
-
-    /** 任务清单变化（PlanningTool 执行中触发）：推送结构化步骤列表，前端渲染为计划面板 */
+    /** 任务清单变化：把结构化步骤推给前端渲染为计划面板 */
     private void emitPlan() {
         List<Map<String, Object>> steps = new ArrayList<>();
         for (AgentPlan.Step step : plan.snapshot()) {
@@ -375,13 +369,12 @@ public class MioBot {
             item.put("status", step.status().name().toLowerCase());
             steps.add(item);
         }
-        displayPlan = steps;
-        emit(SseChunk.plan(steps).fields());
+        channel.plan(steps);
     }
 
     /**
-     * 收尾同步：模型给出最终回答却没把清单余下步骤标记完成时，
-     * 统一补成已完成（每次 updateStatus 触发 emitPlan），保证前端清单与结论一致。
+     * 收尾同步：模型给出最终回答却没把清单余下步骤标记完成时统一补成已完成，
+     * 保证前端清单与结论一致。
      */
     private void finalizePlan() {
         for (AgentPlan.Step step : plan.snapshot()) {
@@ -391,137 +384,7 @@ public class MioBot {
         }
     }
 
-    private void emitThinkingDelta(String delta) {
-        appendDisplayText("thinking", delta);
-        emit(SseChunk.delta("thinking", delta).fields());
-    }
-
-    private void emitAnswerDelta(String delta) {
-        appendDisplayText("text", delta);
-        emit(SseChunk.delta("answer", delta).fields());
-    }
-
-    private void emitToolUse(String id, String tool) {
-        Map<String, Object> block = new LinkedHashMap<>();
-        block.put("type", "tool");
-        if (id != null && !id.isBlank()) {
-            block.put("id", id);
-        }
-        block.put("tool", tool);
-        block.put("args", "");
-        block.put("status", "running");
-        displayBlocks.add(block);
-        emit(SseChunk.toolUse(id, tool).fields());
-    }
-
-    private void emitToolArgs(String id, String delta) {
-        // 优先按 id 配对；无 id 的兼容端点则落到最后一个 running 工具块
-        Map<String, Object> target = null;
-        if (id != null && !id.isBlank()) {
-            for (int i = displayBlocks.size() - 1; i >= 0; i--) {
-                Map<String, Object> b = displayBlocks.get(i);
-                if ("tool".equals(b.get("type")) && id.equals(b.get("id"))) {
-                    target = b;
-                    break;
-                }
-            }
-        }
-        if (target == null) {
-            for (int i = displayBlocks.size() - 1; i >= 0; i--) {
-                Map<String, Object> b = displayBlocks.get(i);
-                if ("tool".equals(b.get("type")) && "running".equals(b.get("status"))) {
-                    target = b;
-                    break;
-                }
-            }
-        }
-        if (target != null) {
-            target.put("args", String.valueOf(target.get("args")) + delta);
-        }
-        emit(SseChunk.toolArgs(id, delta).fields());
-    }
-
-    private void completeDisplayTool(String id, String tool, String result) {
-        for (int i = displayBlocks.size() - 1; i >= 0; i--) {
-            Map<String, Object> b = displayBlocks.get(i);
-            if (!"tool".equals(b.get("type")) || !"running".equals(b.get("status"))) {
-                continue;
-            }
-            boolean idMatch = id != null && id.equals(b.get("id"));
-            boolean nameMatch = tool != null && tool.equals(b.get("tool"));
-            if (idMatch || nameMatch) {
-                b.put("status", "done");
-                b.put("result", result);
-                return;
-            }
-        }
-        // 没有配对的调用块（异常兜底）：补一个已完成块保证结果不丢
-        Map<String, Object> block = new LinkedHashMap<>();
-        block.put("type", "tool");
-        block.put("tool", tool);
-        block.put("result", result);
-        block.put("status", "done");
-        displayBlocks.add(block);
-    }
-
-    /** 展示块文本增量：合并同类末块（与前端渲染逻辑同构） */
-    private void appendDisplayText(String type, String delta) {
-        if (!displayBlocks.isEmpty()) {
-            Map<String, Object> last = displayBlocks.get(displayBlocks.size() - 1);
-            if (type.equals(last.get("type"))) {
-                last.put("text", String.valueOf(last.get("text")) + delta);
-                return;
-            }
-        }
-        Map<String, Object> block = new LinkedHashMap<>();
-        block.put("type", type);
-        block.put("text", delta);
-        displayBlocks.add(block);
-    }
-
-    /** 展示持久化：完整 blocks/plan/duration 落 agent_message（游客不落库） */
-    private void persistDisplayMessage(String role, String text, Long durationMs) {
-        if (agentMessageService == null || userId == null) {
-            return;
-        }
-        try {
-            AgentMessageDO row = new AgentMessageDO();
-            row.setConversationId(chatId);
-            row.setAgentId(agentId);
-            row.setUserId(userId);
-            row.setRole(role);
-            if (text != null) {
-                List<Map<String, Object>> blocks = new ArrayList<>();
-                Map<String, Object> block = new LinkedHashMap<>();
-                block.put("type", "text");
-                block.put("text", text);
-                blocks.add(block);
-                row.setBlocks(JacksonUtil.writeValueAsString(blocks));
-            } else {
-                row.setBlocks(JacksonUtil.writeValueAsString(displayBlocks));
-                if (displayPlan != null && !displayPlan.isEmpty()) {
-                    row.setPlan(JacksonUtil.writeValueAsString(displayPlan));
-                }
-                row.setDurationMs(durationMs != null ? durationMs.intValue() : null);
-            }
-            agentMessageService.append(row);
-        } catch (Exception e) {
-            log.warn("展示消息落库失败: {}", e.getMessage());
-        }
-    }
-
-    private void emitHeartbeat() {
-        emit(SseChunk.heartbeat().fields());
-    }
-
-    /** 发送一条信封事件（连接断开时静默跳过，不影响执行与落库） */
-    private void emit(Map<String, Object> fields) {
-        if (emitter != null) {
-            SseStreams.sendTyped(emitter, fields, seq.incrementAndGet());
-        }
-    }
-
-    private void complete() {
+    private void complete(SseEmitter emitter) {
         try {
             emitter.complete();
         } catch (IllegalStateException ignored) {
@@ -541,10 +404,20 @@ public class MioBot {
         }
     }
 
-    private String truncate(String text, int max) {
-        if (text == null) {
-            return "";
+    private static String loadDiscipline() {
+        try (InputStream in = MioBot.class.getResourceAsStream("/prompts/miobot-system.txt")) {
+            if (in != null) {
+                return new String(in.readAllBytes(), StandardCharsets.UTF_8).strip();
+            }
+        } catch (Exception e) {
+            log.warn("加载 Agent 纪律提示词失败，使用内置兜底", e);
         }
-        return text.length() <= max ? text : text.substring(0, max) + "…";
+        return """
+                # 工作方式
+                - 你运行在"思考 → 行动 → 观察"的循环里：每轮可先简述你要做什么，然后调用工具，拿到结果后决定下一步。
+                - 工具调用失败时分析原因重试或换方案，不要静默放弃，也不要编造结果。
+                - 需要事实性、时效性信息（新闻、价格、文档细节等）时主动使用搜索/抓取工具，不要凭记忆猜测。
+                - 最终回答用 Markdown 排版，使用中文，语气自然干练。
+                - 当所有子任务完成、能给出完整回答时，直接输出最终回答（不再调用任何工具）。""";
     }
 }

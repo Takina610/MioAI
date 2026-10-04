@@ -38,15 +38,31 @@ export const connectSSE = (
 
 /**
  * 与智能体对话（统一走 MioBot 流式 Agent 引擎，SSE 信封返回全过程）：
- * MioBot（agentId=1，系统内置）与用户自定义智能体共用 /bot/chat
+ * MioBot（agentId=1，系统内置）与用户自定义智能体共用 /bot/chat。
+ * skipUserPersist：重新生成场景，用户消息已在历史中，后端不再重复落库
  */
 export const chatWithMioBot = (
   content: string,
   chatId: string,
   agentId: number,
-  token: string
+  token: string,
+  skipUserPersist: boolean = false
 ): EventSource => {
-  return connectSSE('/bot/chat', { content, chatId, agentId, token })
+  const params: ConnectSSEParams = { content, chatId, agentId, token }
+  if (skipUserPersist) {
+    params.skipUserPersist = true
+  }
+  return connectSSE('/bot/chat', params)
+}
+
+/** 截断会话历史（编辑消息/重新生成共用）：保留 seq <= keepThroughSeq 的消息并重建记忆 */
+export const truncateConversation = async (
+  conversationId: string,
+  keepThroughSeq: number
+): Promise<{ keptMessages: number; userContent?: string }> => {
+  return request.post(`/bot/truncate/${conversationId}`, null, {
+    params: { keepThroughSeq }
+  })
 }
 
 export const generateTitle = async (

@@ -18,4 +18,7 @@ public interface AgentMessageService {
 
     /** 删除会话的全部消息（会话删除时级联） */
     void deleteByConversation(String conversationId);
+
+    /** 删除 seq 大于 keepThroughSeq 的消息（编辑消息/重新生成的历史截断） */
+    void deleteAfterSeq(String conversationId, long keepThroughSeq);
 }

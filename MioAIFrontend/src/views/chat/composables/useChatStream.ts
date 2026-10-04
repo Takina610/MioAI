@@ -71,10 +71,17 @@ export function useChatStream(options: {
     }
   }
 
-  function sendMessage(content: string): void {
-    if (!content || messagesApi.isLoading.value) return
+  /** 发送选项：重新生成场景复用已在列表里的用户消息（本地截断后调用），后端也不重复落库 */
+  interface SendOptions {
+    skipUserMessage?: boolean
+    skipUserPersist?: boolean
+  }
 
-    const isNewChat = !messagesApi.currentChatId.value
+  function sendMessage(content: string, opts?: SendOptions): void {
+    if (!content || messagesApi.isLoading.value) return
+    const skipUserMessage = opts?.skipUserMessage ?? false
+
+    const isNewChat = !messagesApi.currentChatId.value && !skipUserMessage
     if (isNewChat) {
       messagesApi.currentChatId.value = userStore.isLoggedIn
         ? generateConversationId()
@@ -83,17 +90,18 @@ export function useChatStream(options: {
     const chatId = messagesApi.currentChatId.value
 
     const existingMessages = messagesApi.getChatMessages(chatId)
-    const userMessage: ChatMessage = {
-      id: generateMessageId(),
-      role: 'user',
-      content,
-      createTime: new Date()
-    }
-    const chatMessages = [...existingMessages, userMessage]
+    const chatMessages = skipUserMessage
+      ? [...existingMessages]
+      : [...existingMessages, {
+          id: generateMessageId(),
+          role: 'user' as const,
+          content,
+          createTime: new Date()
+        }]
     const aiMessageIndex = chatMessages.length
     messagesApi.setChatMessages(chatId, chatMessages)
 
-    if (userStore.isLoggedIn) {
+    if (!skipUserMessage && userStore.isLoggedIn) {
       options.ensureSession(chatId)
     }
     if (isNewChat && userStore.isLoggedIn) {
@@ -168,7 +176,7 @@ export function useChatStream(options: {
     }
     currentEventSourceChatId = chatId
 
-    eventSource = chatWithMioBot(content, chatId, options.agentId.value, token)
+    eventSource = chatWithMioBot(content, chatId, options.agentId.value, token, opts?.skipUserPersist ?? false)
     const es = eventSource
 
     // 流式异常处理：连接被掐断时后端通常仍在执行——启动静默自愈而不是报错

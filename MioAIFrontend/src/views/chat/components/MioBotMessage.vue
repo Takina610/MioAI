@@ -111,7 +111,10 @@ import {
   CodeOutlined,
   DownloadOutlined,
   ToolOutlined,
-  GlobalOutlined
+  GlobalOutlined,
+  PlayCircleOutlined,
+  CalculatorOutlined,
+  FileAddOutlined
 } from '@ant-design/icons-vue'
 import MarkdownView from '@/components/MarkdownView.vue'
 import ZcodeSpinner from '@/components/ZcodeSpinner.vue'
@@ -204,7 +207,10 @@ const TOOL_LABELS: Record<string, string> = {
   searchImage: '搜索图片',
   executeTerminalCommand: '执行命令',
   downloadResource: '下载资源',
-  getCurrentDateTime: '查询时间'
+  searchBangumi: '查询作品资料',
+  calculate: '精确计算',
+  runInSandbox: '沙箱执行',
+  writeSandboxFile: '沙箱写文件'
 }
 
 /** 未登记的工具（如自定义 MCP）：camelCase 拆词作展示名，不暴露原始方法名 */
@@ -223,7 +229,11 @@ const TOOL_ICONS: Record<string, Component> = markRaw({
   writeFile: EditOutlined,
   searchImage: PictureOutlined,
   executeTerminalCommand: CodeOutlined,
-  downloadResource: DownloadOutlined
+  downloadResource: DownloadOutlined,
+  searchBangumi: PlayCircleOutlined,
+  calculate: CalculatorOutlined,
+  runInSandbox: CodeOutlined,
+  writeSandboxFile: FileAddOutlined
 })
 
 function toolIcon(tool: string): Component {

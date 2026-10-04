@@ -70,6 +70,12 @@
             <artifactId>jsoup</artifactId>
             <version>1.19.1</version>
         </dependency>
+        <!-- 工具：SSH 连接 Linux 沙箱（mwiede 维护的 jsch 后继，支持现代密钥格式） -->
+        <dependency>
+            <groupId>com.github.mwiede</groupId>
+            <artifactId>jsch</artifactId>
+            <version>2.28.7</version>
+        </dependency>
         <dependency>
             <groupId>com.itextpdf</groupId>
             <artifactId>itext-core</artifactId>

@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.mio.ai.bot.agent.MioBot;
 import com.mio.ai.bot.model.dto.SseChunk;
 import com.mio.ai.bot.model.entity.AgentMessageDO;
+import com.mio.ai.bot.model.entity.ChatConversationDO;
 import com.mio.ai.bot.model.vo.ChatVO;
 import com.mio.ai.bot.repository.ChatHistoryRepository;
 import com.mio.ai.bot.service.AgentMessageService;
@@ -14,6 +15,7 @@ import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.utils.JacksonUtil;
 import com.mio.ai.common.utils.ResultUtils;
+import com.mio.ai.framework.tools.sandbox.SandboxProperties;
 import com.mio.ai.resource.model.entity.Agent;
 import com.mio.ai.resource.service.log.AgentUsageLogService;
 import com.mio.ai.resource.service.log.ToolCallLogService;
@@ -23,6 +25,9 @@ import jakarta.annotation.Resource;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +35,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -87,6 +93,9 @@ public class MioBotController {
     @Autowired
     private AgentMessageService agentMessageService;
 
+    @Autowired
+    private SandboxProperties sandboxProperties;
+
     /** 正在执行中的会话：断线自动重连/双击等重复请求直接拒绝，防止同一轮任务被重复执行 */
     private static final java.util.Set<String> ACTIVE_CHATS = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
@@ -94,7 +103,8 @@ public class MioBotController {
     public SseEmitter chat(@RequestParam @NotBlank @Size(max = 64) String chatId,
                            @RequestParam @NotBlank @Size(max = 20000) String content,
                            @RequestParam(required = false) Long agentId,
-                           @RequestParam(required = false) String token) {
+                           @RequestParam(required = false) String token,
+                           @RequestParam(defaultValue = "false") boolean skipUserPersist) {
         Long userId = StrUtil.isBlank(token) ? null : redisComponent.getUserId(token);
         long resolvedAgentId = agentId != null ? agentId : MioBot.AGENT_ID;
 
@@ -109,8 +119,8 @@ public class MioBotController {
             customSystemPrompt = agent.getSystemPrompt();
         }
 
-        // 会话记录：仅登录用户落库（游客会话不产生列表项）
-        if (userId != null) {
+        // 会话记录：仅登录用户落库（游客会话不产生列表项）；重新生成时用户消息已在历史里，跳过
+        if (userId != null && !skipUserPersist) {
             ChatVO chatVO = new ChatVO();
             chatVO.setChatId(chatId);
             chatVO.setMessage(content);
@@ -120,6 +130,7 @@ public class MioBotController {
         }
 
         if (containsSensitiveWord(content)) {
+            ACTIVE_CHATS.remove(chatId);
             return emitSingleReply(SENSITIVE_REPLY);
         }
 
@@ -128,10 +139,81 @@ public class MioBotController {
 
         MioBot mioBot = new MioBot(chatModel, jdbcChatMemory, commonTools,
                 List.of(mcpTools), agentUsageLogService, toolCallLogService, agentMessageService,
-                chatId, userId, resolvedAgentId, customSystemPrompt);
+                chatId, userId, resolvedAgentId, customSystemPrompt, sandboxProperties.isEnabled());
         // 任务真正结束（含异常）时解除会话占用
         mioBot.setOnFinish(() -> ACTIVE_CHATS.remove(chatId));
-        return mioBot.run(content, knowledgeContext);
+        return mioBot.run(content, knowledgeContext, !skipUserPersist);
+    }
+
+    /**
+     * 截断会话历史（编辑消息/重新生成共用）：保留 seq &le; keepThroughSeq 的展示消息，
+     * 删除其后的行，并按剩余行重建 chat_memory（清除旧记忆后重放）。
+     * 返回保留部分最后一条用户消息内容，供重新生成场景原样重发。
+     */
+    @PostMapping("/bot/truncate/{conversationId}")
+    public BaseResponse<Map<String, Object>> truncate(@PathVariable @NotBlank String conversationId,
+                                                      @RequestParam long keepThroughSeq,
+                                                      jakarta.servlet.http.HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        ChatConversationDO conversation = chatHistoryRepository.getChatByConversationId(conversationId);
+        if (conversation == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "会话不存在");
+        }
+        if (conversation.getUserId() == null || !conversation.getUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限访问该会话");
+        }
+
+        agentMessageService.deleteAfterSeq(conversationId, keepThroughSeq);
+        List<Message> replayed = rebuildMemory(conversationId);
+
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("keptMessages", replayed.size());
+        for (int i = replayed.size() - 1; i >= 0; i--) {
+            if (replayed.get(i) instanceof UserMessage user) {
+                result.put("userContent", user.getText());
+                break;
+            }
+        }
+        return ResultUtils.success(result);
+    }
+
+    /** 清空旧记忆后按展示消息重放（user 原文 / assistant 文本块拼接），保证记忆与截断后的展示一致 */
+    private List<Message> rebuildMemory(String conversationId) {
+        List<Message> replayed = new ArrayList<>();
+        for (AgentMessageDO row : agentMessageService.listByConversation(conversationId)) {
+            if ("user".equals(row.getRole())) {
+                replayed.add(new UserMessage(blockText(row.getBlocks())));
+            } else if ("assistant".equals(row.getRole())) {
+                replayed.add(new AssistantMessage(blockText(row.getBlocks())));
+            }
+        }
+        jdbcChatMemory.clear(conversationId);
+        for (Message message : replayed) {
+            jdbcChatMemory.add(conversationId, message);
+        }
+        return replayed;
+    }
+
+    /** 从展示 blocks JSON 提取纯文本（text 块拼接；旧数据无 blocks 时回退空串） */
+    private String blockText(String blocksJson) {
+        if (blocksJson == null || blocksJson.isBlank()) {
+            return "";
+        }
+        try {
+            List<Map<String, Object>> blocks = JacksonUtil.readValue(blocksJson, List.class);
+            StringBuilder sb = new StringBuilder();
+            for (Map<String, Object> block : blocks) {
+                if ("text".equals(block.get("type")) && block.get("text") != null) {
+                    if (!sb.isEmpty()) {
+                        sb.append("\n\n");
+                    }
+                    sb.append(String.valueOf(block.get("text")));
+                }
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     /**

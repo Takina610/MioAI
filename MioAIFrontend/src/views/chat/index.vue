@@ -25,7 +25,14 @@
       </div>
 
       <div class="chat-container">
-        <ChatMessageList ref="messageListRef" :messages="messages" :is-loading="isLoading" />
+        <ChatMessageList
+          ref="messageListRef"
+          :messages="messages"
+          :is-loading="isLoading"
+          :can-modify="userStore.isLoggedIn"
+          @edit="handleEditMessage"
+          @regenerate="handleRegenerate"
+        />
         <ChatInput
           v-model="inputMessage"
           :agent-name="agentInfo?.name"
@@ -75,6 +82,8 @@ import ChatPlanPanel from './components/ChatPlanPanel.vue'
 import { useChatSessions } from './composables/useChatSessions'
 import { useChatMessages } from './composables/useChatMessages'
 import { useChatStream } from './composables/useChatStream'
+import { truncateConversation } from '@/api/chat'
+import { getBotMessages } from '@/api/botMessages'
 
 const route = useRoute()
 const router = useRouter()
@@ -258,6 +267,73 @@ function handleSend(): void {
 
 function handleDeleteConfirm(): void {
   confirmDelete((chatId) => chatId === currentChatId.value)
+}
+
+/** 消息操作的前置校验：登录 + 会话已建立 + 当前无流式任务 */
+function canModifyMessages(): boolean {
+  return userStore.isLoggedIn && !!currentChatId.value && !isLoading.value
+}
+
+/** 取服务端消息行（截断以 seq 精确定位，本地列表不维护 seq） */
+async function fetchRows(chatId: string): Promise<Array<{ role: string; seq: number }>> {
+  const rows = await getBotMessages(chatId, { skipErrorMessage: true })
+  return (rows ?? []).map(r => ({ role: r.role, seq: r.seq ?? 0 }))
+}
+
+/** 重新生成：截断到最后一条用户消息（本地+服务端），原文重发且不重复落库 */
+async function handleRegenerate(): Promise<void> {
+  if (!canModifyMessages()) return
+  const chatId = currentChatId.value
+  const msgs = messagesApi.getChatMessages(chatId)
+  let lastUserIndex = -1
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].role === 'user') { lastUserIndex = i; break }
+  }
+  if (lastUserIndex < 0) return
+  const content = msgs[lastUserIndex].content
+
+  try {
+    const rows = await fetchRows(chatId)
+    const lastUserRow = [...rows].reverse().find(r => r.role === 'user')
+    if (!lastUserRow) {
+      message.error('找不到原始提问')
+      return
+    }
+    await truncateConversation(chatId, lastUserRow.seq)
+  } catch (e) {
+    console.error(e)
+    return
+  }
+
+  messagesApi.setChatMessages(chatId, msgs.slice(0, lastUserIndex + 1))
+  sendMessage(content, { skipUserMessage: true, skipUserPersist: true })
+}
+
+/** 编辑用户消息：截断该消息及其后历史（本地+服务端），以新内容重新发送 */
+async function handleEditMessage(index: number, newContent: string): Promise<void> {
+  if (!canModifyMessages()) return
+  const chatId = currentChatId.value
+  const msgs = messagesApi.getChatMessages(chatId)
+  if (!msgs[index] || msgs[index].role !== 'user') return
+
+  try {
+    const rows = await fetchRows(chatId)
+    // 本地该消息是第 n 条 user → 服务端第 n 个 user 行；保留其前一行的 seq
+    const userOrdinal = msgs.slice(0, index + 1).filter(m => m.role === 'user').length
+    const targetRow = rows.filter(r => r.role === 'user')[userOrdinal - 1]
+    if (!targetRow) {
+      message.error('找不到原始提问')
+      return
+    }
+    const prevRow = [...rows].reverse().find(r => r.seq < targetRow.seq)
+    await truncateConversation(chatId, prevRow ? prevRow.seq : 0)
+  } catch (e) {
+    console.error(e)
+    return
+  }
+
+  messagesApi.setChatMessages(chatId, msgs.slice(0, index))
+  sendMessage(newContent)
 }
 
 function handleKeyboardShortcut(e: KeyboardEvent): void {

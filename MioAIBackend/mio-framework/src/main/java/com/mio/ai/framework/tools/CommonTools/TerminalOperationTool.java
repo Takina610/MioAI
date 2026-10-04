@@ -36,9 +36,14 @@ public class TerminalOperationTool {
         }
         StringBuilder output = new StringBuilder();
         try {
-            ProcessBuilder builder = new ProcessBuilder("cmd.exe", "/c", command);
+            // Windows 用 cmd，Linux 服务器用 bash（白名单策略不变）
+            boolean windows = System.getProperty("os.name", "").toLowerCase().contains("win");
+            ProcessBuilder builder = windows
+                    ? new ProcessBuilder("cmd.exe", "/c", command)
+                    : new ProcessBuilder("/bin/bash", "-c", command);
             Process process = builder.start();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), windows ? java.nio.charset.Charset.defaultCharset() : java.nio.charset.StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     output.append(line).append("\n");

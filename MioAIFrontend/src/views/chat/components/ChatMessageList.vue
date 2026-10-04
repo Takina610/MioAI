@@ -20,15 +20,33 @@
             :create-time="msg.createTime"
             :interrupted="msg.interrupted"
           />
-          <template v-else>
+          <template v-else-if="editingId !== msg.id">
             <MarkdownView class="message-text" :content="msg.content" />
           </template>
+          <!-- 编辑态：原位替换为文本框，保存即截断重发 -->
+          <div v-else class="message-edit">
+            <a-textarea v-model:value="editText" :auto-size="{ minRows: 2, maxRows: 12 }" @keydown.esc="cancelEdit" />
+            <div class="edit-buttons">
+              <a-button size="small" @click="cancelEdit">取消</a-button>
+              <a-button size="small" type="primary" :disabled="!editText.trim()" @click="confirmEdit(msg, index)">保存并发送</a-button>
+            </div>
+          </div>
           <div class="message-actions">
             <div class="copy-area" v-show="!isLoading && hoverMessageId === msg.id && msg.content">
               <a-tooltip :title="copiedMessageId === msg.id ? '已复制' : '复制'">
                 <a-button type="text" size="small" class="copy-btn" :class="{ 'copied': copiedMessageId === msg.id }" @click="copyMessage(msg.content, msg.id)">
                   <CheckOutlined v-if="copiedMessageId === msg.id" />
                   <CopyOutlined v-else />
+                </a-button>
+              </a-tooltip>
+              <a-tooltip v-if="canModify && msg.role === 'user'" title="编辑">
+                <a-button type="text" size="small" class="copy-btn" @click="startEdit(msg)">
+                  <EditOutlined />
+                </a-button>
+              </a-tooltip>
+              <a-tooltip v-if="canModify && msg.role === 'assistant' && index === messages.length - 1" title="重新生成">
+                <a-button type="text" size="small" class="copy-btn" @click="emit('regenerate')">
+                  <RedoOutlined />
                 </a-button>
               </a-tooltip>
             </div>
@@ -42,7 +60,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { CopyOutlined, CheckOutlined } from '@ant-design/icons-vue'
+import { CopyOutlined, CheckOutlined, EditOutlined, RedoOutlined } from '@ant-design/icons-vue'
 import type { ChatMessage } from '@/types'
 import MarkdownView from '@/components/MarkdownView.vue'
 import MioBotMessage from './MioBotMessage.vue'
@@ -50,11 +68,42 @@ import MioBotMessage from './MioBotMessage.vue'
 defineProps<{
   messages: ChatMessage[]
   isLoading: boolean
+  /** 登录用户才提供编辑/重新生成（依赖服务端历史截断） */
+  canModify: boolean
+}>()
+
+const emit = defineEmits<{
+  /** 编辑用户消息后以新内容重发（截断该消息及其后的历史） */
+  (e: 'edit', index: number, content: string): void
+  /** 对最后一条回复重新生成（截断旧回复后重发） */
+  (e: 'regenerate'): void
 }>()
 
 const messagesRef = ref<HTMLElement | null>(null)
 const hoverMessageId = ref<string>('')
 const copiedMessageId = ref<string>('')
+const editingId = ref<string>('')
+const editText = ref<string>('')
+
+function startEdit(msg: ChatMessage): void {
+  editingId.value = msg.id
+  editText.value = msg.content
+}
+
+function cancelEdit(): void {
+  editingId.value = ''
+  editText.value = ''
+}
+
+function confirmEdit(msg: ChatMessage, index: number): void {
+  const content = editText.value.trim()
+  if (!content || content === msg.content) {
+    cancelEdit()
+    return
+  }
+  cancelEdit()
+  emit('edit', index, content)
+}
 
 function scrollToBottom(): void {
   if (messagesRef.value) {
@@ -147,6 +196,18 @@ defineExpose({ scrollToBottom, isNearBottom })
           font-size: 12px;
           color: #d48806;
           margin-top: 4px;
+        }
+
+        .message-edit {
+          max-width: 70%;
+          width: 100%;
+
+          .edit-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 8px;
+          }
         }
 
         .message-loading {
