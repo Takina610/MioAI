@@ -41,6 +41,7 @@
           :agent-avatar="agentInfo?.avatar"
           :has-messages="messages.length > 0"
           :loading="isLoading"
+          :supported-efforts="supportedEfforts"
           @send="handleSend"
         >
           <template #above-input>
@@ -84,7 +85,7 @@ import ChatPlanPanel from './components/ChatPlanPanel.vue'
 import { useChatSessions } from './composables/useChatSessions'
 import { useChatMessages } from './composables/useChatMessages'
 import { useChatStream } from './composables/useChatStream'
-import { truncateConversation } from '@/api/chat'
+import { truncateConversation, getReasoningEfforts } from '@/api/chat'
 import { getBotMessages } from '@/api/botMessages'
 
 const route = useRoute()
@@ -96,9 +97,25 @@ const agentInfo = ref<Agent | null>(null)
 const authModalVisible = ref<boolean>(false)
 const inputMessage = ref<string>('')
 
-// 思考等级：本地记忆，随每次发送透传给模型
+// 思考等级：本地记忆，随每次发送透传给模型；档位列表按当前模型能力动态拉取
 const reasoningEffort = ref<string>(localStorage.getItem('reasoning-effort') || 'high')
 watch(reasoningEffort, v => localStorage.setItem('reasoning-effort', v))
+const supportedEfforts = ref<string[]>([])
+
+onMounted(async () => {
+  try {
+    const res = await getReasoningEfforts()
+    supportedEfforts.value = res.efforts ?? []
+    // 本地记忆的档位该模型不支持（如 medium/none）→ 回退到支持列表里最接近"高"的档
+    if (supportedEfforts.value.length && !supportedEfforts.value.includes(reasoningEffort.value)) {
+      reasoningEffort.value = supportedEfforts.value.includes('high')
+        ? 'high'
+        : supportedEfforts.value[supportedEfforts.value.length - 1]
+    }
+  } catch (e) {
+    console.error('拉取思考档位失败，使用兜底列表', e)
+  }
+})
 
 const sidebarRef = ref<InstanceType<typeof ChatSidebar> | null>(null)
 const messageListRef = ref<InstanceType<typeof ChatMessageList> | null>(null)

@@ -19,7 +19,7 @@
         </div>
         <!-- zcode 式底部工具栏：左思考等级、右发送 -->
         <div class="input-toolbar">
-          <a-dropdown :trigger="['click']" placement="topLeft">
+            <a-dropdown :trigger="['click']" placement="topLeft">
             <div class="effort-selector" @click.prevent>
               <BrainIcon :size="14" class="effort-icon" :class="{ dimmed: effort === 'none' }" />
               <span class="effort-label">{{ effortLabel }}</span>
@@ -27,7 +27,7 @@
             </div>
             <template #overlay>
               <a-menu :selected-keys="[effort]" @click="onEffortClick">
-                <a-menu-item v-for="opt in EFFORT_OPTIONS" :key="opt.value">
+                <a-menu-item v-for="opt in effortOptions" :key="opt.value">
                   <BrainIcon :size="13" class="menu-brain" :class="{ dimmed: opt.value === 'none' }" />
                   <span>{{ opt.label }}</span>
                 </a-menu-item>
@@ -56,13 +56,19 @@ import { useUserStore } from '@/store/user'
 import { ArrowUpOutlined, DownOutlined } from '@ant-design/icons-vue'
 import BrainIcon from '@/components/BrainIcon.vue'
 
-/** 思考等级档位（与后端 ReasoningEffort 白名单对齐） */
-const EFFORT_OPTIONS = [
-  { value: 'high', label: '最高' },
-  { value: 'medium', label: '中等' },
-  { value: 'low', label: '较低' },
-  { value: 'none', label: '关闭' }
-] as const
+/** 思考档位全量标签（实际渲染哪些档由后端按模型能力返回） */
+const EFFORT_LABELS: Record<string, string> = {
+  max: '极限',
+  xhigh: '超高',
+  high: '最高',
+  medium: '中等',
+  low: '较低',
+  minimal: '极低',
+  none: '关闭'
+}
+
+/** 探测失败时的兜底档位 */
+const FALLBACK_EFFORTS = ['high', 'medium', 'low', 'none']
 
 const props = defineProps<{
   modelValue: string
@@ -70,8 +76,10 @@ const props = defineProps<{
   agentAvatar?: string
   hasMessages: boolean
   loading: boolean
-  /** 思考强度（none/low/medium/high） */
+  /** 思考强度（后端返回的该模型支持的档位之一） */
   effort?: string
+  /** 当前模型支持的思考档位（按能力探测，如实渲染） */
+  supportedEfforts?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -87,10 +95,16 @@ const value = computed({
   set: (v: string) => emit('update:modelValue', v)
 })
 
+const effortOptions = computed(() =>
+  (props.supportedEfforts?.length ? props.supportedEfforts : FALLBACK_EFFORTS)
+    .map(v => ({ value: v, label: EFFORT_LABELS[v] ?? v }))
+    .reverse()
+)
+
 const effort = computed(() => props.effort || 'high')
 
 const effortLabel = computed(
-  () => EFFORT_OPTIONS.find(o => o.value === effort.value)?.label ?? '最高'
+  () => effortOptions.value.find(o => o.value === effort.value)?.label ?? EFFORT_LABELS[effort.value] ?? effort.value
 )
 
 function onEffortClick({ key }: { key: string | number }): void {

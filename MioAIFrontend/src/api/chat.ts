@@ -36,6 +36,11 @@ export const connectSSE = (
   return eventSource
 }
 
+/** 当前模型实际支持的思考档位（后端探测上游能力，前端据此如实渲染档位选择器） */
+export const getReasoningEfforts = async (): Promise<{ efforts: string[] }> => {
+  return request.get('/bot/efforts')
+}
+
 /**
  * 与智能体对话（统一走 MioBot 流式 Agent 引擎，SSE 信封返回全过程）：
  * MioBot（agentId=1，系统内置）与用户自定义智能体共用 /bot/chat。

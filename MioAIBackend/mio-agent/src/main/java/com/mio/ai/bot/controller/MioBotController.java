@@ -112,8 +112,17 @@ public class MioBotController {
     private static final java.util.Set<String> REASONING_EFFORTS =
             java.util.Set.of("minimal", "low", "medium", "high", "xhigh", "max", "none");
 
+    @Autowired
+    private com.mio.ai.bot.config.ModelEffortCapabilities modelEffortCapabilities;
+
     /** 正在执行中的会话：断线自动重连/双击等重复请求直接拒绝，防止同一轮任务被重复执行 */
     private static final java.util.Set<String> ACTIVE_CHATS = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /** 当前模型实际支持的思考档位（探测缓存），前端据此如实渲染档位选择器 */
+    @GetMapping("/bot/efforts")
+    public Map<String, Object> efforts() {
+        return Map.of("efforts", modelEffortCapabilities.supportedEfforts());
+    }
 
     @GetMapping("/bot/chat")
     public SseEmitter chat(@RequestParam @NotBlank @Size(max = 64) String chatId,
