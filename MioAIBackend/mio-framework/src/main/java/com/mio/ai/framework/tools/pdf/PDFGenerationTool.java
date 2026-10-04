@@ -1,4 +1,4 @@
-package com.mio.ai.framework.tools.CommonTools;
+package com.mio.ai.framework.tools.pdf;
 
 import cn.hutool.core.io.FileUtil;
 import com.itextpdf.kernel.font.PdfFont;

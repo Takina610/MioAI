@@ -22,9 +22,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 public class BotEventChannel {
 
-    /** SSE 工具结果事件的预览长度：完整结果已进入模型上下文，前端只需可读摘要 */
-    private static final int TOOL_RESULT_PREVIEW_LENGTH = 400;
-
     private final AgentMessageService agentMessageService;
     private final String chatId;
     private final Long userId;
@@ -100,13 +97,9 @@ public class BotEventChannel {
         emit(SseChunk.toolArgs(id, delta).fields());
     }
 
-    public void toolResults(org.springframework.ai.chat.messages.ToolResponseMessage toolResponseMessage) {
-        for (org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse response
-                : toolResponseMessage.getResponses()) {
-            String preview = truncate(response.responseData(), TOOL_RESULT_PREVIEW_LENGTH);
-            completeDisplayTool(response.id(), response.name(), preview);
-            emit(SseChunk.toolResult(response.id(), response.name(), preview).fields());
-        }
+    public void toolResultPreview(String id, String tool, String preview) {
+        completeDisplayTool(id, tool, preview);
+        emit(SseChunk.toolResult(id, tool, preview).fields());
     }
 
     /** 任务清单变化：推送结构化步骤列表，前端渲染为计划面板 */

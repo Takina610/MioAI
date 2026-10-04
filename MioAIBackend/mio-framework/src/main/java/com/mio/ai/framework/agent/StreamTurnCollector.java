@@ -1,4 +1,4 @@
-package com.mio.ai.bot.agent;
+package com.mio.ai.framework.agent;
 
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;

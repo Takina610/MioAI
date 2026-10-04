@@ -15,7 +15,7 @@ import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.utils.JacksonUtil;
 import com.mio.ai.common.utils.ResultUtils;
-import com.mio.ai.framework.tools.sandbox.SandboxProperties;
+import com.mio.ai.framework.sandbox.SandboxSession;
 import com.mio.ai.resource.model.entity.Agent;
 import com.mio.ai.resource.service.log.AgentUsageLogService;
 import com.mio.ai.resource.service.log.ToolCallLogService;
@@ -93,8 +93,8 @@ public class MioBotController {
     @Autowired
     private AgentMessageService agentMessageService;
 
-    @Autowired
-    private SandboxProperties sandboxProperties;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private SandboxSession sandboxSession;
 
     /** 正在执行中的会话：断线自动重连/双击等重复请求直接拒绝，防止同一轮任务被重复执行 */
     private static final java.util.Set<String> ACTIVE_CHATS = java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -139,7 +139,7 @@ public class MioBotController {
 
         MioBot mioBot = new MioBot(chatModel, jdbcChatMemory, commonTools,
                 List.of(mcpTools), agentUsageLogService, toolCallLogService, agentMessageService,
-                chatId, userId, resolvedAgentId, customSystemPrompt, sandboxProperties.isEnabled());
+                chatId, userId, resolvedAgentId, customSystemPrompt, sandboxSession);
         // 任务真正结束（含异常）时解除会话占用
         mioBot.setOnFinish(() -> ACTIVE_CHATS.remove(chatId));
         return mioBot.run(content, knowledgeContext, !skipUserPersist);

@@ -1,4 +1,4 @@
-package com.mio.ai.framework.tools.CommonTools;
+package com.mio.ai.framework.tools;
 
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.HttpUtil;
@@ -89,7 +89,7 @@ public class WebSearchTool {
         Document document = Jsoup.parse(html);
         Elements results = document.select(".result");
         if (results.isEmpty()) {
-            return "没有搜索到相关结果，请换个关键词或直接用 scrapeWebPage 抓取已知网址";
+            return "没有搜索到相关结果，请换个关键词，或用 fetchUrl 直接抓取已知网址";
         }
         StringBuilder sb = new StringBuilder();
         int count = 0;
@@ -112,7 +112,7 @@ public class WebSearchTool {
             count++;
         }
         if (count == 0) {
-            return "没有搜索到相关结果，请换个关键词或直接用 scrapeWebPage 抓取已知网址";
+            return "没有搜索到相关结果，请换个关键词，或用 fetchUrl 直接抓取已知网址";
         }
         return sb.toString();
     }

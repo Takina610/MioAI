@@ -109,12 +109,10 @@ import {
   EditOutlined,
   PictureOutlined,
   CodeOutlined,
-  DownloadOutlined,
   ToolOutlined,
   GlobalOutlined,
-  PlayCircleOutlined,
-  CalculatorOutlined,
-  FileAddOutlined
+  FileAddOutlined,
+  FileSearchOutlined
 } from '@ant-design/icons-vue'
 import MarkdownView from '@/components/MarkdownView.vue'
 import ZcodeSpinner from '@/components/ZcodeSpinner.vue'
@@ -196,21 +194,15 @@ const finalText = computed(() => {
 // ---------- 工具语义化展示 ----------
 const TOOL_LABELS: Record<string, string> = {
   managePlan: '任务清单',
-  searchWeb: '联网搜索',
-  scrapeWebPage: '阅读网页',
-  generatePDF: '生成 PDF',
+  runCommand: '执行命令',
   readFile: '读取文件',
   writeFile: '写入文件',
-  appendFile: '追加内容',
-  listWorkspaceFiles: '查看工作区文件',
-  deleteFile: '删除文件',
-  searchImage: '搜索图片',
-  executeTerminalCommand: '执行命令',
-  downloadResource: '下载资源',
-  searchBangumi: '查询作品资料',
-  calculate: '精确计算',
-  runInSandbox: '沙箱执行',
-  writeSandboxFile: '沙箱写文件'
+  editFile: '编辑文件',
+  glob: '查找文件',
+  grep: '搜索内容',
+  searchWeb: '联网搜索',
+  fetchUrl: '阅读网页',
+  generatePDF: '生成 PDF'
 }
 
 /** 未登记的工具（如自定义 MCP）：camelCase 拆词作展示名，不暴露原始方法名 */
@@ -222,18 +214,15 @@ function toolLabel(tool: string): string {
 
 const TOOL_ICONS: Record<string, Component> = markRaw({
   managePlan: OrderedListOutlined,
-  searchWeb: SearchOutlined,
-  scrapeWebPage: ReadOutlined,
-  generatePDF: FilePdfOutlined,
+  runCommand: CodeOutlined,
   readFile: FileTextOutlined,
-  writeFile: EditOutlined,
-  searchImage: PictureOutlined,
-  executeTerminalCommand: CodeOutlined,
-  downloadResource: DownloadOutlined,
-  searchBangumi: PlayCircleOutlined,
-  calculate: CalculatorOutlined,
-  runInSandbox: CodeOutlined,
-  writeSandboxFile: FileAddOutlined
+  writeFile: FileAddOutlined,
+  editFile: EditOutlined,
+  glob: FileSearchOutlined,
+  grep: SearchOutlined,
+  searchWeb: GlobalOutlined,
+  fetchUrl: ReadOutlined,
+  generatePDF: FilePdfOutlined
 })
 
 function toolIcon(tool: string): Component {
