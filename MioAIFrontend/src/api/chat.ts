@@ -36,9 +36,10 @@ export const connectSSE = (
   return eventSource
 }
 
-/** 当前模型实际支持的思考档位（后端探测上游能力，前端据此如实渲染档位选择器） */
+/** 当前模型实际支持的思考档位（后端探测上游能力，前端据此如实渲染档位选择器）；
+ * 失败静默（前端有兜底档位，不该弹全局错误） */
 export const getReasoningEfforts = async (): Promise<{ efforts: string[] }> => {
-  return request.get('/bot/efforts')
+  return request.get('/bot/efforts', { skipErrorMessage: true } as never)
 }
 
 /**
