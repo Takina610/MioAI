@@ -62,8 +62,16 @@ public class StreamTurnCollector {
 
         Object reasoningDelta = output.getMetadata().get("reasoningContent");
         if (reasoningDelta instanceof String reasoningText && !reasoningText.isEmpty()) {
-            reasoning.append(reasoningText);
-            thinkingDeltaSink.accept(reasoningText);
+            // 兼容两种思考流格式：增量式（各 chunk 只含新增）与累积快照式
+            // （如 opencode zen 网关，每个 chunk 都是从头到当前的全文）——后者做差分
+            String delta = reasoningText;
+            if (reasoning.length() > 0 && reasoningText.startsWith(reasoning.toString())) {
+                delta = reasoningText.substring(reasoning.length());
+            }
+            if (!delta.isEmpty()) {
+                reasoning.append(delta);
+                thinkingDeltaSink.accept(delta);
+            }
         }
 
         String textDelta = output.getText();
