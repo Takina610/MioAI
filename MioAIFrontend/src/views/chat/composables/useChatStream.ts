@@ -305,12 +305,13 @@ export function useChatStream(options: {
     es.onerror = handleStreamError
   }
 
-  /** 文本增量：content 累积 + 合并进同类末块（块序即显示序） */
+  /** 文本增量：content 累积 + 合并进同类末块（块序即显示序）；重试提示随之清除 */
   function appendTextDelta(msg: ChatMessage, delta: string): ChatMessage {
     return {
       ...msg,
       content: msg.content + delta,
-      blocks: appendBlockDelta(closeOpenThinking(msg.blocks), 'text', delta)
+      blocks: appendBlockDelta(closeOpenThinking(msg.blocks), 'text', delta),
+      retryNotice: undefined
     }
   }
 
@@ -350,7 +351,11 @@ export function useChatStream(options: {
       case 'answer':
         return appendTextDelta(msg, String(parsed.delta ?? parsed.content ?? ''))
       case 'thinking':
-        return { ...msg, blocks: appendBlockDelta(msg.blocks, 'thinking', String(parsed.delta ?? parsed.content ?? '')) }
+        return {
+          ...msg,
+          blocks: appendBlockDelta(msg.blocks, 'thinking', String(parsed.delta ?? parsed.content ?? '')),
+          retryNotice: undefined
+        }
       case 'tool_use': {
         const blocks = [...closeOpenThinking(msg.blocks)]
         blocks.push({
@@ -406,6 +411,11 @@ export function useChatStream(options: {
         }
       case 'heartbeat':
         return msg
+      case 'retry': {
+        const attempt = Number(parsed.attempt) || 1
+        const maxAttempts = Number(parsed.maxAttempts) || attempt
+        return { ...msg, retryNotice: `网络波动，正在重试（${attempt}/${maxAttempts}）` }
+      }
       case 'done':
         markFinished()
         return { ...msg, blocks: closeOpenThinking(msg.blocks) }

@@ -114,6 +114,11 @@ public class BotEventChannel {
         emit(SseChunk.heartbeat().fields());
     }
 
+    /** 瞬态失败自动重试：只推状态不落展示块（重试成功后内容自然续上，用户无感） */
+    public void retryScheduled(int attempt, int maxAttempts, String reason) {
+        emit(SseChunk.retry(attempt, maxAttempts, reason).fields());
+    }
+
     public void usage(int inputTokens, int outputTokens, long durationMs) {
         emit(SseChunk.usage(inputTokens, outputTokens, durationMs).fields());
     }

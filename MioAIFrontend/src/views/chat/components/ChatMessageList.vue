@@ -19,6 +19,7 @@
             :duration-ms="msg.durationMs"
             :create-time="msg.createTime"
             :interrupted="msg.interrupted"
+            :retry-notice="msg.retryNotice"
           />
           <template v-else-if="editingId !== msg.id">
             <MarkdownView class="message-text" :content="msg.content" />

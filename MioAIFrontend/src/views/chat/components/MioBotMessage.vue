@@ -1,9 +1,10 @@
 <template>
   <div class="mio-bot-message">
-    <!-- 状态行：进行中显示已工作时长；完成后显示总结行并可展开工作过程 -->
+    <!-- 状态行：进行中显示已工作时长（瞬态重试时附提示）；完成后显示总结行并可展开工作过程 -->
     <div v-if="isLoading" class="status-line running">
       <ZcodeSpinner :size="13" />
       <span>已工作 {{ elapsedText }}</span>
+      <span v-if="retryNotice" class="retry-notice">{{ retryNotice }}</span>
     </div>
     <div
       v-else-if="processBlocks.length"
@@ -131,6 +132,8 @@ interface Props {
   createTime?: Date
   /** 流式传输异常中断（界面提示回答可能不完整） */
   interrupted?: boolean
+  /** 瞬态失败自动重试提示（后端 retry 事件，内容恢复即清除） */
+  retryNotice?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -525,6 +528,14 @@ watch(
   font-size: 13px;
   color: #86909c;
   user-select: none;
+
+  .retry-notice {
+    padding: 1px 8px;
+    border-radius: 8px;
+    background: #fff7e6;
+    color: #d48806;
+    font-size: 12px;
+  }
 
   &.done {
     cursor: pointer;

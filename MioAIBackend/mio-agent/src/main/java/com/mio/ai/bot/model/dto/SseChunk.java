@@ -15,6 +15,7 @@ import java.util.Map;
  *  tool_result 工具执行结果     {id, tool, content}
  *  plan        任务清单快照     {steps:[{index,description,status}]}
  *  heartbeat   保活心跳        {}（长工具执行期间维持连接，前端忽略内容仅重挂看门狗）
+ *  retry       瞬态失败自动重试 {attempt, maxAttempts, reason}（本轮尚无任何输出时无感重发，前端提示后自行恢复）
  *  usage       用量尾块        {inputTokens, outputTokens, durationMs}
  *  done        结束标记        {}
  *  error       错误            {content}
@@ -65,6 +66,15 @@ public record SseChunk(Map<String, Object> fields) {
     public static SseChunk heartbeat() {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("type", "heartbeat");
+        return new SseChunk(map);
+    }
+
+    public static SseChunk retry(int attempt, int maxAttempts, String reason) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("type", "retry");
+        map.put("attempt", attempt);
+        map.put("maxAttempts", maxAttempts);
+        putIfNotBlank(map, "reason", reason);
         return new SseChunk(map);
     }
 

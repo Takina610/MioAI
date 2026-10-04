@@ -104,6 +104,10 @@ public class MioBotController {
     @org.springframework.beans.factory.annotation.Value("${mio.ai.agent.stream-timeout-seconds:1800}")
     private long agentStreamTimeoutSeconds;
 
+    /** 瞬态失败自动重试次数（zcode 风格：网络抖动/上游 5xx 在本轮尚无输出时无感重发） */
+    @org.springframework.beans.factory.annotation.Value("${mio.ai.agent.model-retries:3}")
+    private int agentModelRetries;
+
     /** 思考强度白名单：与 openai-java ReasoningEffort 枚举一致，前端输入框下方可调 */
     private static final java.util.Set<String> REASONING_EFFORTS =
             java.util.Set.of("minimal", "low", "medium", "high", "xhigh", "max", "none");
@@ -155,7 +159,7 @@ public class MioBotController {
         MioBot mioBot = new MioBot(chatModel, jdbcChatMemory, commonTools,
                 List.of(mcpTools), agentUsageLogService, toolCallLogService, agentMessageService,
                 chatId, userId, resolvedAgentId, customSystemPrompt, sandboxSession, agentMaxSteps,
-                agentStreamTimeoutSeconds, effort);
+                agentStreamTimeoutSeconds, effort, agentModelRetries);
         // 任务真正结束（含异常）时解除会话占用
         mioBot.setOnFinish(() -> ACTIVE_CHATS.remove(chatId));
         return mioBot.run(content, knowledgeContext, !skipUserPersist);

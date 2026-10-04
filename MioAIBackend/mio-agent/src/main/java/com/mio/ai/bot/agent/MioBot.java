@@ -53,6 +53,9 @@ public class MioBot {
     /** 单次流式调用超时兜底值；实际取配置 mio.ai.agent.stream-timeout-seconds */
     private static final long DEFAULT_STREAM_TIMEOUT_SECONDS = 1800;
 
+    /** 瞬态失败重试次数兜底值；实际取配置 mio.ai.agent.model-retries */
+    private static final int DEFAULT_MODEL_RETRIES = 3;
+
     /** 心跳间隔：小于常见代理/网关的空闲超时，保证长工具执行期间连接存活 */
     private static final long HEARTBEAT_INTERVAL_SECONDS = 15;
 
@@ -81,6 +84,7 @@ public class MioBot {
     private final int maxSteps;
     private final long streamTimeoutSeconds;
     private final String reasoningEffort;
+    private final int modelRetries;
     private final ToolCallback[] tools;
 
     private final AgentPlan plan = new AgentPlan();
@@ -103,7 +107,8 @@ public class MioBot {
                   SandboxSession sandboxSession,
                   Integer maxSteps,
                   Long streamTimeoutSeconds,
-                  String reasoningEffort) {
+                  String reasoningEffort,
+                  Integer modelRetries) {
         this.chatModel = chatModel;
         this.chatMemory = chatMemory;
         this.agentUsageLogService = agentUsageLogService;
@@ -117,6 +122,7 @@ public class MioBot {
         this.streamTimeoutSeconds = streamTimeoutSeconds != null && streamTimeoutSeconds > 0
                 ? streamTimeoutSeconds : DEFAULT_STREAM_TIMEOUT_SECONDS;
         this.reasoningEffort = reasoningEffort;
+        this.modelRetries = modelRetries != null && modelRetries >= 0 ? modelRetries : DEFAULT_MODEL_RETRIES;
         this.tools = concatTools(builtInTools, mcpTools,
                 ToolCallbacks.from(new PlanningTool(plan))[0]);
         this.channel = new BotEventChannel(agentMessageService, chatId, userId, agentId);
@@ -152,7 +158,7 @@ public class MioBot {
 
                 String systemPrompt = AgentPrompts.build(
                         baseSystemPrompt, knowledgeContext, sandboxWorkdir != null, sandboxWorkdir);
-                AgentLoop.Result result = new AgentLoop(streamTimeoutSeconds, reasoningEffort).run(
+                AgentLoop.Result result = new AgentLoop(streamTimeoutSeconds, reasoningEffort, modelRetries).run(
                         chatModel, messages, systemPrompt, tools, planSection(), maxSteps, loopListener());
 
                 persistNarratives(messages);
@@ -212,6 +218,13 @@ public class MioBot {
             @Override
             public void toolArgs(String id, String delta) {
                 channel.toolArgs(id, delta);
+            }
+
+            @Override
+            public void retryScheduled(int attempt, int maxAttempts, String reason) {
+                log.warn("模型流瞬态失败，自动重试 {}/{}，chatId={}，reason={}",
+                        attempt, maxAttempts, chatId, reason);
+                channel.retryScheduled(attempt, maxAttempts, reason);
             }
 
             @Override

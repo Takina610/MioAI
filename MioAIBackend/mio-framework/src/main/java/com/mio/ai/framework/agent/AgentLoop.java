@@ -15,6 +15,7 @@ import org.springframework.ai.tool.ToolCallback;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * 通用 Agent 循环（参考 opencode runLoop / pi agent-loop 的骨架，与 Web 层解耦）：
@@ -32,10 +33,19 @@ public class AgentLoop {
     /** 单次模型流式调用（含超长生成全程）的 okhttp callTimeout；须不小于上游反代的总预算 */
     private static final long DEFAULT_STREAM_TIMEOUT_SECONDS = 1800;
 
+    /** 瞬态失败重试次数默认值（zcode 风格宽松，首次请求之外再给 3 次） */
+    private static final int DEFAULT_MODEL_RETRIES = 3;
+
+    /** 重试退避曲线（zcode 同款）：2s 基数 ×2 指数增长，60s 封顶，±20% 抖动 */
+    private static final long RETRY_BASE_DELAY_MS = 2_000;
+    private static final long RETRY_MAX_DELAY_MS = 60_000;
+
     private final ToolCallingManager toolCallingManager = ToolCallingManager.builder().build();
     private final long streamTimeoutSeconds;
     /** 思考强度（minimal/low/medium/high/xhigh/max/none）；null = 不指定，用上游默认 */
     private final String reasoningEffort;
+    /** 单次模型调用的瞬态失败重试次数 */
+    private final int modelRetries;
 
     /** 循环事件监听：上层负责流式展示、持久化与用量日志 */
     public interface Listener {
@@ -52,6 +62,10 @@ public class AgentLoop {
 
         /** 每轮模型响应后的用量/日志钩子 */
         void stepFinished(ChatResponse response, int step, List<AssistantMessage.ToolCall> toolCalls);
+
+        /** 瞬态失败将自动重试（zcode 重试边界规则：本轮尚未输出任何内容时才重试，用户零感知） */
+        default void retryScheduled(int attempt, int maxAttempts, String reason) {
+        }
     }
 
     /** 循环结果：是否自然完成（模型主动收尾）与用量统计 */
@@ -59,12 +73,13 @@ public class AgentLoop {
     }
 
     public AgentLoop() {
-        this(DEFAULT_STREAM_TIMEOUT_SECONDS, null);
+        this(DEFAULT_STREAM_TIMEOUT_SECONDS, null, DEFAULT_MODEL_RETRIES);
     }
 
-    public AgentLoop(long streamTimeoutSeconds, String reasoningEffort) {
+    public AgentLoop(long streamTimeoutSeconds, String reasoningEffort, int modelRetries) {
         this.streamTimeoutSeconds = streamTimeoutSeconds > 0 ? streamTimeoutSeconds : DEFAULT_STREAM_TIMEOUT_SECONDS;
         this.reasoningEffort = reasoningEffort;
+        this.modelRetries = Math.max(0, modelRetries);
     }
 
     /**
@@ -88,10 +103,7 @@ public class AgentLoop {
             Prompt prompt = new Prompt(messages, buildOptions(chatModel, tools))
                     .augmentSystemMessage(systemPrompt + (promptSuffix == null ? "" : promptSuffix));
 
-            StreamTurnCollector collector = new StreamTurnCollector(
-                    listener::thinkingDelta, listener::answerDelta,
-                    listener::toolUse, listener::toolArgs);
-            chatModel.stream(prompt).doOnNext(collector::accept).blockLast();
+            StreamTurnCollector collector = streamTurnWithRetry(chatModel, prompt, listener);
 
             ChatResponse response = collector.build();
             Usage usage = response.getMetadata().getUsage();
@@ -131,6 +143,45 @@ public class AgentLoop {
      * <p>timeout 显式设置：经 buildRequestOptions → RequestOptions → okhttp callTimeout 链
      * 逐级传递（字节码验证），不设则 okhttp 层 60s 默认值会掐断超长流式生成。
      */
+    /**
+     * 单次模型流式调用 + 瞬态失败重试（zcode runner-stream 的 attempt 循环）。
+     * <p>重试边界规则：本轮已向前端发出任何内容（思考/正文/工具调用）后不再重试，
+     * 避免重放导致用户看到重复输出——只有"还没吐出第一个字就断"的失败可以无感重发。
+     */
+    private StreamTurnCollector streamTurnWithRetry(ChatModel chatModel, Prompt prompt, Listener listener) {
+        for (int attempt = 1; ; attempt++) {
+            StreamTurnCollector collector = new StreamTurnCollector(
+                    listener::thinkingDelta, listener::answerDelta,
+                    listener::toolUse, listener::toolArgs);
+            try {
+                chatModel.stream(prompt).doOnNext(collector::accept).blockLast();
+                return collector;
+            } catch (Throwable error) {
+                StreamFailureClassifier.Classification failure = StreamFailureClassifier.classify(error);
+                boolean canRetry = failure.retryable()
+                        && !collector.hasEmitted()
+                        && attempt <= modelRetries;
+                if (!canRetry) {
+                    throw error;
+                }
+                listener.retryScheduled(attempt, modelRetries + 1, failure.reason());
+                try {
+                    Thread.sleep(retryDelayMs(attempt));
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw error;
+                }
+            }
+        }
+    }
+
+    /** 指数退避 + 抖动：min(60s, 2s × 2^(attempt-1))，±20% 随机化避免同步重试风暴 */
+    private static long retryDelayMs(int attempt) {
+        long capped = Math.min(RETRY_MAX_DELAY_MS, RETRY_BASE_DELAY_MS << Math.min(attempt - 1, 5));
+        double jitter = 0.8 + ThreadLocalRandom.current().nextDouble(0.4);
+        return Math.round(capped * jitter);
+    }
+
     private OpenAiChatOptions buildOptions(ChatModel chatModel, ToolCallback[] tools) {
         Duration streamTimeout = Duration.ofSeconds(streamTimeoutSeconds);
         if (chatModel.getDefaultOptions() instanceof OpenAiChatOptions defaults) {

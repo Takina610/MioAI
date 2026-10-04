@@ -50,6 +50,8 @@ export interface ChatMessage {
   durationMs?: number
   /** 流式传输异常中断（已有部分内容时置位，界面提示回答可能不完整） */
   interrupted?: boolean
+  /** 瞬态失败自动重试中的提示（后端 retry 事件；下一段内容到达即清除） */
+  retryNotice?: string
   /** 回复完成后的用量统计 */
   usage?: ChatMessageUsage
 }

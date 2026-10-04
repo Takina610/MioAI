@@ -37,6 +37,14 @@ public class StreamTurnCollector {
 
     private Usage usage;
 
+    /** 本轮是否已向外发出任何内容（重试边界哨兵：发出后瞬态失败不再重试） */
+    private boolean emitted;
+
+    /** 本轮是否已向外发出思考/正文/工具调用任一内容（zcode 重试边界：false 才允许无感重试） */
+    public boolean hasEmitted() {
+        return emitted;
+    }
+
     public StreamTurnCollector(Consumer<String> thinkingDeltaSink,
                                Consumer<String> answerDeltaSink,
                                BiConsumer<String, String> toolUseSink,
@@ -71,6 +79,7 @@ public class StreamTurnCollector {
             if (!delta.isEmpty()) {
                 reasoning.append(delta);
                 thinkingDeltaSink.accept(delta);
+                emitted = true;
             }
         }
 
@@ -78,6 +87,7 @@ public class StreamTurnCollector {
         if (textDelta != null && !textDelta.isEmpty()) {
             text.append(textDelta);
             answerDeltaSink.accept(textDelta);
+            emitted = true;
         }
 
         mergeToolCalls(output.getToolCalls());
@@ -100,6 +110,7 @@ public class StreamTurnCollector {
                 // 新调用出现即通知前端（必须先于参数分片，保证前端/持久化先建好工具块）
                 if (pendingToolCallName != null && !pendingToolCallName.isBlank()) {
                     toolUseSink.accept(pendingToolCallId, pendingToolCallName);
+                    emitted = true;
                 }
                 appendArgs(delta);
             } else if (pendingToolCallName != null) {
