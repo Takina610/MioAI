@@ -198,9 +198,13 @@ const TOOL_LABELS: Record<string, string> = {
   generatePDF: '生成 PDF',
   readFile: '读取文件',
   writeFile: '写入文件',
+  appendFile: '追加内容',
+  listWorkspaceFiles: '查看工作区文件',
+  deleteFile: '删除文件',
   searchImage: '搜索图片',
   executeTerminalCommand: '执行命令',
-  downloadResource: '下载资源'
+  downloadResource: '下载资源',
+  getCurrentDateTime: '查询时间'
 }
 
 /** 未登记的工具（如自定义 MCP）：camelCase 拆词作展示名，不暴露原始方法名 */

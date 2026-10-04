@@ -21,7 +21,8 @@ public class ToolRegistration {
                                       TerminalOperationTool terminalOperationTool,
                                       WebScrapingTool webScrapingTool,
                                       WebSearchTool webSearchTool,
-                                      ImageSearchTool imageSearchTool
+                                      ImageSearchTool imageSearchTool,
+                                      DateTimeTool dateTimeTool
     ) {
         return ToolCallbacks.from(
                 fileOperationTool,
@@ -30,7 +31,8 @@ public class ToolRegistration {
                 terminalOperationTool,
                 webScrapingTool,
                 webSearchTool,
-                imageSearchTool
+                imageSearchTool,
+                dateTimeTool
         );
     }
 }

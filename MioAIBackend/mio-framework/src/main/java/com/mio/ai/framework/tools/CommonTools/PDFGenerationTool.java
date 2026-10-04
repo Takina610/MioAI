@@ -18,49 +18,132 @@ import java.io.File;
 import java.io.IOException;
 import java.util.UUID;
 
+/**
+ * @author: Takina
+ * @date: 2026/3/31 17:06
+ * @description: PDF 文档生成工具：内容自动清理（emoji/控制字符）、按行结构排版
+ * （#/##/### 标题、- 列表、空行分段），字形缺失时白名单字符兜底重渲，上传 R2 返回直链。
+ */
 @Component
 public class PDFGenerationTool {
 
-    private static final String ALLOWED_CHAR_REGEX = "^[a-zA-Z0-9_\\u4e00-\\u9fa5\\.]+$";
+    private static final String FILE_NAME_ILLEGAL = "[\\:*?\"<>|]";
+
+    /** 渲染兜底白名单之外的全部剔除（仅保留常用中英文与中英文标点） */
+    private static final String STRICT_KEEP =
+            "[^\\u4e00-\\u9fa5\\u3400-\\u4dbfA-Za-z0-9 \\t\\n，。、；：！？（）()《》【】“”‘'\"\\[\\]{}%+*/=.,;:!?#@$&~…—·-]";
 
     @Autowired
     R2Util r2Util;
 
-    @Tool(description = "根据内容生成PDF文件，必须全程使用标准简体中文，禁止英文、拼音、符号乱码，正常分段排版", returnDirect = false)
+    @Tool(description = "把完整内容排版为 PDF 并上传，返回用户可直接打开下载的链接。"
+            + "排版规则：以 # 开头的行渲染为大标题，## 为中标题，### 为小标题，- 开头渲染为列表项，空行分段。"
+            + "emoji 与特殊符号会被自动清理，无需刻意规避。直接传最终内容即可，不要先写中间文件", returnDirect = false)
     public String generatePDF(
-            @ToolParam(description = "PDF文件名，必须是中文、英文、数字组合") String fileName,
-            @ToolParam(description = "要写入 PDF 的完整内容，必须是纯中文正常文本") String content) {
+            @ToolParam(description = "PDF文件名（不带 .pdf 后缀），如：上海3日旅游计划") String fileName,
+            @ToolParam(description = "完整文档内容") String content) {
 
-        if (!fileName.matches(ALLOWED_CHAR_REGEX)) {
-            return "错误：文件名不合法，仅支持中文、英文、数字、下划线、.";
+        String safeName = sanitizeFileName(fileName);
+        if (safeName.isBlank()) {
+            return "错误：文件名为空";
+        }
+        if (content == null || content.isBlank()) {
+            return "错误：内容为空";
         }
 
         String fileDir = System.getProperty("java.io.tmpdir") + File.separator + "pdf";
-        String localFilePath = fileDir + File.separator + fileName;
+        String localFilePath = fileDir + File.separator + safeName + ".pdf";
+        FileUtil.mkdir(fileDir);
+
+        String cleaned = sanitizeContent(content);
+        if (cleaned.isBlank()) {
+            return "错误：内容清理后为空，请提供有效文本";
+        }
+        try {
+            renderPdf(cleaned, localFilePath);
+        } catch (Exception e) {
+            // 字形缺失等渲染异常：按白名单再清一遍重试，保证一定出文档
+            String strict = cleaned.replaceAll(STRICT_KEEP, "");
+            if (strict.isBlank()) {
+                return "PDF生成失败：" + e.getMessage();
+            }
+            try {
+                renderPdf(strict, localFilePath);
+            } catch (Exception e2) {
+                return "PDF生成失败：" + e2.getMessage();
+            }
+        }
 
         try {
-            FileUtil.mkdir(fileDir);
-
-            try (PdfWriter writer = new PdfWriter(localFilePath);
-                 PdfDocument pdf = new PdfDocument(writer);
-                 Document document = new Document(pdf)) {
-
-                PdfFont font = PdfFontFactory.createFont("STSong-Light", "UniGB-UCS2-H", PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
-                document.setFont(font);
-
-                Paragraph paragraph = new Paragraph(content).setFontSize(12);
-                document.add(paragraph);
-            }
-
             String entityId = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
             String fileUrl = r2Util.uploadLocalFile(localFilePath, FileType.PDF_FILE, entityId);
-
+            return "PDF生成成功！下载链接：" + fileUrl;
+        } catch (Exception e) {
+            return "PDF上传失败：" + e.getMessage();
+        } finally {
             FileUtil.del(localFilePath);
-
-            return "PDF生成成功！文件链接：" + fileUrl;
-        } catch (IOException e) {
-            return "PDF生成失败：" + e.getMessage();
         }
     }
-}
 
+    /** 逐行结构化排版渲染 */
+    private void renderPdf(String content, String path) throws IOException {
+        try (PdfWriter writer = new PdfWriter(path);
+             PdfDocument pdf = new PdfDocument(writer);
+             Document document = new Document(pdf)) {
+
+            PdfFont font = PdfFontFactory.createFont("STSong-Light", "UniGB-UCS2-H",
+                    PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
+            document.setFont(font);
+            document.setMargins(36, 36, 36, 36);
+
+            for (String line : content.split("\n", -1)) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty()) {
+                    document.add(new Paragraph("").setMarginBottom(4));
+                } else if (trimmed.startsWith("### ")) {
+                    document.add(new Paragraph(trimmed.substring(4)).setFontSize(13).setMarginTop(8));
+                } else if (trimmed.startsWith("## ")) {
+                    document.add(new Paragraph(trimmed.substring(3)).setFontSize(15).setMarginTop(10));
+                } else if (trimmed.startsWith("# ")) {
+                    document.add(new Paragraph(trimmed.substring(2)).setFontSize(18)
+                            .setMarginTop(12).setMarginBottom(6));
+                } else if (trimmed.startsWith("- ") || trimmed.startsWith("• ")) {
+                    document.add(new Paragraph("•  " + trimmed.substring(2)).setFontSize(12).setMarginLeft(16));
+                } else {
+                    document.add(new Paragraph(trimmed).setFontSize(12));
+                }
+            }
+        }
+    }
+
+    /** 清理非 BMP 字符（emoji 等 STSong 无法编码）与控制字符，保留换行/制表 */
+    private static String sanitizeContent(String content) {
+        StringBuilder sb = new StringBuilder(content.length());
+        content.codePoints().forEach(cp -> {
+            if (cp == '\n' || cp == '\r' || cp == '\t') {
+                sb.append((char) cp);
+            } else if (cp <= 0xFFFF && cp >= 0x20) {
+                sb.append((char) cp);
+            }
+            // 非 BMP（emoji/增补平面）与控制字符直接丢弃
+        });
+        return sb.toString();
+    }
+
+    /** 文件名归一化：取末段、清理非法字符，兼容模型带了 .pdf 后缀的情况 */
+    private static String sanitizeFileName(String name) {
+        if (name == null) {
+            return "";
+        }
+        String normalized = name.replace("\\", "/");
+        int slash = normalized.lastIndexOf('/');
+        if (slash >= 0) {
+            normalized = normalized.substring(slash + 1);
+        }
+        normalized = normalized.replaceAll(FILE_NAME_ILLEGAL, "_").trim();
+        if (normalized.toLowerCase().endsWith(".pdf")) {
+            normalized = normalized.substring(0, normalized.length() - 4);
+        }
+        return normalized;
+    }
+}

@@ -35,6 +35,18 @@ export const markdown = new MarkdownIt({
   .use(cjkFriendly)
   .use(tasklists, { enabled: false })
 
+// 聊天内的外部链接（PDF/CDN 等）一律新标签打开，不挤占当前会话页
+const defaultLinkOpen = markdown.renderer.rules.link_open
+  ?? ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options))
+markdown.renderer.rules.link_open = (tokens, idx, options, env, self) => {
+  const href = String(tokens[idx].attrGet('href') ?? '')
+  if (/^https?:\/\//i.test(href)) {
+    tokens[idx].attrSet('target', '_blank')
+    tokens[idx].attrSet('rel', 'noopener noreferrer')
+  }
+  return defaultLinkOpen(tokens, idx, options, env, self)
+}
+
 /** KaTeX 输出的 MathML/HTML 标签与属性 */
 const KATEX_TAGS = [
   'math', 'semantics', 'annotation', 'annotation-xml', 'menclose', 'merror',

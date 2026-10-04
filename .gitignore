@@ -59,3 +59,4 @@ build/
 /logs/
 /RunKit/
 .deploy/
+MioAIBackend/data/

@@ -34,7 +34,8 @@ public class SystemConstant {
     public static final Long REDIS_KEY_EXPIRES_DAY = REDIS_KEY_TIME_1MIN * 60 * 24;
 
     /**
-     * 文件保存目录
+     * 文件保存目录（Agent 工作区）：跟随后端工作目录，避免换机器时旧绝对路径失效
      */
-    public static String FILE_SAVE_DIR = "E:\\University Code Learning Journey\\Java IDEA\\JavaWebProject\\mio-ai\\src\\main\\resources\\file";
+    public static String FILE_SAVE_DIR =
+            System.getProperty("user.dir") + java.io.File.separator + "data" + java.io.File.separator + "agent-files";
 }
