@@ -79,7 +79,13 @@ export const useUserStore = defineStore('user', () => {
       setUserInfo(res)
       return res
     } catch (e) {
-      clearUser()
+      // 只在服务端明确判定 token 失效时降级游客；
+      // 网络/后端瞬时不可达保留本地登录态，避免后端重启窗口期刷新页面被误登出
+      const bizCode = (e as Error & { code?: number }).code
+      const httpStatus = (e as { response?: { status?: number } }).response?.status
+      if (bizCode === 40100 || httpStatus === 401) {
+        clearUser()
+      }
       throw e
     }
   }
