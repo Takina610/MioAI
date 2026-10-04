@@ -96,6 +96,10 @@ public class MioBotController {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private SandboxSession sandboxSession;
 
+    /** Agent 单轮步数上限（zcode 风格宽松默认，防失控而非限制任务长度） */
+    @org.springframework.beans.factory.annotation.Value("${mio.ai.agent.max-steps:100}")
+    private int agentMaxSteps;
+
     /** 正在执行中的会话：断线自动重连/双击等重复请求直接拒绝，防止同一轮任务被重复执行 */
     private static final java.util.Set<String> ACTIVE_CHATS = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
@@ -139,7 +143,7 @@ public class MioBotController {
 
         MioBot mioBot = new MioBot(chatModel, jdbcChatMemory, commonTools,
                 List.of(mcpTools), agentUsageLogService, toolCallLogService, agentMessageService,
-                chatId, userId, resolvedAgentId, customSystemPrompt, sandboxSession);
+                chatId, userId, resolvedAgentId, customSystemPrompt, sandboxSession, agentMaxSteps);
         // 任务真正结束（含异常）时解除会话占用
         mioBot.setOnFinish(() -> ACTIVE_CHATS.remove(chatId));
         return mioBot.run(content, knowledgeContext, !skipUserPersist);
