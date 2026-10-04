@@ -77,6 +77,8 @@ export function useChatStream(options: {
     skipUserPersist?: boolean
     /** 思考强度（none/low/medium/high 等），透传到模型 */
     reasoningEffort?: string
+    /** 编辑/重新生成时被替换掉的旧回复版本（挂到新回复上供 <n/n> 切换） */
+    history?: ChatMessage[]
   }
 
   function sendMessage(content: string, opts?: SendOptions): void {
@@ -122,7 +124,9 @@ export function useChatStream(options: {
       role: 'assistant',
       content: '',
       blocks: [],
-      createTime: new Date()
+      createTime: new Date(),
+      history: opts?.history,
+      activeVersion: (opts?.history?.length ?? 0) + 1
     }
     messagesApi.setChatMessages(chatId, [...chatMessages, aiMessage])
 

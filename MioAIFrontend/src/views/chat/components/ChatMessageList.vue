@@ -10,36 +10,50 @@
         @mouseleave="hoverMessageId = ''"
       >
         <div class="message-content">
-          <!-- assistant 按内容块顺序渲染（文本/思考/工具顺着显示），流式期间分支稳定不切换 -->
+          <!-- assistant 按内容块顺序渲染（文本/思考/工具顺着显示），流式期间分支稳定不切换；
+               多版本（编辑/重生成产生）按 activeVersion 选显示内容 -->
           <MioBotMessage
             v-if="msg.role === 'assistant'"
-            :content="msg.content"
-            :blocks="msg.blocks"
-            :is-loading="isLoading && index === messages.length - 1"
-            :duration-ms="msg.durationMs"
-            :create-time="msg.createTime"
-            :interrupted="msg.interrupted"
-            :retry-notice="msg.retryNotice"
+            :content="displayOf(msg).content"
+            :blocks="displayOf(msg).blocks"
+            :is-loading="isLoading && index === messages.length - 1 && isLatestVersion(msg)"
+            :duration-ms="displayOf(msg).durationMs"
+            :create-time="displayOf(msg).createTime"
+            :interrupted="displayOf(msg).interrupted"
+            :retry-notice="isLatestVersion(msg) ? msg.retryNotice : undefined"
           />
           <template v-else-if="editingId !== msg.id">
             <MarkdownView class="message-text" :content="msg.content" />
           </template>
-          <!-- 编辑态：原位替换为文本框，保存即截断重发 -->
+          <!-- 编辑态：原位替换为文本框（按钮嵌在框内右下），保存即截断重发 -->
           <div v-else class="message-edit">
-            <a-textarea v-model:value="editText" :auto-size="{ minRows: 2, maxRows: 12 }" @keydown.esc="cancelEdit" />
+            <a-textarea
+              v-model:value="editText"
+              :auto-size="{ minRows: 2, maxRows: 12 }"
+              @keydown.esc="cancelEdit"
+              @keydown.enter.exact.prevent="confirmEdit(msg, index)"
+            />
             <div class="edit-buttons">
               <a-button size="small" @click="cancelEdit">取消</a-button>
-              <a-button size="small" type="primary" :disabled="!editText.trim()" @click="confirmEdit(msg, index)">保存并发送</a-button>
+              <a-button size="small" type="primary" class="edit-send" :disabled="!editText.trim()" @click="confirmEdit(msg, index)">
+                发送
+              </a-button>
             </div>
           </div>
           <div class="message-actions">
-            <div class="copy-area" v-show="!isLoading && hoverMessageId === msg.id && msg.content">
-              <a-tooltip :title="copiedMessageId === msg.id ? '已复制' : '复制'">
-                <a-button type="text" size="small" class="copy-btn" :class="{ 'copied': copiedMessageId === msg.id }" @click="copyMessage(msg.content, msg.id)">
-                  <CheckOutlined v-if="copiedMessageId === msg.id" />
-                  <CopyOutlined v-else />
-                </a-button>
-              </a-tooltip>
+            <!-- 多版本消息工具栏常驻；单版本悬浮显示；编辑中隐藏 -->
+            <div
+              class="copy-area"
+              v-show="editingId !== msg.id && !isLoading && (hasVersions(msg) || (hoverMessageId === msg.id && displayOf(msg).content))"
+            >
+              <template v-if="msg.role === 'assistant'">
+                <a-tooltip :title="copiedMessageId === msg.id ? '已复制' : '复制'">
+                  <a-button type="text" size="small" class="copy-btn" :class="{ 'copied': copiedMessageId === msg.id }" @click="copyMessage(displayOf(msg).content, msg.id)">
+                    <CheckOutlined v-if="copiedMessageId === msg.id" />
+                    <CopyOutlined v-else />
+                  </a-button>
+                </a-tooltip>
+              </template>
               <a-tooltip v-if="canModify && msg.role === 'user'" title="编辑">
                 <a-button type="text" size="small" class="copy-btn" @click="startEdit(msg)">
                   <EditOutlined />
@@ -50,6 +64,16 @@
                   <RedoOutlined />
                 </a-button>
               </a-tooltip>
+              <!-- 回复版本切换：< n/n >（编辑/重生成产生的历次回复） -->
+              <div v-if="msg.role === 'assistant' && hasVersions(msg)" class="version-nav">
+                <a-button type="text" size="small" class="version-btn" :disabled="versionOf(msg) <= 1" @click="emit('switchVersion', msg.id, versionOf(msg) - 1)">
+                  <LeftOutlined />
+                </a-button>
+                <span class="version-text">{{ versionOf(msg) }} / {{ totalVersions(msg) }}</span>
+                <a-button type="text" size="small" class="version-btn" :disabled="versionOf(msg) >= totalVersions(msg)" @click="emit('switchVersion', msg.id, versionOf(msg) + 1)">
+                  <RightOutlined />
+                </a-button>
+              </div>
             </div>
           </div>
         </div>
@@ -61,7 +85,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { CopyOutlined, CheckOutlined, EditOutlined, RedoOutlined } from '@ant-design/icons-vue'
+import { CopyOutlined, CheckOutlined, EditOutlined, RedoOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons-vue'
 import type { ChatMessage } from '@/types'
 import MarkdownView from '@/components/MarkdownView.vue'
 import MioBotMessage from './MioBotMessage.vue'
@@ -78,6 +102,8 @@ const emit = defineEmits<{
   (e: 'edit', index: number, content: string): void
   /** 对最后一条回复重新生成（截断旧回复后重发） */
   (e: 'regenerate'): void
+  /** 切换回复版本（编辑/重生成产生的历次回复） */
+  (e: 'switchVersion', messageId: string, version: number): void
 }>()
 
 const messagesRef = ref<HTMLElement | null>(null)
@@ -85,6 +111,32 @@ const hoverMessageId = ref<string>('')
 const copiedMessageId = ref<string>('')
 const editingId = ref<string>('')
 const editText = ref<string>('')
+
+// ---------- 回复版本（编辑/重新生成产生的历次回复） ----------
+function totalVersions(msg: ChatMessage): number {
+  return (msg.history?.length ?? 0) + 1
+}
+
+function versionOf(msg: ChatMessage): number {
+  return msg.activeVersion ?? totalVersions(msg)
+}
+
+function hasVersions(msg: ChatMessage): boolean {
+  return msg.role === 'assistant' && totalVersions(msg) > 1
+}
+
+function isLatestVersion(msg: ChatMessage): boolean {
+  return versionOf(msg) === totalVersions(msg)
+}
+
+/** 按当前版本号取显示内容：最新=消息本体，旧版=history 快照 */
+function displayOf(msg: ChatMessage): Pick<ChatMessage, 'content' | 'blocks' | 'durationMs' | 'createTime' | 'interrupted'> {
+  const version = versionOf(msg)
+  if (version === totalVersions(msg) || !msg.history?.length) {
+    return msg
+  }
+  return msg.history[version - 1] ?? msg
+}
 
 function startEdit(msg: ChatMessage): void {
   editingId.value = msg.id
@@ -202,12 +254,23 @@ defineExpose({ scrollToBottom, isNearBottom })
         .message-edit {
           max-width: 70%;
           width: 100%;
+          position: relative;
 
+          // 取消/发送嵌在输入框内右下角
           .edit-buttons {
+            position: absolute;
+            right: 10px;
+            bottom: 10px;
             display: flex;
-            justify-content: flex-end;
             gap: 8px;
-            margin-top: 8px;
+
+            .edit-send {
+              padding: 0 14px;
+            }
+          }
+
+          :deep(.ant-input) {
+            padding-bottom: 44px;
           }
         }
 
@@ -258,6 +321,32 @@ defineExpose({ scrollToBottom, isNearBottom })
 
             &.copied {
               color: #52c41a;
+            }
+          }
+
+          // 回复版本切换 < n/n >
+          .version-nav {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 4px;
+            color: #86909c;
+
+            .version-btn {
+              color: #86909c;
+              padding: 2px 6px;
+              height: auto;
+              font-size: 12px;
+
+              &:hover:not(:disabled) {
+                color: $primary-color;
+              }
+            }
+
+            .version-text {
+              font-size: 12px;
+              min-width: 36px;
+              text-align: center;
+              user-select: none;
             }
           }
         }

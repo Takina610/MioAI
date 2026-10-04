@@ -52,6 +52,10 @@ export interface ChatMessage {
   interrupted?: boolean
   /** 瞬态失败自动重试中的提示（后端 retry 事件；下一段内容到达即清除） */
   retryNotice?: string
+  /** 本消息的历史版本（旧→新，不含当前正文）：编辑/重新生成时旧回复存档于此 */
+  history?: ChatMessage[]
+  /** 当前显示的版本号（从 1 计数，最大 = history.length + 1 即最新正文） */
+  activeVersion?: number
   /** 回复完成后的用量统计 */
   usage?: ChatMessageUsage
 }

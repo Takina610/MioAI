@@ -2,7 +2,6 @@
   <div class="mio-bot-message">
     <!-- 状态行：进行中显示已工作时长（瞬态重试时附提示）；完成后显示总结行并可展开工作过程 -->
     <div v-if="isLoading" class="status-line running">
-      <ZcodeSpinner :size="13" />
       <span>已工作 {{ elapsedText }}</span>
       <span v-if="retryNotice" class="retry-notice">{{ retryNotice }}</span>
     </div>
@@ -29,13 +28,16 @@
             :content="block.text"
           />
 
-          <!-- 思考块（zcode 式）：流式=单行实时摘要，点击展开自动滚底；结束=「思考 · 持续了X秒」 -->
+          <!-- 思考块（zcode GUI 式）：收起=「图标 思考 · 摘要/时长」单行；展开=竖线内容区（与图标对齐），上方不再重复摘要 -->
           <div v-else-if="block.type === 'thinking'" class="thinking-block">
             <div class="thinking-bar" @click="toggleThinking(index)">
-              <ZcodeSpinner v-if="isActiveThinking(index)" :size="13" class="think-spin" />
-              <BrainIcon v-else :size="13" class="think-icon" />
-              <span v-if="isActiveThinking(index)" class="thinking-live">{{ thinkingTail(block) }}</span>
-              <span v-else class="thinking-label">思考{{ durationSuffix(block) }}</span>
+              <BrainIcon :size="13" class="think-icon" :class="{ active: isActiveThinking(index) }" />
+              <span class="thinking-label">思考</span>
+              <span
+                v-if="isActiveThinking(index) && !isThinkingExpanded(index)"
+                class="thinking-live"
+              >· {{ thinkingTail(block) }}</span>
+              <span v-else-if="!isActiveThinking(index)" class="thinking-label">· {{ durationSuffix(block) }}</span>
               <CaretRightOutlined :rotate="isThinkingExpanded(index) ? 90 : 0" class="caret-icon" />
             </div>
             <CollapseTransition :open="isThinkingExpanded(index)">
@@ -365,7 +367,10 @@ watch(
     for (let i = 0; i < blocks.length; i++) {
       const b = blocks[i]
       if (b.type === 'tool' && !(i in revealMap.value)) {
-        revealMap.value[i] = props.isLoading ? 0 : toolMeta(b).length
+        // 已完成的工具块直接显示完整信息：切换会话再切回（组件重建）时不重放打字机
+        revealMap.value[i] = props.isLoading && b.status === 'running'
+          ? 0
+          : toolMeta(b).length
       }
     }
   },
@@ -473,13 +478,13 @@ function thinkingTail(block: ThinkingBlock): string {
   return tail.length > 90 ? '…' + tail.slice(-90) : tail
 }
 
-/** 收起态标签后缀：「· 持续了 X 秒」；不足 1 秒沿用 zcode 的「持续了几秒」 */
+/** 收起态标签后缀：「持续了 X 秒」；不足 1 秒沿用 zcode 的「持续了几秒」 */
 function durationSuffix(block: ThinkingBlock): string {
   if (block.durationMs == null) return ''
   const seconds = Math.round(block.durationMs / 1000)
-  if (seconds < 1) return ' · 持续了几秒'
-  if (seconds < 60) return ` · 持续了 ${seconds} 秒`
-  return ` · 持续了 ${formatDuration(block.durationMs)}`
+  if (seconds < 1) return '持续了几秒'
+  if (seconds < 60) return `持续了 ${seconds} 秒`
+  return `持续了 ${formatDuration(block.durationMs)}`
 }
 
 const thinkingEls = new Map<number, HTMLElement>()
@@ -573,12 +578,12 @@ watch(
   transition: transform 0.2s;
 }
 
-// 思考块（zcode 式：单行折叠条 + 展开浅灰正文）
+// 思考块（zcode GUI 式：图标+「思考 · 摘要」单行；展开后竖线内容区与图标对齐）
 .thinking-block {
   .thinking-bar {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 6px;
     max-width: 100%;
     padding: 4px 10px;
     margin: 0 -10px;
@@ -593,9 +598,15 @@ watch(
       background: #f2f3f5;
     }
 
-    .think-icon,
-    .think-spin {
+    .think-icon {
       flex-shrink: 0;
+      color: #86909c;
+
+      // 思考进行中：图标微呼吸提示活跃（加载动画只出现在消息下方）
+      &.active {
+        color: $primary-color;
+        animation: think-pulse 1.6s ease-in-out infinite;
+      }
     }
 
     .thinking-live {
@@ -608,12 +619,15 @@ watch(
 
     .thinking-label {
       flex-shrink: 0;
+      white-space: nowrap;
     }
   }
 
+  // 竖线从内容第一行贯穿到最后一行，x 位置与上方图标中心对齐（图标 13px → 中心 ≈ 6px）
   .thinking-text {
-    margin: 6px 0 0 20px;
-    padding: 2px 0 4px;
+    margin: 4px 0 6px 6px;
+    padding: 2px 0 4px 14px;
+    border-left: 2px solid #e5e6eb;
     font-size: 13px;
     line-height: 1.65;
     color: #86909c;
@@ -623,6 +637,11 @@ watch(
     overflow-y: auto;
     @include thin-scrollbar;
   }
+}
+
+@keyframes think-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
 }
 
 // 工具块：时间线条目 + 可跳转来源链接

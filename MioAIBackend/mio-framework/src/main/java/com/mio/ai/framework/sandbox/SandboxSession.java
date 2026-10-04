@@ -73,12 +73,30 @@ public class SandboxSession {
         }
     }
 
-    /** 工作目录内的相对路径 → 校验后的路径串（供 shell 引用） */
+    /** 工作目录内的相对路径 → 校验后的路径串（供 shell 引用）。
+     * 容错规范化：模型常带 ~/sandbox/ 前缀或 ./ 前缀，直接剥掉而不是报错
+     * （写入失败率最高的一类就是全路径被严格校验拒绝）。 */
     public String resolveRelative(String path) {
-        if (StrUtil.isBlank(path) || path.startsWith("/") || path.startsWith("~") || path.contains("..")) {
+        if (StrUtil.isBlank(path)) {
+            throw new IllegalArgumentException("路径不能为空");
+        }
+        String p = path.trim().replace("\\", "/");
+        String workdir = StrUtil.blankToDefault(props.getWorkdir(), "sandbox")
+                .replaceFirst("^~/?", "").replaceAll("^/+", "").replaceAll("/+$", "");
+        p = p.replaceFirst("^~/?", "");
+        if (!workdir.isEmpty()) {
+            p = p.replaceFirst("^" + java.util.regex.Pattern.quote(workdir) + "/?", "");
+            // 绝对路径含工作目录（/home/xx/sandbox/...）：取工作目录之后的部分
+            int idx = p.indexOf("/" + workdir + "/");
+            if (idx >= 0) {
+                p = p.substring(idx + workdir.length() + 2);
+            }
+        }
+        p = p.replaceFirst("^\\./", "").replaceAll("^/+", "");
+        if (p.isEmpty() || p.contains("..")) {
             throw new IllegalArgumentException("路径必须是沙箱工作目录内的相对路径: " + path);
         }
-        return path.replace("\\", "/");
+        return p;
     }
 
     /** 读工作目录内文件全文（UTF-8） */

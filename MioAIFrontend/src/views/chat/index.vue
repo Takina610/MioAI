@@ -32,6 +32,7 @@
           :can-modify="userStore.isLoggedIn"
           @edit="handleEditMessage"
           @regenerate="handleRegenerate"
+          @switch-version="handleSwitchVersion"
         />
         <ChatInput
           v-model="inputMessage"
@@ -74,7 +75,7 @@ import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getAgentById } from '@/api/agent'
 import { useUserStore } from '@/store/user'
-import type { Agent } from '@/types'
+import type { Agent, ChatMessage } from '@/types'
 import AuthModal from '@/components/AuthModal.vue'
 import ChatSidebar from './components/ChatSidebar.vue'
 import ChatMessageList from './components/ChatMessageList.vue'
@@ -276,7 +277,13 @@ function handleDeleteConfirm(): void {
 
 /** 消息操作的前置校验：登录 + 会话已建立 + 当前无流式任务 */
 function canModifyMessages(): boolean {
-  return userStore.isLoggedIn && !!currentChatId.value && !isLoading.value
+  if (!userStore.isLoggedIn) return false
+  if (!currentChatId.value) return false
+  if (isLoading.value) {
+    message.warning('当前会话有任务正在执行，请等完成后再操作')
+    return false
+  }
+  return true
 }
 
 /** 取服务端消息行（截断以 seq 精确定位，本地列表不维护 seq） */
@@ -285,7 +292,16 @@ async function fetchRows(chatId: string): Promise<Array<{ role: string; seq: num
   return (rows ?? []).map(r => ({ role: r.role, seq: r.seq ?? 0 }))
 }
 
-/** 重新生成：截断到最后一条用户消息（本地+服务端），原文重发且不重复落库 */
+/** 旧回复快照存入版本历史（供 <n/n> 切换）；空回复不留版本 */
+function snapshotHistory(oldReply?: ChatMessage, priorHistory?: ChatMessage[]): ChatMessage[] | undefined {
+  const history = [...(priorHistory ?? [])]
+  if (oldReply && (oldReply.content || oldReply.blocks?.length)) {
+    history.push({ ...oldReply, history: undefined, activeVersion: undefined })
+  }
+  return history.length ? history : undefined
+}
+
+/** 重新生成：截断到最后一条用户消息（本地+服务端），原文重发且不重复落库；旧回复存为版本 */
 async function handleRegenerate(): Promise<void> {
   if (!canModifyMessages()) return
   const chatId = currentChatId.value
@@ -296,6 +312,11 @@ async function handleRegenerate(): Promise<void> {
   }
   if (lastUserIndex < 0) return
   const content = msgs[lastUserIndex].content
+  const oldReply = msgs[msgs.length - 1]
+  const history = snapshotHistory(
+    oldReply.role === 'assistant' ? oldReply : undefined,
+    oldReply.role === 'assistant' ? oldReply.history : undefined
+  )
 
   try {
     const rows = await fetchRows(chatId)
@@ -307,19 +328,22 @@ async function handleRegenerate(): Promise<void> {
     await truncateConversation(chatId, lastUserRow.seq)
   } catch (e) {
     console.error(e)
+    message.error('操作失败，请重试')
     return
   }
 
   messagesApi.setChatMessages(chatId, msgs.slice(0, lastUserIndex + 1))
-  sendMessage(content, { skipUserMessage: true, skipUserPersist: true, reasoningEffort: reasoningEffort.value })
+  sendMessage(content, { skipUserMessage: true, skipUserPersist: true, reasoningEffort: reasoningEffort.value, history })
 }
 
-/** 编辑用户消息：截断该消息及其后历史（本地+服务端），以新内容重新发送 */
+/** 编辑用户消息：截断该消息及其后历史（本地+服务端），以新内容重新发送；旧回复存为版本 */
 async function handleEditMessage(index: number, newContent: string): Promise<void> {
   if (!canModifyMessages()) return
   const chatId = currentChatId.value
   const msgs = messagesApi.getChatMessages(chatId)
   if (!msgs[index] || msgs[index].role !== 'user') return
+  const oldReply = msgs.slice(index + 1).find(m => m.role === 'assistant')
+  const history = snapshotHistory(oldReply, oldReply?.history)
 
   try {
     const rows = await fetchRows(chatId)
@@ -334,11 +358,24 @@ async function handleEditMessage(index: number, newContent: string): Promise<voi
     await truncateConversation(chatId, prevRow ? prevRow.seq : 0)
   } catch (e) {
     console.error(e)
+    message.error('操作失败，请重试')
     return
   }
 
   messagesApi.setChatMessages(chatId, msgs.slice(0, index))
-  sendMessage(newContent, { reasoningEffort: reasoningEffort.value })
+  sendMessage(newContent, { reasoningEffort: reasoningEffort.value, history })
+}
+
+/** 切换回复版本：只改前端显示，不动服务端历史 */
+function handleSwitchVersion(messageId: string, version: number): void {
+  const chatId = currentChatId.value
+  if (!chatId) return
+  const msgs = messagesApi.getChatMessages(chatId)
+  const idx = msgs.findIndex(m => m.id === messageId)
+  if (idx < 0) return
+  const updated = [...msgs]
+  updated[idx] = { ...updated[idx], activeVersion: version }
+  messagesApi.setChatMessages(chatId, updated)
 }
 
 function handleKeyboardShortcut(e: KeyboardEvent): void {
