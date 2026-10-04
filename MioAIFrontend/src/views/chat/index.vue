@@ -6,6 +6,7 @@
       :chat-list="chatList"
       :current-chat-id="currentChatId"
       :chat-list-loading="chatListLoading"
+      :streaming-chat-ids="streamingChatIds"
       @select="selectChat"
       @new-chat="createNewChat"
       @share="shareChat"
@@ -151,6 +152,9 @@ const streamApi = useChatStream({
   scrollToChatListTop
 })
 const { sendMessage, cleanup: cleanupStream } = streamApi
+
+/** 正在流式执行中的会话（侧边栏显示加载动画，切走也能看出进度在跑） */
+const streamingChatIds = computed(() => [...messagesApi.chatLoadingMap.value.keys()])
 
 const { currentChatId, messages, isLoading, switchChat, loadMessages } = messagesApi
 

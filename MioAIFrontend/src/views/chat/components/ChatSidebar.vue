@@ -54,6 +54,7 @@
         :current-chat-id="currentChatId"
         :chat-list-loading="chatListLoading"
         :is-collapsed="isCollapsed"
+        :streaming-chat-ids="streamingChatIds"
         @select="emit('select', $event)"
         @share="emit('share', $event)"
         @delete="emit('delete', $event)"
@@ -127,6 +128,8 @@ defineProps<{
   chatList: ChatSession[]
   currentChatId: string
   chatListLoading: boolean
+  /** 正在流式执行中的会话 ID（列表项显示加载动画） */
+  streamingChatIds?: string[]
 }>()
 
 const emit = defineEmits<{

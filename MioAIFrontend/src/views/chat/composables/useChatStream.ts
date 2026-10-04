@@ -202,7 +202,7 @@ export function useChatStream(options: {
       startRecoveryPolling(chatId, aiMessageIndex, () => {
         // 自愈失败（后端真挂了/始终无新内容）：保留已有内容并标记中断
         patchMessage(chatId, aiMessageIndex, (msg) => ({ ...msg, interrupted: true }))
-        if (isNewChat && userStore.isLoggedIn) {
+        if (!earlyTitleDone && isNewChat && userStore.isLoggedIn) {
           options.updateTitle(content, messagesApi.getChatMessages(chatId)[aiMessageIndex]?.content || '', chatId)
         }
         messagesApi.setLoading(chatId, false)
@@ -219,7 +219,7 @@ export function useChatStream(options: {
         if (messagesApi.currentChatId.value === chatId) {
           nextTick(() => options.followStream())
         }
-        if (isNewChat && userStore.isLoggedIn) {
+        if (!earlyTitleDone && isNewChat && userStore.isLoggedIn) {
           options.updateTitle(content, textOfBlocks(row.blocks ?? []), chatId)
         }
         messagesApi.setLoading(chatId, false)
@@ -228,6 +228,19 @@ export function useChatStream(options: {
 
     // 初始挂一次看门狗；此后每个事件（含心跳）到达都会重挂
     rearmStreamWatchdog(chatId, () => handleStreamError(new Event('stream-watchdog')))
+
+    // 标题不必等回复结束：首答累计够多字或首个工具调用出现时即可总结
+    let earlyTitleDone = false
+    const maybeTitleEarly = (): void => {
+      if (earlyTitleDone || !isNewChat || !userStore.isLoggedIn) return
+      const msg = messagesApi.getChatMessages(chatId)[aiMessageIndex]
+      if (!msg) return
+      const hasTool = (msg.blocks ?? []).some(b => b.type === 'tool')
+      if (msg.content.length >= 60 || hasTool) {
+        earlyTitleDone = true
+        options.updateTitle(content, msg.content, chatId)
+      }
+    }
 
     es.onmessage = (event: MessageEvent) => {
       const rawData = event.data
@@ -258,15 +271,16 @@ export function useChatStream(options: {
       if (finished) {
         finishStream()
       } else {
+        maybeTitleEarly()
         followIfCurrent(chatId)
       }
     }
 
-    /** 流完成：生成标题、复位加载状态、关闭连接 */
+    /** 流完成：生成标题（早触发过则跳过）、复位加载状态、关闭连接 */
     function finishStream(): void {
       disarmStreamWatchdog()
       const finalMessages = messagesApi.getChatMessages(chatId)
-      if (isNewChat && userStore.isLoggedIn) {
+      if (!earlyTitleDone && isNewChat && userStore.isLoggedIn) {
         options.updateTitle(content, finalMessages[aiMessageIndex]?.content || '', chatId)
       }
       messagesApi.setLoading(chatId, false)

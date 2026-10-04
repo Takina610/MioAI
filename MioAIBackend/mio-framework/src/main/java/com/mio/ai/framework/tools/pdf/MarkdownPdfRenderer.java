@@ -54,6 +54,7 @@ public final class MarkdownPdfRenderer {
     }
 
     public static void render(String markdown, String path) throws IOException {
+        markdown = preprocessHtml(markdown);
         FontProvider provider = new FontProvider();
         provider.addFont(readResource(CJK_FONT));
         provider.addFont(readResource(EMOJI_FONT));
@@ -282,6 +283,48 @@ public final class MarkdownPdfRenderer {
 
     private static Paragraph spacer(float height) {
         return new Paragraph("").setMarginBottom(height);
+    }
+
+    /**
+     * HTML 标签与实体预处理：模型常直接输出 <br>、&emsp;、<b> 等——
+     * 先把常见 HTML 标签转成等价 markdown/换行、剥除未知标签，
+     * 最后再解码实体（保证 &lt;br&gt; 之类的转义文本不被当标签处理）。
+     */
+    private static String preprocessHtml(String md) {
+        String s = md.replace("\n", "\n").replace("\r", "\n");
+        s = s.replaceAll("(?i)<br\s*/?>", "\n");
+        s = s.replaceAll("(?i)<hr\s*/?>", "\n---\n");
+        s = s.replaceAll("(?i)<h1(\s[^>]*)?>", "\n# ");
+        s = s.replaceAll("(?i)<h2(\s[^>]*)?>", "\n## ");
+        s = s.replaceAll("(?i)<h3(\s[^>]*)?>", "\n### ");
+        s = s.replaceAll("(?i)<h[4-6](\s[^>]*)?>", "\n#### ");
+        s = s.replaceAll("(?i)<li(\s[^>]*)?>", "- ");
+        s = s.replaceAll("(?i)</(p|div|h[1-6]|li|ul|ol|tr|table|blockquote)>", "\n");
+        s = s.replaceAll("(?i)<(b|strong)>(.+?)</\\1>", "**$2**");
+        s = s.replaceAll("(?i)<(i|em|u)>(.+?)</\\1>", "$2");
+        s = s.replaceAll("(?i)<(code)>(.+?)</\\1>", "`$2`");
+        s = s.replaceAll("(?i)<sub>(.+?)</sub>", "$1");
+        s = s.replaceAll("(?i)<sup>(.+?)</sup>", "$1");
+        s = s.replaceAll("(?i)<[a-zA-Z][^>\n]{0,200}/?>", "");
+        s = s.replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&apos;", "'")
+                .replace("&nbsp;", " ")
+                .replace("&ensp;", " ")
+                .replace("&emsp;", "  ")
+                .replace("&hellip;", "…")
+                .replace("&mdash;", "—")
+                .replace("&ndash;", "–")
+                .replace("&ldquo;", "“")
+                .replace("&rdquo;", "”")
+                .replace("&lsquo;", "‘")
+                .replace("&rsquo;", "’")
+                .replace("&middot;", "·")
+                .replace("&times;", "×")
+                .replace("&deg;", "°");
+        return s;
     }
 
     private static byte[] readResource(String path) throws IOException {

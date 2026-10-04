@@ -26,7 +26,14 @@
           @click="emit('select', chat.id)"
         >
           <div class="chat-item-content">
-            <div class="chat-item-title">{{ chat.title }}</div>
+            <div class="chat-item-title">
+              <ZcodeSpinner
+                v-if="streamingChatIds?.includes(chat.id)"
+                :size="12"
+                class="chat-item-spinner"
+              />
+              <span class="chat-item-title-text">{{ chat.title }}</span>
+            </div>
             <div class="chat-item-time">{{ formatTime(chat.updateTime) }}</div>
           </div>
           <a-dropdown :trigger="['click']">
@@ -56,6 +63,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { ChatSession } from '@/types'
+import ZcodeSpinner from '@/components/ZcodeSpinner.vue'
 import {
   MessageOutlined,
   MoreOutlined,
@@ -68,6 +76,8 @@ defineProps<{
   currentChatId: string
   chatListLoading: boolean
   isCollapsed: boolean
+  /** 正在流式执行中的会话（对应列表项标题前显示加载动画） */
+  streamingChatIds?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -212,10 +222,21 @@ defineExpose({ checkListFilled, scrollToTop })
       min-width: 0;
 
       .chat-item-title {
+        display: flex;
+        align-items: center;
+        gap: 6px;
         font-size: 14px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        min-width: 0;
+
+        .chat-item-spinner {
+          flex-shrink: 0;
+        }
+
+        .chat-item-title-text {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
       }
 
       .chat-item-time {
