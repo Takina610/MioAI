@@ -53,11 +53,13 @@ public class BotEventChannel {
     }
 
     public void answerDelta(String delta) {
+        closeOpenThinking();
         appendDisplayText("text", delta);
         emit(SseChunk.delta("answer", delta).fields());
     }
 
     public void toolUse(String id, String tool) {
+        closeOpenThinking();
         Map<String, Object> block = new LinkedHashMap<>();
         block.put("type", "tool");
         if (id != null && !id.isBlank()) {
@@ -129,6 +131,7 @@ public class BotEventChannel {
         if (agentMessageService == null || userId == null) {
             return;
         }
+        closeOpenThinking();
         try {
             AgentMessageDO row = new AgentMessageDO();
             row.setConversationId(chatId);
@@ -197,7 +200,22 @@ public class BotEventChannel {
         Map<String, Object> block = new LinkedHashMap<>();
         block.put("type", type);
         block.put("text", delta);
+        if ("thinking".equals(type)) {
+            block.put("startMs", System.currentTimeMillis());
+        }
         displayBlocks.add(block);
+    }
+
+    /** 思考块收尾：换块/落库时把进行中的思考块记上时长（前端展示"思考 · 持续了X秒"） */
+    private void closeOpenThinking() {
+        if (displayBlocks.isEmpty()) {
+            return;
+        }
+        Map<String, Object> last = displayBlocks.get(displayBlocks.size() - 1);
+        if ("thinking".equals(last.get("type")) && last.get("startMs") instanceof Long startMs) {
+            last.put("durationMs", System.currentTimeMillis() - startMs);
+            last.remove("startMs");
+        }
     }
 
     private String truncate(String text, int max) {

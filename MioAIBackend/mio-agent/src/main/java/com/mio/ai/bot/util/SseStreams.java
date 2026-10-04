@@ -23,8 +23,13 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public final class SseStreams {
 
-    /** 聊天流超时：10 分钟。正常回答远短于此，仅兜底连接挂死 */
-    public static final long CHAT_TIMEOUT_MS = 600_000L;
+    /**
+     * 聊天流超时：0 = 不设墙钟上限。多步 Agent 任务时长无上界
+     * （N 步 × 单步流式上限 + 工具执行时间），固定上限会在任务中途干净掐断连接
+     * （表现为无 error 事件的静默断流）。连接存活由 15s 心跳维持，
+     * 挂死由前端看门狗（60s 无事件）判定，收尾由任务结束时的 complete 兜底。
+     */
+    public static final long CHAT_TIMEOUT_MS = 0L;
 
     private SseStreams() {
     }

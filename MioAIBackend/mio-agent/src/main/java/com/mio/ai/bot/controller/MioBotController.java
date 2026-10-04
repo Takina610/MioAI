@@ -100,6 +100,14 @@ public class MioBotController {
     @org.springframework.beans.factory.annotation.Value("${mio.ai.agent.max-steps:100}")
     private int agentMaxSteps;
 
+    /** 单次模型流式调用超时（须不小于本地反代的总预算，否则先被后端掐断） */
+    @org.springframework.beans.factory.annotation.Value("${mio.ai.agent.stream-timeout-seconds:1800}")
+    private long agentStreamTimeoutSeconds;
+
+    /** 思考强度白名单：与 openai-java ReasoningEffort 枚举一致，前端输入框下方可调 */
+    private static final java.util.Set<String> REASONING_EFFORTS =
+            java.util.Set.of("minimal", "low", "medium", "high", "xhigh", "max", "none");
+
     /** 正在执行中的会话：断线自动重连/双击等重复请求直接拒绝，防止同一轮任务被重复执行 */
     private static final java.util.Set<String> ACTIVE_CHATS = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
@@ -108,7 +116,8 @@ public class MioBotController {
                            @RequestParam @NotBlank @Size(max = 20000) String content,
                            @RequestParam(required = false) Long agentId,
                            @RequestParam(required = false) String token,
-                           @RequestParam(defaultValue = "false") boolean skipUserPersist) {
+                           @RequestParam(defaultValue = "false") boolean skipUserPersist,
+                           @RequestParam(required = false) String reasoningEffort) {
         Long userId = StrUtil.isBlank(token) ? null : redisComponent.getUserId(token);
         long resolvedAgentId = agentId != null ? agentId : MioBot.AGENT_ID;
 
@@ -141,9 +150,12 @@ public class MioBotController {
         ToolCallback[] mcpTools = botResourceService.getMcpToolCallbacks(resolvedAgentId);
         String knowledgeContext = botResourceService.buildKnowledgeContext(resolvedAgentId, userId, content);
 
+        String effort = reasoningEffort != null && REASONING_EFFORTS.contains(reasoningEffort)
+                ? reasoningEffort : null;
         MioBot mioBot = new MioBot(chatModel, jdbcChatMemory, commonTools,
                 List.of(mcpTools), agentUsageLogService, toolCallLogService, agentMessageService,
-                chatId, userId, resolvedAgentId, customSystemPrompt, sandboxSession, agentMaxSteps);
+                chatId, userId, resolvedAgentId, customSystemPrompt, sandboxSession, agentMaxSteps,
+                agentStreamTimeoutSeconds, effort);
         // 任务真正结束（含异常）时解除会话占用
         mioBot.setOnFinish(() -> ACTIVE_CHATS.remove(chatId));
         return mioBot.run(content, knowledgeContext, !skipUserPersist);

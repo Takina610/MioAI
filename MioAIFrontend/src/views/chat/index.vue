@@ -35,6 +35,7 @@
         />
         <ChatInput
           v-model="inputMessage"
+          v-model:effort="reasoningEffort"
           :agent-name="agentInfo?.name"
           :agent-avatar="agentInfo?.avatar"
           :has-messages="messages.length > 0"
@@ -93,6 +94,10 @@ const agentId = ref<number>(0)
 const agentInfo = ref<Agent | null>(null)
 const authModalVisible = ref<boolean>(false)
 const inputMessage = ref<string>('')
+
+// 思考等级：本地记忆，随每次发送透传给模型
+const reasoningEffort = ref<string>(localStorage.getItem('reasoning-effort') || 'high')
+watch(reasoningEffort, v => localStorage.setItem('reasoning-effort', v))
 
 const sidebarRef = ref<InstanceType<typeof ChatSidebar> | null>(null)
 const messageListRef = ref<InstanceType<typeof ChatMessageList> | null>(null)
@@ -261,7 +266,7 @@ function handleSend(): void {
     return
   }
 
-  sendMessage(content)
+  sendMessage(content, { reasoningEffort: reasoningEffort.value })
   inputMessage.value = ''
 }
 
@@ -306,7 +311,7 @@ async function handleRegenerate(): Promise<void> {
   }
 
   messagesApi.setChatMessages(chatId, msgs.slice(0, lastUserIndex + 1))
-  sendMessage(content, { skipUserMessage: true, skipUserPersist: true })
+  sendMessage(content, { skipUserMessage: true, skipUserPersist: true, reasoningEffort: reasoningEffort.value })
 }
 
 /** 编辑用户消息：截断该消息及其后历史（本地+服务端），以新内容重新发送 */
@@ -333,7 +338,7 @@ async function handleEditMessage(index: number, newContent: string): Promise<voi
   }
 
   messagesApi.setChatMessages(chatId, msgs.slice(0, index))
-  sendMessage(newContent)
+  sendMessage(newContent, { reasoningEffort: reasoningEffort.value })
 }
 
 function handleKeyboardShortcut(e: KeyboardEvent): void {

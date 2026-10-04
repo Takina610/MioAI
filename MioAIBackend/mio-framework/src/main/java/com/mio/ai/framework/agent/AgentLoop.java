@@ -29,11 +29,13 @@ public class AgentLoop {
     private static final String STEP_LIMIT_HINT =
             "[system] 已达到单轮最大执行步数。本轮禁止再调用任何工具，请立即基于已获得的信息输出总结与后续建议。";
 
-    /** 单次模型流式调用（含超长生成全程）的 okhttp callTimeout，与 SSE 会话超时对齐 */
-    private static final long DEFAULT_STREAM_TIMEOUT_SECONDS = 600;
+    /** 单次模型流式调用（含超长生成全程）的 okhttp callTimeout；须不小于上游反代的总预算 */
+    private static final long DEFAULT_STREAM_TIMEOUT_SECONDS = 1800;
 
     private final ToolCallingManager toolCallingManager = ToolCallingManager.builder().build();
     private final long streamTimeoutSeconds;
+    /** 思考强度（minimal/low/medium/high/xhigh/max/none）；null = 不指定，用上游默认 */
+    private final String reasoningEffort;
 
     /** 循环事件监听：上层负责流式展示、持久化与用量日志 */
     public interface Listener {
@@ -57,11 +59,12 @@ public class AgentLoop {
     }
 
     public AgentLoop() {
-        this(DEFAULT_STREAM_TIMEOUT_SECONDS);
+        this(DEFAULT_STREAM_TIMEOUT_SECONDS, null);
     }
 
-    public AgentLoop(long streamTimeoutSeconds) {
+    public AgentLoop(long streamTimeoutSeconds, String reasoningEffort) {
         this.streamTimeoutSeconds = streamTimeoutSeconds > 0 ? streamTimeoutSeconds : DEFAULT_STREAM_TIMEOUT_SECONDS;
+        this.reasoningEffort = reasoningEffort;
     }
 
     /**
@@ -134,11 +137,17 @@ public class AgentLoop {
             OpenAiChatOptions.Builder mutated = defaults.mutate()
                     .toolCallbacks(List.of(tools));
             mutated.timeout(streamTimeout);
+            if (reasoningEffort != null && !reasoningEffort.isBlank()) {
+                mutated.reasoningEffort(reasoningEffort);
+            }
             return mutated.build();
         }
-        return OpenAiChatOptions.builder()
+        OpenAiChatOptions.Builder builder = OpenAiChatOptions.builder()
                 .toolCallbacks(List.of(tools))
-                .timeout(streamTimeout)
-                .build();
+                .timeout(streamTimeout);
+        if (reasoningEffort != null && !reasoningEffort.isBlank()) {
+            builder.reasoningEffort(reasoningEffort);
+        }
+        return builder.build();
     }
 }

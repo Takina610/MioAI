@@ -75,6 +75,8 @@ export function useChatStream(options: {
   interface SendOptions {
     skipUserMessage?: boolean
     skipUserPersist?: boolean
+    /** 思考强度（none/low/medium/high 等），透传到模型 */
+    reasoningEffort?: string
   }
 
   function sendMessage(content: string, opts?: SendOptions): void {
@@ -176,7 +178,10 @@ export function useChatStream(options: {
     }
     currentEventSourceChatId = chatId
 
-    eventSource = chatWithMioBot(content, chatId, options.agentId.value, token, opts?.skipUserPersist ?? false)
+    eventSource = chatWithMioBot(content, chatId, options.agentId.value, token, {
+      skipUserPersist: opts?.skipUserPersist ?? false,
+      reasoningEffort: opts?.reasoningEffort
+    })
     const es = eventSource
 
     // 流式异常处理：连接被掐断时后端通常仍在执行——启动静默自愈而不是报错
@@ -305,18 +310,32 @@ export function useChatStream(options: {
     return {
       ...msg,
       content: msg.content + delta,
-      blocks: appendBlockDelta(msg.blocks, 'text', delta)
+      blocks: appendBlockDelta(closeOpenThinking(msg.blocks), 'text', delta)
     }
   }
 
-  /** 向同类末块合并增量；末块类型不同或无块时新开一块 */
+  /** 向同类末块合并增量；末块类型不同或无块时新开一块（思考块开块时记起点） */
   function appendBlockDelta(blocks: MessageBlock[] | undefined, type: 'text' | 'thinking', delta: string): MessageBlock[] {
     const next = [...(blocks ?? [])]
     const last = next[next.length - 1]
     if (last && last.type === type) {
       next[next.length - 1] = { ...last, text: last.text + delta } as MessageBlock
     } else {
-      next.push({ type, text: delta })
+      next.push(type === 'thinking'
+        ? { type, text: delta, startedAt: Date.now() }
+        : { type, text: delta })
+    }
+    return next
+  }
+
+  /** 进行中的思考块收尾：换块/流结束时记上时长（收起态显示"思考 · 持续了X秒"） */
+  function closeOpenThinking(blocks: MessageBlock[] | undefined): MessageBlock[] {
+    const next = blocks ?? []
+    const last = next[next.length - 1]
+    if (last && last.type === 'thinking' && last.startedAt != null && last.durationMs == null) {
+      const copy = [...next]
+      copy[copy.length - 1] = { ...last, durationMs: Date.now() - last.startedAt }
+      return copy
     }
     return next
   }
@@ -333,7 +352,7 @@ export function useChatStream(options: {
       case 'thinking':
         return { ...msg, blocks: appendBlockDelta(msg.blocks, 'thinking', String(parsed.delta ?? parsed.content ?? '')) }
       case 'tool_use': {
-        const blocks = [...(msg.blocks ?? [])]
+        const blocks = [...closeOpenThinking(msg.blocks)]
         blocks.push({
           type: 'tool',
           id: parsed.id ? String(parsed.id) : undefined,
@@ -389,10 +408,10 @@ export function useChatStream(options: {
         return msg
       case 'done':
         markFinished()
-        return msg
+        return { ...msg, blocks: closeOpenThinking(msg.blocks) }
       case 'error':
         markFinished()
-        return { ...msg, interrupted: true }
+        return { ...msg, blocks: closeOpenThinking(msg.blocks), interrupted: true }
       default:
         return msg
     }

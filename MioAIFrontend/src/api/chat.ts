@@ -46,11 +46,14 @@ export const chatWithMioBot = (
   chatId: string,
   agentId: number,
   token: string,
-  skipUserPersist: boolean = false
+  opts: { skipUserPersist?: boolean; reasoningEffort?: string } = {}
 ): EventSource => {
   const params: ConnectSSEParams = { content, chatId, agentId, token }
-  if (skipUserPersist) {
+  if (opts.skipUserPersist) {
     params.skipUserPersist = true
+  }
+  if (opts.reasoningEffort) {
+    params.reasoningEffort = opts.reasoningEffort
   }
   return connectSSE('/bot/chat', params)
 }

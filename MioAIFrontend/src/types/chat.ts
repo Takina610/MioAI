@@ -20,7 +20,7 @@ export interface ToolEvent {
  */
 export type MessageBlock =
   | { type: 'text'; text: string }
-  | { type: 'thinking'; text: string }
+  | { type: 'thinking'; text: string; startedAt?: number; durationMs?: number }
   | (ToolEvent & { type: 'tool' })
 
 /** 任务清单步骤（SSE plan 事件快照，渲染于输入框上方） */

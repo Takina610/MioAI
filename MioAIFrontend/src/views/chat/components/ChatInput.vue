@@ -8,17 +8,35 @@
     <div class="chat-input-wrapper">
       <div class="chat-input-container">
         <slot name="above-input" />
-        <div class="input-box">
+        <div class="input-main">
           <a-textarea
             v-model:value="value"
             :placeholder="`给 ${agentName || 'MioBot'} 发送消息`"
-            :auto-size="{ minRows: 1, maxRows: 6 }"
+            :auto-size="{ minRows: 1, maxRows: 8 }"
             @pressEnter="handleEnter"
             class="chat-textarea"
           />
+        </div>
+        <!-- zcode 式底部工具栏：左思考等级、右发送 -->
+        <div class="input-toolbar">
+          <a-dropdown :trigger="['click']" placement="topLeft">
+            <div class="effort-selector" @click.prevent>
+              <BrainIcon :size="14" class="effort-icon" :class="{ dimmed: effort === 'none' }" />
+              <span class="effort-label">{{ effortLabel }}</span>
+              <DownOutlined class="effort-caret" />
+            </div>
+            <template #overlay>
+              <a-menu :selected-keys="[effort]" @click="onEffortClick">
+                <a-menu-item v-for="opt in EFFORT_OPTIONS" :key="opt.value">
+                  <BrainIcon :size="13" class="menu-brain" :class="{ dimmed: opt.value === 'none' }" />
+                  <span>{{ opt.label }}</span>
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
+
           <a-button
             type="primary"
-            shape="circle"
             class="send-btn"
             :disabled="!value.trim() || loading"
             :loading="loading"
@@ -35,7 +53,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useUserStore } from '@/store/user'
-import { ArrowUpOutlined } from '@ant-design/icons-vue'
+import { ArrowUpOutlined, DownOutlined } from '@ant-design/icons-vue'
+import BrainIcon from '@/components/BrainIcon.vue'
+
+/** 思考等级档位（与后端 ReasoningEffort 白名单对齐） */
+const EFFORT_OPTIONS = [
+  { value: 'high', label: '最高' },
+  { value: 'medium', label: '中等' },
+  { value: 'low', label: '较低' },
+  { value: 'none', label: '关闭' }
+] as const
 
 const props = defineProps<{
   modelValue: string
@@ -43,10 +70,13 @@ const props = defineProps<{
   agentAvatar?: string
   hasMessages: boolean
   loading: boolean
+  /** 思考强度（none/low/medium/high） */
+  effort?: string
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
+  (e: 'update:effort', value: string): void
   (e: 'send'): void
 }>()
 
@@ -56,6 +86,16 @@ const value = computed({
   get: () => props.modelValue,
   set: (v: string) => emit('update:modelValue', v)
 })
+
+const effort = computed(() => props.effort || 'high')
+
+const effortLabel = computed(
+  () => EFFORT_OPTIONS.find(o => o.value === effort.value)?.label ?? '最高'
+)
+
+function onEffortClick({ key }: { key: string | number }): void {
+  emit('update:effort', String(key))
+}
 
 function handleEnter(e: KeyboardEvent): void {
   if (!e.shiftKey) {
@@ -129,18 +169,15 @@ function handleEnter(e: KeyboardEvent): void {
         box-shadow: 0 4px 16px rgba(42, 161, 169, 0.2);
       }
 
-      .input-box {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 12px 14px 12px 18px;
+      .input-main {
+        padding: 14px 16px 6px;
 
         .chat-textarea {
-          flex: 1;
+          width: 100%;
           border: none;
           background: transparent;
           resize: none;
-          font-size: 16px;
+          font-size: 15px;
           line-height: 1.5;
           color: #1d2129;
 
@@ -164,34 +201,86 @@ function handleEnter(e: KeyboardEvent): void {
             }
           }
         }
+      }
 
-        .send-btn {
-          width: 40px;
-          height: 40px;
-          min-width: 40px;
+      // zcode 式工具栏：左思考等级 / 右发送（圆角方形）
+      .input-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 10px 10px 12px;
+      }
+
+      .effort-selector {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px;
+        border-radius: 10px;
+        font-size: 13px;
+        color: #4e5969;
+        cursor: pointer;
+        user-select: none;
+        transition: background 0.2s;
+
+        &:hover {
+          background: #f2f3f5;
+        }
+
+        .effort-icon {
+          color: $primary-color;
+
+          &.dimmed {
+            color: #c9cdd4;
+          }
+        }
+
+        .effort-caret {
+          font-size: 10px;
+          color: #86909c;
+        }
+      }
+
+      .send-btn {
+        width: 34px;
+        height: 34px;
+        min-width: 34px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        background: $primary-color;
+        border-color: $primary-color;
+        flex-shrink: 0;
+
+        &:hover:not(:disabled) {
+          background: darken($primary-color, 10%);
+          border-color: darken($primary-color, 10%);
+        }
+
+        &:disabled {
+          background: #e5e6eb;
+          border-color: #e5e6eb;
+          color: #c9cdd4;
+        }
+
+        :deep(.anticon) {
+          font-size: 15px;
           display: flex;
-          align-items: center;
-          justify-content: center;
-          background: $primary-color;
-          border-color: $primary-color;
-          flex-shrink: 0;
-
-          &:hover:not(:disabled) {
-            background: darken($primary-color, 10%);
-            border-color: darken($primary-color, 10%);
-          }
-
-          &:disabled {
-            background: #c9cdd4;
-            border-color: #c9cdd4;
-          }
-
-          :deep(.anticon) {
-            font-size: 18px;
-          }
         }
       }
     }
+  }
+}
+
+.menu-brain {
+  color: $primary-color;
+  margin-right: 8px;
+  vertical-align: -2px;
+
+  &.dimmed {
+    color: #c9cdd4;
   }
 }
 
@@ -214,22 +303,21 @@ function handleEnter(e: KeyboardEvent): void {
 
     .chat-input-wrapper {
       .chat-input-container {
-        .input-box {
-          padding: 12px 14px;
-          border-radius: 20px;
+        .input-main {
+          padding: 12px 14px 4px;
 
           .chat-textarea {
             font-size: 14px;
           }
+        }
 
-          .send-btn {
-            width: 36px;
-            height: 36px;
-            min-width: 36px;
+        .send-btn {
+          width: 32px;
+          height: 32px;
+          min-width: 32px;
 
-            :deep(.anticon) {
-              font-size: 16px;
-            }
+          :deep(.anticon) {
+            font-size: 14px;
           }
         }
       }

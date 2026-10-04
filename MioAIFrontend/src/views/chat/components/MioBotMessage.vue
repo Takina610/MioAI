@@ -28,15 +28,17 @@
             :content="block.text"
           />
 
-          <!-- 思考块 -->
+          <!-- 思考块（zcode 式）：流式=单行实时摘要，点击展开自动滚底；结束=「思考 · 持续了X秒」 -->
           <div v-else-if="block.type === 'thinking'" class="thinking-block">
-            <div class="block-header" @click="toggleThinking(index)">
+            <div class="thinking-bar" @click="toggleThinking(index)">
+              <ZcodeSpinner v-if="isActiveThinking(index)" :size="13" class="think-spin" />
+              <BrainIcon v-else :size="13" class="think-icon" />
+              <span v-if="isActiveThinking(index)" class="thinking-live">{{ thinkingTail(block) }}</span>
+              <span v-else class="thinking-label">思考{{ durationSuffix(block) }}</span>
               <CaretRightOutlined :rotate="isThinkingExpanded(index) ? 90 : 0" class="caret-icon" />
-              <BulbOutlined class="block-icon" />
-              <span class="block-title">思考过程</span>
             </div>
             <CollapseTransition :open="isThinkingExpanded(index)">
-              <div class="thinking-text">{{ block.text }}</div>
+              <div :ref="el => setThinkingEl(index, el)" class="thinking-text">{{ block.text }}</div>
             </CollapseTransition>
           </div>
 
@@ -95,11 +97,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, markRaw, onUnmounted, ref, watch } from 'vue'
+import { computed, markRaw, nextTick, onUnmounted, ref, watch } from 'vue'
 import type { Component } from 'vue'
 import {
   CaretRightOutlined,
-  BulbOutlined,
   CheckCircleOutlined,
   OrderedListOutlined,
   SearchOutlined,
@@ -117,6 +118,7 @@ import {
 import MarkdownView from '@/components/MarkdownView.vue'
 import ZcodeSpinner from '@/components/ZcodeSpinner.vue'
 import CollapseTransition from '@/components/CollapseTransition.vue'
+import BrainIcon from '@/components/BrainIcon.vue'
 import type { MessageBlock } from '@/types'
 
 interface Props {
@@ -138,7 +140,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const processExpanded = ref(false)
-const manuallyExpandedThinking = ref<Set<number>>(new Set())
+const expandedThinking = ref<Set<number>>(new Set())
 
 // 完成于后台标签页时暂缓收缩：等页面重新可见再收（动画才不会被浏览器吞掉）
 const holdProcessOpen = ref(false)
@@ -434,28 +436,77 @@ onUnmounted(() => {
 
 const elapsedText = computed(() => formatDuration(now.value - props.createTime.getTime()))
 
-// ---------- 展开/收起 ----------
-const lastThinkingIndex = computed(() => {
-  for (let i = props.blocks.length - 1; i >= 0; i--) {
-    if (props.blocks[i].type === 'thinking') return i
-  }
-  return -1
-})
+// ---------- 思考块（zcode 式单行折叠条） ----------
+type ThinkingBlock = Extract<MessageBlock, { type: 'thinking' }>
+
+/** 流式进行中的思考 = 消息末块且尚未收尾（换块/结束时会写入 durationMs） */
+function isActiveThinking(index: number): boolean {
+  const block = props.blocks[index]
+  return props.isLoading && index === props.blocks.length - 1
+    && block?.type === 'thinking' && block.durationMs == null
+}
 
 function isThinkingExpanded(index: number): boolean {
-  if (manuallyExpandedThinking.value.has(index)) return true
-  return props.isLoading && index === lastThinkingIndex.value
+  return expandedThinking.value.has(index)
 }
 
 function toggleThinking(index: number): void {
-  const next = new Set(manuallyExpandedThinking.value)
+  const next = new Set(expandedThinking.value)
   if (next.has(index)) {
     next.delete(index)
   } else {
     next.add(index)
   }
-  manuallyExpandedThinking.value = next
+  expandedThinking.value = next
+  if (next.has(index) && isActiveThinking(index)) {
+    nextTick(() => scrollThinkingToBottom(index))
+  }
 }
+
+/** 单行实时摘要：取思考文本的最后一段（最新内容），超长截头保尾 */
+function thinkingTail(block: ThinkingBlock): string {
+  const lines = block.text.split('\n').map(l => l.trim()).filter(Boolean)
+  const tail = lines[lines.length - 1] ?? ''
+  return tail.length > 90 ? '…' + tail.slice(-90) : tail
+}
+
+/** 收起态标签后缀：「· 持续了 X 秒」；不足 1 秒沿用 zcode 的「持续了几秒」 */
+function durationSuffix(block: ThinkingBlock): string {
+  if (block.durationMs == null) return ''
+  const seconds = Math.round(block.durationMs / 1000)
+  if (seconds < 1) return ' · 持续了几秒'
+  if (seconds < 60) return ` · 持续了 ${seconds} 秒`
+  return ` · 持续了 ${formatDuration(block.durationMs)}`
+}
+
+const thinkingEls = new Map<number, HTMLElement>()
+function setThinkingEl(index: number, el: unknown): void {
+  if (el instanceof HTMLElement) {
+    thinkingEls.set(index, el)
+  } else {
+    thinkingEls.delete(index)
+  }
+}
+
+function scrollThinkingToBottom(index: number): void {
+  const el = thinkingEls.get(index)
+  if (el) el.scrollTop = el.scrollHeight
+}
+
+// 展开中的实时思考：内容增长时自动滚到最底（zcode 行为）
+watch(
+  () => {
+    const block = props.blocks[props.blocks.length - 1]
+    return block?.type === 'thinking' && block.durationMs == null ? block.text.length : -1
+  },
+  (len) => {
+    if (len < 0) return
+    const index = props.blocks.length - 1
+    if (isThinkingExpanded(index)) {
+      scrollThinkingToBottom(index)
+    }
+  }
+)
 </script>
 
 <style lang="scss" scoped>
@@ -505,51 +556,61 @@ function toggleThinking(index: number): void {
   gap: 10px;
 }
 
-.block-header {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  margin: 0 -8px;
-  border-radius: 6px;
-  cursor: pointer;
-  user-select: none;
-  color: #86909c;
-  font-size: 13px;
-  transition: background 0.2s;
-
-  &:hover {
-    background: #f2f3f5;
-  }
-}
-
 .caret-icon {
   font-size: 11px;
   color: #86909c;
   transition: transform 0.2s;
 }
 
-// 思考块
+// 思考块（zcode 式：单行折叠条 + 展开浅灰正文）
 .thinking-block {
-  .thinking-text {
-    margin: 6px 0 0 20px;
-    padding: 10px 14px;
-    background: #f7f8fa;
-    border-left: 3px solid #e5e6eb;
-    border-radius: 0 8px 8px 0;
+  .thinking-bar {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    max-width: 100%;
+    padding: 4px 10px;
+    margin: 0 -10px;
+    border-radius: 8px;
+    cursor: pointer;
+    user-select: none;
+    color: #86909c;
     font-size: 13px;
-    line-height: 1.6;
-    color: #6b7280;
-    white-space: pre-wrap;
-    word-break: break-word;
-    max-height: 260px;
-    overflow-y: auto;
-    @include thin-scrollbar;
+    transition: background 0.2s;
+
+    &:hover {
+      background: #f2f3f5;
+    }
+
+    .think-icon,
+    .think-spin {
+      flex-shrink: 0;
+    }
+
+    .thinking-live {
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .thinking-label {
+      flex-shrink: 0;
+    }
   }
 
-  .block-icon {
+  .thinking-text {
+    margin: 6px 0 0 20px;
+    padding: 2px 0 4px;
     font-size: 13px;
-    color: #d48806;
+    line-height: 1.65;
+    color: #86909c;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 280px;
+    overflow-y: auto;
+    @include thin-scrollbar;
   }
 }
 

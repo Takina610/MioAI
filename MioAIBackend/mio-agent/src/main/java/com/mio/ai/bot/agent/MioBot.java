@@ -50,6 +50,9 @@ public class MioBot {
     /** 单轮任务的步数上限兜底值；实际取配置 mio.ai.agent.max-steps（zcode 风格宽松上限） */
     private static final int DEFAULT_MAX_STEPS = 100;
 
+    /** 单次流式调用超时兜底值；实际取配置 mio.ai.agent.stream-timeout-seconds */
+    private static final long DEFAULT_STREAM_TIMEOUT_SECONDS = 1800;
+
     /** 心跳间隔：小于常见代理/网关的空闲超时，保证长工具执行期间连接存活 */
     private static final long HEARTBEAT_INTERVAL_SECONDS = 15;
 
@@ -76,6 +79,8 @@ public class MioBot {
     /** 沙箱工作目录展示名；null = 沙箱未启用 */
     private final String sandboxWorkdir;
     private final int maxSteps;
+    private final long streamTimeoutSeconds;
+    private final String reasoningEffort;
     private final ToolCallback[] tools;
 
     private final AgentPlan plan = new AgentPlan();
@@ -96,7 +101,9 @@ public class MioBot {
                   Long agentId,
                   String baseSystemPrompt,
                   SandboxSession sandboxSession,
-                  Integer maxSteps) {
+                  Integer maxSteps,
+                  Long streamTimeoutSeconds,
+                  String reasoningEffort) {
         this.chatModel = chatModel;
         this.chatMemory = chatMemory;
         this.agentUsageLogService = agentUsageLogService;
@@ -107,6 +114,9 @@ public class MioBot {
         this.baseSystemPrompt = baseSystemPrompt;
         this.sandboxWorkdir = sandboxSession != null ? sandboxSession.workdirDisplay() : null;
         this.maxSteps = maxSteps != null && maxSteps > 0 ? maxSteps : DEFAULT_MAX_STEPS;
+        this.streamTimeoutSeconds = streamTimeoutSeconds != null && streamTimeoutSeconds > 0
+                ? streamTimeoutSeconds : DEFAULT_STREAM_TIMEOUT_SECONDS;
+        this.reasoningEffort = reasoningEffort;
         this.tools = concatTools(builtInTools, mcpTools,
                 ToolCallbacks.from(new PlanningTool(plan))[0]);
         this.channel = new BotEventChannel(agentMessageService, chatId, userId, agentId);
@@ -142,7 +152,7 @@ public class MioBot {
 
                 String systemPrompt = AgentPrompts.build(
                         baseSystemPrompt, knowledgeContext, sandboxWorkdir != null, sandboxWorkdir);
-                AgentLoop.Result result = new AgentLoop().run(
+                AgentLoop.Result result = new AgentLoop(streamTimeoutSeconds, reasoningEffort).run(
                         chatModel, messages, systemPrompt, tools, planSection(), maxSteps, loopListener());
 
                 persistNarratives(messages);
