@@ -21,11 +21,12 @@ public class PlanningTool {
         this.plan = plan;
     }
 
-    @Tool(description = "管理当前任务的执行计划。在开始复杂任务时必须先调用本工具创建任务清单，"
-            + "把任务分解为有序步骤；每完成一个步骤后更新其状态。"
-            + "action 取值：create=创建计划（steps 换行分隔）；"
-            + "update=更新指定步骤状态（需要 stepIndex 与 status）；view=查看当前计划。"
-            + "status 取值：not_started/in_progress/done/failed")
+    @Tool(description = "Use this tool to create and manage a structured task list for the current conversation. "
+            + "This helps you track your progress and gives the user visibility into what you are doing. "
+            + "Create the plan at the start of complex tasks (3+ steps); mark each step in_progress when you start it "
+            + "and done/failed as you finish. Simple tasks do not need a plan. "
+            + "action: create=创建计划（steps 换行分隔）；update=更新步骤状态（stepIndex + status）；view=查看当前计划。"
+            + "status: not_started/in_progress/done/failed")
     public String managePlan(
             @ToolParam(description = "动作：create / update / view") String action,
             @ToolParam(required = false, description = "create 时为步骤列表（换行分隔），其他动作忽略")

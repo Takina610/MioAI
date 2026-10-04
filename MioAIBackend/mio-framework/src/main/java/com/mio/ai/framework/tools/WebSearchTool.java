@@ -39,7 +39,10 @@ public class WebSearchTool {
     @Value("${web.search.api-key:}")
     private String apiKey;
 
-    @Tool(description = "联网搜索信息，返回前几条结果的标题、摘要与链接")
+    @Tool(description = "Search the web. Returns a few result blocks with titles, snippets and URLs. "
+            + "Use for time-sensitive information or facts you are not sure about. "
+            + "After answering from the results, cite the source URLs. "
+            + "When you already know a page's URL, prefer fetchUrl over searching again.")
     public String searchWeb(
             @ToolParam(description = "搜索查询关键词") String query) {
         if (StrUtil.isNotBlank(apiKey)) {

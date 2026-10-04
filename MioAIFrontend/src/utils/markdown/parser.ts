@@ -15,25 +15,40 @@ function escapeHtml(s: string): string {
  *  html 放行裸 HTML（模型常用 <br> 换行表格单元格），危险内容由下方 DOMPurify 白名单过滤；
  *  cjkFriendly 修复全角标点相邻时 **加粗** 不解析（CommonMark 侧翼规则的 CJK 缺陷）；
  *  tasklists 渲染 - [ ] 任务列表复选框；katex delimiters:all 同时支持 $…$ 与 \(…\)/\[…\] 定界符 */
+/** 代码块统一外壳：header 显示语言 + 复制按钮（复制由 MarkdownView 事件委托处理） */
+function codeBlockWrap(lang: string, inner: string): string {
+  const langLabel = lang ? escapeHtml(lang) : '代码'
+  return `<div class="md-code-wrap"><div class="md-code-header"><span class="md-code-lang">${langLabel}</span><span class="md-copy-btn">复制</span></div>${inner}</div>`
+}
+
 export const markdown = new MarkdownIt({
   html: true,
   linkify: true,
-  breaks: true,
-  highlight(code, lang): string {
-    const language = lang && hljs.getLanguage(lang) ? lang : ''
-    if (language) {
-      try {
-        return `<pre class="md-code"><code class="hljs language-${language}">${hljs.highlight(code, { language, ignoreIllegals: true }).value}</code></pre>`
-      } catch {
-        // 高亮失败时回退到转义输出
-      }
-    }
-    const langClass = lang ? ` class="language-${escapeHtml(lang)}"` : ''
-    return `<pre class="md-code"><code${langClass}>${escapeHtml(code)}</code></pre>`
-  }
+  breaks: true
 }).use(katex, { throwOnError: false, delimiters: 'all', mathFence: true })
   .use(cjkFriendly)
   .use(tasklists, { enabled: false })
+
+// 覆盖 fence 渲染规则：高亮 + 外壳完全自控。
+// （不能用 options.highlight 回调——markdown-it 对非 <pre 开头的返回值会再包一层
+//  <pre><code>，导致外壳 div 嵌进 code 内被 DOMPurify 剥掉）
+markdown.renderer.rules.fence = (tokens, idx) => {
+  const token = tokens[idx]
+  const info = (token.info || '').trim().split(/\s+/)[0] || ''
+  const code = token.content
+  let inner: string
+  if (info && hljs.getLanguage(info)) {
+    try {
+      inner = `<pre class="md-code"><code class="hljs language-${info}">${hljs.highlight(code, { language: info, ignoreIllegals: true }).value}</code></pre>`
+    } catch {
+      inner = `<pre class="md-code"><code>${escapeHtml(code)}</code></pre>`
+    }
+  } else {
+    const langClass = info ? ` class="language-${escapeHtml(info)}"` : ''
+    inner = `<pre class="md-code"><code${langClass}>${escapeHtml(code)}</code></pre>`
+  }
+  return codeBlockWrap(info, inner) + '\n'
+}
 
 // 聊天内的外部链接（CDN 等）与同源文件代理链接（/api/file/...，PDF 等）
 // 一律新标签打开，不挤占当前会话页；外链不带 referrer（与手动复制链接直接打开一致）

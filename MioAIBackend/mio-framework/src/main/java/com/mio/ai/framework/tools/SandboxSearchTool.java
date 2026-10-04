@@ -19,8 +19,10 @@ public class SandboxSearchTool {
         this.session = session;
     }
 
-    @Tool(description = "按文件名 glob 模式查找沙箱工作目录内的文件（递归），如 *.py、report-*。"
-            + "不确定文件路径时先用这个")
+    @Tool(description = "Fast file pattern matching in your sandbox working directory. "
+            + "Supports glob patterns like \"**/*.js\" or \"src/**/*.ts\". "
+            + "Returns matching file paths (recursive; up to 100). "
+            + "Use this when you don't know the exact path of a file.")
     public String glob(
             @ToolParam(description = "文件名 glob 模式") String pattern) {
         try {
@@ -34,8 +36,11 @@ public class SandboxSearchTool {
         }
     }
 
-    @Tool(description = "在沙箱工作目录内按正则搜索文件内容（递归，输出 文件:行号:内容）。"
-            + "定位代码/数据里的关键字用它；单行超长会截断到 300 字符")
+    @Tool(description = "Content search over files in your sandbox working directory (recursive; output is file:line:content). "
+            + "Prefer this over `grep`/`rg` via runCommand — it is faster and returns structured results. "
+            + "Full regex syntax (e.g. \"log.*Error\", \"function\\s+\\w+\"). "
+            + "Filter with `include` (a filename glob such as \"*.py\") or `path` (a subdirectory). "
+            + "Lines longer than 300 chars are truncated; when results are too many, narrow the pattern.")
     public String grep(
             @ToolParam(description = "正则表达式（ERE 语法）") String pattern,
             @ToolParam(description = "限定搜索的子目录或文件（可选，默认整个工作目录）", required = false) String path,

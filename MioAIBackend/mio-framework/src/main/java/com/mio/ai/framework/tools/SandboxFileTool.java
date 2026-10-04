@@ -26,8 +26,13 @@ public class SandboxFileTool {
         this.session = session;
     }
 
-    @Tool(description = "读取沙箱工作目录内的文件，输出带行号，默认从第 1 行起最多 800 行。"
-            + "文件更长时会标注总行数，用 offset 参数接着读；编辑文件前必须先读")
+    @Tool(description = "Reads a file from your sandbox working directory. "
+            + "Results use cat -n format, with line numbers starting at 1. "
+            + "Reads up to 800 lines by default; longer files report the total line count — continue with the offset parameter. "
+            + "You can optionally specify a line offset and limit (especially handy for long files), "
+            + "but it's recommended to read the whole file by not providing these parameters. "
+            + "A missing file or empty file returns an error rather than content. "
+            + "Do NOT re-read a file you just edited to verify — editFile/writeFile would have errored if the change failed.")
     public String readFile(
             @ToolParam(description = "工作目录内的相对路径，如 scripts/analyze.py") String path,
             @ToolParam(description = "起始行号（1 起，可选）", required = false) Integer offset,
@@ -56,8 +61,10 @@ public class SandboxFileTool {
         }
     }
 
-    @Tool(description = "把完整内容写入沙箱工作目录的文件（自动创建父目录，同名覆盖）。"
-            + "新建文件或整体重写用这个；局部修改优先用 editFile")
+    @Tool(description = "Writes a file to your sandbox working directory, overwriting if one exists "
+            + "(parent directories are created automatically). "
+            + "When to use: creating a new file, or fully replacing one you've already read. "
+            + "For partial changes, use editFile instead.")
     public String writeFile(
             @ToolParam(description = "工作目录内的相对路径") String path,
             @ToolParam(description = "文件的完整文本内容") String content) {
@@ -69,8 +76,11 @@ public class SandboxFileTool {
         }
     }
 
-    @Tool(description = "精确替换文件中的一段文本：oldText 必须与文件内容完全一致（含缩进与换行）且唯一，"
-            + "否则会报错并列出匹配位置——此时补充更多上下文让 oldText 唯一后重试。replaceAll 可替换全部匹配")
+    @Tool(description = "Performs exact string replacement in a file in your sandbox working directory. "
+            + "You must readFile the file in this conversation before editing, or the call will fail. "
+            + "`oldText` must match the file exactly, including indentation, and be unique — the edit fails otherwise "
+            + "(the error lists match positions; add more surrounding context to make it unique, or set replaceAll=true to replace every occurrence). "
+            + "Strip the readFile line-number prefix before matching.")
     public String editFile(
             @ToolParam(description = "工作目录内的相对路径") String path,
             @ToolParam(description = "要替换的原文本（必须精确匹配）") String oldText,

@@ -20,8 +20,11 @@ public class WebFetchTool {
 
     private static final int TIMEOUT_MS = 15000;
 
-    @Tool(description = "抓取任意网页并提取正文纯文本（自动剔除导航/脚本噪音，保留标题与摘要），过长截断。"
-            + "阅读搜索结果里的文章、文档，或访问已知 URL/API 时使用；需要请求头或参数的 API 调用可改用 runCommand 的 curl")
+    @Tool(description = "Fetches a URL and converts the page to readable plain text "
+            + "(navigation/script noise stripped; title and summary kept; truncated when too long). "
+            + "Use it to read an article/documentation page you found via searchWeb or already know the URL of. "
+            + "For API calls that need custom headers or params, use curl via runCommand instead. "
+            + "Fails on pages that require authentication.")
     public String fetchUrl(@ToolParam(description = "要抓取的网页或接口 URL") String url) {
         try {
             Document document = Jsoup.connect(url)

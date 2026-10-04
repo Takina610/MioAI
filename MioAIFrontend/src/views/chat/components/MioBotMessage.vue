@@ -45,9 +45,9 @@
             </CollapseTransition>
           </div>
 
-          <!-- 工具块：语义化行 + 可跳转的来源链接（随过程收起/展开） -->
+          <!-- 工具块：语义化行（可点击展开看执行结果）+ 可跳转的来源链接（随过程收起/展开） -->
           <div v-else class="tool-block">
-            <div class="tool-row">
+            <div class="tool-row" :class="{ expandable: block.result }" @click="toggleToolResult(index)">
               <span class="tool-status">
                 <ZcodeSpinner v-if="block.status === 'running'" :size="14" />
                 <component :is="toolIcon(block.tool)" v-else class="tool-icon" />
@@ -56,7 +56,15 @@
               <span v-if="shownMeta(index, block)" class="tool-meta">
                 {{ shownMeta(index, block) }}<span v-if="typing(index, block)" class="tw-cursor"></span>
               </span>
+              <CaretRightOutlined
+                v-if="block.result && !typing(index, block)"
+                :rotate="expandedTools.has(index) ? 90 : 0"
+                class="caret-icon tool-caret"
+              />
             </div>
+            <CollapseTransition :open="expandedTools.has(index)">
+              <pre v-if="block.result" class="tool-result">{{ block.result }}</pre>
+            </CollapseTransition>
 
             <!-- 来源链接（DeepSeek 式：点击直接跳转网页） -->
             <div v-if="block.status === 'done' && sourceChips(block).length" class="tool-sources">
@@ -146,6 +154,13 @@ const props = withDefaults(defineProps<Props>(), {
 
 const processExpanded = ref(false)
 const expandedThinking = ref<Set<number>>(new Set())
+const expandedTools = ref<Set<number>>(new Set())
+
+function toggleToolResult(index: number): void {
+  const next = new Set(expandedTools.value)
+  next.has(index) ? next.delete(index) : next.add(index)
+  expandedTools.value = next
+}
 
 // 完成于后台标签页时暂缓收缩：等页面重新可见再收（动画才不会被浏览器吞掉）
 const holdProcessOpen = ref(false)
@@ -657,6 +672,36 @@ watch(
     margin: 0 -8px;
     border-radius: 6px;
     min-width: 0;
+
+    &.expandable {
+      cursor: pointer;
+
+      &:hover {
+        background: #f2f3f5;
+      }
+    }
+
+    .tool-caret {
+      flex-shrink: 0;
+      font-size: 10px;
+    }
+  }
+
+  // 工具执行结果（点击工具行展开）
+  .tool-result {
+    margin: 4px 0 2px 24px;
+    padding: 8px 12px;
+    background: #f7f8fa;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.55;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: #4e5969;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 220px;
+    overflow-y: auto;
+    @include thin-scrollbar;
   }
 
   .tool-status {

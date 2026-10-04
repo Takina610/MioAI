@@ -37,10 +37,11 @@ public class PDFGenerationTool {
     @Autowired
     R2Util r2Util;
 
-    @Tool(description = "把完整内容排版为 PDF 并上传，返回用户可直接打开下载的链接。"
-            + "排版支持（建议充分利用，让文档丰富美观）：#/##/### 多级标题；- 与 1. 列表（行首缩进两空格嵌套）；"
-            + "| 表格 |；**加粗**；`代码`；~~删除线~~；> 引用；--- 分隔线；emoji 表情；![说明](图片网址) 插图。"
-            + "直接传最终 markdown 内容即可，不要先写中间文件", returnDirect = false)
+    @Tool(description = "Generates a formatted PDF document and uploads it, returning a link the user can open directly. "
+            + "IMPORTANT: use this ONLY when the user explicitly asks for a PDF or a printable document — never proactively. "
+            + "Formatting supports: #/##/### headings; - and 1. lists (indent two spaces to nest); | tables |; **bold**; "
+            + "`code`; ~~strikethrough~~; > quotes; --- dividers; emoji; ![alt](image-url). "
+            + "Pass the final markdown content directly — do not write an intermediate file first.", returnDirect = false)
     public String generatePDF(
             @ToolParam(description = "PDF文件名（不带 .pdf 后缀），如：上海3日旅游计划") String fileName,
             @ToolParam(description = "完整文档内容") String content) {

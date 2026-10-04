@@ -19,10 +19,15 @@ public class SandboxShellTool {
         this.session = session;
     }
 
-    @Tool(description = "在 Linux 沙箱的 bash 中执行命令，stdout 与 stderr 合并返回，过长时保留末尾。"
-            + "适合：运行/调试代码（python3 等）、数据处理、curl 调用公开 API、系统查询。"
-            + "工作目录内容跨命令持久。默认超时 120 秒（最长 600）。"
-            + "文件浏览用 ls/find，读文件建议用 readFile（带行号与分段）")
+    @Tool(description = "Executes a bash command on your sandbox Linux machine and returns its output "
+            + "(stdout and stderr merged). Each call starts in the working directory; "
+            + "shell state (env vars, functions) does not persist between calls, but files do. "
+            + "Good for: running/debugging code (python3), data processing, curl against public APIs, system inspection. "
+            + "IMPORTANT: Avoid using this tool to run `find`, `grep`, `cat`, `head`, `tail`, `sed`, `awk`, or `echo` "
+            + "unless you have verified that a dedicated tool (readFile / grep / glob) cannot accomplish your task — "
+            + "the dedicated tools give a much better experience. "
+            + "Output longer than the cap keeps only the tail; re-run a more precise command for the full content. "
+            + "timeoutSeconds: default 120, max 600. No sudo; interactive commands are not supported.")
     public String runCommand(
             @ToolParam(description = "要执行的 bash 命令，可用 && 串联多步") String command,
             @ToolParam(description = "超时秒数（可选，默认 120，最大 600）", required = false) Integer timeoutSeconds) {
