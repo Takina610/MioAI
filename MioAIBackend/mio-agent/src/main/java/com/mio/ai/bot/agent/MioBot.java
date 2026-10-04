@@ -149,10 +149,17 @@ public class MioBot {
                     channel::heartbeat, HEARTBEAT_INTERVAL_SECONDS, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
             try {
                 List<Message> messages = new ArrayList<>(loadHistory());
-                UserMessage userMessage = new UserMessage(userPrompt);
-                messages.add(userMessage);
+                // 重新生成场景：截断保留的 user 行就是本轮 prompt（不再落库）。
+                // 复用历史末尾的同内容 user 消息，避免把同一请求重复注入模型上下文
+                boolean promptAlreadyInHistory = !persistUserMessage
+                        && !messages.isEmpty()
+                        && messages.get(messages.size() - 1) instanceof UserMessage tail
+                        && tail.getText() != null && tail.getText().equals(userPrompt);
+                if (!promptAlreadyInHistory) {
+                    messages.add(new UserMessage(userPrompt));
+                }
                 if (persistUserMessage) {
-                    persist(userMessage);
+                    persist(new UserMessage(userPrompt));
                     channel.persistDisplay("user", userPrompt, null);
                 }
 
