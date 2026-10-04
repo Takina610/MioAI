@@ -22,6 +22,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 public class BotEventChannel {
 
+    /** SSE 工具结果事件的预览长度：完整结果已进入模型上下文，前端只需可读摘要 */
+    private static final int TOOL_RESULT_PREVIEW_LENGTH = 400;
+
+    /** 工具结果块的持久化上限：供水合重建请求历史（对齐 zcode 模型可见预算量级） */
+    private static final int TOOL_RESULT_PERSIST_CAP = 24_000;
+
     private final AgentMessageService agentMessageService;
     private final String chatId;
     private final Long userId;
@@ -99,8 +105,18 @@ public class BotEventChannel {
         emit(SseChunk.toolArgs(id, delta).fields());
     }
 
-    public void toolResultPreview(String id, String tool, String preview) {
-        completeDisplayTool(id, tool, preview);
+    /**
+     * 工具结果：块内保留全量（供水合重建请求历史，超长截头），前端事件发预览。
+     */
+    public void toolResult(String id, String tool, String content) {
+        String full = content == null ? "" : content;
+        if (full.length() > TOOL_RESULT_PERSIST_CAP) {
+            full = full.substring(0, TOOL_RESULT_PERSIST_CAP)
+                    + "\n[...result truncated at " + TOOL_RESULT_PERSIST_CAP + " chars...]";
+        }
+        completeDisplayTool(id, tool, full);
+        String preview = full.length() > TOOL_RESULT_PREVIEW_LENGTH
+                ? full.substring(0, TOOL_RESULT_PREVIEW_LENGTH) + "…" : full;
         emit(SseChunk.toolResult(id, tool, preview).fields());
     }
 
@@ -129,6 +145,27 @@ public class BotEventChannel {
 
     public void error(String message) {
         emit(SseChunk.content("error", message).fields());
+    }
+
+    /** 压缩边界行：水合时据此作废更早历史并以摘要续接（zcode compact boundary 对位） */
+    public void persistCompact(String summary) {
+        if (agentMessageService == null || userId == null) {
+            return;
+        }
+        try {
+            AgentMessageDO row = new AgentMessageDO();
+            row.setConversationId(chatId);
+            row.setAgentId(agentId);
+            row.setUserId(userId);
+            row.setRole("assistant");
+            Map<String, Object> block = new LinkedHashMap<>();
+            block.put("type", "compact");
+            block.put("text", summary == null ? "" : summary);
+            row.setBlocks(JacksonUtil.writeValueAsString(List.of(block)));
+            agentMessageService.append(row);
+        } catch (Exception e) {
+            log.warn("压缩边界落库失败: {}", e.getMessage());
+        }
     }
 
     /** 展示持久化：完整 blocks/plan/duration 落 agent_message（游客不落库） */

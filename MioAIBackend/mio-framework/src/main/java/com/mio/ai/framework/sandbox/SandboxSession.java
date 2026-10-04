@@ -73,6 +73,34 @@ public class SandboxSession {
         }
     }
 
+    /**
+     * 原样执行（zagent 引擎用）：不加退出码/超时修饰、不做尾部截断，工作目录内可指定子目录。
+     * 输出格式化（Exit code 前缀等）由调用方按 zcode Bash 工具语义自行完成。
+     */
+    public ExecResult execRaw(String command, Integer timeoutSeconds, String cwdRelative) {
+        int timeout = timeoutSeconds != null && timeoutSeconds > 0
+                ? Math.min(timeoutSeconds, 600) : props.getExecTimeoutSeconds();
+        String cdChain = "cd " + homeDir();
+        if (cwdRelative != null && !cwdRelative.isBlank() && !cwdRelative.contains("..")) {
+            cdChain += " && cd " + quote(cwdRelative);
+        }
+        synchronized (lock) {
+            try {
+                ensureSession();
+                return runChannelRaw(cdChain + " && " + command, timeout);
+            } catch (Exception e) {
+                closeQuietly();
+                try {
+                    ensureSession();
+                    return runChannelRaw(cdChain + " && " + command, timeout);
+                } catch (Exception retry) {
+                    log.warn("沙箱命令执行失败: {}", retry.getMessage());
+                    return new ExecResult("Sandbox execution error: " + retry.getMessage(), null, false);
+                }
+            }
+        }
+    }
+
     /** 工作目录内的相对路径 → 校验后的路径串（供 shell 引用）。
      * 容错规范化：模型常带 ~/sandbox/ 前缀或 ./ 前缀，直接剥掉而不是报错
      * （写入失败率最高的一类就是全路径被严格校验拒绝）。 */
@@ -200,6 +228,32 @@ public class SandboxSession {
             sb.append("\n[退出码: ").append(exitCode).append("]");
         }
         return new ExecResult(sb.toString(), exitCode, timedOut);
+    }
+
+    /** 原样执行并采集：输出不附加任何修饰（超限时强断并置 timedOut） */
+    private ExecResult runChannelRaw(String command, int timeoutSeconds) throws Exception {
+        ChannelExec channel = (ChannelExec) session.openChannel("exec");
+        channel.setCommand(command);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        channel.setOutputStream(out);
+        channel.setErrStream(out);
+        InputStream in = channel.getInputStream();
+        channel.connect(props.getConnectTimeoutMs());
+        long deadline = System.currentTimeMillis() + timeoutSeconds * 1000L;
+        boolean timedOut = false;
+        byte[] buffer = new byte[4096];
+        while (!channel.isClosed()) {
+            if (System.currentTimeMillis() > deadline) {
+                timedOut = true;
+                break;
+            }
+            drain(in, out, buffer);
+            Thread.sleep(25);
+        }
+        drain(in, out, buffer);
+        Integer exitCode = channel.isClosed() ? channel.getExitStatus() : null;
+        channel.disconnect();
+        return new ExecResult(out.toString(StandardCharsets.UTF_8), exitCode, timedOut);
     }
 
     /** 输出内存上限：超过硬上限后丢弃，只保末尾 */

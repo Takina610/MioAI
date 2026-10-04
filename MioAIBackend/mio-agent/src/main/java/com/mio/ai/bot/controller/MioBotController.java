@@ -15,7 +15,6 @@ import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.utils.JacksonUtil;
 import com.mio.ai.common.utils.ResultUtils;
-import com.mio.ai.framework.sandbox.SandboxSession;
 import com.mio.ai.resource.model.entity.Agent;
 import com.mio.ai.resource.service.log.AgentUsageLogService;
 import com.mio.ai.resource.service.log.ToolCallLogService;
@@ -24,14 +23,9 @@ import com.mio.ai.user.utils.RedisComponent;
 import jakarta.annotation.Resource;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -63,14 +57,10 @@ public class MioBotController {
     private static final String SENSITIVE_REPLY = "抱歉，您的问题涉及敏感内容，我无法回答。请换一种方式提问或讨论其他话题。";
 
     @Resource
-    private ToolCallback[] commonTools;
+    private com.mio.ai.framework.zagent.tools.ToolsetFactory toolsetFactory;
 
     @Autowired
     private ChatModel chatModel;
-
-    @Autowired
-    @Qualifier("jdbcChatMemory")
-    private ChatMemory jdbcChatMemory;
 
     @Autowired
     private ChatHistoryRepository chatHistoryRepository;
@@ -93,20 +83,25 @@ public class MioBotController {
     @Autowired
     private AgentMessageService agentMessageService;
 
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private SandboxSession sandboxSession;
+    /** 引擎使用的模型名（环境信息提示用，与 yml 的 chat.model 一致） */
+    @org.springframework.beans.factory.annotation.Value("${spring.ai.openai.chat.model:}")
+    private String engineModelName;
 
     /** Agent 单轮步数上限（zcode 风格宽松默认，防失控而非限制任务长度） */
     @org.springframework.beans.factory.annotation.Value("${mio.ai.agent.max-steps:100}")
     private int agentMaxSteps;
 
-    /** 单次模型流式调用超时（须不小于本地反代的总预算，否则先被后端掐断） */
+    /** 单次模型流式调用超时（须不小于本地模型反代的总预算，否则先被后端掐断） */
     @org.springframework.beans.factory.annotation.Value("${mio.ai.agent.stream-timeout-seconds:1800}")
     private long agentStreamTimeoutSeconds;
 
     /** 瞬态失败自动重试次数（zcode 风格：网络抖动/上游 5xx 在本轮尚无输出时无感重发） */
     @org.springframework.beans.factory.annotation.Value("${mio.ai.agent.model-retries:3}")
     private int agentModelRetries;
+
+    /** 上下文窗口（token）：自动压缩阈值 = 窗口 − 输出预留 − 缓冲 */
+    @org.springframework.beans.factory.annotation.Value("${mio.ai.agent.context-window-tokens:200000}")
+    private long agentContextWindowTokens;
 
     /** 思考强度白名单：与 openai-java ReasoningEffort 枚举一致，前端输入框下方可调 */
     private static final java.util.Set<String> REASONING_EFFORTS =
@@ -165,10 +160,11 @@ public class MioBotController {
 
         String effort = reasoningEffort != null && REASONING_EFFORTS.contains(reasoningEffort)
                 ? reasoningEffort : null;
-        MioBot mioBot = new MioBot(chatModel, jdbcChatMemory, commonTools,
-                List.of(mcpTools), agentUsageLogService, toolCallLogService, agentMessageService,
-                chatId, userId, resolvedAgentId, customSystemPrompt, sandboxSession, agentMaxSteps,
-                agentStreamTimeoutSeconds, effort, agentModelRetries);
+        var engineConfig = new com.mio.ai.framework.zagent.AgentEngineConfig(
+                agentMaxSteps, agentStreamTimeoutSeconds, agentModelRetries, agentContextWindowTokens);
+        MioBot mioBot = new MioBot(chatModel, toolsetFactory, List.of(mcpTools),
+                agentUsageLogService, toolCallLogService, agentMessageService,
+                chatId, userId, resolvedAgentId, customSystemPrompt, engineModelName, effort, engineConfig);
         // 任务真正结束（含异常）时解除会话占用
         mioBot.setOnFinish(() -> ACTIVE_CHATS.remove(chatId));
         return mioBot.run(content, knowledgeContext, !skipUserPersist);
@@ -176,7 +172,7 @@ public class MioBotController {
 
     /**
      * 截断会话历史（编辑消息/重新生成共用）：保留 seq &le; keepThroughSeq 的展示消息，
-     * 删除其后的行，并按剩余行重建 chat_memory（清除旧记忆后重放）。
+     * 删除其后的行。新引擎按 agent_message 行水合请求历史，截断行即截断上下文。
      * 返回保留部分最后一条用户消息内容，供重新生成场景原样重发。
      */
     @PostMapping("/bot/truncate/{conversationId}")
@@ -193,34 +189,23 @@ public class MioBotController {
         }
 
         agentMessageService.deleteAfterSeq(conversationId, keepThroughSeq);
-        List<Message> replayed = rebuildMemory(conversationId);
 
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (AgentMessageDO row : agentMessageService.listByConversation(conversationId)) {
+            Map<String, Object> item = new java.util.LinkedHashMap<>();
+            item.put("role", row.getRole());
+            item.put("text", blockText(row.getBlocks()));
+            rows.add(item);
+        }
         Map<String, Object> result = new java.util.LinkedHashMap<>();
-        result.put("keptMessages", replayed.size());
-        for (int i = replayed.size() - 1; i >= 0; i--) {
-            if (replayed.get(i) instanceof UserMessage user) {
-                result.put("userContent", user.getText());
+        result.put("keptMessages", rows.size());
+        for (int i = rows.size() - 1; i >= 0; i--) {
+            if ("user".equals(rows.get(i).get("role"))) {
+                result.put("userContent", rows.get(i).get("text"));
                 break;
             }
         }
         return ResultUtils.success(result);
-    }
-
-    /** 清空旧记忆后按展示消息重放（user 原文 / assistant 文本块拼接），保证记忆与截断后的展示一致 */
-    private List<Message> rebuildMemory(String conversationId) {
-        List<Message> replayed = new ArrayList<>();
-        for (AgentMessageDO row : agentMessageService.listByConversation(conversationId)) {
-            if ("user".equals(row.getRole())) {
-                replayed.add(new UserMessage(blockText(row.getBlocks())));
-            } else if ("assistant".equals(row.getRole())) {
-                replayed.add(new AssistantMessage(blockText(row.getBlocks())));
-            }
-        }
-        jdbcChatMemory.clear(conversationId);
-        for (Message message : replayed) {
-            jdbcChatMemory.add(conversationId, message);
-        }
-        return replayed;
     }
 
     /** 从展示 blocks JSON 提取纯文本（text 块拼接；旧数据无 blocks 时回退空串） */
