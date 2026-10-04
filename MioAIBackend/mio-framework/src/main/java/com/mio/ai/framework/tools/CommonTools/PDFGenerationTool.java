@@ -9,6 +9,7 @@ import com.itextpdf.layout.Document;
 import com.itextpdf.layout.element.Paragraph;
 import com.mio.ai.common.common.FileType;
 import com.mio.ai.common.utils.R2Util;
+import com.mio.ai.framework.tools.pdf.MarkdownPdfRenderer;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,8 +22,8 @@ import java.util.UUID;
 /**
  * @author: Takina
  * @date: 2026/3/31 17:06
- * @description: PDF 文档生成工具：内容自动清理（emoji/控制字符）、按行结构排版
- * （#/##/### 标题、- 列表、空行分段），字形缺失时白名单字符兜底重渲，上传 R2 返回直链。
+ * @description: PDF 文档生成工具：markdown 富排版渲染（标题/列表/表格/加粗/引用/emoji/图片），
+ * 字体缺失时降级 STSong 纯文本，字形异常时白名单兜底重渲，上传 R2 后回传同源代理链接。
  */
 @Component
 public class PDFGenerationTool {
@@ -37,8 +38,9 @@ public class PDFGenerationTool {
     R2Util r2Util;
 
     @Tool(description = "把完整内容排版为 PDF 并上传，返回用户可直接打开下载的链接。"
-            + "排版规则：以 # 开头的行渲染为大标题，## 为中标题，### 为小标题，- 开头渲染为列表项，空行分段。"
-            + "emoji 与特殊符号会被自动清理，无需刻意规避。直接传最终内容即可，不要先写中间文件", returnDirect = false)
+            + "排版支持（建议充分利用，让文档丰富美观）：#/##/### 多级标题；- 与 1. 列表（行首缩进两空格嵌套）；"
+            + "| 表格 |；**加粗**；`代码`；~~删除线~~；> 引用；--- 分隔线；emoji 表情；![说明](图片网址) 插图。"
+            + "直接传最终 markdown 内容即可，不要先写中间文件", returnDirect = false)
     public String generatePDF(
             @ToolParam(description = "PDF文件名（不带 .pdf 后缀），如：上海3日旅游计划") String fileName,
             @ToolParam(description = "完整文档内容") String content) {
@@ -55,22 +57,31 @@ public class PDFGenerationTool {
         String localFilePath = fileDir + File.separator + safeName + ".pdf";
         FileUtil.mkdir(fileDir);
 
-        String cleaned = sanitizeContent(content);
+        String cleaned = sanitizeControlChars(content);
         if (cleaned.isBlank()) {
             return "错误：内容清理后为空，请提供有效文本";
         }
         try {
-            renderPdf(cleaned, localFilePath);
+            // 主路径：Noto CJK + Emoji 字体，markdown 富排版（emoji/加粗/表格/图片等）
+            MarkdownPdfRenderer.render(cleaned, localFilePath);
         } catch (Exception e) {
-            // 字形缺失等渲染异常：按白名单再清一遍重试，保证一定出文档
-            String strict = cleaned.replaceAll(STRICT_KEEP, "");
-            if (strict.isBlank()) {
+            // 字体缺失或渲染异常：降级 STSong 纯文本（清 emoji），保证一定出文档
+            String legacy = sanitizeContent(cleaned);
+            if (legacy.isBlank()) {
                 return "PDF生成失败：" + e.getMessage();
             }
             try {
-                renderPdf(strict, localFilePath);
+                renderPlain(legacy, localFilePath);
             } catch (Exception e2) {
-                return "PDF生成失败：" + e2.getMessage();
+                String strict = legacy.replaceAll(STRICT_KEEP, "");
+                if (strict.isBlank()) {
+                    return "PDF生成失败：" + e2.getMessage();
+                }
+                try {
+                    renderPlain(strict, localFilePath);
+                } catch (Exception e3) {
+                    return "PDF生成失败：" + e3.getMessage();
+                }
             }
         }
 
@@ -88,8 +99,8 @@ public class PDFGenerationTool {
         }
     }
 
-    /** 逐行结构化排版渲染 */
-    private void renderPdf(String content, String path) throws IOException {
+    /** 降级渲染：STSong 纯文本逐行（富排版字体不可用时兜底） */
+    private void renderPlain(String content, String path) throws IOException {
         try (PdfWriter writer = new PdfWriter(path);
              PdfDocument pdf = new PdfDocument(writer);
              Document document = new Document(pdf)) {
@@ -118,6 +129,18 @@ public class PDFGenerationTool {
             }
         }
     }
+
+    /** 仅清理控制字符（保留 emoji 与全部可见字符） */
+    private static String sanitizeControlChars(String content) {
+        StringBuilder sb = new StringBuilder(content.length());
+        content.codePoints().forEach(cp -> {
+            if (cp == '\n' || cp == '\r' || cp == '\t' || cp >= 0x20) {
+                sb.appendCodePoint(cp);
+            }
+        });
+        return sb.toString();
+    }
+
 
     /** 清理非 BMP 字符（emoji 等 STSong 无法编码）与控制字符，保留换行/制表 */
     private static String sanitizeContent(String content) {
