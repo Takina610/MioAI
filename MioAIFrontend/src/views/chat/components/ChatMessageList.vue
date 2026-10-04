@@ -46,14 +46,12 @@
               class="copy-area"
               v-show="editingId !== msg.id && !isLoading && (hasVersions(msg) || (hoverMessageId === msg.id && displayOf(msg).content))"
             >
-              <template v-if="msg.role === 'assistant'">
-                <a-tooltip :title="copiedMessageId === msg.id ? '已复制' : '复制'">
-                  <a-button type="text" size="small" class="copy-btn" :class="{ 'copied': copiedMessageId === msg.id }" @click="copyMessage(displayOf(msg).content, msg.id)">
-                    <CheckOutlined v-if="copiedMessageId === msg.id" />
-                    <CopyOutlined v-else />
-                  </a-button>
-                </a-tooltip>
-              </template>
+              <a-tooltip :title="copiedMessageId === msg.id ? '已复制' : '复制'">
+                <a-button type="text" size="small" class="copy-btn" :class="{ 'copied': copiedMessageId === msg.id }" @click="copyMessage(displayOf(msg).content, msg.id)">
+                  <CheckOutlined v-if="copiedMessageId === msg.id" />
+                  <CopyOutlined v-else />
+                </a-button>
+              </a-tooltip>
               <a-tooltip v-if="canModify && msg.role === 'user'" title="编辑">
                 <a-button type="text" size="small" class="copy-btn" @click="startEdit(msg)">
                   <EditOutlined />
