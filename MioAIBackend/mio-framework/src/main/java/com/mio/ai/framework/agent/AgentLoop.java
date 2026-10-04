@@ -14,6 +14,7 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -103,37 +104,86 @@ public class AgentLoop {
             Prompt prompt = new Prompt(messages, buildOptions(chatModel, tools))
                     .augmentSystemMessage(systemPrompt + (promptSuffix == null ? "" : promptSuffix));
 
-            StreamTurnCollector collector = streamTurnWithRetry(chatModel, prompt, listener);
+            // 工具名幻觉容错：模型调用了不存在的工具（如把 runCommand 叫成 bash）时
+            // Spring AI 在流聚合或工具执行两处都会抛 IllegalStateException 炸掉整个任务——
+            // 任何一处捕获后都把幻觉调用连同纠正性结果写回对话历史重跑该步，让模型自纠
+            int hallucinationRepairs = 0;
+            ChatResponse response = null;
+            while (true) {
+                StreamTurnCollector collector;
+                try {
+                    collector = streamTurnWithRetry(chatModel, prompt, listener);
+                } catch (ToolNameHallucinationError hallucination) {
+                    if (++hallucinationRepairs > 2 || !hallucination.partialAssistant().hasToolCalls()) {
+                        throw hallucination;
+                    }
+                    prompt = injectHallucinationCorrection(messages, hallucination.partialAssistant(), tools, listener,
+                            systemPrompt, promptSuffix, chatModel);
+                    continue;
+                }
+                ChatResponse candidate = collector.build();
+                AssistantMessage assistant = candidate.getResult().getOutput();
+                if (!assistant.hasToolCalls()) {
+                    response = candidate;
+                    break;
+                }
+                try {
+                    ToolExecutionResult toolResult = toolCallingManager.executeToolCalls(prompt, candidate);
+                    ToolResponseMessage toolResponseMessage =
+                            (ToolResponseMessage) toolResult.conversationHistory()
+                                    .get(toolResult.conversationHistory().size() - 1);
+                    // 上下文回填：助手工具调用 + 工具结果（剔除 augment 注入的系统消息，避免逐轮堆积）
+                    messages.add(assistant);
+                    messages.add(toolResponseMessage);
+                    for (ToolResponseMessage.ToolResponse toolResponse : toolResponseMessage.getResponses()) {
+                        listener.toolResult(toolResponse.id(), toolResponse.name(), toolResponse.responseData());
+                    }
+                    response = candidate;
+                    break;
+                } catch (Throwable error) {
+                    ToolNameHallucinationError hallucination = asToolNameHallucination(error, collector);
+                    if (hallucination == null || ++hallucinationRepairs > 2) {
+                        throw error;
+                    }
+                    prompt = injectHallucinationCorrection(messages, assistant, tools, listener,
+                            systemPrompt, promptSuffix, chatModel);
+                }
+            }
 
-            ChatResponse response = collector.build();
             Usage usage = response.getMetadata().getUsage();
             if (usage != null) {
                 inputTokens += usage.getPromptTokens() != null ? usage.getPromptTokens().intValue() : 0;
                 outputTokens += usage.getCompletionTokens() != null ? usage.getCompletionTokens().intValue() : 0;
             }
-
-            AssistantMessage assistant = response.getResult().getOutput();
-            listener.stepFinished(response, step, assistant.getToolCalls());
+            listener.stepFinished(response, step, response.getResult().getOutput().getToolCalls());
 
             // 模型不再调用工具 = 最终回答已流式输出完毕，任务结束
-            if (!assistant.hasToolCalls()) {
+            if (!response.getResult().getOutput().hasToolCalls()) {
                 finished = true;
-                break;
-            }
-
-            ToolExecutionResult toolResult = toolCallingManager.executeToolCalls(prompt, response);
-            ToolResponseMessage toolResponseMessage =
-                    (ToolResponseMessage) toolResult.conversationHistory()
-                            .get(toolResult.conversationHistory().size() - 1);
-
-            // 上下文回填：助手工具调用 + 工具结果（剔除 augment 注入的系统消息，避免逐轮堆积）
-            messages.add(assistant);
-            messages.add(toolResponseMessage);
-            for (ToolResponseMessage.ToolResponse toolResponse : toolResponseMessage.getResponses()) {
-                listener.toolResult(toolResponse.id(), toolResponse.name(), toolResponse.responseData());
             }
         }
         return new Result(finished, step - 1, inputTokens, outputTokens);
+    }
+
+    /**
+     * 幻觉恢复：把助手的幻觉调用与纠正性工具结果写回对话历史，返回重建后的 Prompt 供重跑。
+     */
+    private Prompt injectHallucinationCorrection(List<Message> messages, AssistantMessage assistant,
+                                                  ToolCallback[] tools, Listener listener,
+                                                  String systemPrompt, String promptSuffix, ChatModel chatModel) {
+        messages.add(assistant);
+        List<ToolResponseMessage.ToolResponse> corrections = new ArrayList<>();
+        String available = toolNames(tools);
+        for (AssistantMessage.ToolCall call : assistant.getToolCalls()) {
+            String text = "错误：工具 " + call.name() + " 不存在。可用的工具只有："
+                    + available + "。请用正确名称重新调用。";
+            corrections.add(new ToolResponseMessage.ToolResponse(
+                    call.id() != null ? call.id() : call.name(), call.name(), text));
+            listener.toolResult(call.id(), call.name(), text);
+        }
+        messages.add(ToolResponseMessage.builder().responses(corrections).build());
+        return new Prompt(messages, buildOptions(chatModel, tools))
+                .augmentSystemMessage(systemPrompt + (promptSuffix == null ? "" : promptSuffix));
     }
 
     /**
@@ -143,6 +193,48 @@ public class AgentLoop {
      * <p>timeout 显式设置：经 buildRequestOptions → RequestOptions → okhttp callTimeout 链
      * 逐级传递（字节码验证），不设则 okhttp 层 60s 默认值会掐断超长流式生成。
      */
+    /**
+     * 模型工具名幻觉（调用了不存在的工具）：携带中断前已收集的助手消息，
+     * 供调用方写回对话历史并注入纠正性工具结果后重跑该步。
+     */
+    static final class ToolNameHallucinationError extends RuntimeException {
+        private final transient AssistantMessage partialAssistant;
+
+        ToolNameHallucinationError(Throwable cause, AssistantMessage partialAssistant) {
+            super(cause.getMessage(), cause);
+            this.partialAssistant = partialAssistant;
+        }
+
+        AssistantMessage partialAssistant() {
+            return partialAssistant;
+        }
+    }
+
+    /** 从异常链中识别"工具未注册"（Spring AI ToolCallingManager 抛出），并带上已收集的助手消息 */
+    private static ToolNameHallucinationError asToolNameHallucination(Throwable error, StreamTurnCollector collector) {
+        Throwable current = error;
+        while (current != null) {
+            if (current instanceof IllegalStateException
+                    && current.getMessage() != null
+                    && current.getMessage().contains("No ToolCallback found")) {
+                return new ToolNameHallucinationError(current, collector.build().getResult().getOutput());
+            }
+            current = current.getCause() == current ? null : current.getCause();
+        }
+        return null;
+    }
+
+    private static String toolNames(ToolCallback[] tools) {
+        StringBuilder names = new StringBuilder();
+        for (ToolCallback tool : tools) {
+            if (names.length() > 0) {
+                names.append(", ");
+            }
+            names.append(tool.getToolDefinition().name());
+        }
+        return names.toString();
+    }
+
     /**
      * 单次模型流式调用 + 瞬态失败重试（zcode runner-stream 的 attempt 循环）。
      * <p>重试边界规则：本轮已向前端发出任何内容（思考/正文/工具调用）后不再重试，
@@ -157,6 +249,11 @@ public class AgentLoop {
                 chatModel.stream(prompt).doOnNext(collector::accept).blockLast();
                 return collector;
             } catch (Throwable error) {
+                // 工具名幻觉不是瞬态失败：转成可恢复的专用错误上抛，由 run() 注入纠正重跑
+                ToolNameHallucinationError hallucination = asToolNameHallucination(error, collector);
+                if (hallucination != null) {
+                    throw hallucination;
+                }
                 StreamFailureClassifier.Classification failure = StreamFailureClassifier.classify(error);
                 boolean canRetry = failure.retryable()
                         && !collector.hasEmitted()
