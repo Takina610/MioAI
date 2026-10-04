@@ -1,7 +1,7 @@
 <template>
   <div class="chat-center-area" :class="{ 'has-messages': hasMessages }">
     <div class="welcome-section" v-if="!hasMessages && !loading">
-      <img :src="agentAvatar || '/favicon.ico'" alt="Agent" class="welcome-avatar" />
+      <img :src="agentAvatar || '/logo.png'" alt="Agent" class="welcome-avatar" />
       <h2 class="welcome-title">我能帮什么忙吗，{{ userStore.userName }}？</h2>
     </div>
     <!-- 与输入框融合的上区（任务清单等，共享同一容器边框） -->
@@ -96,7 +96,7 @@ function handleEnter(e: KeyboardEvent): void {
     .welcome-avatar {
       width: 48px;
       height: 48px;
-      border-radius: 50%;
+      border-radius: 25%;
       object-fit: cover;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
       flex-shrink: 0;

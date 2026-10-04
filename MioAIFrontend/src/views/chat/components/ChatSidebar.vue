@@ -2,7 +2,7 @@
   <aside class="sidebar" :class="{ collapsed: isCollapsed }">
     <div class="sidebar-top">
       <div class="logo-section" v-show="!isCollapsed">
-        <img :src="agentInfo?.avatar || '/favicon.ico'" alt="Avatar" class="agent-avatar" />
+        <img :src="agentInfo?.avatar || '/logo.png'" alt="Avatar" class="agent-avatar" />
         <span class="agent-name">{{ agentInfo?.name || 'MioBot' }}</span>
       </div>
       <a-button
@@ -203,7 +203,7 @@ defineExpose({ checkListFilled, scrollToTop })
       .agent-avatar {
         width: 32px;
         height: 32px;
-        border-radius: 50%;
+        border-radius: 25%;
         object-fit: cover;
       }
 

@@ -3,7 +3,7 @@
     <header class="header">
       <div class="header-content">
         <a class="logo-link" @click="refreshPage">
-          <img src="/favicon.ico" alt="Logo" class="logo-img" />
+          <img src="/logo.png" alt="Logo" class="logo-img" />
           <span class="logo-text">MioAI</span>
         </a>
         <div class="header-right">

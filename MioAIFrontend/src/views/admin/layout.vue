@@ -2,7 +2,7 @@
   <div class="admin-layout">
     <header class="admin-header">
       <div class="header-brand">
-        <img src="/favicon.ico" alt="Logo" class="logo-img" />
+        <img src="/logo.png" alt="Logo" class="logo-img" />
         <span class="logo-text">MioAI</span>
         <span class="header-divider">|</span>
         <span class="page-title">{{ pageTitle }}</span>

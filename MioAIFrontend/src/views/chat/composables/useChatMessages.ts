@@ -30,6 +30,8 @@ export function useChatMessages(options: {
   scrollToBottom: () => void
   /** URL 携带的会话在服务端不存在（已删除或脏链接）时回调，由页面负责回到新对话 */
   onConversationMissing?: (conversationId: string) => void
+  /** 加载发现末尾是 user 行（上轮回合仍在后端执行/曾被中断）：由页面接管为恢复轮询 */
+  onPendingTurn?: (chatId: string) => void
 }) {
   const userStore = useUserStore()
 
@@ -74,9 +76,20 @@ export function useChatMessages(options: {
 
     try {
       // agent_message 完整持久化：还原工作过程（内容块/任务清单/耗时）。
-      // 新会话刚发送首条消息时与本请求存在落库竞态，空结果静默保留本地消息。
+      // 新会话刚发送首条消息时会与本请求竞态（会话记录尚未落库，返回 40400）——
+      // 稍候重试一次，仍不存在才按"会话缺失"处理。
       let loadedMessages: ChatMessage[] | null = null
-      const rows = await getBotMessages(conversationId, { skipErrorMessage: true })
+      let rows = null as Awaited<ReturnType<typeof getBotMessages>> | null
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          rows = await getBotMessages(conversationId, { skipErrorMessage: true })
+          break
+        } catch (e) {
+          const code = (e as Error & { code?: number }).code
+          if (code !== 40400 || attempt > 0) throw e
+          await new Promise(resolve => setTimeout(resolve, 1500))
+        }
+      }
       if (rows && rows.length > 0) {
         loadedMessages = rows.map((row, index) => {
           const blocks = (row.blocks ?? undefined) as MessageBlock[] | undefined
@@ -100,10 +113,26 @@ export function useChatMessages(options: {
         chatMessagesMap.value.set(conversationId, loadedMessages)
       }
 
+      // 末尾是 user 行：上一轮的回复仍在后端执行（页面曾被关闭/丢弃/中断）——
+      // 补一条进行中的空消息并交给恢复轮询接管，后端落库后自动补全
+      if (
+        loadedMessages.length > 0 &&
+        loadedMessages[loadedMessages.length - 1].role === 'user' &&
+        !isLoadingThisChat
+      ) {
+        const withPending: ChatMessage[] = [...loadedMessages, {
+          id: `pending_${conversationId}`,
+          role: 'assistant',
+          content: '',
+          blocks: [],
+          createTime: new Date()
+        }]
+        chatMessagesMap.value.set(conversationId, withPending)
+        options.onPendingTurn?.(conversationId)
+      }
+
       if (currentChatId.value === conversationId) {
-        messages.value = isLoadingThisChat
-          ? (chatMessagesMap.value.get(conversationId) || loadedMessages)
-          : loadedMessages
+        messages.value = chatMessagesMap.value.get(conversationId) || loadedMessages
       }
       nextTick(() => {
         options.scrollToBottom()

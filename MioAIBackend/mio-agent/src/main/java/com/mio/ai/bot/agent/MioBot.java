@@ -91,6 +91,9 @@ public class MioBot {
 
     // 展示持久化：与本轮 SSE 事件同构的内容块（文本/思考/工具）+ 最终清单快照 + 耗时
     private final List<Map<String, Object>> displayBlocks = new ArrayList<>();
+
+    /** 任务结束（含异常）回调：控制器借此解除会话占用（防重复执行闸门） */
+    private volatile Runnable onFinish;
     private List<Map<String, Object>> displayPlan;
 
     // 当前运行的 SSE 连接与事件序号
@@ -210,6 +213,13 @@ public class MioBot {
                 complete();
             } finally {
                 heartbeat.cancel(false);
+                if (onFinish != null) {
+                    try {
+                        onFinish.run();
+                    } catch (Exception ignored) {
+                        // 清理回调失败不影响主流程
+                    }
+                }
             }
         });
 
@@ -517,6 +527,10 @@ public class MioBot {
         } catch (IllegalStateException ignored) {
             // 连接已被容器关闭
         }
+    }
+
+    public void setOnFinish(Runnable onFinish) {
+        this.onFinish = onFinish;
     }
 
     private Long parseConversationId() {

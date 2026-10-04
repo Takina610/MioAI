@@ -1,7 +1,7 @@
 <template>
   <div class="forbidden">
     <div class="content">
-      <img src="/favicon.ico" alt="logo" class="logo" />
+      <img src="/logo.png" alt="logo" class="logo" />
       <h1>无权访问</h1>
       <p>您没有权限访问此页面。</p>
       <div class="actions">

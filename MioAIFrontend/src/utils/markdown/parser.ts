@@ -35,7 +35,8 @@ export const markdown = new MarkdownIt({
   .use(cjkFriendly)
   .use(tasklists, { enabled: false })
 
-// 聊天内的外部链接（PDF/CDN 等）一律新标签打开，不挤占当前会话页
+// 聊天内的外部链接（PDF/CDN 等）一律新标签打开，不挤占当前会话页；
+// 不带 referrer（与手动复制链接直接打开一致，规避 CDN 侧的来源拦截）
 const defaultLinkOpen = markdown.renderer.rules.link_open
   ?? ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options))
 markdown.renderer.rules.link_open = (tokens, idx, options, env, self) => {
@@ -43,6 +44,7 @@ markdown.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   if (/^https?:\/\//i.test(href)) {
     tokens[idx].attrSet('target', '_blank')
     tokens[idx].attrSet('rel', 'noopener noreferrer')
+    tokens[idx].attrSet('referrerpolicy', 'no-referrer')
   }
   return defaultLinkOpen(tokens, idx, options, env, self)
 }
@@ -77,7 +79,7 @@ const SANITIZE_OPTIONS = {
     ...KATEX_TAGS
   ],
   ALLOWED_ATTR: [
-    'href', 'title', 'target', 'rel',
+    'href', 'title', 'target', 'rel', 'referrerpolicy',
     'src', 'alt', 'width', 'height',
     'class', 'id',
     'colspan', 'rowspan', 'align',

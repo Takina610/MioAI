@@ -18,9 +18,10 @@ const STREAM_WATCHDOG_TIMEOUT_MS = 60000
 
 // 断线自愈：连接被浏览器/代理掐断时后端仍在执行，
 // 结束时会把完整工作过程一次性落库到 agent_message——静默轮询该表，
-// 本轮 assistant 行出现即代表执行完成，取整行还原界面；超时才提示中断。
+// 本轮 assistant 行出现即代表执行完成，取整行还原界面；超时放弃才提示中断。
+// 长任务 + 标签页休眠场景可能很久才完成，窗口放宽到 10 分钟。
 const RECOVERY_POLL_INTERVAL_MS = 4000
-const RECOVERY_MAX_WAIT_MS = 240000
+const RECOVERY_MAX_WAIT_MS = 600000
 
 /**
  * 消息发送与流式接收：智能体 SSE（ZCode 风格事件流）与本地 Ollama 直连两种通道。
@@ -498,6 +499,34 @@ export function useChatStream(options: {
     }, RECOVERY_POLL_INTERVAL_MS)
   }
 
+  /**
+   * 孤儿回合接管：历史加载发现末条是 user 行（页面曾在执行期间被关闭/丢弃），
+   * 该回合仍在后端执行——置为加载中并恢复轮询，落库后自动补全完整回复。
+   */
+  function recoverPendingTurn(chatId: string): void {
+    const msgs = messagesApi.getChatMessages(chatId)
+    const pendingIndex = msgs.length - 1
+    if (pendingIndex < 0 || msgs[pendingIndex].role !== 'assistant' || msgs[pendingIndex].content) {
+      return
+    }
+    messagesApi.setLoading(chatId, true)
+    startRecoveryPolling(chatId, pendingIndex, () => {
+      // 始终无结果：标记中断（刷新仍可从历史恢复）
+      patchMessage(chatId, pendingIndex, (msg) => ({ ...msg, interrupted: true }))
+      messagesApi.setLoading(chatId, false)
+    }, (row) => {
+      patchMessage(chatId, pendingIndex, (msg) => ({
+        ...msg,
+        content: textOfBlocks(row.blocks ?? []),
+        blocks: (row.blocks ?? undefined) as MessageBlock[] | undefined,
+        plan: (row.plan ?? undefined) as ChatMessage['plan'],
+        durationMs: row.durationMs ?? undefined,
+        interrupted: false
+      }))
+      messagesApi.setLoading(chatId, false)
+    })
+  }
+
   /** 组件卸载前关闭所有流式连接 */
   function cleanup(): void {
     disarmStreamWatchdog()
@@ -513,5 +542,5 @@ export function useChatStream(options: {
     }
   }
 
-  return { sendMessage, cleanup }
+  return { sendMessage, cleanup, recoverPendingTurn }
 }

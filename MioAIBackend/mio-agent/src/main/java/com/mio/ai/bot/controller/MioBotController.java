@@ -87,6 +87,9 @@ public class MioBotController {
     @Autowired
     private AgentMessageService agentMessageService;
 
+    /** 正在执行中的会话：断线自动重连/双击等重复请求直接拒绝，防止同一轮任务被重复执行 */
+    private static final java.util.Set<String> ACTIVE_CHATS = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     @GetMapping("/bot/chat")
     public SseEmitter chat(@RequestParam @NotBlank @Size(max = 64) String chatId,
                            @RequestParam @NotBlank @Size(max = 20000) String content,
@@ -94,6 +97,10 @@ public class MioBotController {
                            @RequestParam(required = false) String token) {
         Long userId = StrUtil.isBlank(token) ? null : redisComponent.getUserId(token);
         long resolvedAgentId = agentId != null ? agentId : MioBot.AGENT_ID;
+
+        if (!ACTIVE_CHATS.add(chatId)) {
+            return emitSingleReply("当前会话有正在进行的任务，请等待完成后再发送（可刷新页面查看进度）。");
+        }
 
         // MioBot 游客可用；自定义智能体要求登录且有权使用（所有者/公开已发布）
         String customSystemPrompt = null;
@@ -122,6 +129,8 @@ public class MioBotController {
         MioBot mioBot = new MioBot(chatModel, jdbcChatMemory, commonTools,
                 List.of(mcpTools), agentUsageLogService, toolCallLogService, agentMessageService,
                 chatId, userId, resolvedAgentId, customSystemPrompt);
+        // 任务真正结束（含异常）时解除会话占用
+        mioBot.setOnFinish(() -> ACTIVE_CHATS.remove(chatId));
         return mioBot.run(content, knowledgeContext);
     }
 

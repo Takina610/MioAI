@@ -118,6 +118,10 @@ const messagesApi = useChatMessages({
       switchChat('')
       router.replace(`/chat/${agentId.value}`)
     }
+  },
+  // 历史末尾是 user 行：回合仍在后端执行，交给流式模块恢复轮询接管
+  onPendingTurn: (chatId) => {
+    streamApi.recoverPendingTurn(chatId)
   }
 })
 
@@ -137,7 +141,7 @@ const {
   onCurrentChatDeleted: createNewChat
 })
 
-const { sendMessage, cleanup: cleanupStream } = useChatStream({
+const streamApi = useChatStream({
   agentId,
   messagesApi,
   ensureSession,
@@ -146,6 +150,7 @@ const { sendMessage, cleanup: cleanupStream } = useChatStream({
   followStream,
   scrollToChatListTop
 })
+const { sendMessage, cleanup: cleanupStream } = streamApi
 
 const { currentChatId, messages, isLoading, switchChat, loadMessages } = messagesApi
 
@@ -187,6 +192,17 @@ watch(
     }
   },
   { immediate: true }
+)
+
+// 刷新时路由 watch（immediate）可能早于启动登录校验完成，loadMessages 因未登录提前返回——
+// 登录态就绪后补拉一次当前会话
+watch(
+  () => userStore.isLoggedIn,
+  (loggedIn) => {
+    if (loggedIn && currentChatId.value && !messages.value.length) {
+      loadMessages(currentChatId.value)
+    }
+  }
 )
 
 async function loadAgentInfo(): Promise<void> {

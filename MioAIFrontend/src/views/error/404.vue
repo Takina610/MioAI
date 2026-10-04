@@ -1,7 +1,7 @@
 <template>
   <div class="not-found">
     <div class="content">
-      <img src="/favicon.ico" alt="logo" class="logo" />
+      <img src="/logo.png" alt="logo" class="logo" />
       <h1>未找到页面</h1>
       <p>页面不存在，请确认网址是否正确。</p>
       <div class="actions">
