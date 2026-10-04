@@ -35,16 +35,19 @@ export const markdown = new MarkdownIt({
   .use(cjkFriendly)
   .use(tasklists, { enabled: false })
 
-// 聊天内的外部链接（PDF/CDN 等）一律新标签打开，不挤占当前会话页；
-// 不带 referrer（与手动复制链接直接打开一致，规避 CDN 侧的来源拦截）
+// 聊天内的外部链接（CDN 等）与同源文件代理链接（/api/file/...，PDF 等）
+// 一律新标签打开，不挤占当前会话页；外链不带 referrer（与手动复制链接直接打开一致）
 const defaultLinkOpen = markdown.renderer.rules.link_open
   ?? ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options))
 markdown.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   const href = String(tokens[idx].attrGet('href') ?? '')
-  if (/^https?:\/\//i.test(href)) {
+  const external = /^https?:\/\//i.test(href)
+  if (external || href.startsWith('/api/file/')) {
     tokens[idx].attrSet('target', '_blank')
-    tokens[idx].attrSet('rel', 'noopener noreferrer')
-    tokens[idx].attrSet('referrerpolicy', 'no-referrer')
+    if (external) {
+      tokens[idx].attrSet('rel', 'noopener noreferrer')
+      tokens[idx].attrSet('referrerpolicy', 'no-referrer')
+    }
   }
   return defaultLinkOpen(tokens, idx, options, env, self)
 }

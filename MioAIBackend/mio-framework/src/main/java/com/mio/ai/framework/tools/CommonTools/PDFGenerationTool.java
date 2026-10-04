@@ -77,7 +77,10 @@ public class PDFGenerationTool {
         try {
             String entityId = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
             String fileUrl = r2Util.uploadLocalFile(localFilePath, FileType.PDF_FILE, entityId);
-            return "PDF生成成功！下载链接：" + fileUrl;
+            // 回传同源代理链接（相对路径）：聊天/分享页点击直接预览或 ?download=1 下载，
+            // 不经 CDN 自定义域名，规避 DNS/代理/防盗链等环境限制
+            String objectName = fileUrl.substring(fileUrl.lastIndexOf('/') + 1);
+            return "PDF生成成功！下载链接：/api/file/pdf/" + objectName;
         } catch (Exception e) {
             return "PDF上传失败：" + e.getMessage();
         } finally {
