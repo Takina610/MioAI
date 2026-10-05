@@ -1,5 +1,5 @@
 <template>
-  <div class="attachment-cards" :class="{ card: variant === 'card' }">
+  <div class="attachment-cards">
     <AttachmentCard
       v-for="item in items"
       :key="item.key"
@@ -33,9 +33,5 @@ defineProps<{
   flex-wrap: wrap;
   gap: 8px;
 
-  &.card {
-    // 图片裸缩略图与文档卡间距微调（对齐输入框卡片区）
-    row-gap: 8px;
-  }
 }
 </style>

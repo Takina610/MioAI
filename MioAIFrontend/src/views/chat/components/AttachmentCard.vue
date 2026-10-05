@@ -1,7 +1,7 @@
 <template>
   <div
     class="att-item"
-    :class="[{ card: variant === 'card' }, { bare: variant === 'card' && isImageName(item.name) }, { light }, { clickable: downloadable && item.status === 'done' }, { error: item.status === 'error' }]"
+    :class="[{ 'as-card': variant === 'card' }, { bare: variant === 'card' && isImageName(item.name) }, { light }, { clickable: downloadable && item.status === 'done' }, { error: item.status === 'error' }]"
     :title="item.status === 'error' ? '上传失败' : item.name"
     @click="downloadable && item.status === 'done' && handleDownload()"
   >
@@ -144,7 +144,7 @@ async function handleDownload(): Promise<void> {
 
   // ---------- 卡片式（输入框待传区，横向胶囊） ----------
   // inline-flex：卡片直接作为输入容器子元素（无任何包装层），同行自然排列换行
-  &.card {
+  &.as-card {
     display: inline-flex;
     align-items: center;
     gap: 14px;
@@ -173,7 +173,7 @@ async function handleDownload(): Promise<void> {
 
   // 图片卡片：裸缩略图——无可见外框/背景，直接显示图片本身（与文档卡同高齐平：
   // 透明 1px 边框补齐文档卡的边框厚度，几何完全一致）
-  &.bare.card {
+  &.bare.as-card {
     padding: 0;
     background: transparent;
     border: 1px solid transparent;
@@ -187,7 +187,7 @@ async function handleDownload(): Promise<void> {
   // 缩略图尺寸（复合选择器：.card 在同一元素上，SCSS 的 `.card &` 会编译成
   // 祖先选择器永不命中——缩略图尺寸必须写在这里才能生效）
   // DeepSeek 1:1 比例：文档卡 86px 高（44px 彩色图标方块 + 上下 20px 留白），图片缩略图与卡同高
-  &.card .att-thumb {
+  &.as-card .att-thumb {
     width: 44px;
     height: 44px;
     border-radius: 10px;
@@ -198,13 +198,13 @@ async function handleDownload(): Promise<void> {
     }
   }
 
-  &.bare.card .att-thumb {
+  &.bare.as-card .att-thumb {
     width: 84px;
     height: 84px;
     border-radius: 16px;
   }
 
-  &:not(.card) .att-thumb {
+  &:not(.as-card) .att-thumb {
     width: 40px;
     height: 40px;
     border-radius: 8px;
@@ -215,7 +215,7 @@ async function handleDownload(): Promise<void> {
   }
 
   // ---------- 行式（消息内） ----------
-  &:not(.card) {
+  &:not(.as-card) {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -261,9 +261,9 @@ async function handleDownload(): Promise<void> {
     min-width: 0;
   }
 
-  // 行式（消息内 chip）：单行紧凑。注意必须用 &:not(.card) 复合选择器——
-  // SCSS 的 ":not(.card) &" 编译成祖先选择器，任何不带 card 类的祖先都会命中它
-  &:not(.card) .att-text {
+  // 行式（消息内 chip）：单行紧凑。注意必须用 &:not(.as-card) 复合选择器——
+  // SCSS 的祖先形式选择器（如 :not(.card) &）会因任意祖先命中而失效，一律用复合形式
+  &:not(.as-card) .att-text {
     flex-direction: row;
     align-items: baseline;
     gap: 6px;
@@ -280,7 +280,7 @@ async function handleDownload(): Promise<void> {
     transition: color 0.2s;
   }
 
-  &:not(.card) .att-name {
+  &:not(.as-card) .att-name {
     max-width: 140px;
     font-weight: 400;
   }
@@ -292,7 +292,7 @@ async function handleDownload(): Promise<void> {
     white-space: nowrap;
   }
 
-  &:not(.card) .att-meta {
+  &:not(.as-card) .att-meta {
     margin-top: 0;
     flex-shrink: 0;
   }
@@ -404,7 +404,7 @@ async function handleDownload(): Promise<void> {
 
   // 用户气泡内：反白配色
   &.light {
-    &:not(.card) {
+    &:not(.as-card) {
       background: rgba(255, 255, 255, 0.14);
       border-color: rgba(255, 255, 255, 0.25);
       color: #fff;

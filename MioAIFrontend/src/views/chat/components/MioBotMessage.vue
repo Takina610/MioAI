@@ -152,7 +152,7 @@
     <AttachmentCards
       v-if="outputAttachments.length"
       :items="outputAttachments"
-      variant="chip"
+      variant="card"
       downloadable
       class="output-attachments"
     />
