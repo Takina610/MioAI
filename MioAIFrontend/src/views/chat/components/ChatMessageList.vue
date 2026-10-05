@@ -26,19 +26,23 @@
           <template v-else-if="editingId !== msg.id">
             <MarkdownView class="message-text" :content="msg.content" />
           </template>
-          <!-- 编辑态：原位替换为文本框（按钮嵌在框内右下），保存即截断重发。
-               全部用原生元素：antd Textarea 会把多个 keydown 监听编译成的数组
-               当 prop 校验丢弃（Invalid prop "onKeydown" 警告），且其中间层在
-               IME 输入下存在 v-model 断链（editText 停留在初值→点发送永远走
-               "内容未变"取消）；原生 textarea 的 v-model 与事件是 Vue 原生路径 -->
-          <div v-else class="message-edit">
-            <textarea
-              v-model="editText"
-              class="edit-native-textarea"
-              rows="3"
-              @keydown.esc="cancelEdit"
-              @keydown.enter.exact.prevent="confirmEdit(msg, index)"
-            ></textarea>
+          <!-- 编辑态：原位替换为文本框（按钮嵌在框内右下），保存即截断重发（内容未变=重发）。
+               a-textarea 保持 UI 风格统一，但规避其两个坑：
+               ① 多个 keydown 监听会编译成数组被 antd 当 prop 丢弃（Invalid prop
+                 "onKeydown" 警告、Enter/Esc 失效）→ 键盘监听移到外层 div 冒泡处理；
+               ② IME 输入下 v-model:value 经其中间层存在断链（editText 停留初值）→
+                 原生 @input 直读 DOM 同步，双通道保底 -->
+          <div
+            v-else class="message-edit"
+            @keydown.esc="cancelEdit"
+            @keydown.enter.exact.prevent="confirmEdit(msg, index)"
+          >
+            <a-textarea
+              :value="editText"
+              :auto-size="{ minRows: 2, maxRows: 12 }"
+              @update:value="(v: string) => editText = v"
+              @input="onEditNativeInput"
+            />
             <div class="edit-buttons">
               <button type="button" class="edit-native-btn" @mousedown.prevent @click="cancelEdit">取消</button>
               <button
@@ -170,14 +174,22 @@ function cancelEdit(): void {
 
 function confirmEdit(msg: ChatMessage, index: number): void {
   const content = editText.value.trim()
-  if (!content || content === msg.content) {
-    // 明确提示而非静默取消：内容未变化时直接关闭编辑框会让"点发送没反应"无法排查
-    message.info(content ? '内容没有变化，已取消编辑' : '内容不能为空，已取消编辑')
+  if (!content) {
+    message.info('内容不能为空，已取消编辑')
     cancelEdit()
     return
   }
+  // 内容未变化也照常发送（= 从这条消息重新发送）；只有空内容才取消
   cancelEdit()
   emit('edit', index, content)
+}
+
+/** 原生 input 直读 DOM 同步（IME 输入下 antd v-model 中间层断链的双通道保底） */
+function onEditNativeInput(e: Event): void {
+  const value = (e.target as HTMLTextAreaElement | null)?.value
+  if (typeof value === 'string') {
+    editText.value = value
+  }
 }
 
 function scrollToBottom(): void {
@@ -323,25 +335,8 @@ defineExpose({ scrollToBottom, isNearBottom })
             }
           }
 
-          .edit-native-textarea {
-            width: 100%;
-            box-sizing: border-box;
-            padding: 10px 12px 44px;
-            border: 1px solid #d9dde3;
-            border-radius: 8px;
-            background: #fff;
-            color: $text-dark;
-            font-size: 14px;
-            font-family: inherit;
-            line-height: 1.6;
-            resize: vertical;
-            min-height: 76px;
-            max-height: 320px;
-            outline: none;
-
-            &:focus {
-              border-color: $primary-color;
-            }
+          :deep(.ant-input) {
+            padding-bottom: 44px;
           }
         }
 
