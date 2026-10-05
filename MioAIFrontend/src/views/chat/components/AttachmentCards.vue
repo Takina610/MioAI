@@ -7,6 +7,7 @@
       :variant="variant"
       :downloadable="downloadable"
       :large-image="allImages"
+      compact
     />
   </div>
 </template>
