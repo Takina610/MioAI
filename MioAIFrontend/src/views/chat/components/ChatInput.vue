@@ -18,11 +18,11 @@
              GSAP 进出场由 usePendingCardAnimations 驱动——离场=四周向中间缩小消失+占位塌缩，
              兄弟卡片由文档流连续回流平滑补位 -->
         <AttachmentCard
-          v-for="card in renderCards"
+          v-for="card in renderCards ?? []"
           :key="card.key"
-          :ref="setCardRef(card.key)"
+          :ref="refSetter ? refSetter(card.key) : undefined"
           :item="card"
-          :leaving="leavingKeys.has(card.key)"
+          :leaving="leavingKeys ? leavingKeys.has(card.key) : false"
           variant="card"
           removable
           @remove="emit('remove-pending', $event)"
@@ -90,7 +90,6 @@ import { useUserStore } from '@/store/user'
 import { ArrowUpOutlined, DownOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import BrainIcon from '@/components/BrainIcon.vue'
 import AttachmentCard from './AttachmentCard.vue'
-import { usePendingCardAnimations } from '../composables/usePendingCardAnimations'
 import type { PendingAttachment } from '@/types'
 
 /** 思考档位全量标签（实际渲染哪些档由后端按模型能力返回） */
@@ -117,8 +116,12 @@ const props = defineProps<{
   effort?: string
   /** 当前模型支持的思考档位（按能力探测，如实渲染） */
   supportedEfforts?: string[]
-  /** 待上传附件（选中即开始上传，由父组件维护状态） */
-  pending?: PendingAttachment[]
+  /** 待上传卡片渲染列表（含离场动画中的卡，由父级动画组合式维护） */
+  renderCards?: PendingAttachment[]
+  /** 离场中的键（隐藏 X，防动画期间重复触发） */
+  leavingKeys?: Set<string>
+  /** v-for 动态 ref 登记器（父级动画组合式需要元素引用驱动 GSAP） */
+  refSetter?: (key: string) => (el: unknown) => void
 }>()
 
 const emit = defineEmits<{
@@ -161,9 +164,6 @@ function handleEnter(e: KeyboardEvent): void {
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const dragOver = ref(false)
-
-/** 待上传卡片：进场缩放浮现 / 离场四周向中间缩小消失（GSAP，无任何包装层） */
-const { renderCards, leavingKeys, setCardRef } = usePendingCardAnimations(computed(() => props.pending))
 
 /** 粘贴上传：Ctrl+V 剪贴板里的文件（如截图）直接进待传区 */
 function onPaste(event: ClipboardEvent): void {

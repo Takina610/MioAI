@@ -6,10 +6,12 @@ import type { PendingAttachment } from '@/types'
  * 待上传卡片的 GSAP 进出场（无 TransitionGroup——卡片是输入容器的直接子元素，
  * 不允许任何包装层，DOM 与 DeepSeek 一致）：
  * - 新增：缩放浮现；
- * - 移除：两阶段。①卡片原位四周向中心缩小消失（scale→0，transformOrigin 正中，
- *   不做任何布局位移——矩形卡的汇集点恒在几何中心）；②收缩完成后宽度塌缩，
- *   右侧卡片此时才被文档流连续回流推向左侧（先消失、后左移）。
- * order 数组维护展示顺序：离场卡保持在原位渲染（不能甩到列表尾，否则右卡瞬跳）。
+ * - 移除：两阶段有重叠的连续动画——①卡片原位四周向中心缩小消失（transformOrigin
+ *   正中，汇集点恒在几何中心）②宽度/高度/占位塌缩，右侧卡片被文档流连续回流
+ *   平滑推向左侧。阶段二在阶段一结束前就开始（overlap），全程无停顿无急动。
+ * - 会话切换/新建等整表替换：beginSilentSwap() 后的下一次差异直接静默落位，
+ *   不播任何离场动画（卡片是为用户保存起来的，不是被删除）。
+ * order 数组维护展示顺序：离场卡保持在原位渲染（甩到列表尾会让右卡瞬跳）。
  */
 export function usePendingCardAnimations(pending: Ref<PendingAttachment[] | undefined>) {
   /** 离场动画中的卡片（保持在原位渲染，动画完成后真正移除） */
@@ -19,6 +21,7 @@ export function usePendingCardAnimations(pending: Ref<PendingAttachment[] | unde
   /** 见过的全部卡片（离场卡的渲染数据源：卡片已从 pending 移除，但动画期间还要显示） */
   const knownCards = new Map<string, PendingAttachment>()
   let hydrated = false
+  let silentNext = false
 
   const renderCards = computed<PendingAttachment[]>(() => {
     const all = new Map<string, PendingAttachment>()
@@ -29,6 +32,15 @@ export function usePendingCardAnimations(pending: Ref<PendingAttachment[] | unde
 
   /** 离场中的键（隐藏 X，防动画期间重复触发） */
   const leavingKeys = computed(() => new Set(leavingCards.value.map(c => c.key)))
+
+  /** 下一次 pending 差异静默落位（会话切换/新建：整表替换，不播离场/进场动画）。
+   * 0ms 定时器自动过期：若本次交换没有产生差异，标志不会污染后续的删除动画。 */
+  function beginSilentSwap(): void {
+    silentNext = true
+    window.setTimeout(() => {
+      silentNext = false
+    }, 0)
+  }
 
   const cardEls = new Map<string, HTMLElement>()
   const setCardRef = (key: string) => (el: unknown) => {
@@ -56,6 +68,15 @@ export function usePendingCardAnimations(pending: Ref<PendingAttachment[] | unde
         order.value = nowKeys
         return
       }
+
+      // 静默交换（会话切换/新建）：整表直接落位，无任何动画
+      if (silentNext) {
+        silentNext = false
+        leavingCards.value = []
+        order.value = nowKeys
+        return
+      }
+
       const added = nowList.filter(p => !order.value.includes(p.key))
       const removed: PendingAttachment[] = []
       const removedKeys: string[] = []
@@ -100,8 +121,10 @@ export function usePendingCardAnimations(pending: Ref<PendingAttachment[] | unde
         }
       }
 
-      // 离场两阶段：①原位四周向中心缩小消失（无布局位移，汇集点=几何中心）
-      // ②收缩完成后宽度/占位塌缩——右侧卡片此时才被文档流连续回流平滑推向左侧
+      // 离场两阶段（有重叠的连续动画，无"停顿→急收"）：
+      // ①原位四周向中心缩小消失（无布局位移，汇集点=几何中心）
+      // ②未等①结束就开始宽度/高度/占位塌缩——右侧卡片被平滑推向左侧，
+      //   末卡移除时垂直空间同步收回（输入框丝滑上移）
       for (const r of removed) {
         await nextTick()
         const el = cardEls.get(r.key)
@@ -109,10 +132,12 @@ export function usePendingCardAnimations(pending: Ref<PendingAttachment[] | unde
           finishLeave(r.key)
           continue
         }
-        // 钉宽转 border-box：第二阶段的 width 数值插值才有正确起点；溢出裁剪防内容外溢
+        // 钉宽高转 border-box：数值插值才有正确起点；溢出裁剪防内容外溢
         el.style.boxSizing = 'border-box'
         el.style.width = `${el.offsetWidth}px`
+        el.style.height = `${el.offsetHeight}px`
         el.style.overflow = 'hidden'
+        el.style.willChange = 'transform, opacity, width, height'
         let finished = false
         const finish = () => {
           if (finished) return
@@ -125,30 +150,33 @@ export function usePendingCardAnimations(pending: Ref<PendingAttachment[] | unde
             scale: 0,
             opacity: 0,
             transformOrigin: '50% 50%',
-            duration: 0.22,
+            duration: 0.24,
             ease: 'power2.in',
           })
-          .to(el, {
-            width: 0,
-            // 高度一并塌缩：末卡移除时行高平滑归零（否则元素卸载瞬间输入框高度跳变）
-            height: 0,
-            minHeight: 0,
-            paddingLeft: 0,
-            paddingRight: 0,
-            borderLeftWidth: 0,
-            borderRightWidth: 0,
-            borderTopWidth: 0,
-            borderBottomWidth: 0,
-            marginLeft: 0,
-            marginTop: 0,
-            duration: 0.18,
-            ease: 'power2.out',
-          })
+          .to(
+            el,
+            {
+              width: 0,
+              height: 0,
+              minHeight: 0,
+              paddingLeft: 0,
+              paddingRight: 0,
+              borderLeftWidth: 0,
+              borderRightWidth: 0,
+              borderTopWidth: 0,
+              borderBottomWidth: 0,
+              marginLeft: 0,
+              marginTop: 0,
+              duration: 0.28,
+              ease: 'power1.inOut',
+            },
+            '-=0.1',
+          )
         // 兜底：GSAP ticker 异常停摆时离场仍会完成（真实前台用户走动画，无感）
-        window.setTimeout(finish, 550)
+        window.setTimeout(finish, 700)
       }
     },
   )
 
-  return { renderCards, leavingKeys, setCardRef }
+  return { renderCards, leavingKeys, setCardRef, beginSilentSwap }
 }

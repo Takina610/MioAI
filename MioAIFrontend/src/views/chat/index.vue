@@ -43,7 +43,9 @@
           :has-messages="messages.length > 0"
           :loading="isLoading"
           :supported-efforts="supportedEfforts"
-          :pending="pendingAttachments"
+          :render-cards="renderCards"
+          :leaving-keys="leavingKeys"
+          :ref-setter="setCardRef"
           @add-files="handleAddFiles"
           @remove-pending="handleRemovePending"
           @send="handleSend"
@@ -88,8 +90,9 @@ import ChatMessageList from './components/ChatMessageList.vue'
 import ChatInput from './components/ChatInput.vue'
 import ChatPlanPanel from './components/ChatPlanPanel.vue'
 import { useChatSessions } from './composables/useChatSessions'
-import { useChatMessages } from './composables/useChatMessages'
+import { useChatMessages, generateConversationId } from './composables/useChatMessages'
 import { useChatStream } from './composables/useChatStream'
+import { usePendingCardAnimations } from './composables/usePendingCardAnimations'
 import { truncateConversation, getReasoningEfforts, uploadAttachment, deleteAttachment } from '@/api/chat'
 import { getBotMessages } from '@/api/botMessages'
 
@@ -268,8 +271,8 @@ async function loadSessions(isLoadMore: boolean = false): Promise<void> {
 }
 
 function createNewChat(): void {
+  // 草稿/待传附件的清空与恢复由会话隔离 watch 接管（'' 键即新会话状态）
   switchChat('')
-  inputMessage.value = ''
   router.push(`/chat/${agentId.value}`)
 }
 
@@ -309,10 +312,27 @@ function handleSend(): void {
 /** 待上传附件：选中文件即开始上传到沙箱（卡片带实时进度环） */
 const pendingAttachments = ref<PendingAttachment[]>([])
 
+/**
+ * 未落会话转正：'' 新会话产生首个附件时生成正式会话 id，
+ * 并把草稿/待传附件迁移过去（隔离 watch 随后加载的就是迁移后的状态，不会清空）
+ */
+function prepareChat(): string {
+  // 整页刷新后 currentChatId 可能尚未恢复，路由上的会话 id 优先
+  const existing = messagesApi.currentChatId.value || (route.params.conversationId as string) || ''
+  if (existing) {
+    messagesApi.currentChatId.value = existing
+    return existing
+  }
+  const id = userStore.isLoggedIn ? generateConversationId() : 'temp_' + Date.now()
+  draftByChat.set(id, inputMessage.value)
+  pendingByChat.set(id, pendingAttachments.value)
+  messagesApi.currentChatId.value = id
+  return id
+}
+
 async function handleAddFiles(files: File[]): Promise<void> {
-  const chatId = prepareChatId()
-  // 新会话首个附件会触发会话隔离 watch（currentChatId 空→id 的交换），先等它完成再 push，
-  // 否则刚加入的记录会被 watch 加载的空列表覆盖
+  const chatId = prepareChat()
+  // 转正触发的会话隔离 watch 在 nextTick 内完成加载，先等它再 push
   await nextTick()
   const slots = MAX_PENDING_ATTACHMENTS - pendingAttachments.value.length
   for (const file of files.slice(0, Math.max(0, slots))) {
@@ -379,18 +399,32 @@ function cleanupPendingAttachments(): void {
 
 const MAX_PENDING_ATTACHMENTS = 50
 
-// 草稿与待传附件按会话隔离：切换会话时各自保存/恢复，互不串显
+// 待上传卡片动画（GSAP）：实例挂在本页——会话切换的 watcher 里能先 arm 静默再换表，
+// 保证切换/新建时卡片直接落位（子组件内实例化时 watcher 顺序颠倒，静默标志永远晚到）
+const {
+  renderCards,
+  leavingKeys,
+  setCardRef,
+  beginSilentSwap: beginPendingSilentSwap,
+} = usePendingCardAnimations(computed(() => pendingAttachments.value))
+
+// 草稿与待传附件按会话隔离：切换时各自保存/恢复。'' 代表未落会话的新会话状态——
+// 纯文字、纯文件、图文混合都要记录。切换/新建由 ChatInput 侧 arm 静默（整表直接落位不播动画）；
+// ''→真实 id 的"转正"迁移在 prepareChat 里做（见下），此处只做纯存/取
 const draftByChat = new Map<string, string>()
 const pendingByChat = new Map<string, PendingAttachment[]>()
 watch(
   () => messagesApi.currentChatId.value,
   (newId, oldId) => {
-    if (oldId) {
-      draftByChat.set(oldId, inputMessage.value)
-      pendingByChat.set(oldId, pendingAttachments.value)
-    }
-    inputMessage.value = (newId && draftByChat.get(newId)) || ''
-    pendingAttachments.value = (newId && pendingByChat.get(newId)) || []
+    const from = oldId ?? ''
+    const to = newId ?? ''
+    if (from === to) return
+    // 会话切换/新建=附件整表替换：先 arm 静默（本 watcher 内同步生效），卡片直接落位不播动画
+    beginPendingSilentSwap()
+    draftByChat.set(from, inputMessage.value)
+    pendingByChat.set(from, pendingAttachments.value)
+    inputMessage.value = draftByChat.get(to) ?? ''
+    pendingAttachments.value = pendingByChat.get(to) ?? []
   },
 )
 
