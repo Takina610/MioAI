@@ -76,6 +76,7 @@ public final class ModelStepRunner {
     /**
      * 挂工具与流式超时（必须用 OpenAiChatOptions：模型内部强转 prompt.options，
      * 裸 builder 默认 gpt-5-mini 会覆盖 yml 模型名；timeout 不设会被 okhttp 60s 默认掐断长流）。
+     * 空工具列表不设 toolCallbacks——部分网关对 "tools":[] 直接 400（换模型兼容）。
      */
     private OpenAiChatOptions buildOptions(List<ToolCallback> toolCallbacks) {
         OpenAiChatOptions.Builder builder;
@@ -84,7 +85,9 @@ public final class ModelStepRunner {
         } else {
             builder = OpenAiChatOptions.builder();
         }
-        builder.toolCallbacks(toolCallbacks);
+        if (toolCallbacks != null && !toolCallbacks.isEmpty()) {
+            builder.toolCallbacks(toolCallbacks);
+        }
         builder.timeout(Duration.ofSeconds(streamTimeoutSeconds));
         if (reasoningEffort != null && !reasoningEffort.isBlank()) {
             builder.reasoningEffort(reasoningEffort);

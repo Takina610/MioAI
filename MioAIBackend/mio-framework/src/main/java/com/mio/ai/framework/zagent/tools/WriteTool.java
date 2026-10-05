@@ -24,7 +24,11 @@ final class WriteTool {
 
     static String execute(com.fasterxml.jackson.databind.JsonNode input, ToolContext ctx) {
         String rawPath = Args.str(input, "file_path");
-        String content = input.hasNonNull("content") ? input.get("content").asText() : "";
+        // 换模型兼容：content 字段整体缺失视为参数错误（避免把遗漏当成清空文件）
+        if (!input.hasNonNull("content")) {
+            throw new ToolUseFailure(13, "content is required and must not be null.");
+        }
+        String content = input.get("content").asText();
         if (rawPath == null) {
             throw new ToolUseFailure(13, "Tool path must not be empty");
         }

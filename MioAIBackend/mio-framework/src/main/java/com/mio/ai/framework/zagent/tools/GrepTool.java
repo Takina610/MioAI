@@ -43,14 +43,25 @@ final class GrepTool {
         if (pattern == null) {
             throw new ToolUseFailure(1, "Pattern must not be empty");
         }
-        String path = Args.str(input, "path");
+        // 换模型兼容：path 误传 "undefined"/"null" 字符串时视为未提供（默认当前目录）
+        String path = Args.cleanPath(Args.str(input, "path"));
         String glob = Args.str(input, "glob");
         String type = Args.str(input, "type");
         String outputMode = StrUtil.blankToDefault(Args.str(input, "output_mode"), "files_with_matches");
+        // 上下文参数宽容归一：模型常写完整词 after/before/context（zcode resolveInput 语义）
         Integer after = Args.intVal(input, "-A");
+        if (after == null) {
+            after = Args.intVal(input, "after");
+        }
         Integer before = Args.intVal(input, "-B");
+        if (before == null) {
+            before = Args.intVal(input, "before");
+        }
         Integer context = Args.intVal(input, "-C");
-        boolean caseInsensitive = Args.bool(input, "-i");
+        if (context == null) {
+            context = Args.intVal(input, "context");
+        }
+        boolean caseInsensitive = Args.bool(input, "-i") || Args.bool(input, "ignore_case");
         Integer headLimit = Args.intVal(input, "head_limit");
         Integer offset = Args.intVal(input, "offset");
         int limit = headLimit != null && headLimit >= 0 ? headLimit : DEFAULT_HEAD_LIMIT;

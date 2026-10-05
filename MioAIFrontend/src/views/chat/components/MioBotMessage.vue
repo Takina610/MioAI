@@ -41,7 +41,7 @@
               <CaretRightOutlined :rotate="isThinkingExpanded(index) ? 90 : 0" class="caret-icon" />
             </div>
             <CollapseTransition :open="isThinkingExpanded(index)">
-              <div :ref="el => setThinkingEl(index, el)" class="thinking-text">{{ block.text }}</div>
+              <div class="thinking-text">{{ block.text }}</div>
             </CollapseTransition>
           </div>
 
@@ -151,7 +151,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, markRaw, nextTick, onUnmounted, ref, watch } from 'vue'
+import { computed, markRaw, onUnmounted, ref, watch } from 'vue'
 import type { Component } from 'vue'
 import {
   CaretRightOutlined,
@@ -688,9 +688,6 @@ function toggleThinking(index: number): void {
     next.add(index)
   }
   expandedThinking.value = next
-  if (next.has(index) && isActiveThinking(index)) {
-    nextTick(() => scrollThinkingToBottom(index))
-  }
 }
 
 /** 单行实时摘要：取思考文本的最后一段（最新内容），超长截头保尾 */
@@ -709,34 +706,6 @@ function durationSuffix(block: ThinkingBlock): string {
   return `持续了 ${formatDuration(block.durationMs)}`
 }
 
-const thinkingEls = new Map<number, HTMLElement>()
-function setThinkingEl(index: number, el: unknown): void {
-  if (el instanceof HTMLElement) {
-    thinkingEls.set(index, el)
-  } else {
-    thinkingEls.delete(index)
-  }
-}
-
-function scrollThinkingToBottom(index: number): void {
-  const el = thinkingEls.get(index)
-  if (el) el.scrollTop = el.scrollHeight
-}
-
-// 展开中的实时思考：内容增长时自动滚到最底（zcode 行为）
-watch(
-  () => {
-    const block = props.blocks[props.blocks.length - 1]
-    return block?.type === 'thinking' && block.durationMs == null ? block.text.length : -1
-  },
-  (len) => {
-    if (len < 0) return
-    const index = props.blocks.length - 1
-    if (isThinkingExpanded(index)) {
-      scrollThinkingToBottom(index)
-    }
-  }
-)
 </script>
 
 <style lang="scss" scoped>

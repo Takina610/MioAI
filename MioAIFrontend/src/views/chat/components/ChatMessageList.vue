@@ -41,6 +41,16 @@
               </a-button>
             </div>
           </div>
+          <!-- 回复版本切换（zcode：跟随提问显示）：< n/n > 挂在提问下方，方便对照选择 -->
+          <div v-if="msg.role === 'user' && replyVersionTarget(index)" class="version-nav-below">
+            <a-button type="text" size="small" class="version-btn" :disabled="versionOf(replyVersionTarget(index)!) <= 1" @click="emit('switchVersion', replyVersionTarget(index)!.id, versionOf(replyVersionTarget(index)!) - 1)">
+              <LeftOutlined />
+            </a-button>
+            <span class="version-text">{{ versionOf(replyVersionTarget(index)!) }} / {{ totalVersions(replyVersionTarget(index)!) }}</span>
+            <a-button type="text" size="small" class="version-btn" :disabled="versionOf(replyVersionTarget(index)!) >= totalVersions(replyVersionTarget(index)!)" @click="emit('switchVersion', replyVersionTarget(index)!.id, versionOf(replyVersionTarget(index)!) + 1)">
+              <RightOutlined />
+            </a-button>
+          </div>
           <div class="message-actions">
             <!-- 多版本消息工具栏常驻；单版本悬浮显示；编辑中隐藏 -->
             <div
@@ -63,16 +73,6 @@
                   <RedoOutlined />
                 </a-button>
               </a-tooltip>
-              <!-- 回复版本切换：< n/n >（编辑/重生成产生的历次回复） -->
-              <div v-if="msg.role === 'assistant' && hasVersions(msg)" class="version-nav">
-                <a-button type="text" size="small" class="version-btn" :disabled="versionOf(msg) <= 1" @click="emit('switchVersion', msg.id, versionOf(msg) - 1)">
-                  <LeftOutlined />
-                </a-button>
-                <span class="version-text">{{ versionOf(msg) }} / {{ totalVersions(msg) }}</span>
-                <a-button type="text" size="small" class="version-btn" :disabled="versionOf(msg) >= totalVersions(msg)" @click="emit('switchVersion', msg.id, versionOf(msg) + 1)">
-                  <RightOutlined />
-                </a-button>
-              </div>
             </div>
           </div>
         </div>
@@ -89,7 +89,7 @@ import type { ChatMessage } from '@/types'
 import MarkdownView from '@/components/MarkdownView.vue'
 import MioBotMessage from './MioBotMessage.vue'
 
-defineProps<{
+const props = defineProps<{
   messages: ChatMessage[]
   isLoading: boolean
   /** 登录用户才提供编辑/重新生成（依赖服务端历史截断） */
@@ -114,6 +114,13 @@ const editingId = ref<string>('')
 const editText = ref<string>('')
 
 // ---------- 回复版本（编辑/重新生成产生的历次回复） ----------
+/** 该提问下方回复的版本组目标（回复带多版本时返回它，供切换器渲染） */
+function replyVersionTarget(index: number): ChatMessage | undefined {
+  const reply = props.messages[index + 1]
+  if (!reply || reply.role !== 'assistant') return undefined
+  return hasVersions(reply) ? reply : undefined
+}
+
 function totalVersions(msg: ChatMessage): number {
   return (msg.history?.length ?? 0) + 1
 }
@@ -349,6 +356,34 @@ defineExpose({ scrollToBottom, isNearBottom })
               text-align: center;
               user-select: none;
             }
+          }
+        }
+
+        // 提问下方的回复版本切换 < n/n >（zcode：跟随提问显示，便于对照选择）
+        .version-nav-below {
+          display: inline-flex;
+          align-items: center;
+          gap: 2px;
+          margin-top: 2px;
+          align-self: flex-end;
+          color: #86909c;
+
+          .version-btn {
+            color: #86909c;
+            padding: 2px 6px;
+            height: auto;
+            font-size: 12px;
+
+            &:hover:not(:disabled) {
+              color: $primary-color;
+            }
+          }
+
+          .version-text {
+            font-size: 12px;
+            min-width: 36px;
+            text-align: center;
+            user-select: none;
           }
         }
       }

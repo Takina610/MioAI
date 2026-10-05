@@ -30,7 +30,8 @@ final class GlobTool {
         if (pattern == null) {
             throw new ToolUseFailure(1, "Pattern must not be empty");
         }
-        String path = Args.str(input, "path");
+        // 换模型兼容：path 误传字面量 "undefined"/"null" 时视为未提供（默认当前目录）
+        String path = Args.cleanPath(Args.str(input, "path"));
         List<String> matches = ctx.fs.glob(path, pattern, MAX_RESULTS);
         if (matches.isEmpty()) {
             return "No files found";

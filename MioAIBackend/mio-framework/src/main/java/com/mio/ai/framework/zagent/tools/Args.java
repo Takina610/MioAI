@@ -42,4 +42,13 @@ public final class Args {
             default -> false;
         };
     }
+
+    /** 路径参数清洗：模型误传字面量 "undefined"/"null" 时视为未提供 */
+    public static String cleanPath(String path) {
+        if (path == null) {
+            return null;
+        }
+        String trimmed = path.trim();
+        return "undefined".equalsIgnoreCase(trimmed) || "null".equalsIgnoreCase(trimmed) ? null : trimmed;
+    }
 }
