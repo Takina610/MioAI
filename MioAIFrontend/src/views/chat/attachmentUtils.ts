@@ -60,6 +60,13 @@ export function formatSize(size: number): string {
   return `${Math.max(1, Math.round(size / 1024))} KB`
 }
 
+/** 扩展名标签（卡片 meta 行用）：project-brief.docx → DOCX，无扩展名 → 文件 */
+export function extLabel(name: string): string {
+  const dot = name.lastIndexOf('.')
+  const ext = dot >= 0 ? name.slice(dot + 1).toUpperCase() : ''
+  return ext && ext.length <= 8 ? ext : '文件'
+}
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
 /** 消息区附件 → 展示形态：图片类型直接给沙箱下载接口作为缩略图地址 */

@@ -104,6 +104,20 @@ public class SandboxFileTransfer {
         return items;
     }
 
+    /** 删除暂存文件（用户点 X 撤回刚上传的附件；文件不存在视作已删除） */
+    public void delete(String relative) {
+        withSftp(sftp -> {
+            try {
+                sftp.rm(relative);
+            } catch (SftpException e) {
+                if (e.id != ChannelSftp.SSH_FX_NO_SUCH_FILE) {
+                    throw e;
+                }
+            }
+            return null;
+        });
+    }
+
     /** 清理超过 keepDays 的暂存文件（uploads/outputs 全量，定时任务调用） */
     public void cleanupOld(int keepDays) {
         SandboxSession session = sessionProvider.getIfAvailable();

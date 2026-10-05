@@ -14,15 +14,17 @@
         @drop.prevent="onDrop"
       >
         <slot name="above-input" />
-        <!-- 待上传附件（选中即开始上传，卡片中央实时进度环） -->
-        <div v-if="pending?.length" class="pending-attachments">
-          <AttachmentCards
-            :items="pending"
-            variant="card"
-            removable
-            @remove="emit('remove-pending', $event)"
-          />
-        </div>
+        <!-- 待上传附件（选中即开始上传，卡片中央实时进度环；全部删除后随高度动画平滑收回） -->
+        <CollapseTransition :open="hasPending">
+          <div class="pending-attachments">
+            <AttachmentCards
+              :items="pending ?? []"
+              variant="card"
+              removable
+              @remove="emit('remove-pending', $event)"
+            />
+          </div>
+        </CollapseTransition>
         <div class="input-main">
           <a-textarea
             v-model:value="value"
@@ -85,16 +87,17 @@ import { computed, ref } from 'vue'
 import { useUserStore } from '@/store/user'
 import { ArrowUpOutlined, DownOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import BrainIcon from '@/components/BrainIcon.vue'
+import CollapseTransition from '@/components/CollapseTransition.vue'
 import AttachmentCards from './AttachmentCards.vue'
 import type { PendingAttachment } from '@/types'
 
 /** 思考档位全量标签（实际渲染哪些档由后端按模型能力返回） */
 const EFFORT_LABELS: Record<string, string> = {
-  max: '极限',
-  xhigh: '超高',
-  high: '最高',
+  max: '超高',
+  xhigh: '最高',
+  high: '高',
   medium: '中等',
-  low: '较低',
+  low: '低',
   minimal: '极低',
   none: '关闭'
 }
@@ -126,6 +129,9 @@ const emit = defineEmits<{
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const dragOver = ref(false)
+
+/** 待传区显隐（CollapseTransition 高度动画：全部删除后输入框平滑收回） */
+const hasPending = computed(() => (props.pending?.length ?? 0) > 0)
 
 /** 粘贴上传：Ctrl+V 剪贴板里的文件（如截图）直接进待传区 */
 function onPaste(event: ClipboardEvent): void {

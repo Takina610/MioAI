@@ -91,6 +91,11 @@ export const uploadAttachment = async (
   } as never)
 }
 
+/** 撤回刚上传的附件（输入卡片点 X）：同步删除沙箱上的文件 */
+export const deleteAttachment = async (path: string): Promise<boolean> => {
+  return request.delete('/bot/attachment', { params: { path } } as never)
+}
+
 /** 下载 Agent 产出的暂存文件（outputs/...）：blob 保存为浏览器下载 */
 export const downloadAttachment = async (path: string, name: string): Promise<void> => {
   const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL || ''}/bot/attachment/download`, {

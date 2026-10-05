@@ -1,5 +1,11 @@
 <template>
-  <div class="attachment-cards" :class="{ light, card: variant === 'card' }">
+  <TransitionGroup
+    tag="div"
+    name="att"
+    class="attachment-cards"
+    :class="{ light, card: variant === 'card' }"
+    @before-leave="pinLeaveSize"
+  >
     <div
       v-for="item in items"
       :key="item.key"
@@ -8,9 +14,21 @@
       :title="item.status === 'error' ? '上传失败' : item.name"
       @click="downloadable && item.status === 'done' && handleDownload(item)"
     >
-      <!-- 缩略图/图标区 -->
+      <!-- 缩略图/图标区：图片类型直接出图（点击放大预览） -->
       <div class="att-thumb">
-        <img v-if="item.previewSrc && item.status !== 'uploading'" :src="item.previewSrc" :alt="item.name" />
+        <span
+          v-if="item.previewSrc && item.status !== 'uploading' && !brokenThumbs.has(item.key)"
+          class="att-img"
+          @click.stop
+        >
+          <a-image
+            :src="item.previewSrc"
+            :alt="item.name"
+            :width="variant === 'card' ? 44 : 30"
+            :height="variant === 'card' ? 44 : 30"
+            @error="brokenThumbs.add(item.key)"
+          />
+        </span>
         <svg v-else-if="item.status === 'uploading'" class="ring" viewBox="0 0 36 36">
           <circle class="ring-bg" cx="18" cy="18" r="15.5" />
           <circle
@@ -25,13 +43,12 @@
         <component v-else :is="attachmentIcon(item.name)" class="att-icon" />
       </div>
 
-      <!-- 卡片式：文件名在下方 -->
-      <span v-if="variant === 'card'" class="att-name">{{ item.name }}</span>
-      <!-- 行式：文件名+大小在右侧 -->
-      <template v-else>
+      <!-- 文件名 + 元信息（扩展名 · 大小） -->
+      <div class="att-text">
         <span class="att-name">{{ item.name }}</span>
-        <span class="att-size">{{ formatSize(item.size) }}</span>
-      </template>
+        <span v-if="variant === 'card'" class="att-meta">{{ extLabel(item.name) }}<template v-if="sizeText(item)"> · {{ sizeText(item) }}</template></span>
+        <span v-else class="att-meta">{{ sizeText(item) }}</span>
+      </div>
 
       <!-- 上传成功后右上角 X 删除 -->
       <button
@@ -44,12 +61,13 @@
         <CloseOutlined />
       </button>
     </div>
-  </div>
+  </TransitionGroup>
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { CloseOutlined } from '@ant-design/icons-vue'
-import { attachmentIcon, formatSize } from '../attachmentUtils'
+import { attachmentIcon, extLabel, formatSize } from '../attachmentUtils'
 import { downloadAttachment } from '@/api/chat'
 import type { AttachmentDisplay } from '@/types'
 
@@ -69,8 +87,21 @@ const emit = defineEmits<{
   (e: 'remove', key: string): void
 }>()
 
+/** 加载失败的缩略图（文件可能已被删除/清理）：回退类型图标 */
+const brokenThumbs = ref(new Set<string>())
+
 function progressOf(item: AttachmentDisplay): number {
   return Math.min(1, Math.max(0, item.progress ?? 0))
+}
+
+function sizeText(item: AttachmentDisplay): string {
+  return formatSize(item.size)
+}
+
+/** leave 前把实际宽度钉成内联样式：width 0 过渡才有数值起点（否则 fit-content 不插值，兄弟节点瞬移） */
+function pinLeaveSize(el: Element): void {
+  const node = el as HTMLElement
+  node.style.width = `${node.offsetWidth}px`
 }
 
 async function handleDownload(item: AttachmentDisplay): Promise<void> {
@@ -84,36 +115,43 @@ async function handleDownload(item: AttachmentDisplay): Promise<void> {
 
 <style lang="scss" scoped>
 .attachment-cards {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 
-  // ---------- 卡片式（输入框待传区） ----------
+  // ---------- 卡片式（输入框待传区，横向胶囊） ----------
   &.card {
     .att-item {
       position: relative;
       display: flex;
-      flex-direction: column;
       align-items: center;
-      width: 72px;
-      padding: 6px 4px 5px;
+      gap: 10px;
+      max-width: 264px;
+      padding: 7px 26px 7px 7px;
       background: #f7f8fa;
       border: 1px solid #e5e6eb;
-      border-radius: 10px;
+      border-radius: 12px;
       transition: border-color 0.2s;
 
       &:hover {
         border-color: #c9cdd4;
+
+        .att-name {
+          color: $primary-color;
+        }
       }
 
-      &.error .att-thumb {
-        color: #d48806;
+      &.error {
+        border-color: #f0c6a0;
+        background: #fff9f0;
       }
     }
 
     .att-thumb {
-      width: 52px;
-      height: 52px;
+      width: 44px;
+      height: 44px;
+      flex-shrink: 0;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -121,52 +159,40 @@ async function handleDownload(item: AttachmentDisplay): Promise<void> {
       background: #fff;
       overflow: hidden;
 
-      img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-      }
-
       .att-icon {
-        font-size: 24px;
+        font-size: 22px;
         color: $primary-color;
       }
     }
 
+    .att-text {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
     .att-name {
-      max-width: 64px;
-      margin-top: 4px;
-      font-size: 11px;
-      color: #4e5969;
+      max-width: 168px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #1d2129;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      transition: color 0.2s;
+    }
+
+    .att-meta {
+      margin-top: 2px;
+      font-size: 11px;
+      color: #86909c;
+      white-space: nowrap;
     }
 
     .att-remove {
       position: absolute;
-      top: -6px;
-      right: -6px;
-      width: 18px;
-      height: 18px;
-      padding: 0;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border: 1px solid #e5e6eb;
-      border-radius: 50%;
-      background: #fff;
-      color: #86909c;
-      font-size: 9px;
-      cursor: pointer;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
-      transition: all 0.15s;
-
-      &:hover {
-        background: #1d2129;
-        border-color: #1d2129;
-        color: #fff;
-      }
+      top: -7px;
+      right: -7px;
     }
   }
 
@@ -211,16 +237,17 @@ async function handleDownload(item: AttachmentDisplay): Promise<void> {
       background: #fff;
       overflow: hidden;
 
-      img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-      }
-
       .att-icon {
         font-size: 16px;
         color: $primary-color;
       }
+    }
+
+    .att-text {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      min-width: 0;
     }
 
     .att-name {
@@ -231,10 +258,55 @@ async function handleDownload(item: AttachmentDisplay): Promise<void> {
       transition: color 0.2s;
     }
 
-    .att-size {
+    .att-meta {
       flex-shrink: 0;
       font-size: 11px;
       color: #86909c;
+    }
+  }
+
+  // 缩略图与 a-image
+  .att-img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: zoom-in;
+
+    :deep(.ant-image) {
+      width: 100%;
+      height: 100%;
+    }
+
+    :deep(.ant-image img) {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  }
+
+  // X 删除按钮（两 variant 共用）
+  .att-remove {
+    position: absolute;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 1px solid #e5e6eb;
+    border-radius: 50%;
+    background: #fff;
+    color: #86909c;
+    font-size: 9px;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+    transition: all 0.15s;
+    z-index: 1;
+
+    &:hover {
+      background: #1d2129;
+      border-color: #1d2129;
+      color: #fff;
     }
   }
 
@@ -265,6 +337,49 @@ async function handleDownload(item: AttachmentDisplay): Promise<void> {
     }
   }
 
+  // ---------- TransitionGroup 动画 ----------
+  // 过渡优先级必须压过 variant 基础规则（.card .att-item 的 border-color 过渡是
+  // 3 级选择器，裸 .att-leave-active 的 all 会被整体覆盖 → 离场/补位瞬跳无动画）；
+  // 同特异性 + 靠后源码顺序取胜，!important 兜底
+  .attachment-cards .att-item.att-enter-active,
+  .attachment-cards .att-item.att-leave-active,
+  .attachment-cards .att-item.att-move {
+    transition:
+      opacity 0.2s ease,
+      transform 0.25s ease,
+      width 0.22s ease,
+      padding 0.22s ease,
+      margin 0.22s ease,
+      border-width 0.22s ease,
+      border-color 0.2s ease !important;
+  }
+
+  // 离场期裁剪：宽度塌缩时缩略图/文件名不外溢
+  .attachment-cards .att-item.att-leave-active {
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  // 进场：缩放浮现
+  .att-enter-from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+
+  // 离场：留在文档流内宽度塌缩——后续卡片随之平滑左移（不用 absolute 钉位，
+  // 否则容器高度瞬间塌掉、输入框无法平滑收回；负 margin 抵消 flex gap 残留）
+  .att-leave-to {
+    opacity: 0;
+    width: 0 !important;
+    min-width: 0 !important;
+    padding-left: 0;
+    padding-right: 0;
+    border-left-width: 0;
+    border-right-width: 0;
+    margin-left: -8px;
+    margin-right: -8px;
+  }
+
   // 用户气泡内：反白配色
   &.light {
     &:not(.card) .att-item {
@@ -280,7 +395,11 @@ async function handleDownload(item: AttachmentDisplay): Promise<void> {
         color: rgba(255, 255, 255, 0.85);
       }
 
-      .att-size {
+      .att-name {
+        color: #fff;
+      }
+
+      .att-meta {
         color: rgba(255, 255, 255, 0.65);
       }
     }

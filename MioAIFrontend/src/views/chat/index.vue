@@ -90,7 +90,7 @@ import ChatPlanPanel from './components/ChatPlanPanel.vue'
 import { useChatSessions } from './composables/useChatSessions'
 import { useChatMessages } from './composables/useChatMessages'
 import { useChatStream } from './composables/useChatStream'
-import { truncateConversation, getReasoningEfforts, uploadAttachment } from '@/api/chat'
+import { truncateConversation, getReasoningEfforts, uploadAttachment, deleteAttachment } from '@/api/chat'
 import { getBotMessages } from '@/api/botMessages'
 
 const route = useRoute()
@@ -350,6 +350,10 @@ function handleRemovePending(key: string): void {
   const record = pendingAttachments.value.find(p => p.key === key)
   if (record?.localPreviewUrl) {
     URL.revokeObjectURL(record.localPreviewUrl)
+  }
+  // 已传到沙箱的文件同步删除（失败忽略：每日清理任务 7 天兜底）
+  if (record?.item?.path) {
+    deleteAttachment(record.item.path).catch(() => {})
   }
   pendingAttachments.value = pendingAttachments.value.filter(p => p.key !== key)
 }

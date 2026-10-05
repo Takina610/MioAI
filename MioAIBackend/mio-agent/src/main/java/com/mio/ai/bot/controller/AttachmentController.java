@@ -71,6 +71,23 @@ public class AttachmentController {
         }
     }
 
+    /** 删除刚上传的附件（输入卡片点 X）：同步删掉沙箱上的文件，本地与远端一致 */
+    @org.springframework.web.bind.annotation.DeleteMapping("/bot/attachment")
+    public BaseResponse<Boolean> delete(@RequestParam @NotBlank String path) {
+        if (!fileTransfer.available()) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "沙箱未启用");
+        }
+        if (!com.mio.ai.bot.model.dto.AttachmentItem.isStagedPath(path)) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "文件不存在");
+        }
+        try {
+            fileTransfer.delete(path.trim());
+        } catch (Exception e) {
+            log.warn("附件删除失败, path={}: {}", path, e.getMessage());
+        }
+        return ResultUtils.success(true);
+    }
+
     /** 下载暂存文件（uploads/outputs 内）：浏览器以附件形式保存 */
     @GetMapping("/bot/attachment/download")
     public ResponseEntity<byte[]> download(@RequestParam @NotBlank String path) {
