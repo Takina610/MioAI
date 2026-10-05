@@ -18,7 +18,7 @@
     <!-- 工作过程（进行中顺着流式显示；完成后默认收起，点击状态行展开逐个查看）。
          页面在后台时浏览器抑制 CSS 过渡（会瞬收），故完成瞬间若页面隐藏则先保持展开，
          等用户切回页面可见时再播放收缩动画 -->
-    <CollapseTransition :open="isLoading || processExpanded || holdProcessOpen">
+    <CollapseTransition :open="isLoading || processExpanded || holdProcessOpen" :seam-gap="PROCESS_SEAM_GAP">
       <div v-if="processBlocks.length" class="process-list">
         <template v-for="(block, index) in processBlocks" :key="index">
           <!-- 文本块（过程中的叙述） -->
@@ -212,6 +212,9 @@ const props = withDefaults(defineProps<Props>(), {
 const processExpanded = ref(false)
 const expandedThinking = ref<Set<number>>(new Set())
 const expandedTools = ref<Set<number>>(new Set())
+
+/** .mio-bot-message 的 flex gap：工作过程折叠层的接缝补偿（抵消 display 切换时 gap 的瞬移） */
+const PROCESS_SEAM_GAP = 12
 
 function toggleToolResult(index: number): void {
   const next = new Set(expandedTools.value)
