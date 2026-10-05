@@ -426,25 +426,93 @@ function toolMeta(block: ToolBlock): string {
       return '更新任务清单'
     }
     case 'searchWeb':
+    case 'WebSearch':
       return a?.query ? `“${a.query}”` : ''
     case 'scrapeWebPage':
+    case 'WebFetch':
       return hostOf(a?.url) || a?.url || ''
     case 'generatePDF':
       return a?.fileName ? `“${a.fileName}”` : ''
     case 'readFile':
     case 'writeFile':
-      return a?.fileName ?? ''
+    case 'Read':
+    case 'Write':
+    case 'Edit':
+      return a?.file_path ?? a?.fileName ?? ''
     case 'searchImage':
       return a?.query ? `“${a.query}”` : ''
     case 'executeTerminalCommand':
-      return a?.command ? `$ ${a.command}` : ''
+    case 'Bash':
+      return a?.command ? `$ ${a.command}` : (a?.description ?? '')
     case 'downloadResource':
       return a?.fileName || hostOf(a?.url) || ''
+    case 'Glob':
+      return a?.pattern ?? ''
+    case 'Grep':
+      return a?.pattern ?? ''
+    case 'TodoRead':
+      return ''
+    case 'TodoWrite': {
+      const items = Array.isArray(a?.todos) ? a.todos.length : 0
+      return items ? `${items} 项任务` : ''
+    }
+    case 'Agent': {
+      const description = typeof a?.description === 'string' ? a.description.trim() : ''
+      if (description) return description
+      return typeof a?.prompt === 'string' && a.prompt ? `“${a.prompt.slice(0, 30)}${a.prompt.length > 30 ? '…' : ''}”` : ''
+    }
+    case 'AskUserQuestion': {
+      // 结构可能是新式 questions 数组或旧式单 question 字段（模型首试常写错）
+      const questions: Array<Record<string, unknown>> = Array.isArray(a?.questions)
+        ? a.questions
+        : (a?.question ? [{ question: a.question }] : [])
+      const first = questions.length
+        ? String(questions[0].question ?? Object.values(questions[0])[0] ?? '')
+        : ''
+      const suffix = questions.length > 1 ? ` 等 ${questions.length} 个问题` : ''
+      return first ? `“${first}”${suffix}` : partialFirstString(block.args)
+    }
+    case 'TaskOutput':
+    case 'TaskStop':
+      return a?.task_id ?? ''
     default: {
-      const raw = (block.args ?? '').replace(/\s+/g, ' ').trim()
-      return raw ? raw.slice(0, 50) : ''
+      // 语义兜底（zcode 风格）：展示参数里最有意义的一个字符串值，绝不裸显 JSON
+      const fromParsed = firstMeaningfulString(a)
+      if (fromParsed) return fromParsed
+      return partialFirstString(block.args)
     }
   }
+}
+
+/** 从已解析参数对象里找第一个有意义的字符串值（浅层，跳过纯布尔/数字键名噪音） */
+function firstMeaningfulString(args: Record<string, unknown> | null | undefined): string {
+  if (!args) return ''
+  const preferred = ['query', 'command', 'path', 'file_path', 'pattern', 'url', 'prompt', 'name', 'description', 'content']
+  for (const key of preferred) {
+    const value = args[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  for (const value of Object.values(args)) {
+    if (typeof value === 'string' && value.trim()) return value.trim()
+    if (typeof value === 'number' || typeof value === 'boolean') continue
+    if (Array.isArray(value)) {
+      const first = value.find(item => item && typeof item === 'object')
+      const inner = firstMeaningfulString(first as Record<string, unknown> | undefined)
+      if (inner) return inner
+    }
+  }
+  return ''
+}
+
+/** 流式中的参数片段还是不完整 JSON：宽松抓第一个字符串值（引号未闭合也算），避免裸显 JSON */
+function partialFirstString(raw: string | undefined): string {
+  if (!raw) return ''
+  const match = raw.match(/:\s*"([^"]*)"?/)
+  if (match && match[1]) {
+    const value = match[1].replace(/\\n/g, ' ').trim()
+    return value.length > 40 ? `${value.slice(0, 40)}…` : value
+  }
+  return ''
 }
 
 // ---------- 来源链接（DeepSeek 式可跳转源） ----------
@@ -972,8 +1040,8 @@ watch(
   .question-chip {
     padding: 1px 8px;
     border-radius: 999px;
-    background: #eef3ff;
-    color: #4a6cf7;
+    background: rgba(42, 161, 169, 0.1);
+    color: $primary-color;
     font-size: 11px;
     line-height: 18px;
     white-space: nowrap;
@@ -997,18 +1065,18 @@ watch(
     transition: border-color 0.15s, background 0.15s;
 
     &:hover {
-      border-color: #b9c6ff;
+      border-color: rgba(42, 161, 169, 0.45);
     }
 
     &.selected {
-      border-color: #4a6cf7;
-      background: #f2f5ff;
+      border-color: $primary-color;
+      background: rgba(42, 161, 169, 0.08);
     }
   }
 
   .option-check {
     font-size: 12px;
-    color: #4a6cf7;
+    color: $primary-color;
     flex-shrink: 0;
   }
 
@@ -1052,7 +1120,7 @@ watch(
     outline: none;
 
     &:focus {
-      border-color: #4a6cf7;
+      border-color: $primary-color;
     }
   }
 
@@ -1078,8 +1146,12 @@ watch(
     padding: 5px 16px;
     border: none;
     border-radius: 8px;
-    background: #4a6cf7;
+    background: $primary-color;
     color: #fff;
+
+    &:hover:not(:disabled) {
+      background: darken($primary-color, 8%);
+    }
     font-size: 12px;
     cursor: pointer;
 
