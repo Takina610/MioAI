@@ -27,8 +27,7 @@
             <AttachmentCards
               v-if="inputAttachmentsOf(msg).length"
               :items="inputAttachmentsOf(msg)"
-              variant="chip"
-              light
+              variant="card"
               class="msg-attachments"
             />
             <MarkdownView class="message-text" :content="msg.content" />

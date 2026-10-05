@@ -13,16 +13,16 @@
       :style="isColoredThumb(item) ? { background: typeColor(item.name) } : undefined"
     >
       <span
-        v-if="item.previewSrc && item.status !== 'uploading' && !broken"
+        v-if="imgSrc"
         class="att-img"
         @click.stop
       >
         <a-image
-          :src="item.previewSrc"
+          :src="imgSrc"
           :alt="item.name"
           :width="variant === 'card' ? 84 : 40"
           :height="variant === 'card' ? 84 : 40"
-          @error="broken = true"
+          @error="onImgError"
         />
         <span class="att-eye"><EyeOutlined /></span>
       </span>
@@ -61,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { CloseOutlined, EyeOutlined } from '@ant-design/icons-vue'
 import { attachmentIcon, extLabel, formatSize, isImageName, typeColor } from '../attachmentUtils'
 import { downloadAttachment } from '@/api/chat'
@@ -85,8 +85,29 @@ const emit = defineEmits<{
   (e: 'remove', key: string): void
 }>()
 
-/** 缩略图加载失败（文件可能已被删除/清理）：回退类型图标 */
+/**
+ * 缩略图加载：瞬时失败（SFTP 流抖动等）自动带 cache-buster 重试两次，
+ * 仍失败才回退类型图标；组件重建（切回会话）时重试计数归零，缩略图自愈
+ */
+const retryCount = ref(0)
 const broken = ref(false)
+const imgSrc = computed(() => {
+  if (broken.value || !props.item.previewSrc || props.item.status === 'uploading') {
+    return undefined
+  }
+  return retryCount.value
+    ? `${props.item.previewSrc}${props.item.previewSrc.includes('?') ? '&' : '?'}_r=${retryCount.value}`
+    : props.item.previewSrc
+})
+
+function onImgError(): void {
+  if (retryCount.value < 2) {
+    retryCount.value += 1
+    broken.value = false
+  } else {
+    broken.value = true
+  }
+}
 
 /** 图标区是否用类型色底（卡片态的非图片/非上传：DeepSeek 式彩色应用图标） */
 function isColoredThumb(item: AttachmentDisplay): boolean {
