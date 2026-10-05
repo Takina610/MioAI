@@ -2,7 +2,6 @@ package com.mio.ai;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * @author: Takina
@@ -10,7 +9,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * @description:
  */
 
-@EnableScheduling
 @SpringBootApplication
 public class MioAIApplication {
     public static void main(String[] args) {

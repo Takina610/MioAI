@@ -42,6 +42,9 @@ public class AttachmentController {
     @Resource
     private SandboxFileTransfer fileTransfer;
 
+    @Resource
+    private com.mio.ai.bot.service.AttachmentDeleteQueue deleteQueue;
+
     /** 上传附件：返回 {path, name, size}，发送消息时随 attachments 参数带给 /bot/chat */
     @PostMapping("/bot/attachment")
     public BaseResponse<Map<String, Object>> upload(@RequestParam("file") MultipartFile file,
@@ -71,7 +74,7 @@ public class AttachmentController {
         }
     }
 
-    /** 删除刚上传的附件（输入卡片点 X）：同步删掉沙箱上的文件，本地与远端一致 */
+    /** 删除刚上传的附件（输入卡片点 X）：入可靠队列异步删除，接口即时返回 */
     @org.springframework.web.bind.annotation.DeleteMapping("/bot/attachment")
     public BaseResponse<Boolean> delete(@RequestParam @NotBlank String path) {
         if (!fileTransfer.available()) {
@@ -81,9 +84,10 @@ public class AttachmentController {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "文件不存在");
         }
         try {
-            fileTransfer.delete(path.trim());
+            deleteQueue.enqueue(path.trim());
         } catch (Exception e) {
-            log.warn("附件删除失败, path={}: {}", path, e.getMessage());
+            // 入队失败不阻断前端：文件由 VPS 清理 cron 兜底删除
+            log.warn("附件删除入队失败, path={}: {}", path, e.getMessage());
         }
         return ResultUtils.success(true);
     }

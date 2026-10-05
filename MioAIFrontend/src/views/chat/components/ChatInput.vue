@@ -22,6 +22,7 @@
           :key="card.key"
           :ref="setCardRef(card.key)"
           :item="card"
+          :leaving="leavingKeys.has(card.key)"
           variant="card"
           removable
           @remove="emit('remove-pending', $event)"
@@ -162,7 +163,7 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const dragOver = ref(false)
 
 /** 待上传卡片：进场缩放浮现 / 离场四周向中间缩小消失（GSAP，无任何包装层） */
-const { renderCards, setCardRef } = usePendingCardAnimations(computed(() => props.pending))
+const { renderCards, leavingKeys, setCardRef } = usePendingCardAnimations(computed(() => props.pending))
 
 /** 粘贴上传：Ctrl+V 剪贴板里的文件（如截图）直接进待传区 */
 function onPaste(event: ClipboardEvent): void {
