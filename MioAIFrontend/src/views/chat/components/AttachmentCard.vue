@@ -1,7 +1,7 @@
 <template>
   <div
     class="att-item"
-    :class="[{ 'as-card': variant === 'card' }, { bare: variant === 'card' && isImageName(item.name) }, { light }, { clickable: downloadable && item.status === 'done' }, { error: item.status === 'error' }]"
+    :class="[{ 'as-card': variant === 'card' }, { 'img-large': isLargeImage(item) }, { bare: variant === 'card' && isImageName(item.name) }, { light }, { clickable: downloadable && item.status === 'done' }, { error: item.status === 'error' }]"
     :title="item.status === 'error' ? '上传失败' : item.name"
     @click="downloadable && item.status === 'done' && handleDownload()"
   >
@@ -20,8 +20,8 @@
         <a-image
           :src="imgSrc"
           :alt="item.name"
-          :width="variant === 'card' ? 84 : 40"
-          :height="variant === 'card' ? 84 : 40"
+          :width="thumbSize"
+          :height="thumbSize"
           @error="onImgError"
         />
         <span class="att-eye"><EyeOutlined /></span>
@@ -79,6 +79,8 @@ const props = defineProps<{
   light?: boolean
   /** 离场动画进行中（隐藏 X，防重复触发） */
   leaving?: boolean
+  /** 纯图片场景：图片卡放大展示（对齐 DeepSeek 单图大预览） */
+  largeImage?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -114,6 +116,19 @@ function isColoredThumb(item: AttachmentDisplay): boolean {
   return props.variant === 'card' && !isImageName(item.name) && item.status !== 'uploading'
 }
 
+/** 纯图片场景下的放大尺寸 */
+const LARGE_IMAGE_PX = 120
+
+/** 图片卡尺寸：纯图片场景放大，混排时跟随文档卡高度 */
+const thumbSize = computed(() => {
+  if (props.variant !== 'card') return 40
+  return props.largeImage ? LARGE_IMAGE_PX : 72
+})
+
+function isLargeImage(item: AttachmentDisplay): boolean {
+  return props.largeImage === true && props.variant === 'card' && isImageName(item.name)
+}
+
 function progressOf(item: AttachmentDisplay): number {
   return Math.min(1, Math.max(0, item.progress ?? 0))
 }
@@ -147,13 +162,13 @@ async function handleDownload(): Promise<void> {
   &.as-card {
     display: inline-flex;
     align-items: center;
-    gap: 14px;
-    max-width: 280px;
-    margin: 10px 0 0 16px;
-    padding: 20px 26px 20px 20px;
+    gap: 12px;
+    max-width: 264px;
+    margin: 8px 0 0 12px;
+    padding: 16px 24px 16px 16px;
     background: #f7f8fa;
     border: 1px solid #e5e6eb;
-    border-radius: 16px;
+    border-radius: 14px;
     vertical-align: top;
     transition: border-color 0.2s;
 
@@ -188,19 +203,26 @@ async function handleDownload(): Promise<void> {
   // 祖先选择器永不命中——缩略图尺寸必须写在这里才能生效）
   // DeepSeek 1:1 比例：文档卡 86px 高（44px 彩色图标方块 + 上下 20px 留白），图片缩略图与卡同高
   &.as-card .att-thumb {
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
+    width: 40px;
+    height: 40px;
+    border-radius: 9px;
 
     .att-icon {
-      font-size: 24px;
+      font-size: 22px;
       color: #fff;
     }
   }
 
   &.bare.as-card .att-thumb {
-    width: 84px;
-    height: 84px;
+    width: 72px;
+    height: 72px;
+    border-radius: 14px;
+  }
+
+  // 纯图片场景：单图放大展示
+  &.img-large.as-card .att-thumb {
+    width: 120px;
+    height: 120px;
     border-radius: 16px;
   }
 
@@ -271,7 +293,7 @@ async function handleDownload(): Promise<void> {
 
   .att-name {
     max-width: 190px;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
     color: #1d2129;
     white-space: nowrap;
@@ -287,7 +309,7 @@ async function handleDownload(): Promise<void> {
 
   .att-meta {
     margin-top: 3px;
-    font-size: 13px;
+    font-size: 12px;
     color: #86909c;
     white-space: nowrap;
   }

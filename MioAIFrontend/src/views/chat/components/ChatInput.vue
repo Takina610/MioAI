@@ -23,6 +23,7 @@
           :ref="refSetter ? refSetter(card.key) : undefined"
           :item="card"
           :leaving="leavingKeys ? leavingKeys.has(card.key) : false"
+          :large-image="pendingAllImages"
           variant="card"
           removable
           @remove="emit('remove-pending', $event)"
@@ -90,6 +91,7 @@ import { useUserStore } from '@/store/user'
 import { ArrowUpOutlined, DownOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import BrainIcon from '@/components/BrainIcon.vue'
 import AttachmentCard from './AttachmentCard.vue'
+import { isImageName } from '../attachmentUtils'
 import type { PendingAttachment } from '@/types'
 
 /** 思考档位全量标签（实际渲染哪些档由后端按模型能力返回） */
@@ -164,6 +166,12 @@ function handleEnter(e: KeyboardEvent): void {
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const dragOver = ref(false)
+
+/** 纯图片待传：图片卡放大展示（对齐 DeepSeek 单图大预览） */
+const pendingAllImages = computed(() => {
+  const live = (props.renderCards ?? []).filter(c => !(props.leavingKeys ?? new Set()).has(c.key))
+  return live.length > 0 && live.every(p => isImageName(p.name))
+})
 
 /** 粘贴上传：Ctrl+V 剪贴板里的文件（如截图）直接进待传区 */
 function onPaste(event: ClipboardEvent): void {
