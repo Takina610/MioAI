@@ -32,7 +32,7 @@
           <div v-else-if="block.type === 'thinking'" class="thinking-block">
             <div class="thinking-bar" @click="toggleThinking(index)">
               <BrainIcon :size="13" class="think-icon" :class="{ active: isActiveThinking(index) }" />
-              <span class="thinking-label">思考</span>
+              <span class="thinking-label" :class="{ running: isActiveThinking(index) }">{{ isActiveThinking(index) ? '正在思考' : '思考' }}</span>
               <span
                 v-if="isActiveThinking(index) && !isThinkingExpanded(index)"
                 class="thinking-live"
@@ -97,14 +97,14 @@
             </div>
           </div>
 
-          <!-- 工具块：语义化行（可点击展开看执行结果）+ 可跳转的来源链接（随过程收起/展开） -->
+          <!-- 工具块：语义化行（可点击展开看执行结果）+ 可跳转的来源链接（随过程收起/展开）。
+               zcode 约定：图标恒静态，运行态由动词文案扫光表达（animated-gradient-text） -->
           <div v-else class="tool-block">
             <div class="tool-row" :class="{ expandable: block.result }" @click="toggleToolResult(index)">
               <span class="tool-status">
-                <ZcodeSpinner v-if="block.status === 'running'" :size="14" />
-                <component :is="toolIcon(block.tool)" v-else class="tool-icon" />
+                <component :is="toolIcon(block.tool)" class="tool-icon" />
               </span>
-              <span class="tool-name">{{ toolLabel(block.tool) }}</span>
+              <span class="tool-verb" :class="{ running: block.status === 'running' }">{{ toolVerb(block) }}</span>
               <span v-if="shownMeta(index, block)" class="tool-meta">
                 {{ shownMeta(index, block) }}<span v-if="typing(index, block)" class="tw-cursor"></span>
               </span>
@@ -382,24 +382,48 @@ const finalText = computed(() => {
 })
 
 // ---------- 工具语义化展示 ----------
-const TOOL_LABELS: Record<string, string> = {
-  managePlan: '任务清单',
-  runCommand: '执行命令',
-  readFile: '读取文件',
-  writeFile: '写入文件',
-  editFile: '编辑文件',
-  glob: '查找文件',
-  grep: '搜索内容',
-  searchWeb: '联网搜索',
-  fetchUrl: '阅读网页',
-  generatePDF: '生成 PDF'
+// 动词文案照搬 zcode zh-CN 词表（chat.toolCall.*）：[进行中, 完成]，
+// 运行态动词带渐变扫光，完成后切换为过去式并恢复静态浅色
+const TOOL_VERBS: Record<string, [string, string]> = {
+  Bash: ['正在执行', '已执行'],
+  executeTerminalCommand: ['正在执行', '已执行'],
+  runCommand: ['正在执行', '已执行'],
+  Read: ['正在读取', '已读取'],
+  readFile: ['正在读取', '已读取'],
+  Write: ['正在写入', '已写入'],
+  writeFile: ['正在写入', '已写入'],
+  Edit: ['正在编辑', '已编辑'],
+  editFile: ['正在编辑', '已编辑'],
+  Grep: ['正在搜索', '已搜索'],
+  grep: ['正在搜索', '已搜索'],
+  searchImage: ['正在搜索', '已搜索'],
+  Glob: ['正在查找', '已查找'],
+  glob: ['正在查找', '已查找'],
+  WebSearch: ['正在搜索', '已搜索'],
+  searchWeb: ['正在搜索', '已搜索'],
+  WebFetch: ['正在获取', '已获取'],
+  fetchUrl: ['正在获取', '已获取'],
+  scrapeWebPage: ['正在获取', '已获取'],
+  downloadResource: ['正在下载', '已下载'],
+  generatePDF: ['正在生成', '已生成'],
+  Agent: ['子智能体', '子智能体'],
+  AskUserQuestion: ['正在提问', '已提问'],
+  TodoWrite: ['更新中', '待办'],
+  TodoRead: ['读取中', '已读取'],
+  managePlan: ['更新中', '任务清单'],
+  TaskOutput: ['正在获取任务输出', '已获取任务输出'],
+  TaskStop: ['停止任务', '已停止']
 }
 
-/** 未登记的工具（如自定义 MCP）：camelCase 拆词作展示名，不暴露原始方法名 */
-function toolLabel(tool: string): string {
-  if (TOOL_LABELS[tool]) return TOOL_LABELS[tool]
-  const spaced = tool.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1)
+/** 工具行动词：运行中→进行式（扫光），完成→过去式；Explore 子代理沿用 zcode 的「查阅」 */
+function toolVerb(block: ToolBlock): string {
+  if (block.tool === 'Agent' && parseArgs(block)?.subagent_type === 'Explore') {
+    return '查阅'
+  }
+  const pair = TOOL_VERBS[block.tool]
+  if (pair) return block.status === 'running' ? pair[0] : pair[1]
+  // 未登记工具（自定义 MCP 等）走 zcode 通用状态词
+  return block.status === 'running' ? '执行中' : '已执行'
 }
 
 const TOOL_ICONS: Record<string, Component> = markRaw({
@@ -682,6 +706,41 @@ function durationSuffix(block: ThinkingBlock): string {
 </script>
 
 <style lang="scss" scoped>
+// zcode animated-gradient-text（styles.css）：运行态文案渐变扫光。
+// 代替旋转图标——长期运行的工具行里旋转动画持续占用渲染资源，zcode 只让文字扫光
+@mixin animated-gradient-text($strong, $soft) {
+  display: inline-block;
+  background: linear-gradient(
+    90deg,
+    $strong 0%,
+    $strong 34%,
+    $soft 50%,
+    $strong 66%,
+    $strong 100%
+  );
+  background-size: 300% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: gradient-flow 4s linear infinite;
+  will-change: background-position;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+@keyframes gradient-flow {
+  0% {
+    background-position: 100% 0;
+  }
+  50% {
+    background-position: 0% 0;
+  }
+  100% {
+    background-position: 100% 0;
+  }
+}
+
 .mio-bot-message {
   width: 100%;
   display: flex;
@@ -784,6 +843,12 @@ function durationSuffix(block: ThinkingBlock): string {
     .thinking-label {
       flex-shrink: 0;
       white-space: nowrap;
+
+      // 思考进行中：「正在思考」文案扫光（与工具行动词同一套 zcode 动效）
+      &.running {
+        font-weight: 500;
+        @include animated-gradient-text(#86909c, rgba(134, 144, 156, 0.25));
+      }
     }
   }
 
@@ -810,7 +875,6 @@ function durationSuffix(block: ThinkingBlock): string {
 
 // 工具块：时间线条目 + 可跳转来源链接
 .tool-block {
-  user-select: none;
   animation: tool-in 0.18s ease;
 
   .tool-row {
@@ -821,6 +885,7 @@ function durationSuffix(block: ThinkingBlock): string {
     margin: 0 -8px;
     border-radius: 6px;
     min-width: 0;
+    user-select: none;
 
     &.expandable {
       cursor: pointer;
@@ -836,9 +901,9 @@ function durationSuffix(block: ThinkingBlock): string {
     }
   }
 
-  // 工具执行结果（点击工具行展开）
+  // 工具执行结果（点击工具行展开）：与工具行左对齐，内容可选中复制
   .tool-result {
-    margin: 4px 0 2px 24px;
+    margin: 4px 0 2px 0;
     padding: 8px 12px;
     background: #f7f8fa;
     border-radius: 8px;
@@ -848,6 +913,7 @@ function durationSuffix(block: ThinkingBlock): string {
     color: #4e5969;
     white-space: pre-wrap;
     word-break: break-word;
+    user-select: text;
     max-height: 220px;
     overflow-y: auto;
     @include thin-scrollbar;
@@ -866,10 +932,17 @@ function durationSuffix(block: ThinkingBlock): string {
     color: $primary-color;
   }
 
-  .tool-name {
+  // 动词标签（正在执行/已执行…）：zcode kindLabel——运行态扫光 + medium，完成态浅色
+  .tool-verb {
     flex-shrink: 0;
     font-size: 13px;
-    color: $primary-color;
+    font-weight: 500;
+    white-space: nowrap;
+    color: #4e5969;
+
+    &.running {
+      @include animated-gradient-text($primary-color, rgba(42, 161, 169, 0.25));
+    }
   }
 
   .tool-meta {
@@ -1004,6 +1077,7 @@ function durationSuffix(block: ThinkingBlock): string {
     border: 1px solid #e5e6eb;
     border-radius: 8px;
     cursor: pointer;
+    user-select: none;
     transition: border-color 0.15s, background 0.15s;
 
     &:hover {
@@ -1071,6 +1145,8 @@ function durationSuffix(block: ThinkingBlock): string {
     padding: 2px 4px;
     font-size: 12px;
     outline: none;
+    user-select: text;
+    -webkit-user-select: text;
 
     &::placeholder {
       color: #c9cdd4;
