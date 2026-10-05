@@ -235,6 +235,9 @@ defineExpose({ scrollToBottom, isNearBottom })
   padding: 24px;
   // 组合器已是常规流布局，不再需要为悬浮输入框预留大片底部空间
   padding-bottom: 24px;
+  // 永久预留滚动条槽位：消息变长时滚动条出现/消失不再挤压内容列
+  // （居中栏整体左移+文本重排=用户看到的"从右侧偏一点往左"与展开抖动）
+  scrollbar-gutter: stable;
   @include thin-scrollbar;
 
   .messages-wrapper {
