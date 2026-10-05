@@ -61,20 +61,29 @@
                   v-for="(opt, oi) in q.options"
                   :key="oi"
                   class="question-option"
-                  :class="{ selected: optionSelected(block, qi, opt.label) }"
-                  @click="toggleOption(block, q, qi, opt.label)"
+                  :class="{ selected: optionSelected(block, qi, optionKey(opt, oi)) }"
+                  @click="toggleOption(block, qi, optionKey(opt, oi))"
                 >
-                  <span class="option-check">{{ optionSelected(block, qi, opt.label) ? '●' : '○' }}</span>
+                  <span class="option-check">{{ optionSelected(block, qi, optionKey(opt, oi)) ? '●' : '○' }}</span>
+                  <span v-if="optionKey(opt, oi)" class="option-key">{{ optionKey(opt, oi) }}</span>
                   <span class="option-label">{{ opt.label }}</span>
                   <span v-if="opt.description" class="option-desc">{{ opt.description }}</span>
                 </div>
                 <pre v-if="previewOf(q, block, qi)" class="option-preview">{{ previewOf(q, block, qi) }}</pre>
-                <input
-                  class="option-custom"
-                  :value="customOf(block, qi)"
-                  placeholder="其他（自定义回答）"
-                  @input="setCustom(block, qi, ($event.target as HTMLInputElement).value)"
-                />
+                <div
+                  class="question-option option-other"
+                  :class="{ selected: otherSelected(block, qi) }"
+                  @click="focusOther(block, qi)"
+                >
+                  <span class="option-check">{{ otherSelected(block, qi) ? '●' : '○' }}</span>
+                  <input
+                    class="option-custom"
+                    :value="customOf(block, qi)"
+                    placeholder="其他（自定义回答，可引用选项标签如 A）"
+                    @input="setCustom(block, qi, ($event.target as HTMLInputElement).value)"
+                    @click.stop
+                  />
+                </div>
               </template>
               <div v-else class="question-answered">
                 <CheckCircleOutlined class="answered-icon" />
@@ -235,16 +244,31 @@ function optionSelected(block: QuestionBlock, questionIndex: number, label: stri
   return (draftOf(block).selections[questionIndex] ?? []).includes(label)
 }
 
-function toggleOption(block: QuestionBlock, q: QuestionBlock['questions'][number], questionIndex: number, label: string): void {
+/** 选项作答键：优先模型给的 key，旧数据回退 label */
+function optionKey(opt: QuestionBlock['questions'][number]['options'][number], index: number): string {
+  return opt.key || opt.label || String(index + 1)
+}
+
+/** 单选：点击预置选项即唯一选中，并清空"其他" */
+function toggleOption(block: QuestionBlock, questionIndex: number, key: string): void {
   const draft = draftOf(block)
   const current = draft.selections[questionIndex] ?? []
-  if (q.multiSelect) {
-    draft.selections[questionIndex] = current.includes(label)
-      ? current.filter(item => item !== label)
-      : [...current, label]
-  } else {
-    draft.selections[questionIndex] = current.includes(label) ? [] : [label]
+  draft.selections[questionIndex] = current.includes(key) ? [] : [key]
+  if (draft.selections[questionIndex].length) {
+    draft.custom[questionIndex] = ''
   }
+}
+
+/** "其他"是否为当前选中（有自定义文本且未选预置项） */
+function otherSelected(block: QuestionBlock, questionIndex: number): boolean {
+  const draft = draftOf(block)
+  return !(draft.selections[questionIndex] ?? []).length && !!(draft.custom[questionIndex] ?? '').trim()
+}
+
+/** 点击"其他"行：聚焦输入框并即时成为唯一选中 */
+function focusOther(block: QuestionBlock, questionIndex: number): void {
+  const draft = draftOf(block)
+  draft.selections[questionIndex] = []
 }
 
 function customOf(block: QuestionBlock, questionIndex: number): string {
@@ -252,14 +276,19 @@ function customOf(block: QuestionBlock, questionIndex: number): string {
 }
 
 function setCustom(block: QuestionBlock, questionIndex: number, value: string): void {
-  draftOf(block).custom[questionIndex] = value
+  const draft = draftOf(block)
+  draft.custom[questionIndex] = value
+  if (value.trim()) {
+    // 输入自定义即选中"其他"：清除预置选项（单选互斥）
+    draft.selections[questionIndex] = []
+  }
 }
 
 /** 当前悬选选项的预览（单选显示已选项 preview；多选显示最近选中项） */
 function previewOf(q: QuestionBlock['questions'][number], block: QuestionBlock, questionIndex: number): string | undefined {
   const selected = draftOf(block).selections[questionIndex] ?? []
   if (!selected.length) return undefined
-  const option = q.options.find(opt => selected.includes(opt.label))
+  const option = q.options.find((opt, i) => selected.includes(opt.key || opt.label || String(i + 1)))
   return option?.preview
 }
 
@@ -567,71 +596,15 @@ function sourceChips(block: ToolBlock): SourceChip[] {
   return chips
 }
 
-// ---------- 打字机效果 ----------
-// 流式中的工具行元信息逐字显示（带光标）；历史还原直接完整显示
-const TYPE_INTERVAL_MS = 28
-const revealMap = ref<Record<number, number>>({})
-let revealTimer: number | undefined
-
-watch(
-  () => props.isLoading,
-  (loading) => {
-    if (loading && revealTimer === undefined) {
-      revealTimer = window.setInterval(advanceReveal, TYPE_INTERVAL_MS)
-    }
-  },
-  { immediate: true }
-)
-
-watch(
-  processBlocks,
-  (blocks) => {
-    for (let i = 0; i < blocks.length; i++) {
-      const b = blocks[i]
-      if (b.type === 'tool' && !(i in revealMap.value)) {
-        // 已完成的工具块直接显示完整信息：切换会话再切回（组件重建）时不重放打字机
-        revealMap.value[i] = props.isLoading && b.status === 'running'
-          ? 0
-          : toolMeta(b).length
-      }
-    }
-  },
-  { immediate: true }
-)
-
-function advanceReveal(): void {
-  const blocks = processBlocks.value
-  let pending = false
-  for (let i = 0; i < blocks.length; i++) {
-    const b = blocks[i]
-    if (b.type !== 'tool') continue
-    const full = toolMeta(b).length
-    const shown = revealMap.value[i] ?? full
-    if (shown < full) {
-      revealMap.value[i] = Math.min(full, shown + 1)
-      pending = true
-    }
-  }
-  if (!pending && !props.isLoading && revealTimer !== undefined) {
-    clearInterval(revealTimer)
-    revealTimer = undefined
-  }
+// ---------- 工具行元信息：真流式直显（zcode 方式） ----------
+// 不做"收完再回放"的打字机：tool_args 的每个 SSE 增量到达即重算语义摘要，
+// 显示速率=模型实际生成速率；运行中且参数仍在流式时带光标
+function shownMeta(_index: number, block: ToolBlock): string {
+  return toolMeta(block)
 }
 
-onUnmounted(() => {
-  if (revealTimer !== undefined) clearInterval(revealTimer)
-})
-
-function shownMeta(index: number, block: ToolBlock): string {
-  const full = toolMeta(block)
-  const shown = revealMap.value[index]
-  return shown === undefined ? full : full.slice(0, shown)
-}
-
-function typing(index: number, block: ToolBlock): boolean {
-  const full = toolMeta(block).length
-  const shown = revealMap.value[index] ?? full
-  return shown < full
+function typing(_index: number, block: ToolBlock): boolean {
+  return props.isLoading && block.status === 'running'
 }
 
 // ---------- 时长 ----------
@@ -1043,6 +1016,17 @@ function durationSuffix(block: ThinkingBlock): string {
     }
   }
 
+  .option-key {
+    padding: 0 7px;
+    border: 1px solid rgba(42, 161, 169, 0.35);
+    border-radius: 6px;
+    color: $primary-color;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 18px;
+    flex-shrink: 0;
+  }
+
   .option-check {
     font-size: 12px;
     color: $primary-color;
@@ -1080,17 +1064,21 @@ function durationSuffix(block: ThinkingBlock): string {
   }
 
   .option-custom {
-    width: 100%;
-    margin-top: 6px;
-    padding: 6px 10px;
-    border: 1px solid #e5e6eb;
-    border-radius: 8px;
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    padding: 2px 4px;
     font-size: 12px;
     outline: none;
 
-    &:focus {
-      border-color: $primary-color;
+    &::placeholder {
+      color: #c9cdd4;
     }
+  }
+
+  .option-other {
+    cursor: text;
   }
 
   .question-answered {

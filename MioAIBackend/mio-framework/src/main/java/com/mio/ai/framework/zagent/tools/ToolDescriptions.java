@@ -129,8 +129,9 @@ final class ToolDescriptions {
             Use this tool only when you are blocked on a decision that is genuinely the user's to make: one you cannot resolve from the request, the code, or sensible defaults.
 
             Usage notes:
-            - Users will always be able to select "Other" to provide custom text input, so you don't need to list that as an option.
-            - Use multiSelect: true to allow multiple answers for questions where users can reasonably select multiple options.
+            - Questions are single-choice on the user side: exactly one option is selected, or a free-text "Other" answer. Never promise multi-select behavior.
+            - Give every option a short `key` you pick yourself (A/B/C, 1/2/3, or a compact word). Users may answer by referencing a key with additions (e.g. "A, but cheaper") — such answers mean: that option plus the stated modifications.
+            - The client always offers a free-text "Other" choice automatically; do not list one yourself.
             - If you recommend a specific option, make that the first option in the list and add "(Recommended)" at the end of the label.
             - Keep the overall question under 120 characters; labels should be lowercase except for proper nouns, acronyms, or identifiers you would normally capitalize.
             - Reserve this tool for decisions that materially change what you do next — not for choices with a conventional default or facts you can verify yourself.

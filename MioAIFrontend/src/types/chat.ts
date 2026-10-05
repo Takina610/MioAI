@@ -16,6 +16,8 @@ export interface ToolEvent {
 
 /** AskUserQuestion 的单个选项 */
 export interface QuestionOption {
+  /** 模型自定的短标签（A/B/C、1/2/3 或紧凑词），用户可能以引用它作答 */
+  key?: string
   label: string
   description: string
   preview?: string
@@ -25,6 +27,7 @@ export interface QuestionOption {
 export interface QuestionItem {
   question: string
   header: string
+  /** 兼容旧数据的遗留字段：问答恒为单选（自定义回答也是单选成员之一） */
   multiSelect?: boolean
   options: QuestionOption[]
 }
