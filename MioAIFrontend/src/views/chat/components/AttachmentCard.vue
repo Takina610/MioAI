@@ -119,13 +119,13 @@ function isColoredThumb(item: AttachmentDisplay): boolean {
 }
 
 /** 纯图片场景下的放大尺寸 */
-const LARGE_IMAGE_PX = 120
+const LARGE_IMAGE_PX = 280
 
 /** 图片卡尺寸：纯图片场景放大，混排时跟随文档卡高度 */
 const thumbSize = computed(() => {
   if (props.variant !== 'card') return 40
   if (!props.compact) return 84
-  return props.largeImage ? LARGE_IMAGE_PX : 72
+  return props.largeImage ? LARGE_IMAGE_PX : 60
 })
 
 function isLargeImage(item: AttachmentDisplay): boolean {
@@ -222,34 +222,43 @@ async function handleDownload(): Promise<void> {
     border-radius: 16px;
   }
 
-  // 消息区紧凑档：整体比输入框待传卡小一号
+  // 消息区紧凑档：整体比输入框待传卡小一号（DeepSeek 比例：卡高 62 = 36px 图标 + 上下 12px）
   &.compact.as-card {
-    gap: 12px;
-    margin: 8px 0 0 12px;
-    padding: 16px 24px 16px 16px;
-    border-radius: 14px;
+    gap: 10px;
+    margin: 8px 0 0 10px;
+    padding: 12px 14px;
+    border-radius: 12px;
   }
 
   &.compact.as-card .att-thumb {
-    width: 40px;
-    height: 40px;
-    border-radius: 9px;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
 
     .att-icon {
-      font-size: 22px;
+      font-size: 20px;
     }
   }
 
-  &.bare.compact.as-card .att-thumb {
-    width: 72px;
-    height: 72px;
-    border-radius: 14px;
+  // 混排裸图：与文档卡同高齐平（无 padding，60+2 边框 = 62）
+  &.bare.compact.as-card {
+    padding: 0;
   }
 
-  // 纯图片场景（消息区）：单图放大展示
+  &.bare.compact.as-card .att-thumb {
+    width: 60px;
+    height: 60px;
+    border-radius: 10px;
+  }
+
+  // 纯图片场景（消息区）：单图放大展示（对齐 DeepSeek 大图，280+2 边框）
+  &.img-large.compact.as-card {
+    padding: 0;
+  }
+
   &.img-large.compact.as-card .att-thumb {
-    width: 120px;
-    height: 120px;
+    width: 280px;
+    height: 280px;
     border-radius: 16px;
   }
 
@@ -321,6 +330,7 @@ async function handleDownload(): Promise<void> {
   .att-name {
     max-width: 190px;
     font-size: 16px;
+    line-height: 1.3;
     font-weight: 600;
     color: #1d2129;
     white-space: nowrap;
@@ -334,9 +344,15 @@ async function handleDownload(): Promise<void> {
     font-weight: 400;
   }
 
+  &.compact.as-card .att-name {
+    max-width: 190px;
+    font-size: 14px;
+  }
+
   .att-meta {
     margin-top: 3px;
     font-size: 13px;
+    line-height: 1.3;
     color: #86909c;
     white-space: nowrap;
   }
@@ -344,6 +360,11 @@ async function handleDownload(): Promise<void> {
   &:not(.as-card) .att-meta {
     margin-top: 0;
     flex-shrink: 0;
+  }
+
+  &.compact.as-card .att-meta {
+    margin-top: 2px;
+    font-size: 12px;
   }
 
   // 图片缩略图：antd 默认遮罩（含 ... 文案）整个隐藏，自绘居中眼睛
