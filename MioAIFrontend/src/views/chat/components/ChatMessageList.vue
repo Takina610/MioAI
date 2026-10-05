@@ -27,16 +27,18 @@
             <MarkdownView class="message-text" :content="msg.content" />
           </template>
           <!-- 编辑态：原位替换为文本框（按钮嵌在框内右下），保存即截断重发。
-               按钮用原生 button + mousedown.prevent：防点击时抢走 textarea 焦点/选区
-               （真实鼠标在布局动画期间的点击更稳）；antd 按钮的 actionability 链
-               在消息区收起动画中会超时，表现为"点发送没反应" -->
+               全部用原生元素：antd Textarea 会把多个 keydown 监听编译成的数组
+               当 prop 校验丢弃（Invalid prop "onKeydown" 警告），且其中间层在
+               IME 输入下存在 v-model 断链（editText 停留在初值→点发送永远走
+               "内容未变"取消）；原生 textarea 的 v-model 与事件是 Vue 原生路径 -->
           <div v-else class="message-edit">
-            <a-textarea
-              v-model:value="editText"
-              :auto-size="{ minRows: 2, maxRows: 12 }"
+            <textarea
+              v-model="editText"
+              class="edit-native-textarea"
+              rows="3"
               @keydown.esc="cancelEdit"
               @keydown.enter.exact.prevent="confirmEdit(msg, index)"
-            />
+            ></textarea>
             <div class="edit-buttons">
               <button type="button" class="edit-native-btn" @mousedown.prevent @click="cancelEdit">取消</button>
               <button
@@ -169,6 +171,8 @@ function cancelEdit(): void {
 function confirmEdit(msg: ChatMessage, index: number): void {
   const content = editText.value.trim()
   if (!content || content === msg.content) {
+    // 明确提示而非静默取消：内容未变化时直接关闭编辑框会让"点发送没反应"无法排查
+    message.info(content ? '内容没有变化，已取消编辑' : '内容不能为空，已取消编辑')
     cancelEdit()
     return
   }
@@ -319,8 +323,25 @@ defineExpose({ scrollToBottom, isNearBottom })
             }
           }
 
-          :deep(.ant-input) {
-            padding-bottom: 44px;
+          .edit-native-textarea {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px 12px 44px;
+            border: 1px solid #d9dde3;
+            border-radius: 8px;
+            background: #fff;
+            color: $text-dark;
+            font-size: 14px;
+            font-family: inherit;
+            line-height: 1.6;
+            resize: vertical;
+            min-height: 76px;
+            max-height: 320px;
+            outline: none;
+
+            &:focus {
+              border-color: $primary-color;
+            }
           }
         }
 
