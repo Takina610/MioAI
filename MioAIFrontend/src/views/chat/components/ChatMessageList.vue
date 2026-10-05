@@ -41,21 +41,11 @@
               </a-button>
             </div>
           </div>
-          <!-- 回复版本切换（zcode：跟随提问显示）：< n/n > 挂在提问下方，方便对照选择 -->
-          <div v-if="msg.role === 'user' && replyVersionTarget(index)" class="version-nav-below">
-            <a-button type="text" size="small" class="version-btn" :disabled="versionOf(replyVersionTarget(index)!) <= 1" @click="emit('switchVersion', replyVersionTarget(index)!.id, versionOf(replyVersionTarget(index)!) - 1)">
-              <LeftOutlined />
-            </a-button>
-            <span class="version-text">{{ versionOf(replyVersionTarget(index)!) }} / {{ totalVersions(replyVersionTarget(index)!) }}</span>
-            <a-button type="text" size="small" class="version-btn" :disabled="versionOf(replyVersionTarget(index)!) >= totalVersions(replyVersionTarget(index)!)" @click="emit('switchVersion', replyVersionTarget(index)!.id, versionOf(replyVersionTarget(index)!) + 1)">
-              <RightOutlined />
-            </a-button>
-          </div>
           <div class="message-actions">
-            <!-- 多版本消息工具栏常驻；单版本悬浮显示；编辑中隐藏 -->
+            <!-- 操作行统一悬浮显示（编辑中/流式期间隐藏）：复制、编辑、重生成、版本切换 -->
             <div
               class="copy-area"
-              v-show="editingId !== msg.id && !isLoading && (hasVersions(msg) || (hoverMessageId === msg.id && displayOf(msg).content))"
+              v-show="editingId !== msg.id && !isLoading && hoverMessageId === msg.id && displayOf(msg).content"
             >
               <a-tooltip :title="copiedMessageId === msg.id ? '已复制' : '复制'">
                 <a-button type="text" size="small" class="copy-btn" :class="{ 'copied': copiedMessageId === msg.id }" @click="copyMessage(displayOf(msg).content, msg.id)">
@@ -73,6 +63,16 @@
                   <RedoOutlined />
                 </a-button>
               </a-tooltip>
+              <!-- 回复版本切换 < n/n >：与复制/编辑同级同显隐，跟随提问显示便于对照 -->
+              <div v-if="msg.role === 'user' && replyVersionTarget(index)" class="version-nav">
+                <a-button type="text" size="small" class="version-btn" :disabled="versionOf(replyVersionTarget(index)!) <= 1" @click="emit('switchVersion', replyVersionTarget(index)!.id, versionOf(replyVersionTarget(index)!) - 1)">
+                  <LeftOutlined />
+                </a-button>
+                <span class="version-text">{{ versionOf(replyVersionTarget(index)!) }} / {{ totalVersions(replyVersionTarget(index)!) }}</span>
+                <a-button type="text" size="small" class="version-btn" :disabled="versionOf(replyVersionTarget(index)!) >= totalVersions(replyVersionTarget(index)!)" @click="emit('switchVersion', replyVersionTarget(index)!.id, versionOf(replyVersionTarget(index)!) + 1)">
+                  <RightOutlined />
+                </a-button>
+              </div>
             </div>
           </div>
         </div>
@@ -359,33 +359,6 @@ defineExpose({ scrollToBottom, isNearBottom })
           }
         }
 
-        // 提问下方的回复版本切换 < n/n >（zcode：跟随提问显示，便于对照选择）
-        .version-nav-below {
-          display: inline-flex;
-          align-items: center;
-          gap: 2px;
-          margin-top: 2px;
-          align-self: flex-end;
-          color: #86909c;
-
-          .version-btn {
-            color: #86909c;
-            padding: 2px 6px;
-            height: auto;
-            font-size: 12px;
-
-            &:hover:not(:disabled) {
-              color: $primary-color;
-            }
-          }
-
-          .version-text {
-            font-size: 12px;
-            min-width: 36px;
-            text-align: center;
-            user-select: none;
-          }
-        }
       }
 
       &.user .message-text {

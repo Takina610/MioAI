@@ -2,7 +2,7 @@ import { nextTick, type Ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
-import { chatWithMioBot, chatWithStream } from '@/api/chat'
+import { chatWithMioBot, chatWithStream, isChatActive } from '@/api/chat'
 import { getBotMessages, type BotMessageRow } from '@/api/botMessages'
 import type { ChatMessage, MessageBlock, PlanStep, QuestionAnswer, QuestionItem } from '@/types'
 import {
@@ -542,6 +542,7 @@ export function useChatStream(options: {
     onRecovered: (row: BotMessageRow) => void
   ): void {
     const startTime = Date.now()
+    let lastActiveProbe = 0
 
     const timer = setInterval(async () => {
       // 加载状态被其他路径复位（如用户切走/删除）则停止
@@ -565,6 +566,20 @@ export function useChatStream(options: {
           clearInterval(timer)
           onRecovered(row)
           return
+        }
+        // 后端已不在执行该会话（回合随重启/异常消亡）：立即放弃，不空等 10 分钟锁死编辑入口
+        if (elapsed > 20000 && Date.now() - lastActiveProbe > 20000) {
+          lastActiveProbe = Date.now()
+          try {
+            const active = await isChatActive(chatId)
+            if (!active) {
+              clearInterval(timer)
+              onGiveUp()
+              return
+            }
+          } catch {
+            // 活跃探测失败（后端暂不可达）：交由既有超时兜底
+          }
         }
         if (elapsed > RECOVERY_MAX_WAIT_MS) {
           clearInterval(timer)

@@ -321,6 +321,15 @@ public class MioBotController {
         return ResultUtils.success(result);
     }
 
+    /**
+     * 会话是否正在执行（ACTIVE_CHATS 占用中）：前端孤儿回合恢复轮询据此快速失败——
+     * 后端不在执行时恢复轮询立即放弃并标记中断，不再空等 10 分钟把编辑/发送入口全部锁死。
+     */
+    @GetMapping("/bot/active/{chatId}")
+    public BaseResponse<Boolean> isChatActive(@PathVariable @NotBlank String chatId) {
+        return ResultUtils.success(ACTIVE_CHATS.contains(chatId));
+    }
+
     /** 敏感词命中的单条完整回复（answer 整段 + done） */
     private SseEmitter emitSingleReply(String reply) {
         SseEmitter emitter = new SseEmitter(SseStreams.CHAT_TIMEOUT_MS);
