@@ -46,6 +46,30 @@ const ICON_RULES: Array<[RegExp, Component]> = [
   [/\.(srt|ass|ssa|vtt|sub)$/i, markRaw(FileTextOutlined)]
 ]
 
+/** 文件类型 → 图标底色（DeepSeek 式彩色应用图标：绿表/蓝文/红 PDF/橙 PPT…） */
+const TYPE_COLORS: Array<[RegExp, string]> = [
+  [/\.(xlsx?|xlsm|xlsb|csv|tsv|ods|numbers)$/i, '#21A55D'],
+  [/\.(docx?|docm|dotx?|rtf|odt|pages)$/i, '#2F6BDF'],
+  [/\.pdf$/i, '#E5483D'],
+  [/\.(pptx?|pptm|odp|key)$/i, '#F5713D'],
+  [/\.(png|jpe?g|gif|webp|bmp|svg|avif|ico|tiff?|heic|heif|psd|ai|eps|raw)$/i, '#0FA7A0'],
+  [/\.(zip|rar|7z|tar|gz|bz2|xz|tgz|iso|dmg)$/i, '#7B61D6'],
+  [/\.(mp4|mov|avi|mkv|webm|flv|wmv|m4v|mpg|mpeg|3gp)$/i, '#8B5CF6'],
+  [/\.(mp3|wav|flac|aac|ogg|m4a|wma|opus|mid|amr)$/i, '#D64A9E'],
+  [
+    /\.(json|xml|ya?ml|toml|ini|html?|css|scss|js|cjs|mjs|ts|mts|jsx|tsx|vue|py|java|cs|c|h|cpp|go|rs|rb|php|swift|kt|sql|sh|bat|md|txt|log)$/i,
+    '#4E7CA8'
+  ],
+  [/\.(exe|dll|so|bin|apk|msi|deb|rpm|jar|class|wasm)$/i, '#6B7280']
+]
+
+export function typeColor(name: string): string {
+  for (const [pattern, color] of TYPE_COLORS) {
+    if (pattern.test(name)) return color
+  }
+  return '#98A1B3'
+}
+
 export function attachmentIcon(name: string): Component {
   for (const [pattern, icon] of ICON_RULES) {
     if (pattern.test(name)) return icon

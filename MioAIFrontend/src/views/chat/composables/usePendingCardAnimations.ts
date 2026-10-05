@@ -130,10 +130,15 @@ export function usePendingCardAnimations(pending: Ref<PendingAttachment[] | unde
           })
           .to(el, {
             width: 0,
+            // 高度一并塌缩：末卡移除时行高平滑归零（否则元素卸载瞬间输入框高度跳变）
+            height: 0,
+            minHeight: 0,
             paddingLeft: 0,
             paddingRight: 0,
             borderLeftWidth: 0,
             borderRightWidth: 0,
+            borderTopWidth: 0,
+            borderBottomWidth: 0,
             marginLeft: 0,
             marginTop: 0,
             duration: 0.18,

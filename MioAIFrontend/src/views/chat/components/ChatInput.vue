@@ -251,7 +251,8 @@ function onFileChange(event: Event): void {
       border: 1px solid #e5e6eb;
       border-radius: 16px;
       box-shadow: 0 4px 12px rgba(242, 243, 245, 1);
-      transition: all 0.2s;
+      // 只过渡视觉属性：高度由卡片 GSAP 逐帧驱动，transition:all 会与之打架造成收回卡顿
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 
       // 文件拖入悬停提示
       &.drag-over {

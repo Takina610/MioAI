@@ -309,8 +309,11 @@ function handleSend(): void {
 /** 待上传附件：选中文件即开始上传到沙箱（卡片带实时进度环） */
 const pendingAttachments = ref<PendingAttachment[]>([])
 
-function handleAddFiles(files: File[]): void {
+async function handleAddFiles(files: File[]): Promise<void> {
   const chatId = prepareChatId()
+  // 新会话首个附件会触发会话隔离 watch（currentChatId 空→id 的交换），先等它完成再 push，
+  // 否则刚加入的记录会被 watch 加载的空列表覆盖
+  await nextTick()
   const slots = MAX_PENDING_ATTACHMENTS - pendingAttachments.value.length
   for (const file of files.slice(0, Math.max(0, slots))) {
     const record: PendingAttachment = {
@@ -375,6 +378,21 @@ function cleanupPendingAttachments(): void {
 }
 
 const MAX_PENDING_ATTACHMENTS = 50
+
+// 草稿与待传附件按会话隔离：切换会话时各自保存/恢复，互不串显
+const draftByChat = new Map<string, string>()
+const pendingByChat = new Map<string, PendingAttachment[]>()
+watch(
+  () => messagesApi.currentChatId.value,
+  (newId, oldId) => {
+    if (oldId) {
+      draftByChat.set(oldId, inputMessage.value)
+      pendingByChat.set(oldId, pendingAttachments.value)
+    }
+    inputMessage.value = (newId && draftByChat.get(newId)) || ''
+    pendingAttachments.value = (newId && pendingByChat.get(newId)) || []
+  },
+)
 
 function handleDeleteConfirm(): void {
   confirmDelete((chatId) => chatId === currentChatId.value)

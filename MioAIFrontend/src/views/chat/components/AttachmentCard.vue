@@ -5,8 +5,13 @@
     :title="item.status === 'error' ? '上传失败' : item.name"
     @click="downloadable && item.status === 'done' && handleDownload()"
   >
-    <!-- 缩略图/图标区：图片类型直接出图（点击放大预览），悬浮只显示居中眼睛 -->
-    <div class="att-thumb">
+    <!-- 缩略图/图标区：图片类型直接出图（点击放大预览）；非图片=类型色圆角方块+白符号
+         （DeepSeek 式彩色应用图标）；悬浮只显示居中眼睛 -->
+    <div
+      class="att-thumb"
+      :class="{ colored: isColoredThumb(item) }"
+      :style="isColoredThumb(item) ? { background: typeColor(item.name) } : undefined"
+    >
       <span
         v-if="item.previewSrc && item.status !== 'uploading' && !broken"
         class="att-img"
@@ -15,8 +20,8 @@
         <a-image
           :src="item.previewSrc"
           :alt="item.name"
-          :width="variant === 'card' ? 86 : 40"
-          :height="variant === 'card' ? 86 : 40"
+          :width="variant === 'card' ? 84 : 40"
+          :height="variant === 'card' ? 84 : 40"
           @error="broken = true"
         />
         <span class="att-eye"><EyeOutlined /></span>
@@ -38,7 +43,7 @@
     <!-- 图片卡片只显示缩略图：名称/大小一概不渲染；非图片保留名称与元信息 -->
     <div v-if="!isImageName(item.name)" class="att-text">
       <span class="att-name">{{ item.name }}</span>
-      <span v-if="variant === 'card'" class="att-meta">{{ extLabel(item.name) }}<template v-if="sizeText(item)"> · {{ sizeText(item) }}</template></span>
+        <span v-if="variant === 'card'" class="att-meta">{{ metaOf(item) }}</span>
       <span v-else class="att-meta">{{ sizeText(item) }}</span>
     </div>
 
@@ -58,7 +63,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { CloseOutlined, EyeOutlined } from '@ant-design/icons-vue'
-import { attachmentIcon, extLabel, formatSize, isImageName } from '../attachmentUtils'
+import { attachmentIcon, extLabel, formatSize, isImageName, typeColor } from '../attachmentUtils'
 import { downloadAttachment } from '@/api/chat'
 import type { AttachmentDisplay } from '@/types'
 
@@ -83,12 +88,24 @@ const emit = defineEmits<{
 /** 缩略图加载失败（文件可能已被删除/清理）：回退类型图标 */
 const broken = ref(false)
 
+/** 图标区是否用类型色底（卡片态的非图片/非上传：DeepSeek 式彩色应用图标） */
+function isColoredThumb(item: AttachmentDisplay): boolean {
+  return props.variant === 'card' && !isImageName(item.name) && item.status !== 'uploading'
+}
+
 function progressOf(item: AttachmentDisplay): number {
   return Math.min(1, Math.max(0, item.progress ?? 0))
 }
 
 function sizeText(item: AttachmentDisplay): string {
   return formatSize(item.size)
+}
+
+/** 卡片元信息（DeepSeek 格式：扩展名 + 空格 + 大小，如 "XLSX 58.49KB"） */
+function metaOf(item: AttachmentDisplay): string {
+  const base = extLabel(item.name)
+  const size = sizeText(item)
+  return size ? `${base} ${size}` : base
 }
 
 async function handleDownload(): Promise<void> {
@@ -109,13 +126,13 @@ async function handleDownload(): Promise<void> {
   &.card {
     display: inline-flex;
     align-items: center;
-    gap: 12px;
-    max-width: 264px;
+    gap: 14px;
+    max-width: 280px;
     margin: 10px 0 0 16px;
-    padding: 23px 26px 23px 16px;
+    padding: 20px 26px 20px 20px;
     background: #f7f8fa;
     border: 1px solid #e5e6eb;
-    border-radius: 12px;
+    border-radius: 16px;
     vertical-align: top;
     transition: border-color 0.2s;
 
@@ -148,21 +165,22 @@ async function handleDownload(): Promise<void> {
 
   // 缩略图尺寸（复合选择器：.card 在同一元素上，SCSS 的 `.card &` 会编译成
   // 祖先选择器永不命中——缩略图尺寸必须写在这里才能生效）
-  // DeepSeek 比例：文档卡 86px 高（40px 图标 + 上下 23px 留白），图片缩略图与卡同高
+  // DeepSeek 1:1 比例：文档卡 86px 高（44px 彩色图标方块 + 上下 20px 留白），图片缩略图与卡同高
   &.card .att-thumb {
-    width: 40px;
-    height: 40px;
-    border-radius: 8px;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
 
     .att-icon {
-      font-size: 22px;
+      font-size: 24px;
+      color: #fff;
     }
   }
 
   &.bare.card .att-thumb {
-    width: 86px;
-    height: 86px;
-    border-radius: 12px;
+    width: 84px;
+    height: 84px;
+    border-radius: 16px;
   }
 
   &:not(.card) .att-thumb {
@@ -220,40 +238,42 @@ async function handleDownload(): Promise<void> {
     display: flex;
     flex-direction: column;
     min-width: 0;
+  }
 
-    :not(.card) & {
-      flex-direction: row;
-      align-items: baseline;
-      gap: 6px;
-    }
+  // 行式（消息内 chip）：单行紧凑。注意必须用 &:not(.card) 复合选择器——
+  // SCSS 的 ":not(.card) &" 编译成祖先选择器，任何不带 card 类的祖先都会命中它
+  &:not(.card) .att-text {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 6px;
   }
 
   .att-name {
-    max-width: 168px;
-    font-size: 14px;
+    max-width: 190px;
+    font-size: 16px;
     font-weight: 600;
     color: #1d2129;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     transition: color 0.2s;
+  }
 
-    :not(.card) & {
-      max-width: 140px;
-      font-weight: 400;
-    }
+  &:not(.card) .att-name {
+    max-width: 140px;
+    font-weight: 400;
   }
 
   .att-meta {
     margin-top: 3px;
-    font-size: 12px;
+    font-size: 13px;
     color: #86909c;
     white-space: nowrap;
+  }
 
-    :not(.card) & {
-      margin-top: 0;
-      flex-shrink: 0;
-    }
+  &:not(.card) .att-meta {
+    margin-top: 0;
+    flex-shrink: 0;
   }
 
   // 图片缩略图：antd 默认遮罩（含 ... 文案）整个隐藏，自绘居中眼睛
