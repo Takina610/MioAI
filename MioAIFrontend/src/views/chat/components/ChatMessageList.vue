@@ -21,6 +21,7 @@
             :create-time="displayOf(msg).createTime"
             :interrupted="displayOf(msg).interrupted"
             :retry-notice="isLatestVersion(msg) ? msg.retryNotice : undefined"
+            :chat-id="chatId"
           />
           <template v-else-if="editingId !== msg.id">
             <MarkdownView class="message-text" :content="msg.content" />
@@ -93,6 +94,8 @@ defineProps<{
   isLoading: boolean
   /** 登录用户才提供编辑/重新生成（依赖服务端历史截断） */
   canModify: boolean
+  /** 当前会话 id（问答卡片提交答案用） */
+  chatId?: string
 }>()
 
 const emit = defineEmits<{

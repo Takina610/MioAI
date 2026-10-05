@@ -74,6 +74,16 @@ export const truncateConversation = async (
   })
 }
 
+/** 回答 Agent 的提问（AskUserQuestion）：解锁该会话挂起的问答门闸 */
+export const answerQuestion = async (
+  chatId: string,
+  id: string,
+  answers: Array<{ index: number; selections: string[]; custom?: string }>
+): Promise<boolean> => {
+  const result = await request.post<{ resolved: boolean }>('/bot/answer', { chatId, id, answers })
+  return Boolean(result?.resolved)
+}
+
 export const generateTitle = async (
   agentId: number,
   conversationId: string,

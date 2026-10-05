@@ -126,6 +126,31 @@ public class BotEventChannel {
         emit(SseChunk.plan(steps).fields());
     }
 
+    /** 向用户提问：追加问答展示块并推送事件（答题走 /bot/answer） */
+    public void question(String id, List<Map<String, Object>> questions) {
+        closeOpenThinking();
+        Map<String, Object> block = new LinkedHashMap<>();
+        block.put("type", "question");
+        block.put("id", id);
+        block.put("status", "pending");
+        block.put("questions", questions);
+        displayBlocks.add(block);
+        emit(SseChunk.question(id, questions).fields());
+    }
+
+    /** 用户已作答：锁定问答块并广播（多端同步） */
+    public void questionAnswered(String id, List<Map<String, Object>> answers) {
+        for (int i = displayBlocks.size() - 1; i >= 0; i--) {
+            Map<String, Object> b = displayBlocks.get(i);
+            if ("question".equals(b.get("type")) && id.equals(b.get("id"))) {
+                b.put("status", "answered");
+                b.put("answers", answers);
+                break;
+            }
+        }
+        emit(SseChunk.questionAnswered(id, answers).fields());
+    }
+
     public void heartbeat() {
         emit(SseChunk.heartbeat().fields());
     }

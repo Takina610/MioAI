@@ -32,4 +32,12 @@ public interface AgentEvents {
 
     /** 上下文已压缩（summary 供落库边界与提示） */
     void compacted(String summary);
+
+    /** 向用户提问（AskUserQuestion；questions 为渲染负载） */
+    default void question(String id, java.util.List<java.util.Map<String, Object>> questions) {
+    }
+
+    /** 用户已作答（广播锁定问答 UI） */
+    default void questionAnswered(String id, java.util.List<java.util.Map<String, Object>> answers) {
+    }
 }

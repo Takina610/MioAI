@@ -30,6 +30,7 @@
           :messages="messages"
           :is-loading="isLoading"
           :can-modify="userStore.isLoggedIn"
+          :chat-id="currentChatId ?? undefined"
           @edit="handleEditMessage"
           @regenerate="handleRegenerate"
           @switch-version="handleSwitchVersion"

@@ -100,6 +100,26 @@ public record SseChunk(Map<String, Object> fields) {
         return new SseChunk(map);
     }
 
+    /** 向用户提问（AskUserQuestion）：questions 为渲染负载 [{question, header, multiSelect, options[{label,description,preview?}]}] */
+    public static SseChunk question(String id, List<Map<String, Object>> questions) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("type", "question");
+        map.put("id", id);
+        map.put("status", "pending");
+        map.put("questions", questions);
+        return new SseChunk(map);
+    }
+
+    /** 用户已作答（广播锁定问答 UI）：answers = [{index, selections[]}] */
+    public static SseChunk questionAnswered(String id, List<Map<String, Object>> answers) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("type", "question");
+        map.put("id", id);
+        map.put("status", "answered");
+        map.put("answers", answers);
+        return new SseChunk(map);
+    }
+
     private static void putIfNotBlank(Map<String, Object> map, String key, String value) {
         if (value != null && !value.isBlank()) {
             map.put(key, value);

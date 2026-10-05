@@ -136,7 +136,7 @@ public class MioBot {
                 } else {
                     Subagents launcher = new Subagents(chatModel, config, reasoningEffort,
                             toolsetFactory, runContext, events, modelName);
-                    registry = toolsetFactory.build(chatId, state, mcpTools, null, launcher);
+                    registry = toolsetFactory.build(chatId, state, mcpTools, null, launcher, events);
                     engine.bindTools(registry);
 
                     boolean appendUserEntry = persistUserMessage || state.entries().isEmpty();
@@ -272,6 +272,16 @@ public class MioBot {
         public void compacted(String summary) {
             channel.persistCompact(summary);
             channel.answerDelta("\n\n[上下文已自动压缩：更早的对话已折叠为摘要，当前任务不受影响]\n\n");
+        }
+
+        @Override
+        public void question(String id, List<Map<String, Object>> questions) {
+            channel.question(id, questions);
+        }
+
+        @Override
+        public void questionAnswered(String id, List<Map<String, Object>> answers) {
+            channel.questionAnswered(id, answers);
         }
 
         private void logUsageDelta(long inputDelta, long outputDelta) {

@@ -92,7 +92,12 @@ export function useChatMessages(options: {
       }
       if (rows && rows.length > 0) {
         loadedMessages = rows.map((row, index) => {
-          const blocks = (row.blocks ?? undefined) as MessageBlock[] | undefined
+          const blocks = ((row.blocks ?? undefined) as MessageBlock[] | undefined)?.map(block =>
+            // 历史恢复中的过期 pending 问答块：门闸早已不在，锁定为未作答态
+            block.type === 'question' && block.status === 'pending'
+              ? { ...block, status: 'answered' as const, answers: [] }
+              : block
+          )
           return {
             id: `${conversationId}_${row.seq ?? index}`,
             role: row.role === 'user' ? 'user' : 'assistant',

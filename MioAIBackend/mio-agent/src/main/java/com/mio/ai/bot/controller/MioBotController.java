@@ -277,6 +277,50 @@ public class MioBotController {
         return SENSITIVE_WORDS.stream().anyMatch(content::contains);
     }
 
+    /**
+     * 用户回答 AskUserQuestion 的提问：解锁该会话挂起的问答门闸，
+     * 等待中的工具拿到答案继续执行（心跳在等待期间持续保活 SSE）。
+     */
+    @org.springframework.web.bind.annotation.PostMapping("/bot/answer")
+    public BaseResponse<Map<String, Object>> answer(
+            @org.springframework.web.bind.annotation.RequestBody Map<String, Object> body) {
+        String chatId = String.valueOf(body.get("chatId"));
+        String id = body.get("id") == null ? null : String.valueOf(body.get("id"));
+        List<com.mio.ai.framework.zagent.tools.QuestionGate.Answer> answers = new ArrayList<>();
+        Object rawAnswers = body.get("answers");
+        if (rawAnswers instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> map) {
+                    int index = 0;
+                    try {
+                        index = Integer.parseInt(String.valueOf(map.get("index")));
+                    } catch (NumberFormatException ignored) {
+                        // 保底 0
+                    }
+                    List<String> selections = new ArrayList<>();
+                    if (map.get("selections") instanceof List<?> selectionList) {
+                        for (Object selection : selectionList) {
+                            selections.add(String.valueOf(selection));
+                        }
+                    }
+                    String custom = map.get("custom") == null ? null : String.valueOf(map.get("custom"));
+                    answers.add(new com.mio.ai.framework.zagent.tools.QuestionGate.Answer(
+                            index, selections, custom));
+                }
+            }
+        }
+        List<Map<String, Object>> payload =
+                com.mio.ai.framework.zagent.tools.QuestionGate.instance().resolve(chatId, answers);
+        if (payload == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "当前会话没有待回答的问题（可能已超时或已作答）");
+        }
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("resolved", true);
+        result.put("questions", payload.size());
+        result.put("id", id);
+        return ResultUtils.success(result);
+    }
+
     /** 敏感词命中的单条完整回复（answer 整段 + done） */
     private SseEmitter emitSingleReply(String reply) {
         SseEmitter emitter = new SseEmitter(SseStreams.CHAT_TIMEOUT_MS);

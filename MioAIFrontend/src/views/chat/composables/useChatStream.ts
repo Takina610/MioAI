@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { chatWithMioBot, chatWithStream } from '@/api/chat'
 import { getBotMessages, type BotMessageRow } from '@/api/botMessages'
-import type { ChatMessage, MessageBlock, PlanStep } from '@/types'
+import type { ChatMessage, MessageBlock, PlanStep, QuestionAnswer, QuestionItem } from '@/types'
 import {
   generateConversationId,
   generateMessageId,
@@ -228,7 +228,11 @@ export function useChatStream(options: {
         patchMessage(chatId, aiMessageIndex, (msg) => ({
           ...msg,
           content: textOfBlocks(row.blocks ?? []),
-          blocks: (row.blocks ?? undefined) as MessageBlock[] | undefined,
+          blocks: ((row.blocks ?? undefined) as MessageBlock[] | undefined)?.map(block =>
+            block.type === 'question' && block.status === 'pending'
+              ? { ...block, status: 'answered' as const, answers: [] }
+              : block
+          ),
           plan: (row.plan ?? undefined) as ChatMessage['plan'],
           durationMs: row.durationMs ?? undefined,
           interrupted: false
@@ -399,6 +403,28 @@ export function useChatStream(options: {
       }
       case 'tool_result': {
         const blocks = matchToolResult(msg.blocks ?? [], parsed)
+        return { ...msg, blocks }
+      }
+      case 'question': {
+        const blocks = [...closeOpenThinking(msg.blocks)]
+        const id = String(parsed.id ?? '')
+        if (parsed.status === 'answered') {
+          const idx = blocks.findIndex(b => b.type === 'question' && b.id === id)
+          if (idx >= 0) {
+            blocks[idx] = {
+              ...(blocks[idx] as Extract<MessageBlock, { type: 'question' }>),
+              status: 'answered',
+              answers: (parsed.answers ?? []) as QuestionAnswer[]
+            }
+          }
+          return { ...msg, blocks }
+        }
+        blocks.push({
+          type: 'question',
+          id,
+          status: 'pending',
+          questions: (parsed.questions ?? []) as QuestionItem[]
+        })
         return { ...msg, blocks }
       }
       case 'plan':
@@ -573,7 +599,12 @@ export function useChatStream(options: {
       patchMessage(chatId, pendingIndex, (msg) => ({
         ...msg,
         content: textOfBlocks(row.blocks ?? []),
-        blocks: (row.blocks ?? undefined) as MessageBlock[] | undefined,
+        blocks: ((row.blocks ?? undefined) as MessageBlock[] | undefined)?.map(block =>
+          // 恢复轮询取回的 pending 问答块：等待中的门闸已随连接丢失，锁定为未作答
+          block.type === 'question' && block.status === 'pending'
+            ? { ...block, status: 'answered' as const, answers: [] }
+            : block
+        ),
         plan: (row.plan ?? undefined) as ChatMessage['plan'],
         durationMs: row.durationMs ?? undefined,
         interrupted: false

@@ -37,6 +37,7 @@ public class SummaryController {
             1. 一句话
             2. 不超过15个字
             3. 直白、概括核心内容
+            4. 纯文本输出，不要使用任何 Markdown 格式符号（如 **、*、#、`）
             
             对话内容：
             %s
@@ -48,6 +49,8 @@ public class SummaryController {
                 .call()
                 .content();
 
+        title = sanitizeTitle(title);
+
         // 保存标题到本地
         UpdateWrapper<ChatConversationDO> updateWrapper = new UpdateWrapper<>();
         updateWrapper.lambda()
@@ -57,5 +60,18 @@ public class SummaryController {
         chatConversationDOMapper.update(updateWrapper);
 
         return ResultUtils.success(title);
+    }
+
+    /** 标题兜底清洗：去 Markdown 强调符/标题符/包裹引号与首尾空白（标题栏按纯文本渲染） */
+    static String sanitizeTitle(String title) {
+        if (title == null || title.isBlank()) {
+            return "未命名对话";
+        }
+        String cleaned = title.strip()
+                .replaceAll("^[#>\\s]+", "")
+                .replaceAll("[*_~`]+", "")
+                .replaceAll("^[\"'“”‘’]+|[\"'“”‘’]+$", "")
+                .strip();
+        return cleaned.isBlank() ? "未命名对话" : cleaned;
     }
 }

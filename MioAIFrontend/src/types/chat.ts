@@ -14,6 +14,27 @@ export interface ToolEvent {
   result?: string
 }
 
+/** AskUserQuestion 的单个选项 */
+export interface QuestionOption {
+  label: string
+  description: string
+  preview?: string
+}
+
+/** AskUserQuestion 的单个问题 */
+export interface QuestionItem {
+  question: string
+  header: string
+  multiSelect?: boolean
+  options: QuestionOption[]
+}
+
+/** 提交后的答案（按问题下标） */
+export interface QuestionAnswer {
+  index: number
+  selections: string[]
+}
+
 /**
  * 消息内按时间序排列的内容块（ZCode 风格：文本/思考/工具顺着流式顺序显示，
  * 不再把过程信息堆在回答上方）。
@@ -22,6 +43,13 @@ export type MessageBlock =
   | { type: 'text'; text: string }
   | { type: 'thinking'; text: string; startedAt?: number; durationMs?: number }
   | (ToolEvent & { type: 'tool' })
+  | {
+      type: 'question'
+      id: string
+      status: 'pending' | 'answered'
+      questions: QuestionItem[]
+      answers?: QuestionAnswer[]
+    }
 
 /** 任务清单步骤（SSE plan 事件快照，渲染于输入框上方） */
 export interface PlanStep {

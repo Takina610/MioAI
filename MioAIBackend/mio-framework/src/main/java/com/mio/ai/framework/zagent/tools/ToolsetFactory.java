@@ -2,6 +2,7 @@ package com.mio.ai.framework.zagent.tools;
 
 import cn.hutool.core.util.StrUtil;
 import com.mio.ai.framework.sandbox.SandboxSession;
+import com.mio.ai.framework.zagent.AgentEvents;
 import com.mio.ai.framework.zagent.history.ConversationState;
 import com.mio.ai.framework.zagent.subagent.SubagentLauncher;
 import com.mio.ai.framework.zagent.task.BackgroundTasks;
@@ -56,12 +57,13 @@ public final class ToolsetFactory {
      *
      * @param allowedTools 工具白名单（null/"*" = 全量；子代理档案传入裁剪清单）
      * @param launcher     子代理启动器（null = 本运行不注册 Agent 工具）
+     * @param events       引擎事件通道（null = 非交互运行，不注册 AskUserQuestion）
      */
     public ToolRegistry build(String chatId, ConversationState state, List<ToolCallback> mcpTools,
-                              List<String> allowedTools, SubagentLauncher launcher) {
+                              List<String> allowedTools, SubagentLauncher launcher, AgentEvents events) {
         SandboxFs fs = sandboxFs();
         ToolContext context = new ToolContext(chatId, state, ReadFileState.forChat(chatId), fs,
-                BackgroundTasks.instance(), launcher);
+                BackgroundTasks.instance(), launcher, events);
         ToolRegistry registry = new ToolRegistry(context);
         boolean all = allowedTools == null || allowedTools.isEmpty() || allowedTools.contains("*");
 
@@ -103,6 +105,9 @@ public final class ToolsetFactory {
         }
         if (launcher != null && (all || allowedTools.contains("Agent"))) {
             registry.register(new AgentTool(launcher).entry());
+        }
+        if (events != null && (all || allowedTools.contains("AskUserQuestion"))) {
+            registry.register(AskUserQuestionTool.entry());
         }
         registry.registerMcpCallbacks(mcpTools);
         return registry;

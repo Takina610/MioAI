@@ -45,6 +45,49 @@
             </CollapseTransition>
           </div>
 
+          <!-- 问答块（AskUserQuestion）：选项卡片，作答提交后锁定展示所选 -->
+          <div
+            v-else-if="block.type === 'question'"
+            class="question-block"
+            :class="{ answered: questionDone(block) }"
+          >
+            <div v-for="(q, qi) in block.questions" :key="qi" class="question-item">
+              <div class="question-head">
+                <span class="question-chip">{{ q.header }}</span>
+                <span class="question-text">{{ q.question }}</span>
+              </div>
+              <template v-if="!questionDone(block)">
+                <div
+                  v-for="(opt, oi) in q.options"
+                  :key="oi"
+                  class="question-option"
+                  :class="{ selected: optionSelected(block, qi, opt.label) }"
+                  @click="toggleOption(block, q, qi, opt.label)"
+                >
+                  <span class="option-check">{{ optionSelected(block, qi, opt.label) ? '●' : '○' }}</span>
+                  <span class="option-label">{{ opt.label }}</span>
+                  <span v-if="opt.description" class="option-desc">{{ opt.description }}</span>
+                </div>
+                <pre v-if="previewOf(q, block, qi)" class="option-preview">{{ previewOf(q, block, qi) }}</pre>
+                <input
+                  class="option-custom"
+                  :value="customOf(block, qi)"
+                  placeholder="其他（自定义回答）"
+                  @input="setCustom(block, qi, ($event.target as HTMLInputElement).value)"
+                />
+              </template>
+              <div v-else class="question-answered">
+                <CheckCircleOutlined class="answered-icon" />
+                <span>{{ answeredText(block, qi) }}</span>
+              </div>
+            </div>
+            <div v-if="!questionDone(block)" class="question-actions">
+              <button class="question-submit" :disabled="!submittable(block) || submitting" @click="submitAnswers(block)">
+                {{ submitting ? '提交中…' : '提交回答' }}
+              </button>
+            </div>
+          </div>
+
           <!-- 工具块：语义化行（可点击展开看执行结果）+ 可跳转的来源链接（随过程收起/展开） -->
           <div v-else class="tool-block">
             <div class="tool-row" :class="{ expandable: block.result }" @click="toggleToolResult(index)">
@@ -130,7 +173,10 @@ import MarkdownView from '@/components/MarkdownView.vue'
 import ZcodeSpinner from '@/components/ZcodeSpinner.vue'
 import CollapseTransition from '@/components/CollapseTransition.vue'
 import BrainIcon from '@/components/BrainIcon.vue'
+import { answerQuestion } from '@/api/chat'
 import type { MessageBlock } from '@/types'
+
+type QuestionBlock = Extract<MessageBlock, { type: 'question' }>
 
 interface Props {
   content: string
@@ -144,6 +190,8 @@ interface Props {
   interrupted?: boolean
   /** 瞬态失败自动重试提示（后端 retry 事件，内容恢复即清除） */
   retryNotice?: string
+  /** 所属会话 id（提交问答答案用） */
+  chatId?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -160,6 +208,97 @@ function toggleToolResult(index: number): void {
   const next = new Set(expandedTools.value)
   next.has(index) ? next.delete(index) : next.add(index)
   expandedTools.value = next
+}
+
+// ---------- 问答块（AskUserQuestion）的草稿与提交 ----------
+
+/** 每个问答块的作答草稿：按块 id 存各问题的已选标签与自定义文本 */
+const questionDrafts = ref<
+  Record<string, { selections: Record<number, string[]>; custom: Record<number, string> }>
+>({})
+const submitting = ref(false)
+/** 本端已提交的块（SSE answered 广播到达前乐观锁定） */
+const submittedIds = ref<Set<string>>(new Set())
+
+function draftOf(block: QuestionBlock): { selections: Record<number, string[]>; custom: Record<number, string> } {
+  if (!questionDrafts.value[block.id]) {
+    questionDrafts.value[block.id] = { selections: {}, custom: {} }
+  }
+  return questionDrafts.value[block.id]
+}
+
+function questionDone(block: QuestionBlock): boolean {
+  return block.status === 'answered' || submittedIds.value.has(block.id)
+}
+
+function optionSelected(block: QuestionBlock, questionIndex: number, label: string): boolean {
+  return (draftOf(block).selections[questionIndex] ?? []).includes(label)
+}
+
+function toggleOption(block: QuestionBlock, q: QuestionBlock['questions'][number], questionIndex: number, label: string): void {
+  const draft = draftOf(block)
+  const current = draft.selections[questionIndex] ?? []
+  if (q.multiSelect) {
+    draft.selections[questionIndex] = current.includes(label)
+      ? current.filter(item => item !== label)
+      : [...current, label]
+  } else {
+    draft.selections[questionIndex] = current.includes(label) ? [] : [label]
+  }
+}
+
+function customOf(block: QuestionBlock, questionIndex: number): string {
+  return draftOf(block).custom[questionIndex] ?? ''
+}
+
+function setCustom(block: QuestionBlock, questionIndex: number, value: string): void {
+  draftOf(block).custom[questionIndex] = value
+}
+
+/** 当前悬选选项的预览（单选显示已选项 preview；多选显示最近选中项） */
+function previewOf(q: QuestionBlock['questions'][number], block: QuestionBlock, questionIndex: number): string | undefined {
+  const selected = draftOf(block).selections[questionIndex] ?? []
+  if (!selected.length) return undefined
+  const option = q.options.find(opt => selected.includes(opt.label))
+  return option?.preview
+}
+
+function submittable(block: QuestionBlock): boolean {
+  return block.questions.some((_, qi) => {
+    const draft = draftOf(block)
+    return (draft.selections[qi] ?? []).length > 0 || (draft.custom[qi] ?? '').trim().length > 0
+  })
+}
+
+async function submitAnswers(block: QuestionBlock): Promise<void> {
+  if (!props.chatId || submitting.value) return
+  submitting.value = true
+  try {
+    const answers = block.questions.map((_, qi) => {
+      const draft = draftOf(block)
+      return {
+        index: qi,
+        selections: draft.selections[qi] ?? [],
+        custom: (draft.custom[qi] ?? '').trim() || undefined
+      }
+    })
+    await answerQuestion(props.chatId, block.id, answers)
+    submittedIds.value = new Set([...submittedIds.value, block.id])
+  } catch (error) {
+    console.error('提交回答失败:', error)
+  } finally {
+    submitting.value = false
+  }
+}
+
+function answeredText(block: QuestionBlock, questionIndex: number): string {
+  const answered = block.answers?.find(item => item.index === questionIndex)
+  const fromBroadcast = answered?.selections ?? []
+  if (fromBroadcast.length) return fromBroadcast.join('、')
+  const draft = questionDrafts.value[block.id]
+  const selections = draft?.selections[questionIndex] ?? []
+  const custom = (draft?.custom[questionIndex] ?? '').trim()
+  return [...selections, ...(custom ? [custom] : [])].join('、') || '未作答'
 }
 
 // 完成于后台标签页时暂缓收缩：等页面重新可见再收（动画才不会被浏览器吞掉）
@@ -684,6 +823,156 @@ watch(
     .tool-caret {
       flex-shrink: 0;
       font-size: 10px;
+    }
+  }
+
+  // 问答块（AskUserQuestion）：待答=选项卡片；已答=所选摘录
+  .question-block {
+    margin: 6px 0;
+    padding: 10px 12px;
+    border: 1px solid #e5e6eb;
+    border-radius: 10px;
+    background: #fbfcfd;
+
+    &.answered {
+      background: #f7faf7;
+      border-color: #d9ecd9;
+    }
+  }
+
+  .question-item {
+    & + .question-item {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed #e5e6eb;
+    }
+  }
+
+  .question-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+
+  .question-chip {
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: #eef3ff;
+    color: #4a6cf7;
+    font-size: 11px;
+    line-height: 18px;
+    white-space: nowrap;
+  }
+
+  .question-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1d2129;
+  }
+
+  .question-option {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 10px;
+    margin: 4px 0;
+    border: 1px solid #e5e6eb;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+
+    &:hover {
+      border-color: #b9c6ff;
+    }
+
+    &.selected {
+      border-color: #4a6cf7;
+      background: #f2f5ff;
+    }
+  }
+
+  .option-check {
+    font-size: 12px;
+    color: #4a6cf7;
+    flex-shrink: 0;
+  }
+
+  .question-option:not(.selected) .option-check {
+    color: #c9cdd4;
+  }
+
+  .option-label {
+    font-size: 13px;
+    color: #1d2129;
+    white-space: nowrap;
+  }
+
+  .option-desc {
+    font-size: 12px;
+    color: #86909c;
+  }
+
+  .option-preview {
+    margin: 4px 0;
+    padding: 8px 10px;
+    background: #f7f8fa;
+    border-radius: 8px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: #4e5969;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 180px;
+    overflow-y: auto;
+    @include thin-scrollbar;
+  }
+
+  .option-custom {
+    width: 100%;
+    margin-top: 6px;
+    padding: 6px 10px;
+    border: 1px solid #e5e6eb;
+    border-radius: 8px;
+    font-size: 12px;
+    outline: none;
+
+    &:focus {
+      border-color: #4a6cf7;
+    }
+  }
+
+  .question-answered {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #1d2129;
+
+    .answered-icon {
+      color: #00b42a;
+      font-size: 14px;
+    }
+  }
+
+  .question-actions {
+    margin-top: 8px;
+    text-align: right;
+  }
+
+  .question-submit {
+    padding: 5px 16px;
+    border: none;
+    border-radius: 8px;
+    background: #4a6cf7;
+    color: #fff;
+    font-size: 12px;
+    cursor: pointer;
+
+    &:disabled {
+      background: #c9cdd4;
+      cursor: not-allowed;
     }
   }
 

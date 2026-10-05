@@ -1,5 +1,6 @@
 package com.mio.ai.framework.zagent.tools;
 
+import com.mio.ai.framework.zagent.AgentEvents;
 import com.mio.ai.framework.zagent.history.ConversationState;
 import com.mio.ai.framework.zagent.subagent.SubagentLauncher;
 import com.mio.ai.framework.zagent.task.BackgroundTasks;
@@ -7,7 +8,7 @@ import com.mio.ai.framework.zagent.task.BackgroundTasks;
 /**
  * 工具执行上下文：一次引擎运行共享的会话级状态与设施。
  * <p>无状态依赖（模型客户端、搜索后端等）由工厂在构造处理器时闭包捕获，
- * 这里只放随会话变化的量。
+ * 这里只放随会话变化的量。events 为 null 表示本运行不能与用户交互（子代理）。
  */
 public final class ToolContext {
 
@@ -18,14 +19,23 @@ public final class ToolContext {
     public final SandboxFs fs;
     public final BackgroundTasks tasks;
     public final SubagentLauncher subagents;
+    /** 引擎事件通道（问答 UI 推送用）；子代理为 null */
+    public final AgentEvents events;
 
     public ToolContext(String chatId, ConversationState state, ReadFileState readFileState,
                        SandboxFs fs, BackgroundTasks tasks, SubagentLauncher subagents) {
+        this(chatId, state, readFileState, fs, tasks, subagents, null);
+    }
+
+    public ToolContext(String chatId, ConversationState state, ReadFileState readFileState,
+                       SandboxFs fs, BackgroundTasks tasks, SubagentLauncher subagents,
+                       AgentEvents events) {
         this.chatId = chatId;
         this.state = state;
         this.readFileState = readFileState;
         this.fs = fs;
         this.tasks = tasks;
         this.subagents = subagents;
+        this.events = events;
     }
 }

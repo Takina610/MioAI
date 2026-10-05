@@ -102,6 +102,11 @@ public final class ConversationHydrator {
             }
             toolGroup.clear();
             text.setLength(0);
+        } else if (!text.isEmpty() && !text.toString().isBlank()) {
+            // 纯文本助手步（无工具调用）：同样进入请求历史，否则上一轮回答在水合时丢失，
+            // 模型会把历史里相邻的两个用户问题当成并列任务重复作答
+            entries.add(ConversationEntry.assistant(text.toString(), List.of()));
+            text.setLength(0);
         }
     }
 

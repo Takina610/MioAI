@@ -124,4 +124,19 @@ final class ToolDescriptions {
             - Takes a task_id parameter identifying the task to stop
             - Returns a success or failure status
             - Use this tool when you need to terminate a long-running task""";
+
+    static final String ASK_USER_QUESTION = """
+            Use this tool only when you are blocked on a decision that is genuinely the user's to make: one you cannot resolve from the request, the code, or sensible defaults.
+
+            Usage notes:
+            - Users will always be able to select "Other" to provide custom text input, so you don't need to list that as an option.
+            - Use multiSelect: true to allow multiple answers for questions where users can reasonably select multiple options.
+            - If you recommend a specific option, make that the first option in the list and add "(Recommended)" at the end of the label.
+            - Keep the overall question under 120 characters; labels should be lowercase except for proper nouns, acronyms, or identifiers you would normally capitalize.
+            - Reserve this tool for decisions that materially change what you do next — not for choices with a conventional default or facts you can verify yourself.
+
+            Preview feature:
+            - Use the optional `preview` field on options when presenting concrete artifacts that users need to visually compare: ASCII mockups of UI layouts, code snippets showing different implementations, diagram variations, or configuration examples.
+            - Preview content is rendered as markdown in a monospace box next to the option list.
+            - Do not use previews for simple preference questions where labels and descriptions suffice.""";
 }
