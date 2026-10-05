@@ -348,26 +348,33 @@ function handleAddFiles(files: File[]): void {
 
 function handleRemovePending(key: string): void {
   const record = pendingAttachments.value.find(p => p.key === key)
-  if (record?.localPreviewUrl) {
-    URL.revokeObjectURL(record.localPreviewUrl)
-  }
-  // 已传到沙箱的文件同步删除（失败忽略：每日清理任务 7 天兜底）
-  if (record?.item?.path) {
-    deleteAttachment(record.item.path).catch(() => {})
-  }
   pendingAttachments.value = pendingAttachments.value.filter(p => p.key !== key)
+  // 沙箱文件删除与本地预览释放延迟到离场动画后（缩略图淡出期间保持可显，避免破图闪现）
+  window.setTimeout(() => {
+    if (record?.localPreviewUrl) {
+      URL.revokeObjectURL(record.localPreviewUrl)
+    }
+    // 已传到沙箱的文件同步删除（失败忽略：每日清理任务 7 天兜底）
+    if (record?.item?.path) {
+      deleteAttachment(record.item.path).catch(() => {})
+    }
+  }, 320)
 }
 
 function cleanupPendingAttachments(): void {
-  for (const record of pendingAttachments.value) {
-    if (record.localPreviewUrl) {
-      URL.revokeObjectURL(record.localPreviewUrl)
-    }
-  }
+  const records = pendingAttachments.value
   pendingAttachments.value = []
+  // 本地预览释放延迟到离场动画后（发送时全部卡片向中间缩小淡出，期间缩略图保持可显）
+  window.setTimeout(() => {
+    for (const record of records) {
+      if (record.localPreviewUrl) {
+        URL.revokeObjectURL(record.localPreviewUrl)
+      }
+    }
+  }, 320)
 }
 
-const MAX_PENDING_ATTACHMENTS = 5
+const MAX_PENDING_ATTACHMENTS = 50
 
 function handleDeleteConfirm(): void {
   confirmDelete((chatId) => chatId === currentChatId.value)

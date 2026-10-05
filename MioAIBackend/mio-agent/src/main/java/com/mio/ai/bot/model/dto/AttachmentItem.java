@@ -53,7 +53,7 @@ public record AttachmentItem(String path, String name, long size) {
                     size = n.longValue();
                 }
                 items.add(new AttachmentItem(path, name, size));
-                if (items.size() >= 5) {
+                if (items.size() >= 50) {
                     break;
                 }
             }

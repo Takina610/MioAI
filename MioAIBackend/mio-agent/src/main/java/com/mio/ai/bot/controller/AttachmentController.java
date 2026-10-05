@@ -37,7 +37,7 @@ import java.util.Map;
 @RestController
 public class AttachmentController {
 
-    private static final long MAX_FILE_BYTES = 20L * 1024 * 1024;
+    private static final long MAX_FILE_BYTES = 100L * 1024 * 1024;
 
     @Resource
     private SandboxFileTransfer fileTransfer;
@@ -53,7 +53,7 @@ public class AttachmentController {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件为空");
         }
         if (file.getSize() > MAX_FILE_BYTES) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "单个文件不能超过 20MB");
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "单个文件不能超过 100MB");
         }
         String originalName = StrUtil.blankToDefault(file.getOriginalFilename(), "file");
         try {

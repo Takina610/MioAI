@@ -27,8 +27,8 @@
           <a-image
             :src="item.previewSrc"
             :alt="item.name"
-            :width="variant === 'card' ? 44 : 30"
-            :height="variant === 'card' ? 44 : 30"
+            :width="40"
+            :height="40"
             @error="brokenThumbs.add(item.key)"
           />
         </span>
@@ -226,13 +226,13 @@ async function handleDownload(item: AttachmentDisplay): Promise<void> {
     }
 
     .att-thumb {
-      width: 44px;
-      height: 44px;
+      width: 40px;
+      height: 40px;
       flex-shrink: 0;
       display: flex;
       align-items: center;
       justify-content: center;
-      border-radius: 8px;
+      border-radius: 10px;
       background: #fff;
       overflow: hidden;
 
@@ -303,18 +303,18 @@ async function handleDownload(item: AttachmentDisplay): Promise<void> {
     }
 
     .att-thumb {
-      width: 30px;
-      height: 30px;
+      width: 40px;
+      height: 40px;
       flex-shrink: 0;
       display: flex;
       align-items: center;
       justify-content: center;
-      border-radius: 6px;
+      border-radius: 8px;
       background: #fff;
       overflow: hidden;
 
       .att-icon {
-        font-size: 16px;
+        font-size: 20px;
         color: $primary-color;
       }
     }

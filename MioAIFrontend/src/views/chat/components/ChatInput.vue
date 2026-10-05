@@ -14,10 +14,14 @@
         @drop.prevent="onDrop"
       >
         <slot name="above-input" />
-        <!-- 待上传附件：一个文件一张卡片，图片只出缩略图（GSAP 进出场/收起动画在卡片组件内） -->
-        <AttachmentCards
-          class="pending-attachments"
-          :items="pending ?? []"
+        <!-- 待上传附件：一个文件一张卡片，直接作为输入容器的子元素（与输入框一体，无任何包装层）；
+             GSAP 进出场由 usePendingCardAnimations 驱动——离场=四周向中间缩小消失+占位塌缩，
+             兄弟卡片由文档流连续回流平滑补位 -->
+        <AttachmentCard
+          v-for="card in renderCards"
+          :key="card.key"
+          :ref="setCardRef(card.key)"
+          :item="card"
           variant="card"
           removable
           @remove="emit('remove-pending', $event)"
@@ -48,20 +52,20 @@
               </button>
             </a-tooltip>
             <a-dropdown :trigger="['click']" placement="topLeft">
-            <div class="effort-selector" @click.prevent>
-              <BrainIcon :size="14" class="effort-icon" :class="{ dimmed: effort === 'none' }" />
-              <span class="effort-label">{{ effortLabel }}</span>
-              <DownOutlined class="effort-caret" />
-            </div>
-            <template #overlay>
-              <a-menu :selected-keys="[effort]" @click="onEffortClick">
-                <a-menu-item v-for="opt in effortOptions" :key="opt.value">
-                  <BrainIcon :size="13" class="menu-brain" :class="{ dimmed: opt.value === 'none' }" />
-                  <span>{{ opt.label }}</span>
-                </a-menu-item>
-              </a-menu>
-            </template>
-          </a-dropdown>
+              <div class="effort-selector" @click.prevent>
+                <BrainIcon :size="14" class="effort-icon" :class="{ dimmed: effort === 'none' }" />
+                <span class="effort-label">{{ effortLabel }}</span>
+                <DownOutlined class="effort-caret" />
+              </div>
+              <template #overlay>
+                <a-menu :selected-keys="[effort]" @click="onEffortClick">
+                  <a-menu-item v-for="opt in effortOptions" :key="opt.value">
+                    <BrainIcon :size="13" class="menu-brain" :class="{ dimmed: opt.value === 'none' }" />
+                    <span>{{ opt.label }}</span>
+                  </a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
           </div>
 
           <a-button
@@ -84,16 +88,17 @@ import { computed, ref } from 'vue'
 import { useUserStore } from '@/store/user'
 import { ArrowUpOutlined, DownOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import BrainIcon from '@/components/BrainIcon.vue'
-import AttachmentCards from './AttachmentCards.vue'
+import AttachmentCard from './AttachmentCard.vue'
+import { usePendingCardAnimations } from '../composables/usePendingCardAnimations'
 import type { PendingAttachment } from '@/types'
 
 /** 思考档位全量标签（实际渲染哪些档由后端按模型能力返回） */
 const EFFORT_LABELS: Record<string, string> = {
-  max: '超高',
-  xhigh: '最高',
-  high: '高',
+  max: '极限',
+  xhigh: '超高',
+  high: '最高',
   medium: '中等',
-  low: '低',
+  low: '较低',
   minimal: '极低',
   none: '关闭'
 }
@@ -111,7 +116,7 @@ const props = defineProps<{
   effort?: string
   /** 当前模型支持的思考档位（按能力探测，如实渲染） */
   supportedEfforts?: string[]
-  /** 待上传附件（选中文件即开始上传，由父组件维护状态） */
+  /** 待上传附件（选中即开始上传，由父组件维护状态） */
   pending?: PendingAttachment[]
 }>()
 
@@ -122,37 +127,6 @@ const emit = defineEmits<{
   (e: 'add-files', files: File[]): void
   (e: 'remove-pending', key: string): void
 }>()
-
-const fileInputRef = ref<HTMLInputElement | null>(null)
-const dragOver = ref(false)
-
-/** 粘贴上传：Ctrl+V 剪贴板里的文件（如截图）直接进待传区 */
-function onPaste(event: ClipboardEvent): void {
-  const files = Array.from(event.clipboardData?.files ?? [])
-  if (files.length) {
-    event.preventDefault()
-    emit('add-files', files)
-  }
-}
-
-/** 拖拽上传：文件拖入输入框容器 */
-function onDrop(event: DragEvent): void {
-  dragOver.value = false
-  const files = Array.from(event.dataTransfer?.files ?? [])
-  if (files.length) {
-    emit('add-files', files)
-  }
-}
-
-function onFileChange(event: Event): void {
-  const input = event.target as HTMLInputElement
-  const files = Array.from(input.files ?? [])
-  if (files.length) {
-    emit('add-files', files)
-  }
-  // 允许再次选择同一个文件
-  input.value = ''
-}
 
 const userStore = useUserStore()
 
@@ -182,6 +156,40 @@ function handleEnter(e: KeyboardEvent): void {
     e.preventDefault()
     emit('send')
   }
+}
+
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const dragOver = ref(false)
+
+/** 待上传卡片：进场缩放浮现 / 离场四周向中间缩小消失（GSAP，无任何包装层） */
+const { renderCards, setCardRef } = usePendingCardAnimations(computed(() => props.pending))
+
+/** 粘贴上传：Ctrl+V 剪贴板里的文件（如截图）直接进待传区 */
+function onPaste(event: ClipboardEvent): void {
+  const files = Array.from(event.clipboardData?.files ?? [])
+  if (files.length) {
+    event.preventDefault()
+    emit('add-files', files)
+  }
+}
+
+/** 拖拽上传：文件拖入输入框容器 */
+function onDrop(event: DragEvent): void {
+  dragOver.value = false
+  const files = Array.from(event.dataTransfer?.files ?? [])
+  if (files.length) {
+    emit('add-files', files)
+  }
+}
+
+function onFileChange(event: Event): void {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  if (files.length) {
+    emit('add-files', files)
+  }
+  // 允许再次选择同一个文件
+  input.value = ''
 }
 </script>
 
@@ -235,7 +243,7 @@ function handleEnter(e: KeyboardEvent): void {
     width: 100%;
     max-width: 800px;
 
-    // 融合容器：任务清单（插槽）与输入框共处一个边框内
+    // 融合容器：待传卡片/任务清单（插槽）与输入框共处一个边框内
     .chat-input-container {
       width: 100%;
       background: #fff;
@@ -287,11 +295,6 @@ function handleEnter(e: KeyboardEvent): void {
             }
           }
         }
-      }
-
-      // 待上传附件区（左右留白随容器；上下间距由卡片组件 GSAP 驱动展开/收起）
-      .pending-attachments {
-        padding: 0 16px;
       }
 
       // zcode 式工具栏：左附件+思考等级 / 右发送（圆角方形）
