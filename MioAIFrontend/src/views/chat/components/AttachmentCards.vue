@@ -1,10 +1,13 @@
 <template>
   <TransitionGroup
+    ref="rootRef"
     tag="div"
-    name="att"
     class="attachment-cards"
     :class="{ light, card: variant === 'card' }"
-    @before-leave="pinLeaveSize"
+    :css="false"
+    @before-leave="onBeforeLeave"
+    @enter="onEnter"
+    @leave="onLeave"
   >
     <div
       v-for="item in items"
@@ -43,8 +46,8 @@
         <component v-else :is="attachmentIcon(item.name)" class="att-icon" />
       </div>
 
-      <!-- 文件名 + 元信息（扩展名 · 大小） -->
-      <div class="att-text">
+      <!-- 图片卡片只显示缩略图，名称/大小一概不显示；非图片保留名称与元信息 -->
+      <div v-if="!isImageName(item.name)" class="att-text">
         <span class="att-name">{{ item.name }}</span>
         <span v-if="variant === 'card'" class="att-meta">{{ extLabel(item.name) }}<template v-if="sizeText(item)"> · {{ sizeText(item) }}</template></span>
         <span v-else class="att-meta">{{ sizeText(item) }}</span>
@@ -65,13 +68,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { nextTick, ref, watch } from 'vue'
+import gsap from 'gsap'
 import { CloseOutlined } from '@ant-design/icons-vue'
-import { attachmentIcon, extLabel, formatSize } from '../attachmentUtils'
+import { attachmentIcon, extLabel, formatSize, isImageName } from '../attachmentUtils'
 import { downloadAttachment } from '@/api/chat'
 import type { AttachmentDisplay } from '@/types'
 
-defineProps<{
+const props = defineProps<{
   items: AttachmentDisplay[]
   /** 输入框卡片式 / 消息内行式 */
   variant?: 'card' | 'chip'
@@ -87,6 +91,8 @@ const emit = defineEmits<{
   (e: 'remove', key: string): void
 }>()
 
+const rootRef = ref<{ $el: HTMLElement } | null>(null)
+
 /** 加载失败的缩略图（文件可能已被删除/清理）：回退类型图标 */
 const brokenThumbs = ref(new Set<string>())
 
@@ -98,11 +104,84 @@ function sizeText(item: AttachmentDisplay): string {
   return formatSize(item.size)
 }
 
-/** leave 前把实际宽度钉成内联样式：width 0 过渡才有数值起点（否则 fit-content 不插值，兄弟节点瞬移） */
-function pinLeaveSize(el: Element): void {
-  const node = el as HTMLElement
-  node.style.width = `${node.offsetWidth}px`
+// ---------- GSAP 驱动的进出场动画（:css="false"，完成时机由 JS 回调控制，
+// 不依赖 CSS transition 检测——离场宽度塌缩时兄弟卡片由文档流连续回流平滑左移） ----------
+
+function onEnter(el: Element, done: () => void): void {
+  gsap.fromTo(
+    el,
+    { opacity: 0, scale: 0.85 },
+    { opacity: 1, scale: 1, duration: 0.2, ease: 'power2.out', onComplete: done },
+  )
 }
+
+function onBeforeLeave(el: Element): void {
+  const node = el as HTMLElement
+  // 钉住当前宽度并转 border-box：GSAP 的 width 数值插值才有正确起点
+  node.style.boxSizing = 'border-box'
+  node.style.width = `${node.offsetWidth}px`
+  node.style.overflow = 'hidden'
+}
+
+function onLeave(el: Element, done: () => void): void {
+  gsap.to(el, {
+    width: 0,
+    opacity: 0,
+    paddingLeft: 0,
+    paddingRight: 0,
+    marginLeft: -8,
+    marginRight: -8,
+    duration: 0.22,
+    ease: 'power2.in',
+    onComplete: done,
+  })
+}
+
+/** 容器展开/收起（GSAP 接管，替代 CollapseTransition——少一层包装 div） */
+watch(
+  () => props.items.length,
+  async (now, before) => {
+    await nextTick()
+    const root = rootRef.value?.$el as HTMLElement | undefined
+    if (!root) return
+    if (now === 0 && (before ?? 0) > 0) {
+      gsap.to(root, {
+        height: 0,
+        paddingTop: 0,
+        opacity: 0,
+        duration: 0.25,
+        ease: 'power2.out',
+        overwrite: 'auto',
+        onComplete: () => {
+          root.style.height = ''
+          root.style.paddingTop = ''
+          root.style.opacity = ''
+          root.style.overflow = ''
+        },
+      })
+      root.style.overflow = 'hidden'
+    } else if (now > 0 && (before ?? 0) === 0) {
+      const target = root.scrollHeight
+      gsap.fromTo(
+        root,
+        { height: 0, paddingTop: 0, opacity: 0 },
+        {
+          height: target,
+          paddingTop: 10,
+          opacity: 1,
+          duration: 0.25,
+          ease: 'power2.out',
+          overwrite: 'auto',
+          onComplete: () => {
+            root.style.height = ''
+            root.style.overflow = ''
+          },
+        },
+      )
+      root.style.overflow = 'hidden'
+    }
+  },
+)
 
 async function handleDownload(item: AttachmentDisplay): Promise<void> {
   try {
@@ -115,7 +194,6 @@ async function handleDownload(item: AttachmentDisplay): Promise<void> {
 
 <style lang="scss" scoped>
 .attachment-cards {
-  position: relative;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -132,7 +210,6 @@ async function handleDownload(item: AttachmentDisplay): Promise<void> {
       background: #f7f8fa;
       border: 1px solid #e5e6eb;
       border-radius: 12px;
-      transition: border-color 0.2s;
 
       &:hover {
         border-color: #c9cdd4;
@@ -190,7 +267,6 @@ async function handleDownload(item: AttachmentDisplay): Promise<void> {
     }
 
     .att-remove {
-      position: absolute;
       top: -7px;
       right: -7px;
     }
@@ -265,7 +341,7 @@ async function handleDownload(item: AttachmentDisplay): Promise<void> {
     }
   }
 
-  // 缩略图与 a-image
+  // 图片缩略图与 a-image 预览
   .att-img {
     display: block;
     width: 100%;
@@ -335,49 +411,6 @@ async function handleDownload(item: AttachmentDisplay): Promise<void> {
       font-size: 8px;
       fill: #4e5969;
     }
-  }
-
-  // ---------- TransitionGroup 动画 ----------
-  // 过渡优先级必须压过 variant 基础规则（.card .att-item 的 border-color 过渡是
-  // 3 级选择器，裸 .att-leave-active 的 all 会被整体覆盖 → 离场/补位瞬跳无动画）；
-  // 同特异性 + 靠后源码顺序取胜，!important 兜底
-  .attachment-cards .att-item.att-enter-active,
-  .attachment-cards .att-item.att-leave-active,
-  .attachment-cards .att-item.att-move {
-    transition:
-      opacity 0.2s ease,
-      transform 0.25s ease,
-      width 0.22s ease,
-      padding 0.22s ease,
-      margin 0.22s ease,
-      border-width 0.22s ease,
-      border-color 0.2s ease !important;
-  }
-
-  // 离场期裁剪：宽度塌缩时缩略图/文件名不外溢
-  .attachment-cards .att-item.att-leave-active {
-    overflow: hidden;
-    white-space: nowrap;
-  }
-
-  // 进场：缩放浮现
-  .att-enter-from {
-    opacity: 0;
-    transform: scale(0.85);
-  }
-
-  // 离场：留在文档流内宽度塌缩——后续卡片随之平滑左移（不用 absolute 钉位，
-  // 否则容器高度瞬间塌掉、输入框无法平滑收回；负 margin 抵消 flex gap 残留）
-  .att-leave-to {
-    opacity: 0;
-    width: 0 !important;
-    min-width: 0 !important;
-    padding-left: 0;
-    padding-right: 0;
-    border-left-width: 0;
-    border-right-width: 0;
-    margin-left: -8px;
-    margin-right: -8px;
   }
 
   // 用户气泡内：反白配色
