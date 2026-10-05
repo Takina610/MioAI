@@ -93,11 +93,22 @@ final class AskUserQuestionTool {
     }
 
     private static List<Map<String, Object>> parseAndValidate(JsonNode input) {
-        if (input == null || !input.has("questions") || !input.get("questions").isArray()) {
+        if (input == null) {
             throw new ToolUseFailure(1, "questions must be an array of 1-4 questions.");
         }
-        List<JsonNode> raw = new ArrayList<>();
-        input.get("questions").forEach(raw::add);
+        JsonNode questionsNode = input.get("questions");
+        List<JsonNode> raw;
+        if (questionsNode != null && questionsNode.isArray()) {
+            raw = new ArrayList<>();
+            questionsNode.forEach(raw::add);
+        } else if (input.has("question") || input.has("options")) {
+            // 宽容归一（zcode resolveInput 语义）：模型常把单个问题对象平铺在顶层
+            // （question/header/options 直接作为根字段）——按单问题处理，不必失败重试
+            raw = new ArrayList<>();
+            raw.add(input);
+        } else {
+            throw new ToolUseFailure(1, "questions must be an array of 1-4 questions.");
+        }
         if (raw.isEmpty() || raw.size() > 4) {
             throw new ToolUseFailure(2, "You may ask between 1 and 4 questions at once.");
         }
