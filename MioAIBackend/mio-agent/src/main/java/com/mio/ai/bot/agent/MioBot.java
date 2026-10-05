@@ -214,8 +214,8 @@ public class MioBot {
             return userPrompt;
         }
         StringBuilder sb = new StringBuilder(userPrompt);
-        sb.append("\n\n<system-reminder>\n# 用户附件\n用户随本条消息上传了文件（已存放在沙箱工作区，"
-                + "用文件工具读取时使用以下相对路径）：\n");
+        sb.append("\n\n<system-reminder>\n# 用户附件\n用户随本条消息上传了文件（上传已在对话外完成，"
+                + "文件就在沙箱工作区——不存在任何上传工具，不要尝试上传/下载，直接用文件工具读取）：\n");
         for (AttachmentItem item : attachments) {
             sb.append("- `").append(item.path()).append('`');
             String storedName = item.path().substring(item.path().lastIndexOf('/') + 1);

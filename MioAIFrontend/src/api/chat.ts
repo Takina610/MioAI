@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { type AxiosProgressEvent } from 'axios'
 import type { AttachmentItem, ChatMessageRequest } from '@/types'
 import request from '@/utils/request'
 
@@ -72,13 +72,22 @@ export const chatWithMioBot = (
 }
 
 /** 上传会话附件：SFTP 直落沙箱工作区 uploads/<chatId>/，返回附件引用（随消息发送） */
-export const uploadAttachment = async (file: File, chatId: string): Promise<AttachmentItem> => {
+export const uploadAttachment = async (
+  file: File,
+  chatId: string,
+  onProgress?: (percent: number) => void
+): Promise<AttachmentItem> => {
   const form = new FormData()
   form.append('file', file)
   form.append('chatId', chatId)
   return request.post('/bot/attachment', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 120000
+    timeout: 120000,
+    onUploadProgress: (event: AxiosProgressEvent) => {
+      if (onProgress && event.total) {
+        onProgress(event.loaded / event.total)
+      }
+    }
   } as never)
 }
 

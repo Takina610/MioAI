@@ -6,14 +6,21 @@
     </div>
     <!-- 与输入框融合的上区（任务清单等，共享同一容器边框） -->
     <div class="chat-input-wrapper">
-      <div class="chat-input-container">
+      <div
+        class="chat-input-container"
+        :class="{ 'drag-over': dragOver }"
+        @dragover.prevent="dragOver = true"
+        @dragleave.prevent="dragOver = false"
+        @drop.prevent="onDrop"
+      >
         <slot name="above-input" />
-        <!-- 待上传附件（发送时随消息一起上传） -->
-        <div v-if="pendingFiles?.length" class="pending-attachments">
-          <AttachmentChips
-            :items="pendingChips"
+        <!-- 待上传附件（选中即开始上传，卡片中央实时进度环） -->
+        <div v-if="pending?.length" class="pending-attachments">
+          <AttachmentCards
+            :items="pending"
+            variant="card"
             removable
-            @remove="emit('remove-file', $event)"
+            @remove="emit('remove-pending', $event)"
           />
         </div>
         <div class="input-main">
@@ -22,6 +29,7 @@
             :placeholder="`给 ${agentName || 'MioBot'} 发送消息`"
             :auto-size="{ minRows: 1, maxRows: 8 }"
             @pressEnter="handleEnter"
+            @paste="onPaste"
             class="chat-textarea"
           />
         </div>
@@ -77,8 +85,8 @@ import { computed, ref } from 'vue'
 import { useUserStore } from '@/store/user'
 import { ArrowUpOutlined, DownOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import BrainIcon from '@/components/BrainIcon.vue'
-import AttachmentChips from './AttachmentChips.vue'
-import type { AttachmentItem } from '@/types'
+import AttachmentCards from './AttachmentCards.vue'
+import type { PendingAttachment } from '@/types'
 
 /** 思考档位全量标签（实际渲染哪些档由后端按模型能力返回） */
 const EFFORT_LABELS: Record<string, string> = {
@@ -104,8 +112,8 @@ const props = defineProps<{
   effort?: string
   /** 当前模型支持的思考档位（按能力探测，如实渲染） */
   supportedEfforts?: string[]
-  /** 待上传附件（发送时随消息一起上传到沙箱） */
-  pendingFiles?: File[]
+  /** 待上传附件（选中文件即开始上传，由父组件维护状态） */
+  pending?: PendingAttachment[]
 }>()
 
 const emit = defineEmits<{
@@ -113,15 +121,29 @@ const emit = defineEmits<{
   (e: 'update:effort', value: string): void
   (e: 'send'): void
   (e: 'add-files', files: File[]): void
-  (e: 'remove-file', index: number): void
+  (e: 'remove-pending', key: string): void
 }>()
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const dragOver = ref(false)
 
-/** 待传文件 → chip 展示形态（path 用文件名占位，仅显示用） */
-const pendingChips = computed<AttachmentItem[]>(() =>
-  (props.pendingFiles ?? []).map(file => ({ path: file.name, name: file.name, size: file.size }))
-)
+/** 粘贴上传：Ctrl+V 剪贴板里的文件（如截图）直接进待传区 */
+function onPaste(event: ClipboardEvent): void {
+  const files = Array.from(event.clipboardData?.files ?? [])
+  if (files.length) {
+    event.preventDefault()
+    emit('add-files', files)
+  }
+}
+
+/** 拖拽上传：文件拖入输入框容器 */
+function onDrop(event: DragEvent): void {
+  dragOver.value = false
+  const files = Array.from(event.dataTransfer?.files ?? [])
+  if (files.length) {
+    emit('add-files', files)
+  }
+}
 
 function onFileChange(event: Event): void {
   const input = event.target as HTMLInputElement
@@ -222,6 +244,12 @@ function handleEnter(e: KeyboardEvent): void {
       border-radius: 16px;
       box-shadow: 0 4px 12px rgba(242, 243, 245, 1);
       transition: all 0.2s;
+
+      // 文件拖入悬停提示
+      &.drag-over {
+        border-color: $primary-color;
+        background: rgba(42, 161, 169, 0.04);
+      }
 
       &:focus-within {
         border-color: $primary-color;

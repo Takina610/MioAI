@@ -174,7 +174,8 @@ public class SandboxFileTransfer {
     }
 
     private String random8() {
-        return Long.toHexString(System.currentTimeMillis() % 0xFFFFFFFFL);
+        // 同毫秒批量上传会撞前缀（UUID 保证唯一）
+        return java.util.UUID.randomUUID().toString().substring(0, 8);
     }
 
     /** 文件名净化：去路径分隔/控制字符，保中文名，限长 80 */

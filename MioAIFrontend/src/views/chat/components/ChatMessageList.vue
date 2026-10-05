@@ -24,9 +24,10 @@
             :chat-id="chatId"
           />
           <template v-else-if="editingId !== msg.id">
-            <AttachmentChips
+            <AttachmentCards
               v-if="inputAttachmentsOf(msg).length"
               :items="inputAttachmentsOf(msg)"
+              variant="chip"
               light
               class="msg-attachments"
             />
@@ -107,10 +108,11 @@
 import { ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { CopyOutlined, CheckOutlined, EditOutlined, RedoOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons-vue'
-import type { AttachmentItem, ChatMessage, MessageBlock } from '@/types'
+import type { AttachmentDisplay, ChatMessage, MessageBlock } from '@/types'
+import { messageAttachmentDisplays } from '../attachmentUtils'
 import MarkdownView from '@/components/MarkdownView.vue'
 import MioBotMessage from './MioBotMessage.vue'
-import AttachmentChips from './AttachmentChips.vue'
+import AttachmentCards from './AttachmentCards.vue'
 
 const props = defineProps<{
   messages: ChatMessage[]
@@ -174,12 +176,14 @@ function startEdit(msg: ChatMessage): void {
   editText.value = msg.content
 }
 
-/** 用户消息随发的附件（attachments 输入块） */
-function inputAttachmentsOf(msg: ChatMessage): AttachmentItem[] {
-  return (msg.blocks ?? [])
-    .filter((b): b is Extract<MessageBlock, { type: 'attachments' }> => b.type === 'attachments')
-    .filter(b => b.side === 'input')
-    .flatMap(b => b.items)
+/** 用户消息随发的附件（attachments 输入块）；图片类型直接出缩略图 */
+function inputAttachmentsOf(msg: ChatMessage): AttachmentDisplay[] {
+  return messageAttachmentDisplays(
+    (msg.blocks ?? [])
+      .filter((b): b is Extract<MessageBlock, { type: 'attachments' }> => b.type === 'attachments')
+      .filter(b => b.side === 'input')
+      .flatMap(b => b.items)
+  )
 }
 
 function cancelEdit(): void {

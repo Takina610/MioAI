@@ -43,9 +43,9 @@
           :has-messages="messages.length > 0"
           :loading="isLoading"
           :supported-efforts="supportedEfforts"
-          :pending-files="pendingFiles"
+          :pending="pendingAttachments"
           @add-files="handleAddFiles"
-          @remove-file="handleRemoveFile"
+          @remove-pending="handleRemovePending"
           @send="handleSend"
         >
           <template #above-input>
@@ -80,7 +80,8 @@ import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getAgentById } from '@/api/agent'
 import { useUserStore } from '@/store/user'
-import type { Agent, AttachmentItem, ChatMessage, MessageBlock } from '@/types'
+import type { Agent, AttachmentItem, ChatMessage, MessageBlock, PendingAttachment } from '@/types'
+import { isImageName } from './attachmentUtils'
 import AuthModal from '@/components/AuthModal.vue'
 import ChatSidebar from './components/ChatSidebar.vue'
 import ChatMessageList from './components/ChatMessageList.vue'
@@ -89,7 +90,7 @@ import ChatPlanPanel from './components/ChatPlanPanel.vue'
 import { useChatSessions } from './composables/useChatSessions'
 import { useChatMessages } from './composables/useChatMessages'
 import { useChatStream } from './composables/useChatStream'
-import { truncateConversation, getReasoningEfforts } from '@/api/chat'
+import { truncateConversation, getReasoningEfforts, uploadAttachment } from '@/api/chat'
 import { getBotMessages } from '@/api/botMessages'
 
 const route = useRoute()
@@ -187,7 +188,7 @@ const streamApi = useChatStream({
   followStream,
   scrollToChatListTop
 })
-const { sendMessage, cleanup: cleanupStream } = streamApi
+const { sendMessage, prepareChatId, cleanup: cleanupStream } = streamApi
 
 /** 正在流式执行中的会话（侧边栏显示加载动画，切走也能看出进度在跑） */
 const streamingChatIds = computed(() => [...messagesApi.chatLoadingMap.value.keys()])
@@ -288,21 +289,81 @@ function handleSend(): void {
     return
   }
 
-  sendMessage(content, { reasoningEffort: reasoningEffort.value, files: pendingFiles.value })
-  pendingFiles.value = []
+  // 附件在选中时已上传；仍在途的门控等待，失败的单卡跳过并提示
+  if (pendingAttachments.value.some(p => p.status === 'uploading')) {
+    message.warning('附件正在上传，请稍候')
+    return
+  }
+  if (pendingAttachments.value.some(p => p.status === 'error')) {
+    message.warning('部分附件上传失败，已自动跳过')
+  }
+  const attachments = pendingAttachments.value
+    .filter(p => p.status === 'done' && p.item)
+    .map(p => p.item as AttachmentItem)
+
+  sendMessage(content, { reasoningEffort: reasoningEffort.value, attachments })
+  cleanupPendingAttachments()
   inputMessage.value = ''
 }
 
-/** 待上传附件：发送时随消息先传沙箱再进对话 */
-const pendingFiles = ref<File[]>([])
+/** 待上传附件：选中文件即开始上传到沙箱（卡片带实时进度环） */
+const pendingAttachments = ref<PendingAttachment[]>([])
 
 function handleAddFiles(files: File[]): void {
-  pendingFiles.value = [...pendingFiles.value, ...files].slice(0, 5)
+  const chatId = prepareChatId()
+  const slots = MAX_PENDING_ATTACHMENTS - pendingAttachments.value.length
+  for (const file of files.slice(0, Math.max(0, slots))) {
+    const record: PendingAttachment = {
+      key: `pending_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      name: file.name,
+      size: file.size,
+      status: 'uploading',
+      progress: 0,
+      previewSrc: isImageName(file.name) ? URL.createObjectURL(file) : undefined
+    }
+    record.localPreviewUrl = record.previewSrc
+    // 经响应式代理写入：闭包里必须持有代理引用，直接改原始对象不会触发渲染
+    pendingAttachments.value.push(record)
+    const live = pendingAttachments.value[pendingAttachments.value.length - 1]
+    uploadAttachment(file, chatId, percent => {
+      live.progress = percent
+    })
+      .then(item => {
+        live.status = 'done'
+        live.progress = 1
+        live.item = item
+        if (live.localPreviewUrl) {
+          // 上传完成：改用沙箱接口出图，释放本地预览
+          URL.revokeObjectURL(live.localPreviewUrl)
+          live.localPreviewUrl = undefined
+          live.previewSrc = `${import.meta.env.VITE_API_BASE_URL || ''}/bot/attachment/download?path=${encodeURIComponent(item.path)}`
+        }
+      })
+      .catch(error => {
+        console.error('附件上传失败:', error)
+        live.status = 'error'
+      })
+  }
 }
 
-function handleRemoveFile(index: number): void {
-  pendingFiles.value = pendingFiles.value.filter((_, i) => i !== index)
+function handleRemovePending(key: string): void {
+  const record = pendingAttachments.value.find(p => p.key === key)
+  if (record?.localPreviewUrl) {
+    URL.revokeObjectURL(record.localPreviewUrl)
+  }
+  pendingAttachments.value = pendingAttachments.value.filter(p => p.key !== key)
 }
+
+function cleanupPendingAttachments(): void {
+  for (const record of pendingAttachments.value) {
+    if (record.localPreviewUrl) {
+      URL.revokeObjectURL(record.localPreviewUrl)
+    }
+  }
+  pendingAttachments.value = []
+}
+
+const MAX_PENDING_ATTACHMENTS = 5
 
 function handleDeleteConfirm(): void {
   confirmDelete((chatId) => chatId === currentChatId.value)

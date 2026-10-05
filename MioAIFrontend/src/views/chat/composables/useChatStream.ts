@@ -2,7 +2,7 @@ import { nextTick, type Ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
-import { chatWithMioBot, chatWithStream, isChatActive, uploadAttachment } from '@/api/chat'
+import { chatWithMioBot, chatWithStream, isChatActive } from '@/api/chat'
 import { getBotMessages, type BotMessageRow } from '@/api/botMessages'
 import { historyFromVersions } from './useChatMessages'
 import type {
@@ -85,9 +85,7 @@ export function useChatStream(options: {
     skipUserPersist?: boolean
     /** 思考强度（none/low/medium/high 等），透传到模型 */
     reasoningEffort?: string
-    /** 随消息上传的本地文件（发送前先传沙箱，失败则中止本轮） */
-    files?: File[]
-    /** 已在沙箱的附件引用（编辑/重生成重发场景沿用原路径，不重复上传） */
+    /** 已上传到沙箱的附件引用（选中文件时即已上传，发送只引用路径） */
     attachments?: AttachmentItem[]
     /** 编辑/重新生成时被替换掉的旧回复版本（挂到新回复上供 <n/n> 切换） */
     history?: ChatMessage[]
@@ -95,7 +93,21 @@ export function useChatStream(options: {
     groupSeq?: number
   }
 
-  async function sendMessage(content: string, opts?: SendOptions): Promise<void> {
+  /** 首次选中附件时即锁定会话 id（附件上传目录随之确定）；新会话 id 记入 freshChatIds，发送时据此判定 isNewChat */
+  const freshChatIds = new Set<string>()
+
+  function prepareChatId(): string {
+    const existing = messagesApi.currentChatId.value
+    if (existing) {
+      return existing
+    }
+    const id = userStore.isLoggedIn ? generateConversationId() : 'temp_' + Date.now()
+    messagesApi.currentChatId.value = id
+    freshChatIds.add(id)
+    return id
+  }
+
+  function sendMessage(content: string, opts?: SendOptions): void {
     // 守卫按"本会话"的 loading 判断（其他会话的执行/恢复轮询不应挡住当前会话）；
     // 拦截必须给出提示——静默 return 正是"点发送没反应"的元凶
     if (!content) return
@@ -106,25 +118,14 @@ export function useChatStream(options: {
     }
     const skipUserMessage = opts?.skipUserMessage ?? false
 
-    const isNewChat = !messagesApi.currentChatId.value && !skipUserMessage
-    if (isNewChat) {
-      messagesApi.currentChatId.value = userStore.isLoggedIn
-        ? generateConversationId()
-        : 'temp_' + Date.now()
+    if (!messagesApi.currentChatId.value) {
+      prepareChatId()
     }
     const chatId = messagesApi.currentChatId.value
+    const isNewChat = !skipUserMessage && freshChatIds.has(chatId)
+    freshChatIds.delete(chatId)
 
-    // 附件在发送前上传到沙箱（会话 id 即暂存目录）；失败则中止本轮不打扰后端
-    let uploaded = opts?.attachments ?? []
-    if (opts?.files?.length) {
-      try {
-        uploaded = await Promise.all(opts.files.map(file => uploadAttachment(file, chatId)))
-      } catch (error) {
-        console.error('附件上传失败:', error)
-        message.error('附件上传失败，请重试')
-        return
-      }
-    }
+    const uploaded = opts?.attachments ?? []
 
     const existingMessages = messagesApi.getChatMessages(chatId)
     const chatMessages = skipUserMessage
@@ -701,5 +702,5 @@ export function useChatStream(options: {
     }
   }
 
-  return { sendMessage, cleanup, recoverPendingTurn }
+  return { sendMessage, prepareChatId, cleanup, recoverPendingTurn }
 }

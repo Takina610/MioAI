@@ -67,6 +67,27 @@ export interface AttachmentItem {
   size: number
 }
 
+/** 附件卡片的展示形态（输入框待传区与消息区共用） */
+export interface AttachmentDisplay {
+  key: string
+  name: string
+  size: number
+  /** uploading=进度环；error=上传失败（仅待传区出现）；done=图标或缩略图 */
+  status: 'uploading' | 'done' | 'error'
+  progress?: number
+  /** 图片类型的缩略图地址（本地 objectURL 或沙箱下载接口） */
+  previewSrc?: string
+}
+
+/** 输入框待传附件记录（index.vue 维护，含上传状态） */
+export interface PendingAttachment extends AttachmentDisplay {
+  status: 'uploading' | 'done' | 'error'
+  /** 上传成功后的沙箱引用（发送时随消息带给后端） */
+  item?: AttachmentItem
+  /** 本地文件预览 URL（图片类型），移除时需 revoke */
+  localPreviewUrl?: string
+}
+
 /** 任务清单步骤（SSE plan 事件快照，渲染于输入框上方） */
 export interface PlanStep {
   index: number

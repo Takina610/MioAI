@@ -149,9 +149,10 @@
     <MarkdownView v-else-if="!processBlocks.length && content" class="answer-content" :content="content" />
 
     <!-- Agent 本轮产出文件（outputs 目录新文件，点击即下载） -->
-    <AttachmentChips
+    <AttachmentCards
       v-if="outputAttachments.length"
       :items="outputAttachments"
+      variant="chip"
       downloadable
       class="output-attachments"
     />
@@ -188,9 +189,10 @@ import MarkdownView from '@/components/MarkdownView.vue'
 import ZcodeSpinner from '@/components/ZcodeSpinner.vue'
 import CollapseTransition from '@/components/CollapseTransition.vue'
 import BrainIcon from '@/components/BrainIcon.vue'
-import AttachmentChips from './AttachmentChips.vue'
+import AttachmentCards from './AttachmentCards.vue'
+import { messageAttachmentDisplays } from '../attachmentUtils'
 import { answerQuestion } from '@/api/chat'
-import type { AttachmentItem, MessageBlock } from '@/types'
+import type { AttachmentDisplay, MessageBlock } from '@/types'
 
 type QuestionBlock = Extract<MessageBlock, { type: 'question' }>
 
@@ -387,11 +389,13 @@ const processBlocks = computed(() =>
     : []
 )
 
-const outputAttachments = computed<AttachmentItem[]>(() =>
-  props.blocks
-    .filter((b): b is Extract<MessageBlock, { type: 'attachments' }> => b.type === 'attachments')
-    .filter(b => b.side === 'output')
-    .flatMap(b => b.items)
+const outputAttachments = computed<AttachmentDisplay[]>(() =>
+  messageAttachmentDisplays(
+    props.blocks
+      .filter((b): b is Extract<MessageBlock, { type: 'attachments' }> => b.type === 'attachments')
+      .filter(b => b.side === 'output')
+      .flatMap(b => b.items)
+  )
 )
 
 const finalText = computed(() => {
