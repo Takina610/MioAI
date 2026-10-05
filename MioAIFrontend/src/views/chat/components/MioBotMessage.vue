@@ -826,6 +826,119 @@ watch(
     }
   }
 
+  // 工具执行结果（点击工具行展开）
+  .tool-result {
+    margin: 4px 0 2px 24px;
+    padding: 8px 12px;
+    background: #f7f8fa;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.55;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: #4e5969;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 220px;
+    overflow-y: auto;
+    @include thin-scrollbar;
+  }
+
+  .tool-status {
+    width: 16px;
+    flex-shrink: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .tool-icon {
+    font-size: 13px;
+    color: $primary-color;
+  }
+
+  .tool-name {
+    flex-shrink: 0;
+    font-size: 13px;
+    color: $primary-color;
+  }
+
+  .tool-meta {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    color: #86909c;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .tw-cursor {
+    display: inline-block;
+    width: 1px;
+    height: 12px;
+    margin-left: 1px;
+    vertical-align: -1px;
+    background: $primary-color;
+    animation: blink 0.8s step-end infinite;
+  }
+
+  // 来源链接：点击直接跳转网页（随工作过程收起/展开）
+  .tool-sources {
+    margin-top: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+
+    .source-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 240px;
+      padding: 4px 10px;
+      background: #f7f8fa;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: background 0.2s;
+
+      &:hover {
+        background: #eef1f4;
+
+        .chip-title {
+          color: $primary-color;
+        }
+      }
+
+      .chip-icon {
+        font-size: 12px;
+        color: #86909c;
+        flex-shrink: 0;
+      }
+
+      .chip-title {
+        font-size: 12px;
+        color: #4e5969;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .chip-idx {
+        flex-shrink: 0;
+        min-width: 14px;
+        height: 14px;
+        padding: 0 3px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        color: #86909c;
+        background: #e8eaee;
+        border-radius: 7px;
+      }
+    }
+  }
+}
+
   // 问答块（AskUserQuestion）：待答=选项卡片；已答=所选摘录
   .question-block {
     margin: 6px 0;
@@ -975,119 +1088,6 @@ watch(
       cursor: not-allowed;
     }
   }
-
-  // 工具执行结果（点击工具行展开）
-  .tool-result {
-    margin: 4px 0 2px 24px;
-    padding: 8px 12px;
-    background: #f7f8fa;
-    border-radius: 8px;
-    font-size: 12px;
-    line-height: 1.55;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    color: #4e5969;
-    white-space: pre-wrap;
-    word-break: break-word;
-    max-height: 220px;
-    overflow-y: auto;
-    @include thin-scrollbar;
-  }
-
-  .tool-status {
-    width: 16px;
-    flex-shrink: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-
-  .tool-icon {
-    font-size: 13px;
-    color: $primary-color;
-  }
-
-  .tool-name {
-    flex-shrink: 0;
-    font-size: 13px;
-    color: $primary-color;
-  }
-
-  .tool-meta {
-    flex: 1;
-    min-width: 0;
-    font-size: 12px;
-    color: #86909c;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .tw-cursor {
-    display: inline-block;
-    width: 1px;
-    height: 12px;
-    margin-left: 1px;
-    vertical-align: -1px;
-    background: $primary-color;
-    animation: blink 0.8s step-end infinite;
-  }
-
-  // 来源链接：点击直接跳转网页（随工作过程收起/展开）
-  .tool-sources {
-    margin-top: 4px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-
-    .source-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      max-width: 240px;
-      padding: 4px 10px;
-      background: #f7f8fa;
-      border-radius: 8px;
-      text-decoration: none;
-      transition: background 0.2s;
-
-      &:hover {
-        background: #eef1f4;
-
-        .chip-title {
-          color: $primary-color;
-        }
-      }
-
-      .chip-icon {
-        font-size: 12px;
-        color: #86909c;
-        flex-shrink: 0;
-      }
-
-      .chip-title {
-        font-size: 12px;
-        color: #4e5969;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      .chip-idx {
-        flex-shrink: 0;
-        min-width: 14px;
-        height: 14px;
-        padding: 0 3px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 10px;
-        color: #86909c;
-        background: #e8eaee;
-        border-radius: 7px;
-      }
-    }
-  }
-}
 
 .answer-content {
   font-size: 14px;
