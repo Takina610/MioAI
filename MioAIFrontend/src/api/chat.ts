@@ -52,7 +52,7 @@ export const chatWithMioBot = (
   chatId: string,
   agentId: number,
   token: string,
-  opts: { skipUserPersist?: boolean; reasoningEffort?: string } = {}
+  opts: { skipUserPersist?: boolean; reasoningEffort?: string; groupSeq?: number } = {}
 ): EventSource => {
   const params: ConnectSSEParams = { content, chatId, agentId, token }
   if (opts.skipUserPersist) {
@@ -61,16 +61,20 @@ export const chatWithMioBot = (
   if (opts.reasoningEffort) {
     params.reasoningEffort = opts.reasoningEffort
   }
+  if (opts.groupSeq != null) {
+    params.groupSeq = opts.groupSeq
+  }
   return connectSSE('/bot/chat', params)
 }
 
 /** 截断会话历史（编辑消息/重新生成共用）：保留 seq <= keepThroughSeq 的消息并重建记忆 */
 export const truncateConversation = async (
   conversationId: string,
-  keepThroughSeq: number
+  keepThroughSeq: number,
+  groupKey?: number
 ): Promise<{ keptMessages: number; userContent?: string }> => {
   return request.post(`/bot/truncate/${conversationId}`, null, {
-    params: { keepThroughSeq }
+    params: groupKey != null ? { keepThroughSeq, groupKey } : { keepThroughSeq }
   })
 }
 

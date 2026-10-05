@@ -160,11 +160,32 @@ CREATE TABLE `agent_message`  (
   `blocks` json NULL COMMENT '内容块JSON数组: [{type:text|thinking|tool,...}]',
   `plan` json NULL COMMENT '任务清单快照JSON: [{index,description,status}]',
   `duration_ms` int NULL DEFAULT NULL COMMENT '本条消息耗时(毫秒)',
+  `group_seq` bigint NULL DEFAULT NULL COMMENT '轮次组锚=该轮首个 user 行 seq；编辑重发的新行沿用被编辑行的组锚（版本组持久化）',
   `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_conv_seq`(`conversation_id` ASC, `seq` ASC) USING BTREE,
   INDEX `idx_conversation_id`(`conversation_id` ASC) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '智能体消息完整持久化(展示用)' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Table structure for agent_message_version（编辑/重新生成归档的历史版本，<n/n> 版本组持久化）
+-- ----------------------------
+DROP TABLE IF EXISTS `agent_message_version`;
+CREATE TABLE `agent_message_version`  (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `conversation_id` varchar(64) NOT NULL COMMENT '会话ID',
+  `agent_id` bigint NULL DEFAULT NULL COMMENT '智能体ID',
+  `user_id` bigint NULL DEFAULT NULL COMMENT '用户ID',
+  `group_key` bigint NOT NULL COMMENT '版本组锚=该轮 user 行 group_seq',
+  `version_index` int NOT NULL DEFAULT 1 COMMENT '组内序号，越大越新',
+  `user_blocks` json NULL COMMENT '旧版本用户消息 blocks（编辑产生）',
+  `assistant_blocks` json NULL COMMENT '旧版本回复 blocks',
+  `plan` json NULL COMMENT '旧版本任务清单快照',
+  `duration_ms` int NULL DEFAULT NULL COMMENT '旧版本耗时(毫秒)',
+  `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`) USING BTREE,
+  INDEX `idx_conv_group`(`conversation_id` ASC, `group_key` ASC) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '消息历史版本归档(<n/n> 版本组)' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Table structure for document

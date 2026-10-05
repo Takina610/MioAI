@@ -306,9 +306,9 @@ function canModifyMessages(): boolean {
 }
 
 /** 取服务端消息行（截断以 seq 精确定位，本地列表不维护 seq） */
-async function fetchRows(chatId: string): Promise<Array<{ role: string; seq: number }>> {
+async function fetchRows(chatId: string): Promise<Array<{ role: string; seq: number; groupSeq?: number | null }>> {
   const rows = await getBotMessages(chatId, { skipErrorMessage: true })
-  return (rows ?? []).map(r => ({ role: r.role, seq: r.seq ?? 0 }))
+  return (rows ?? []).map(r => ({ role: r.role, seq: r.seq ?? 0, groupSeq: r.groupSeq ?? null }))
 }
 
 /** 旧回复快照存入版本历史（供 <n/n> 切换）；空回复不留版本 */
@@ -344,7 +344,8 @@ async function handleRegenerate(): Promise<void> {
       message.error('找不到原始提问')
       return
     }
-    await truncateConversation(chatId, lastUserRow.seq)
+    const groupKey = lastUserRow.groupSeq ?? lastUserRow.seq
+    await truncateConversation(chatId, lastUserRow.seq, groupKey)
   } catch (e) {
     console.error(e)
     message.error('操作失败，请重试')
@@ -366,6 +367,7 @@ async function handleEditMessage(index: number, newContent: string): Promise<voi
   }
   const oldReply = msgs.slice(index + 1).find(m => m.role === 'assistant')
   const history = snapshotHistory(oldReply, oldReply?.history)
+  let groupKey: number | undefined
 
   try {
     const rows = await fetchRows(chatId)
@@ -377,7 +379,8 @@ async function handleEditMessage(index: number, newContent: string): Promise<voi
       return
     }
     const prevRow = [...rows].reverse().find(r => r.seq < targetRow.seq)
-    await truncateConversation(chatId, prevRow ? prevRow.seq : 0)
+    groupKey = targetRow.groupSeq ?? targetRow.seq
+    await truncateConversation(chatId, prevRow ? prevRow.seq : 0, groupKey)
   } catch (e) {
     console.error(e)
     message.error('操作失败，请重试')
@@ -385,7 +388,7 @@ async function handleEditMessage(index: number, newContent: string): Promise<voi
   }
 
   messagesApi.setChatMessages(chatId, msgs.slice(0, index))
-  sendMessage(newContent, { reasoningEffort: reasoningEffort.value, history })
+  sendMessage(newContent, { reasoningEffort: reasoningEffort.value, history, groupSeq: groupKey })
 }
 
 /** 切换回复版本：只改前端显示，不动服务端历史 */

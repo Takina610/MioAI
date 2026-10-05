@@ -125,7 +125,8 @@ public class MioBotController {
                            @RequestParam(required = false) Long agentId,
                            @RequestParam(required = false) String token,
                            @RequestParam(defaultValue = "false") boolean skipUserPersist,
-                           @RequestParam(required = false) String reasoningEffort) {
+                           @RequestParam(required = false) String reasoningEffort,
+                           @RequestParam(required = false) Long groupSeq) {
         Long userId = StrUtil.isBlank(token) ? null : redisComponent.getUserId(token);
         long resolvedAgentId = agentId != null ? agentId : MioBot.AGENT_ID;
 
@@ -165,6 +166,8 @@ public class MioBotController {
         MioBot mioBot = new MioBot(chatModel, toolsetFactory, List.of(mcpTools),
                 agentUsageLogService, toolCallLogService, agentMessageService,
                 chatId, userId, resolvedAgentId, customSystemPrompt, engineModelName, effort, engineConfig);
+        // 编辑重发：新 user 行沿用被编辑轮次的组锚（版本组持久化）
+        mioBot.setUserGroupSeq(groupSeq);
         // 任务真正结束（含异常）时解除会话占用
         mioBot.setOnFinish(() -> ACTIVE_CHATS.remove(chatId));
         return mioBot.run(content, knowledgeContext, !skipUserPersist);
@@ -178,6 +181,7 @@ public class MioBotController {
     @PostMapping("/bot/truncate/{conversationId}")
     public BaseResponse<Map<String, Object>> truncate(@PathVariable @NotBlank String conversationId,
                                                       @RequestParam long keepThroughSeq,
+                                                      @RequestParam(required = false) Long groupKey,
                                                       jakarta.servlet.http.HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         ChatConversationDO conversation = chatHistoryRepository.getChatByConversationId(conversationId);
@@ -188,7 +192,12 @@ public class MioBotController {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限访问该会话");
         }
 
-        agentMessageService.deleteAfterSeq(conversationId, keepThroughSeq);
+        if (groupKey != null) {
+            // 编辑/重新生成：截断前把被替换的旧轮次对归档进版本表（<n/n> 版本组持久化）
+            agentMessageService.deleteAfterSeqWithArchive(conversationId, keepThroughSeq, groupKey);
+        } else {
+            agentMessageService.deleteAfterSeq(conversationId, keepThroughSeq);
+        }
 
         List<Map<String, Object>> rows = new ArrayList<>();
         for (AgentMessageDO row : agentMessageService.listByConversation(conversationId)) {
@@ -248,8 +257,12 @@ public class MioBotController {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限访问该会话");
         }
 
+        List<AgentMessageDO> messages = agentMessageService.listByConversation(conversationId);
+        Map<Long, List<com.mio.ai.bot.model.entity.AgentMessageVersionDO>> versionsByGroup =
+                agentMessageService.versionsByGroup(conversationId);
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (AgentMessageDO message : agentMessageService.listByConversation(conversationId)) {
+        Long pendingGroupKey = null;
+        for (AgentMessageDO message : messages) {
             Map<String, Object> row = new java.util.LinkedHashMap<>();
             row.put("role", message.getRole());
             row.put("seq", message.getSeq());
@@ -257,6 +270,27 @@ public class MioBotController {
             row.put("plan", parseJson(message.getPlan()));
             row.put("durationMs", message.getDurationMs());
             row.put("createTime", message.getCreateTime());
+            row.put("groupSeq", message.getGroupSeq());
+            if ("user".equals(message.getRole())) {
+                // 该轮的组锚（未落锚的旧数据用自身 seq）
+                pendingGroupKey = message.getGroupSeq() != null ? message.getGroupSeq() : message.getSeq().longValue();
+            } else if ("assistant".equals(message.getRole()) && pendingGroupKey != null) {
+                List<com.mio.ai.bot.model.entity.AgentMessageVersionDO> groupVersions =
+                        versionsByGroup.get(pendingGroupKey);
+                if (groupVersions != null && !groupVersions.isEmpty()) {
+                    List<Map<String, Object>> versions = new ArrayList<>();
+                    for (var version : groupVersions) {
+                        Map<String, Object> item = new java.util.LinkedHashMap<>();
+                        item.put("versionIndex", version.getVersionIndex());
+                        item.put("userText", blockText(version.getUserBlocks()));
+                        item.put("blocks", parseJson(version.getAssistantBlocks()));
+                        item.put("plan", parseJson(version.getPlan()));
+                        item.put("durationMs", version.getDurationMs());
+                        versions.add(item);
+                    }
+                    row.put("versions", versions);
+                }
+            }
             rows.add(row);
         }
         return ResultUtils.success(rows);

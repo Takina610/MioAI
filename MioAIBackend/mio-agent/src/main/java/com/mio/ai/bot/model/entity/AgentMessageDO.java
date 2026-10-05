@@ -42,5 +42,8 @@ public class AgentMessageDO {
     /** 本条消息耗时（毫秒，assistant 行） */
     private Integer durationMs;
 
+    /** 轮次组锚=该轮首个 user 行 seq；编辑重发的新行沿用被编辑行的组锚（版本组持久化） */
+    private Long groupSeq;
+
     private Date createTime;
 }

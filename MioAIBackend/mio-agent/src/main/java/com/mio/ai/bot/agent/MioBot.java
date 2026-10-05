@@ -71,6 +71,13 @@ public class MioBot {
     /** 任务结束（含异常）回调：控制器借此解除会话占用 */
     private volatile Runnable onFinish;
 
+    /** 编辑重发场景：本轮 user 行的版本组锚（沿用被编辑轮次的组） */
+    private volatile Long userGroupSeq;
+
+    public void setUserGroupSeq(Long userGroupSeq) {
+        this.userGroupSeq = userGroupSeq;
+    }
+
     public MioBot(ChatModel chatModel,
                   ToolsetFactory toolsetFactory,
                   List<ToolCallback> mcpTools,
@@ -141,7 +148,7 @@ public class MioBot {
 
                     boolean appendUserEntry = persistUserMessage || state.entries().isEmpty();
                     if (persistUserMessage) {
-                        channel.persistDisplay("user", userPrompt, null);
+                        channel.persistDisplay("user", userPrompt, null, userGroupSeq);
                     }
                     engine.runTurn(userPrompt, appendUserEntry);
                 }

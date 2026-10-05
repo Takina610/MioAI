@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { chatWithMioBot, chatWithStream, isChatActive } from '@/api/chat'
 import { getBotMessages, type BotMessageRow } from '@/api/botMessages'
+import { historyFromVersions } from './useChatMessages'
 import type { ChatMessage, MessageBlock, PlanStep, QuestionAnswer, QuestionItem } from '@/types'
 import {
   generateConversationId,
@@ -79,6 +80,8 @@ export function useChatStream(options: {
     reasoningEffort?: string
     /** 编辑/重新生成时被替换掉的旧回复版本（挂到新回复上供 <n/n> 切换） */
     history?: ChatMessage[]
+    /** 编辑重发：本轮版本组锚（沿用被编辑轮次，后端据此持久化版本组） */
+    groupSeq?: number
   }
 
   function sendMessage(content: string, opts?: SendOptions): void {
@@ -191,7 +194,8 @@ export function useChatStream(options: {
 
     eventSource = chatWithMioBot(content, chatId, options.agentId.value, token, {
       skipUserPersist: opts?.skipUserPersist ?? false,
-      reasoningEffort: opts?.reasoningEffort
+      reasoningEffort: opts?.reasoningEffort,
+      groupSeq: opts?.groupSeq
     })
     const es = eventSource
 
@@ -242,6 +246,7 @@ export function useChatStream(options: {
           ),
           plan: (row.plan ?? undefined) as ChatMessage['plan'],
           durationMs: row.durationMs ?? undefined,
+          history: historyFromVersions(row.versions) ?? msg.history,
           interrupted: false
         }))
         if (messagesApi.currentChatId.value === chatId) {
@@ -629,6 +634,7 @@ export function useChatStream(options: {
         ),
         plan: (row.plan ?? undefined) as ChatMessage['plan'],
         durationMs: row.durationMs ?? undefined,
+        history: historyFromVersions(row.versions) ?? msg.history,
         interrupted: false
       }))
       messagesApi.setLoading(chatId, false)

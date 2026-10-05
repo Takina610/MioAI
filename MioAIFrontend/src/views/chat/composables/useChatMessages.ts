@@ -1,6 +1,6 @@
 import { ref, nextTick } from 'vue'
 import { message } from 'ant-design-vue'
-import { getBotMessages } from '@/api/botMessages'
+import { getBotMessages, type BotMessageVersion } from '@/api/botMessages'
 import { useUserStore } from '@/store/user'
 import type { ChatMessage, MessageBlock } from '@/types'
 
@@ -26,6 +26,19 @@ export function textOfBlocks(blocks: MessageBlock[]): string {
  * 多会话消息管理：每个会话的消息与加载状态各自维护在 Map 中，
  * 仅当会话为当前会话时同步到展示用的 messages/isLoading。
  */
+/** 后端归档版本 → 消息 history（<n/n> 版本组的持久化恢复） */
+export function historyFromVersions(versions: BotMessageVersion[] | null | undefined): ChatMessage[] | undefined {
+  if (!versions || versions.length === 0) return undefined
+  return versions.map((v, i) => ({
+    id: `v_${Date.now()}_${i}_${v.versionIndex}`,
+    role: 'assistant' as const,
+    content: textOfBlocks(((v.blocks ?? []) as MessageBlock[])),
+    createTime: new Date(),
+    blocks: (v.blocks ?? undefined) as MessageBlock[] | undefined,
+    durationMs: v.durationMs ?? undefined
+  }))
+}
+
 export function useChatMessages(options: {
   scrollToBottom: () => void
   /** URL 携带的会话在服务端不存在（已删除或脏链接）时回调，由页面负责回到新对话 */
@@ -98,6 +111,7 @@ export function useChatMessages(options: {
               ? { ...block, status: 'answered' as const, answers: [] }
               : block
           )
+          const history = historyFromVersions(row.versions)
           return {
             id: `${conversationId}_${row.seq ?? index}`,
             role: row.role === 'user' ? 'user' : 'assistant',
@@ -105,7 +119,9 @@ export function useChatMessages(options: {
             createTime: row.createTime ? new Date(row.createTime) : new Date(),
             blocks,
             plan: (row.plan ?? undefined) as ChatMessage['plan'],
-            durationMs: row.durationMs ?? undefined
+            durationMs: row.durationMs ?? undefined,
+            history,
+            activeVersion: history ? history.length + 1 : undefined
           }
         })
       } else {

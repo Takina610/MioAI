@@ -195,6 +195,10 @@ public class BotEventChannel {
 
     /** 展示持久化：完整 blocks/plan/duration 落 agent_message（游客不落库） */
     public void persistDisplay(String role, String text, Long durationMs) {
+        persistDisplay(role, text, durationMs, null);
+    }
+
+    public void persistDisplay(String role, String text, Long durationMs, Long groupSeq) {
         if (agentMessageService == null || userId == null) {
             return;
         }
@@ -218,6 +222,9 @@ public class BotEventChannel {
                     row.setPlan(JacksonUtil.writeValueAsString(displayPlan));
                 }
                 row.setDurationMs(durationMs != null ? durationMs.intValue() : null);
+            }
+            if (groupSeq != null && "user".equals(role)) {
+                row.setGroupSeq(groupSeq);
             }
             agentMessageService.append(row);
         } catch (Exception e) {
