@@ -105,9 +105,7 @@
                 <component :is="toolIcon(block.tool)" class="tool-icon" />
               </span>
               <span class="tool-verb" :class="{ running: block.status === 'running' }">{{ toolVerb(block) }}</span>
-              <span v-if="shownMeta(index, block)" class="tool-meta">
-                {{ shownMeta(index, block) }}<span v-if="typing(index, block)" class="tw-cursor"></span>
-              </span>
+              <span v-if="shownMeta(index, block)" class="tool-meta">{{ shownMeta(index, block) }}</span>
               <CaretRightOutlined
                 v-if="block.result && !typing(index, block)"
                 :rotate="expandedTools.has(index) ? 90 : 0"
@@ -958,16 +956,6 @@ function durationSuffix(block: ThinkingBlock): string {
     text-overflow: ellipsis;
   }
 
-  .tw-cursor {
-    display: inline-block;
-    width: 1px;
-    height: 12px;
-    margin-left: 1px;
-    vertical-align: -1px;
-    background: $primary-color;
-    animation: blink 0.8s step-end infinite;
-  }
-
   // 来源链接：点击直接跳转网页（随工作过程收起/展开）
   .tool-sources {
     margin-top: 4px;
@@ -1223,12 +1211,6 @@ function durationSuffix(block: ThinkingBlock): string {
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes blink {
-  50% {
-    opacity: 0;
   }
 }
 </style>
