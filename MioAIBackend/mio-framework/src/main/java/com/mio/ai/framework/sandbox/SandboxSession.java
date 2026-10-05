@@ -2,6 +2,7 @@ package com.mio.ai.framework.sandbox;
 
 import cn.hutool.core.util.StrUtil;
 import com.jcraft.jsch.ChannelExec;
+import com.jcraft.jsch.ChannelSftp;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
 import com.mio.ai.framework.sandbox.SandboxProperties;
@@ -35,6 +36,7 @@ public class SandboxSession {
 
     private final SandboxProperties props;
     private final Object lock = new Object();
+    private final Object sftpLock = new Object();
     private Session session;
 
     public SandboxSession(SandboxProperties props) {
@@ -96,6 +98,34 @@ public class SandboxSession {
                 } catch (Exception retry) {
                     log.warn("沙箱命令执行失败: {}", retry.getMessage());
                     return new ExecResult("Sandbox execution error: " + retry.getMessage(), null, false);
+                }
+            }
+        }
+    }
+
+    /** SFTP 回调：在打开的 {@link ChannelSftp} 上执行（工作目录内相对路径） */
+    @FunctionalInterface
+    public interface SftpOp<T> {
+        T apply(ChannelSftp sftp) throws Exception;
+    }
+
+    /**
+     * 在共享 SSH 连接上开一条临时 SFTP 通道执行文件传输（上传/下载/列目录）。
+     * 通道用完即断，与命令执行共用底层连接；sftpLock 串行化传输，避免并发抢通道。
+     */
+    public <T> T withSftp(SftpOp<T> op) throws Exception {
+        synchronized (sftpLock) {
+            synchronized (lock) {
+                ensureSession();
+            }
+            ChannelSftp sftp = null;
+            try {
+                sftp = (ChannelSftp) session.openChannel("sftp");
+                sftp.connect(props.getConnectTimeoutMs());
+                return op.apply(sftp);
+            } finally {
+                if (sftp != null) {
+                    sftp.disconnect();
                 }
             }
         }

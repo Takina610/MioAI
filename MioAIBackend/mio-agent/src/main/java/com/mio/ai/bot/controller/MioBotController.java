@@ -83,6 +83,10 @@ public class MioBotController {
     @Autowired
     private AgentMessageService agentMessageService;
 
+    /** 沙箱文件传输：附件直落沙箱 + 产出收集 */
+    @Autowired
+    private com.mio.ai.framework.sandbox.SandboxFileTransfer fileTransfer;
+
     /** 引擎使用的模型名（环境信息提示用，与 yml 的 chat.model 一致） */
     @org.springframework.beans.factory.annotation.Value("${spring.ai.openai.chat.model:}")
     private String engineModelName;
@@ -126,7 +130,8 @@ public class MioBotController {
                            @RequestParam(required = false) String token,
                            @RequestParam(defaultValue = "false") boolean skipUserPersist,
                            @RequestParam(required = false) String reasoningEffort,
-                           @RequestParam(required = false) Long groupSeq) {
+                           @RequestParam(required = false) Long groupSeq,
+                           @RequestParam(required = false) @Size(max = 4000) String attachments) {
         Long userId = StrUtil.isBlank(token) ? null : redisComponent.getUserId(token);
         long resolvedAgentId = agentId != null ? agentId : MioBot.AGENT_ID;
 
@@ -165,7 +170,8 @@ public class MioBotController {
                 agentMaxSteps, agentStreamTimeoutSeconds, agentModelRetries, agentContextWindowTokens);
         MioBot mioBot = new MioBot(chatModel, toolsetFactory, List.of(mcpTools),
                 agentUsageLogService, toolCallLogService, agentMessageService,
-                chatId, userId, resolvedAgentId, customSystemPrompt, engineModelName, effort, engineConfig);
+                chatId, userId, resolvedAgentId, customSystemPrompt, engineModelName, effort, engineConfig,
+                fileTransfer, com.mio.ai.bot.model.dto.AttachmentItem.parseList(attachments));
         // 编辑重发：新 user 行沿用被编辑轮次的组锚（版本组持久化）
         mioBot.setUserGroupSeq(groupSeq);
         // 任务真正结束（含异常）时解除会话占用

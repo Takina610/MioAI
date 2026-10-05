@@ -1,8 +1,10 @@
 package com.mio.ai.bot.agent;
 
+import com.mio.ai.bot.model.dto.AttachmentItem;
 import com.mio.ai.bot.model.entity.AgentMessageDO;
 import com.mio.ai.bot.service.AgentMessageService;
 import com.mio.ai.bot.util.SseStreams;
+import com.mio.ai.framework.sandbox.SandboxFileTransfer;
 import com.mio.ai.framework.zagent.AgentEngine;
 import com.mio.ai.framework.zagent.AgentEngineConfig;
 import com.mio.ai.framework.zagent.AgentEvents;
@@ -11,6 +13,7 @@ import com.mio.ai.framework.zagent.history.ConversationHydrator;
 import com.mio.ai.framework.zagent.history.ConversationState;
 import com.mio.ai.framework.zagent.history.TodoItem;
 import com.mio.ai.framework.zagent.subagent.Subagents;
+import com.mio.ai.framework.zagent.tools.SandboxFs;
 import com.mio.ai.framework.zagent.tools.ToolRegistry;
 import com.mio.ai.framework.zagent.tools.ToolsetFactory;
 import com.mio.ai.resource.model.entity.AgentUsageLog;
@@ -57,6 +60,7 @@ public class MioBot {
     private final AgentUsageLogService agentUsageLogService;
     private final ToolCallLogService toolCallLogService;
     private final AgentMessageService agentMessageService;
+    private final SandboxFileTransfer fileTransfer;
 
     private final String chatId;
     private final Long userId;
@@ -65,6 +69,9 @@ public class MioBot {
     private final String modelName;
     private final String reasoningEffort;
     private final AgentEngineConfig config;
+
+    /** 本轮用户附件（可空）：落库展示 + 注入模型上下文 */
+    private final List<AttachmentItem> attachments;
 
     private final BotEventChannel channel;
 
@@ -90,7 +97,9 @@ public class MioBot {
                   String customSystemPrompt,
                   String modelName,
                   String reasoningEffort,
-                  AgentEngineConfig config) {
+                  AgentEngineConfig config,
+                  SandboxFileTransfer fileTransfer,
+                  List<AttachmentItem> attachments) {
         this.chatModel = chatModel;
         this.toolsetFactory = toolsetFactory;
         this.mcpTools = mcpTools;
@@ -104,6 +113,8 @@ public class MioBot {
         this.modelName = modelName;
         this.reasoningEffort = reasoningEffort;
         this.config = config;
+        this.attachments = attachments == null ? List.of() : attachments;
+        this.fileTransfer = fileTransfer;
         this.channel = new BotEventChannel(agentMessageService, chatId, userId, agentId);
     }
 
@@ -148,9 +159,12 @@ public class MioBot {
 
                     boolean appendUserEntry = persistUserMessage || state.entries().isEmpty();
                     if (persistUserMessage) {
+                        channel.setUserAttachments(attachments);
                         channel.persistDisplay("user", userPrompt, null, userGroupSeq);
                     }
-                    engine.runTurn(userPrompt, appendUserEntry);
+                    java.util.Set<String> outputsBefore = snapshotOutputs(runContext.fs());
+                    engine.runTurn(buildModelPrompt(userPrompt, runContext.fs()), appendUserEntry);
+                    collectOutputs(runContext.fs(), outputsBefore);
                 }
 
                 long durationMs = System.currentTimeMillis() - startTime;
@@ -192,6 +206,75 @@ public class MioBot {
         if (summary == null) {
             channel.answerDelta("Compaction skipped: not enough conversation history to summarize.");
         }
+    }
+
+    /** 模型可见的用户输入：附件以 system-reminder 注入（路径 + 产出目录约定），展示正文保持原样 */
+    private String buildModelPrompt(String userPrompt, SandboxFs fs) {
+        if (attachments.isEmpty() || fs == null || fileTransfer == null || !fileTransfer.available()) {
+            return userPrompt;
+        }
+        StringBuilder sb = new StringBuilder(userPrompt);
+        sb.append("\n\n<system-reminder>\n# 用户附件\n用户随本条消息上传了文件（已存放在沙箱工作区，"
+                + "用文件工具读取时使用以下相对路径）：\n");
+        for (AttachmentItem item : attachments) {
+            sb.append("- `").append(item.path()).append('`');
+            String storedName = item.path().substring(item.path().lastIndexOf('/') + 1);
+            if (item.name() != null && !item.name().isBlank() && !item.name().equals(storedName)) {
+                sb.append("（原始文件名: ").append(item.name()).append('）');
+            }
+            if (item.size() > 0) {
+                sb.append("，").append(humanSize(item.size()));
+            }
+            sb.append('\n');
+        }
+        sb.append("如需把处理后的文件交付给用户，写入 outputs/").append(SandboxFileTransfer.safeDir(chatId))
+                .append("/ 目录（已创建）：本轮结束后其中的新文件会自动作为可下载附件展示给用户。\n</system-reminder>");
+        return sb.toString();
+    }
+
+    /** 本轮产出目录（工作区内相对路径，chatId 已净化） */
+    private String outputsDir() {
+        return SandboxFileTransfer.OUTPUTS_ROOT + "/" + SandboxFileTransfer.safeDir(chatId);
+    }
+
+    /** 轮次开始：创建产出目录并快照既有文件（结束时的差集即本轮新产出） */
+    private java.util.Set<String> snapshotOutputs(SandboxFs fs) {
+        if (fileTransfer == null || !fileTransfer.available() || fs == null) {
+            return null;
+        }
+        try {
+            fileTransfer.ensureOutputDir(chatId);
+            java.util.Set<String> names = new java.util.HashSet<>();
+            for (Map<String, Object> item : fileTransfer.listDir(outputsDir())) {
+                names.add(String.valueOf(item.get("name")));
+            }
+            return names;
+        } catch (Exception e) {
+            log.warn("产出目录快照失败, chatId={}: {}", chatId, e.getMessage());
+            return null;
+        }
+    }
+
+    /** 轮次结束：本轮新写入 outputs/&lt;chatId&gt;/ 的文件作为附件块推给前端（含落库） */
+    private void collectOutputs(SandboxFs fs, java.util.Set<String> before) {
+        if (fileTransfer == null || !fileTransfer.available() || fs == null || before == null) {
+            return;
+        }
+        try {
+            List<Map<String, Object>> produced = fileTransfer.listNew(outputsDir(), before);
+            if (!produced.isEmpty()) {
+                channel.attachments(produced);
+            }
+        } catch (Exception e) {
+            log.warn("产出文件收集失败, chatId={}: {}", chatId, e.getMessage());
+        }
+    }
+
+    private String humanSize(long bytes) {
+        if (bytes >= 1024 * 1024) {
+            return String.format("%.1f MB", bytes / 1024.0 / 1024.0);
+        }
+        return Math.max(1, bytes / 1024) + " KB";
     }
 
     /** 冷启动水合：agent_message 展示行 → 请求历史 + 任务清单（游客/无记录时空历史） */

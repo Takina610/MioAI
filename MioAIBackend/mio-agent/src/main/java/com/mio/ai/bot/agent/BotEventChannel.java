@@ -41,6 +41,9 @@ public class BotEventChannel {
     private final List<Map<String, Object>> displayBlocks = new ArrayList<>();
     private List<Map<String, Object>> displayPlan;
 
+    // 本轮用户附件（MioBot 注入）：随 user 行持久化为展示块
+    private volatile List<com.mio.ai.bot.model.dto.AttachmentItem> userAttachments;
+
     public BotEventChannel(AgentMessageService agentMessageService,
                            String chatId, Long userId, Long agentId) {
         this.agentMessageService = agentMessageService;
@@ -51,6 +54,25 @@ public class BotEventChannel {
 
     public void bind(SseEmitter emitter) {
         this.emitter = emitter;
+    }
+
+    /** 本轮用户附件（run 开始时注入，user 行落库时转展示块） */
+    public void setUserAttachments(List<com.mio.ai.bot.model.dto.AttachmentItem> items) {
+        this.userAttachments = items;
+    }
+
+    /** Agent 产出文件：追加附件展示块并推送事件（前端渲染为可下载附件） */
+    public void attachments(List<Map<String, Object>> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        closeOpenThinking();
+        Map<String, Object> block = new LinkedHashMap<>();
+        block.put("type", "attachments");
+        block.put("side", "output");
+        block.put("items", items);
+        displayBlocks.add(block);
+        emit(SseChunk.attachments(items).fields());
     }
 
     public void thinkingDelta(String delta) {
@@ -215,6 +237,18 @@ public class BotEventChannel {
                 block.put("type", "text");
                 block.put("text", text);
                 blocks.add(block);
+                List<com.mio.ai.bot.model.dto.AttachmentItem> userItems = userAttachments;
+                if ("user".equals(role) && userItems != null && !userItems.isEmpty()) {
+                    List<Map<String, Object>> itemMaps = new ArrayList<>();
+                    for (com.mio.ai.bot.model.dto.AttachmentItem item : userItems) {
+                        itemMaps.add(item.toMap());
+                    }
+                    Map<String, Object> attachBlock = new LinkedHashMap<>();
+                    attachBlock.put("type", "attachments");
+                    attachBlock.put("side", "input");
+                    attachBlock.put("items", itemMaps);
+                    blocks.add(attachBlock);
+                }
                 row.setBlocks(JacksonUtil.writeValueAsString(blocks));
             } else {
                 row.setBlocks(JacksonUtil.writeValueAsString(displayBlocks));

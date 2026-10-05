@@ -1,4 +1,5 @@
-import type { ChatMessageRequest } from '@/types'
+import axios from 'axios'
+import type { AttachmentItem, ChatMessageRequest } from '@/types'
 import request from '@/utils/request'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
@@ -52,7 +53,7 @@ export const chatWithMioBot = (
   chatId: string,
   agentId: number,
   token: string,
-  opts: { skipUserPersist?: boolean; reasoningEffort?: string; groupSeq?: number } = {}
+  opts: { skipUserPersist?: boolean; reasoningEffort?: string; groupSeq?: number; attachments?: AttachmentItem[] } = {}
 ): EventSource => {
   const params: ConnectSSEParams = { content, chatId, agentId, token }
   if (opts.skipUserPersist) {
@@ -64,7 +65,39 @@ export const chatWithMioBot = (
   if (opts.groupSeq != null) {
     params.groupSeq = opts.groupSeq
   }
+  if (opts.attachments?.length) {
+    params.attachments = JSON.stringify(opts.attachments)
+  }
   return connectSSE('/bot/chat', params)
+}
+
+/** 上传会话附件：SFTP 直落沙箱工作区 uploads/<chatId>/，返回附件引用（随消息发送） */
+export const uploadAttachment = async (file: File, chatId: string): Promise<AttachmentItem> => {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('chatId', chatId)
+  return request.post('/bot/attachment', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000
+  } as never)
+}
+
+/** 下载 Agent 产出的暂存文件（outputs/...）：blob 保存为浏览器下载 */
+export const downloadAttachment = async (path: string, name: string): Promise<void> => {
+  const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL || ''}/bot/attachment/download`, {
+    params: { path },
+    responseType: 'blob',
+    headers: { token: localStorage.getItem('token') || '' },
+    timeout: 120000
+  })
+  const url = URL.createObjectURL(response.data as Blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = name
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
 }
 
 /** 截断会话历史（编辑消息/重新生成共用）：保留 seq <= keepThroughSeq 的消息并重建记忆 */

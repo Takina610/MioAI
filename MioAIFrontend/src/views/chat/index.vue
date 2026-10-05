@@ -43,6 +43,9 @@
           :has-messages="messages.length > 0"
           :loading="isLoading"
           :supported-efforts="supportedEfforts"
+          :pending-files="pendingFiles"
+          @add-files="handleAddFiles"
+          @remove-file="handleRemoveFile"
           @send="handleSend"
         >
           <template #above-input>
@@ -77,7 +80,7 @@ import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getAgentById } from '@/api/agent'
 import { useUserStore } from '@/store/user'
-import type { Agent, ChatMessage } from '@/types'
+import type { Agent, AttachmentItem, ChatMessage, MessageBlock } from '@/types'
 import AuthModal from '@/components/AuthModal.vue'
 import ChatSidebar from './components/ChatSidebar.vue'
 import ChatMessageList from './components/ChatMessageList.vue'
@@ -285,8 +288,20 @@ function handleSend(): void {
     return
   }
 
-  sendMessage(content, { reasoningEffort: reasoningEffort.value })
+  sendMessage(content, { reasoningEffort: reasoningEffort.value, files: pendingFiles.value })
+  pendingFiles.value = []
   inputMessage.value = ''
+}
+
+/** 待上传附件：发送时随消息先传沙箱再进对话 */
+const pendingFiles = ref<File[]>([])
+
+function handleAddFiles(files: File[]): void {
+  pendingFiles.value = [...pendingFiles.value, ...files].slice(0, 5)
+}
+
+function handleRemoveFile(index: number): void {
+  pendingFiles.value = pendingFiles.value.filter((_, i) => i !== index)
 }
 
 function handleDeleteConfirm(): void {
@@ -336,7 +351,6 @@ async function handleRegenerate(): Promise<void> {
     oldReply.role === 'assistant' ? oldReply : undefined,
     oldReply.role === 'assistant' ? oldReply.history : undefined
   )
-
   try {
     const rows = await fetchRows(chatId)
     const lastUserRow = [...rows].reverse().find(r => r.role === 'user')
@@ -353,7 +367,7 @@ async function handleRegenerate(): Promise<void> {
   }
 
   messagesApi.setChatMessages(chatId, msgs.slice(0, lastUserIndex + 1))
-  sendMessage(content, { skipUserMessage: true, skipUserPersist: true, reasoningEffort: reasoningEffort.value, history })
+  sendMessage(content, { skipUserMessage: true, skipUserPersist: true, reasoningEffort: reasoningEffort.value, history, attachments: attachmentsOf(msgs[lastUserIndex]) })
 }
 
 /** 编辑用户消息：截断该消息及其后历史（本地+服务端），以新内容重新发送；旧回复存为版本 */
@@ -388,7 +402,15 @@ async function handleEditMessage(index: number, newContent: string): Promise<voi
   }
 
   messagesApi.setChatMessages(chatId, msgs.slice(0, index))
-  sendMessage(newContent, { reasoningEffort: reasoningEffort.value, history, groupSeq: groupKey })
+  sendMessage(newContent, { reasoningEffort: reasoningEffort.value, history, groupSeq: groupKey, attachments: attachmentsOf(msgs[index]) })
+}
+
+/** 该消息随发的附件（attachments 输入块）：编辑/重生成重发时沿用原路径 */
+function attachmentsOf(msg: ChatMessage): AttachmentItem[] {
+  return (msg.blocks ?? [])
+    .filter((b): b is Extract<MessageBlock, { type: 'attachments' }> => b.type === 'attachments')
+    .filter(b => b.side === 'input')
+    .flatMap(b => b.items)
 }
 
 /** 切换回复版本：只改前端显示，不动服务端历史 */

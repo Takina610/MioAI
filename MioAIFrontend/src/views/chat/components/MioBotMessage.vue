@@ -148,6 +148,14 @@
     <!-- 历史消息（无块信息）：直接渲染正文 -->
     <MarkdownView v-else-if="!processBlocks.length && content" class="answer-content" :content="content" />
 
+    <!-- Agent 本轮产出文件（outputs 目录新文件，点击即下载） -->
+    <AttachmentChips
+      v-if="outputAttachments.length"
+      :items="outputAttachments"
+      downloadable
+      class="output-attachments"
+    />
+
     <!-- 流式尾部加载动画 -->
     <div v-if="isLoading" class="stream-tail">
       <ZcodeSpinner :size="14" />
@@ -180,8 +188,9 @@ import MarkdownView from '@/components/MarkdownView.vue'
 import ZcodeSpinner from '@/components/ZcodeSpinner.vue'
 import CollapseTransition from '@/components/CollapseTransition.vue'
 import BrainIcon from '@/components/BrainIcon.vue'
+import AttachmentChips from './AttachmentChips.vue'
 import { answerQuestion } from '@/api/chat'
-import type { MessageBlock } from '@/types'
+import type { AttachmentItem, MessageBlock } from '@/types'
 
 type QuestionBlock = Extract<MessageBlock, { type: 'question' }>
 
@@ -362,16 +371,27 @@ onUnmounted(() => {
   }
 })
 
-/** 过程块 = 最后一个非文本块及其之前的全部（叙述/思考/工具）；其后的是最终回答 */
+/** 过程块 = 最后一个非文本块及其之前的全部（叙述/思考/工具）；其后的是最终回答。
+ * 附件块不属过程：不参与过程/正文分界，单独渲染在正文下方（Agent 产出可下载） */
 const lastNonTextIndex = computed(() => {
   for (let i = props.blocks.length - 1; i >= 0; i--) {
-    if (props.blocks[i].type !== 'text') return i
+    const type = props.blocks[i].type
+    if (type !== 'text' && type !== 'attachments') return i
   }
   return -1
 })
 
 const processBlocks = computed(() =>
-  lastNonTextIndex.value >= 0 ? props.blocks.slice(0, lastNonTextIndex.value + 1) : []
+  lastNonTextIndex.value >= 0
+    ? props.blocks.slice(0, lastNonTextIndex.value + 1).filter(b => b.type !== 'attachments')
+    : []
+)
+
+const outputAttachments = computed<AttachmentItem[]>(() =>
+  props.blocks
+    .filter((b): b is Extract<MessageBlock, { type: 'attachments' }> => b.type === 'attachments')
+    .filter(b => b.side === 'output')
+    .flatMap(b => b.items)
 )
 
 const finalText = computed(() => {
@@ -1187,6 +1207,11 @@ function durationSuffix(block: ThinkingBlock): string {
 
 .answer-content {
   font-size: 14px;
+  padding: 0 4px;
+}
+
+// Agent 产出附件区（正文下方，可下载）
+.output-attachments {
   padding: 0 4px;
 }
 

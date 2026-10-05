@@ -53,6 +53,19 @@ export type MessageBlock =
       questions: QuestionItem[]
       answers?: QuestionAnswer[]
     }
+  | {
+      /** 附件块：input=用户随消息上传，output=Agent 本轮产出（可下载） */
+      type: 'attachments'
+      side: 'input' | 'output'
+      items: AttachmentItem[]
+    }
+
+/** 会话附件（沙箱工作区内相对路径）：path 形如 uploads/<chatId>/xxx 或 outputs/<chatId>/xxx */
+export interface AttachmentItem {
+  path: string
+  name: string
+  size: number
+}
 
 /** 任务清单步骤（SSE plan 事件快照，渲染于输入框上方） */
 export interface PlanStep {

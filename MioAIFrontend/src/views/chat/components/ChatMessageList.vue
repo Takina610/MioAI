@@ -24,6 +24,12 @@
             :chat-id="chatId"
           />
           <template v-else-if="editingId !== msg.id">
+            <AttachmentChips
+              v-if="inputAttachmentsOf(msg).length"
+              :items="inputAttachmentsOf(msg)"
+              light
+              class="msg-attachments"
+            />
             <MarkdownView class="message-text" :content="msg.content" />
           </template>
           <!-- 编辑态：原位替换为文本框（按钮嵌在框内右下），保存即截断重发（内容未变=重发）。
@@ -101,9 +107,10 @@
 import { ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { CopyOutlined, CheckOutlined, EditOutlined, RedoOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons-vue'
-import type { ChatMessage } from '@/types'
+import type { AttachmentItem, ChatMessage, MessageBlock } from '@/types'
 import MarkdownView from '@/components/MarkdownView.vue'
 import MioBotMessage from './MioBotMessage.vue'
+import AttachmentChips from './AttachmentChips.vue'
 
 const props = defineProps<{
   messages: ChatMessage[]
@@ -165,6 +172,14 @@ function displayOf(msg: ChatMessage): Pick<ChatMessage, 'content' | 'blocks' | '
 function startEdit(msg: ChatMessage): void {
   editingId.value = msg.id
   editText.value = msg.content
+}
+
+/** 用户消息随发的附件（attachments 输入块） */
+function inputAttachmentsOf(msg: ChatMessage): AttachmentItem[] {
+  return (msg.blocks ?? [])
+    .filter((b): b is Extract<MessageBlock, { type: 'attachments' }> => b.type === 'attachments')
+    .filter(b => b.side === 'input')
+    .flatMap(b => b.items)
 }
 
 function cancelEdit(): void {
@@ -254,6 +269,12 @@ defineExpose({ scrollToBottom, isNearBottom })
 
         .message-content {
           align-items: flex-end;
+
+          // 气泡上方的附件 chips 右对齐
+          .msg-attachments {
+            justify-content: flex-end;
+            margin-bottom: 8px;
+          }
         }
       }
 

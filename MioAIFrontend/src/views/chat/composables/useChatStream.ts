@@ -2,10 +2,17 @@ import { nextTick, type Ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
-import { chatWithMioBot, chatWithStream, isChatActive } from '@/api/chat'
+import { chatWithMioBot, chatWithStream, isChatActive, uploadAttachment } from '@/api/chat'
 import { getBotMessages, type BotMessageRow } from '@/api/botMessages'
 import { historyFromVersions } from './useChatMessages'
-import type { ChatMessage, MessageBlock, PlanStep, QuestionAnswer, QuestionItem } from '@/types'
+import type {
+  AttachmentItem,
+  ChatMessage,
+  MessageBlock,
+  PlanStep,
+  QuestionAnswer,
+  QuestionItem
+} from '@/types'
 import {
   generateConversationId,
   generateMessageId,
@@ -78,13 +85,17 @@ export function useChatStream(options: {
     skipUserPersist?: boolean
     /** 思考强度（none/low/medium/high 等），透传到模型 */
     reasoningEffort?: string
+    /** 随消息上传的本地文件（发送前先传沙箱，失败则中止本轮） */
+    files?: File[]
+    /** 已在沙箱的附件引用（编辑/重生成重发场景沿用原路径，不重复上传） */
+    attachments?: AttachmentItem[]
     /** 编辑/重新生成时被替换掉的旧回复版本（挂到新回复上供 <n/n> 切换） */
     history?: ChatMessage[]
     /** 编辑重发：本轮版本组锚（沿用被编辑轮次，后端据此持久化版本组） */
     groupSeq?: number
   }
 
-  function sendMessage(content: string, opts?: SendOptions): void {
+  async function sendMessage(content: string, opts?: SendOptions): Promise<void> {
     // 守卫按"本会话"的 loading 判断（其他会话的执行/恢复轮询不应挡住当前会话）；
     // 拦截必须给出提示——静默 return 正是"点发送没反应"的元凶
     if (!content) return
@@ -103,6 +114,18 @@ export function useChatStream(options: {
     }
     const chatId = messagesApi.currentChatId.value
 
+    // 附件在发送前上传到沙箱（会话 id 即暂存目录）；失败则中止本轮不打扰后端
+    let uploaded = opts?.attachments ?? []
+    if (opts?.files?.length) {
+      try {
+        uploaded = await Promise.all(opts.files.map(file => uploadAttachment(file, chatId)))
+      } catch (error) {
+        console.error('附件上传失败:', error)
+        message.error('附件上传失败，请重试')
+        return
+      }
+    }
+
     const existingMessages = messagesApi.getChatMessages(chatId)
     const chatMessages = skipUserMessage
       ? [...existingMessages]
@@ -110,7 +133,16 @@ export function useChatStream(options: {
           id: generateMessageId(),
           role: 'user' as const,
           content,
-          createTime: new Date()
+          createTime: new Date(),
+          ...(uploaded.length
+            ? {
+                blocks: [{
+                  type: 'attachments' as const,
+                  side: 'input' as const,
+                  items: uploaded
+                }]
+              }
+            : {})
         }]
     const aiMessageIndex = chatMessages.length
     messagesApi.setChatMessages(chatId, chatMessages)
@@ -145,6 +177,9 @@ export function useChatStream(options: {
     // 本地大模型：Ollama 直连（仅正文流）
     const provider = localStorage.getItem('ai-model-provider') || 'dashscope'
     if (provider === 'ollama') {
+      if (uploaded.length) {
+        message.info('本地模型暂不支持读取附件，仅发送文字')
+      }
       if (activeStream) {
         activeStream.close()
         activeStream = null
@@ -195,7 +230,8 @@ export function useChatStream(options: {
     eventSource = chatWithMioBot(content, chatId, options.agentId.value, token, {
       skipUserPersist: opts?.skipUserPersist ?? false,
       reasoningEffort: opts?.reasoningEffort,
-      groupSeq: opts?.groupSeq
+      groupSeq: opts?.groupSeq,
+      attachments: uploaded
     })
     const es = eventSource
 
@@ -441,6 +477,15 @@ export function useChatStream(options: {
       }
       case 'plan':
         return { ...msg, plan: (parsed.steps ?? []) as PlanStep[] }
+      case 'attachments': {
+        const blocks = [...(msg.blocks ?? [])]
+        blocks.push({
+          type: 'attachments',
+          side: parsed.side === 'input' ? 'input' : 'output',
+          items: (parsed.items ?? []) as AttachmentItem[]
+        })
+        return { ...msg, blocks }
+      }
       case 'usage':
         return {
           ...msg,

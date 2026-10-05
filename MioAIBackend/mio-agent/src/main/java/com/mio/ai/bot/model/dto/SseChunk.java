@@ -100,6 +100,15 @@ public record SseChunk(Map<String, Object> fields) {
         return new SseChunk(map);
     }
 
+    /** Agent 产出文件：本轮新写入 outputs/&lt;chatId&gt;/ 的文件（前端渲染为可下载附件） */
+    public static SseChunk attachments(List<Map<String, Object>> items) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("type", "attachments");
+        map.put("side", "output");
+        map.put("items", items);
+        return new SseChunk(map);
+    }
+
     /** 向用户提问（AskUserQuestion）：questions 为渲染负载 [{question, header, multiSelect, options[{label,description,preview?}]}] */
     public static SseChunk question(String id, List<Map<String, Object>> questions) {
         Map<String, Object> map = new LinkedHashMap<>();

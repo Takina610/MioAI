@@ -8,6 +8,14 @@
     <div class="chat-input-wrapper">
       <div class="chat-input-container">
         <slot name="above-input" />
+        <!-- 待上传附件（发送时随消息一起上传） -->
+        <div v-if="pendingFiles?.length" class="pending-attachments">
+          <AttachmentChips
+            :items="pendingChips"
+            removable
+            @remove="emit('remove-file', $event)"
+          />
+        </div>
         <div class="input-main">
           <a-textarea
             v-model:value="value"
@@ -17,8 +25,21 @@
             class="chat-textarea"
           />
         </div>
-        <!-- zcode 式底部工具栏：左思考等级、右发送 -->
+        <!-- zcode 式底部工具栏：左附件+思考等级、右发送 -->
         <div class="input-toolbar">
+          <div class="toolbar-left">
+            <input
+              ref="fileInputRef"
+              type="file"
+              multiple
+              class="hidden-file-input"
+              @change="onFileChange"
+            />
+            <a-tooltip title="上传附件">
+              <button type="button" class="attach-btn" @click="fileInputRef?.click()">
+                <PlusOutlined />
+              </button>
+            </a-tooltip>
             <a-dropdown :trigger="['click']" placement="topLeft">
             <div class="effort-selector" @click.prevent>
               <BrainIcon :size="14" class="effort-icon" :class="{ dimmed: effort === 'none' }" />
@@ -34,6 +55,7 @@
               </a-menu>
             </template>
           </a-dropdown>
+          </div>
 
           <a-button
             type="primary"
@@ -51,10 +73,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useUserStore } from '@/store/user'
-import { ArrowUpOutlined, DownOutlined } from '@ant-design/icons-vue'
+import { ArrowUpOutlined, DownOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import BrainIcon from '@/components/BrainIcon.vue'
+import AttachmentChips from './AttachmentChips.vue'
+import type { AttachmentItem } from '@/types'
 
 /** 思考档位全量标签（实际渲染哪些档由后端按模型能力返回） */
 const EFFORT_LABELS: Record<string, string> = {
@@ -80,13 +104,34 @@ const props = defineProps<{
   effort?: string
   /** 当前模型支持的思考档位（按能力探测，如实渲染） */
   supportedEfforts?: string[]
+  /** 待上传附件（发送时随消息一起上传到沙箱） */
+  pendingFiles?: File[]
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
   (e: 'update:effort', value: string): void
   (e: 'send'): void
+  (e: 'add-files', files: File[]): void
+  (e: 'remove-file', index: number): void
 }>()
+
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+/** 待传文件 → chip 展示形态（path 用文件名占位，仅显示用） */
+const pendingChips = computed<AttachmentItem[]>(() =>
+  (props.pendingFiles ?? []).map(file => ({ path: file.name, name: file.name, size: file.size }))
+)
+
+function onFileChange(event: Event): void {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  if (files.length) {
+    emit('add-files', files)
+  }
+  // 允许再次选择同一个文件
+  input.value = ''
+}
 
 const userStore = useUserStore()
 
@@ -217,12 +262,48 @@ function handleEnter(e: KeyboardEvent): void {
         }
       }
 
-      // zcode 式工具栏：左思考等级 / 右发送（圆角方形）
+      // 待上传附件区（与输入框同边距）
+      .pending-attachments {
+        padding: 10px 16px 0;
+      }
+
+      // zcode 式工具栏：左附件+思考等级 / 右发送（圆角方形）
       .input-toolbar {
         display: flex;
         align-items: center;
         justify-content: space-between;
         padding: 6px 10px 10px 12px;
+
+        .toolbar-left {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+      }
+
+      .hidden-file-input {
+        display: none;
+      }
+
+      .attach-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        border: none;
+        border-radius: 10px;
+        background: transparent;
+        color: #4e5969;
+        font-size: 15px;
+        cursor: pointer;
+        transition: background 0.2s;
+
+        &:hover {
+          background: #f2f3f5;
+          color: $primary-color;
+        }
       }
 
       .effort-selector {
