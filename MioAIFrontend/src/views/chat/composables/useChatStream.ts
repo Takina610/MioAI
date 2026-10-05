@@ -82,7 +82,14 @@ export function useChatStream(options: {
   }
 
   function sendMessage(content: string, opts?: SendOptions): void {
-    if (!content || messagesApi.isLoading.value) return
+    // 守卫按"本会话"的 loading 判断（其他会话的执行/恢复轮询不应挡住当前会话）；
+    // 拦截必须给出提示——静默 return 正是"点发送没反应"的元凶
+    if (!content) return
+    const guardChatId = messagesApi.currentChatId.value
+    if (guardChatId && messagesApi.chatLoadingMap.value.get(guardChatId)) {
+      message.warning('当前会话有任务正在执行，请等完成后再发送')
+      return
+    }
     const skipUserMessage = opts?.skipUserMessage ?? false
 
     const isNewChat = !messagesApi.currentChatId.value && !skipUserMessage

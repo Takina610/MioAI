@@ -26,7 +26,10 @@
           <template v-else-if="editingId !== msg.id">
             <MarkdownView class="message-text" :content="msg.content" />
           </template>
-          <!-- 编辑态：原位替换为文本框（按钮嵌在框内右下），保存即截断重发 -->
+          <!-- 编辑态：原位替换为文本框（按钮嵌在框内右下），保存即截断重发。
+               按钮用原生 button + mousedown.prevent：防点击时抢走 textarea 焦点/选区
+               （真实鼠标在布局动画期间的点击更稳）；antd 按钮的 actionability 链
+               在消息区收起动画中会超时，表现为"点发送没反应" -->
           <div v-else class="message-edit">
             <a-textarea
               v-model:value="editText"
@@ -35,17 +38,24 @@
               @keydown.enter.exact.prevent="confirmEdit(msg, index)"
             />
             <div class="edit-buttons">
-              <a-button size="small" @click="cancelEdit">取消</a-button>
-              <a-button size="small" type="primary" class="edit-send" :disabled="!editText.trim()" @click="confirmEdit(msg, index)">
+              <button type="button" class="edit-native-btn" @mousedown.prevent @click="cancelEdit">取消</button>
+              <button
+                type="button"
+                class="edit-native-btn edit-native-send"
+                :disabled="!editText.trim()"
+                @mousedown.prevent
+                @click="confirmEdit(msg, index)"
+              >
                 发送
-              </a-button>
+              </button>
             </div>
           </div>
           <div class="message-actions">
-            <!-- 操作行统一悬浮显示（编辑中/流式期间隐藏）：复制、编辑、重生成、版本切换 -->
+            <!-- 操作行常驻显示（复制/编辑/重生成/版本切换）：仅编辑中隐藏；
+                 生成中的最后一条消息还没有完整内容可操作，也隐藏 -->
             <div
               class="copy-area"
-              v-show="editingId !== msg.id && !isLoading && hoverMessageId === msg.id && displayOf(msg).content"
+              v-show="editingId !== msg.id && !(isLoading && index === messages.length - 1)"
             >
               <a-tooltip :title="copiedMessageId === msg.id ? '已复制' : '复制'">
                 <a-button type="text" size="small" class="copy-btn" :class="{ 'copied': copiedMessageId === msg.id }" @click="copyMessage(displayOf(msg).content, msg.id)">
@@ -272,8 +282,40 @@ defineExpose({ scrollToBottom, isNearBottom })
             display: flex;
             gap: 8px;
 
-            .edit-send {
+            .edit-native-btn {
+              height: 24px;
+              padding: 0 10px;
+              border: 1px solid #d9dde3;
+              border-radius: 6px;
+              background: #fff;
+              color: #4e5969;
+              font-size: 12px;
+              line-height: 22px;
+              cursor: pointer;
+
+              &:hover {
+                border-color: $primary-color;
+                color: $primary-color;
+              }
+
+              &:disabled {
+                border-color: #e5e6eb;
+                background: #f7f8fa;
+                color: #c9cdd4;
+                cursor: not-allowed;
+              }
+            }
+
+            .edit-native-send {
               padding: 0 14px;
+              background: $primary-color;
+              border-color: $primary-color;
+              color: #fff;
+
+              &:hover:not(:disabled) {
+                background: darken($primary-color, 8%);
+                color: #fff;
+              }
             }
           }
 

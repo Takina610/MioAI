@@ -297,7 +297,8 @@ function handleDeleteConfirm(): void {
 function canModifyMessages(): boolean {
   if (!userStore.isLoggedIn) return false
   if (!currentChatId.value) return false
-  if (isLoading.value) {
+  // 按当前会话判断执行状态：其他会话的执行/恢复轮询不应拦截本会话的编辑
+  if (messagesApi.chatLoadingMap.value.get(currentChatId.value)) {
     message.warning('当前会话有任务正在执行，请等完成后再操作')
     return false
   }
@@ -359,7 +360,10 @@ async function handleEditMessage(index: number, newContent: string): Promise<voi
   if (!canModifyMessages()) return
   const chatId = currentChatId.value
   const msgs = messagesApi.getChatMessages(chatId)
-  if (!msgs[index] || msgs[index].role !== 'user') return
+  if (!msgs[index] || msgs[index].role !== 'user') {
+    message.error('编辑目标已变化，请重试')
+    return
+  }
   const oldReply = msgs.slice(index + 1).find(m => m.role === 'assistant')
   const history = snapshotHistory(oldReply, oldReply?.history)
 
