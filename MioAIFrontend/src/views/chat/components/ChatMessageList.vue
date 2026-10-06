@@ -32,63 +32,21 @@
             />
             <MarkdownView class="message-text" :content="msg.content" />
           </template>
-          <!-- 编辑态：原位替换为文本框（按钮嵌在框内右下），保存即截断重发（内容未变=重发）。
-               a-textarea 保持 UI 风格统一，但规避其两个坑：
-               ① 多个 keydown 监听会编译成数组被 antd 当 prop 丢弃（Invalid prop
-                 "onKeydown" 警告、Enter/Esc 失效）→ 键盘监听移到外层 div 冒泡处理；
-               ② IME 输入下 v-model:value 经其中间层存在断链（editText 停留初值）→
-                 原生 @input 直读 DOM 同步，双通道保底 -->
-          <div
-            v-else class="message-edit"
-            :class="{ 'edit-drag-over': editDragOver }"
-            @dragover.prevent="editDragOver = true"
-            @dragleave.prevent="editDragOver = false"
-            @drop.prevent="onEditDrop"
-            @keydown.esc="cancelEdit"
-            @keydown.enter.exact.prevent="confirmEdit(msg, index)"
-          >
-            <!-- DeepSeek 式编辑：布局与输入框完全一致（附件卡在文本上方、支持粘贴/拖拽，底部工具栏 + 最左 / 取消发送最右） -->
-            <AttachmentCards
-              v-if="editRenderCards?.length"
-              :items="editRenderCards"
-              variant="card"
-              removable
+          <div v-else class="message-edit" @keydown.esc="cancelEdit">
+            <ChatInput
+              v-model="editText"
+              embedded
+              cancelable
+              has-messages
+              :loading="false"
+              :render-cards="editRenderCards"
+              :leaving-keys="editLeavingKeys"
               :ref-setter="editRefSetter"
-              class="edit-attachments"
-              :class="{ 'edit-drag-over': editDragOver }"
-              @remove="emit('removeEditAtt', $event)"
+              @send="confirmEdit(msg, index)"
+              @cancel="cancelEdit"
+              @add-files="emit('addEditFiles', $event)"
+              @remove-pending="emit('removeEditAtt', $event)"
             />
-            <a-textarea
-              :value="editText"
-              :auto-size="{ minRows: 2, maxRows: 12 }"
-              @update:value="(v: string) => editText = v"
-              @input="onEditNativeInput"
-              @paste="onEditPaste"
-            />
-            <div class="edit-toolbar">
-              <input
-                ref="editFileInputRef"
-                type="file"
-                multiple
-                class="edit-file-input"
-                @change="onEditFileChange"
-              />
-              <button type="button" class="edit-attach-btn" title="上传附件" @click="editFileInputRef?.click()">
-                <PlusOutlined />
-              </button>
-              <div class="edit-actions">
-                <button type="button" class="edit-native-btn" @mousedown.prevent @click="cancelEdit">取消</button>
-                <button
-                  type="button"
-                  class="edit-native-btn edit-native-send"
-                  :disabled="!editText.trim()"
-                  @mousedown.prevent
-                  @click="confirmEdit(msg, index)"
-                >
-                  发送
-                </button>
-              </div>
-            </div>
           </div>
           <div class="message-actions">
             <!-- 操作行常驻显示（复制/编辑/重生成/版本切换）：仅编辑中隐藏；
@@ -108,7 +66,7 @@
                   <EditOutlined />
                 </a-button>
               </a-tooltip>
-              <a-tooltip v-if="canModify && msg.role === 'assistant' && index === messages.length - 1" title="重新生成">
+              <a-tooltip v-if="canModify && msg.role !== 'user' && index === messages.length - 1" title="重新生成">
                 <a-button type="text" size="small" class="copy-btn" @click="emit('regenerate')">
                   <RedoOutlined />
                 </a-button>
@@ -134,11 +92,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { CopyOutlined, CheckOutlined, EditOutlined, PlusOutlined, RedoOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons-vue'
+import { CopyOutlined, CheckOutlined, EditOutlined, RedoOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons-vue'
 import type { AttachmentDisplay, AttachmentItem, ChatMessage, MessageBlock, PendingAttachment } from '@/types'
 import { messageAttachmentDisplays } from '../attachmentUtils'
 import MarkdownView from '@/components/MarkdownView.vue'
 import MioBotMessage from './MioBotMessage.vue'
+import ChatInput from './ChatInput.vue'
 import AttachmentCards from './AttachmentCards.vue'
 
 const props = defineProps<{
@@ -178,35 +137,6 @@ const hoverMessageId = ref<string>('')
 const copiedMessageId = ref<string>('')
 const editingId = ref<string>('')
 const editText = ref<string>('')
-const editFileInputRef = ref<HTMLInputElement | null>(null)
-const editDragOver = ref(false)
-
-function onEditFileChange(event: Event): void {
-  const input = event.target as HTMLInputElement
-  const files = Array.from(input.files ?? [])
-  if (files.length) {
-    emit('addEditFiles', files)
-  }
-  input.value = ''
-}
-
-/** 编辑态粘贴文件（Ctrl+V） */
-function onEditPaste(event: ClipboardEvent): void {
-  const files = Array.from(event.clipboardData?.files ?? [])
-  if (files.length) {
-    event.preventDefault()
-    emit('addEditFiles', files)
-  }
-}
-
-/** 编辑态拖入文件 */
-function onEditDrop(event: DragEvent): void {
-  editDragOver.value = false
-  const files = Array.from(event.dataTransfer?.files ?? [])
-  if (files.length) {
-    emit('addEditFiles', files)
-  }
-}
 
 // ---------- 回复版本（编辑/重新生成产生的历次回复） ----------
 /** 该提问下方回复的版本组目标（回复带多版本时返回它，供切换器渲染） */
@@ -389,108 +319,9 @@ defineExpose({ scrollToBottom, isNearBottom })
           margin-top: 4px;
         }
 
-        // 编辑态：与输入框同款容器（附件卡在文本上方，底部工具栏 + 最左 / 取消发送最右）
+        // 编辑态：嵌入输入框组件（自身带边框容器/附件卡/工具栏）
         .message-edit {
-          width: 100%;
-          background: #fff;
-          border: 1px solid #e5e6eb;
-          border-radius: 16px;
-          transition: border-color 0.2s;
-
-          &:focus-within,
-          &.edit-drag-over {
-            border-color: $primary-color;
-          }
-
-          &.edit-drag-over {
-            background: rgba(42, 161, 169, 0.04);
-          }
-
-          // 编辑态附件卡区
-          .edit-attachments {
-            padding: 10px 16px 0;
-          }
-
-          .edit-file-input {
-            display: none;
-          }
-
-          // 底部工具栏：+ 最左 / 取消发送最右
-          .edit-toolbar {
-            display: flex;
-            align-items: center;
-            padding: 6px 12px 10px 12px;
-          }
-
-          .edit-attach-btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 30px;
-            height: 30px;
-            padding: 0;
-            border: none;
-            border-radius: 10px;
-            background: transparent;
-            color: #4e5969;
-            font-size: 15px;
-            cursor: pointer;
-            transition: background 0.2s;
-
-            &:hover {
-              background: #f2f3f5;
-              color: $primary-color;
-            }
-          }
-
-          .edit-actions {
-            margin-left: auto;
-            display: flex;
-            gap: 8px;
-          }
-
-          :deep(.ant-input) {
-            padding: 4px 16px 6px;
-            border: none;
-            box-shadow: none;
-            background: transparent;
-          }
-
-          .edit-native-btn {
-            height: 30px;
-            padding: 0 14px;
-            border: 1px solid #d9dde3;
-            border-radius: 8px;
-            background: #fff;
-            color: #4e5969;
-            font-size: 13px;
-            cursor: pointer;
-            transition: all 0.2s;
-
-            &:hover {
-              border-color: $primary-color;
-              color: $primary-color;
-            }
-
-            &:disabled {
-              border-color: #e5e6eb;
-              background: #f7f8fa;
-              color: #c9cdd4;
-              cursor: not-allowed;
-            }
-          }
-
-          .edit-native-send {
-            background: $primary-color;
-            border-color: $primary-color;
-            color: #fff;
-
-            &:hover:not(:disabled) {
-              background: darken($primary-color, 8%);
-              border-color: darken($primary-color, 8%);
-              color: #fff;
-            }
-          }
+          margin: 4px 0;
         }
 
         .message-loading {

@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-center-area" :class="{ 'has-messages': hasMessages }">
+  <div class="chat-center-area" :class="{ 'has-messages': hasMessages, embedded }">
     <div class="welcome-section" v-if="!hasMessages && !loading">
       <img :src="agentAvatar || '/logo.png'" alt="Agent" class="welcome-avatar" />
       <h2 class="welcome-title">我能帮什么忙吗，{{ userStore.userName }}？</h2>
@@ -69,6 +69,7 @@
             </a-dropdown>
           </div>
 
+          <button v-if="cancelable" type="button" class="cancel-btn" @mousedown.prevent @click="emit('cancel')">取消</button>
           <a-button
             type="primary"
             class="send-btn"
@@ -122,12 +123,17 @@ const props = defineProps<{
   leavingKeys?: Set<string>
   /** v-for 动态 ref 登记器（父级动画组合式需要元素引用驱动 GSAP） */
   refSetter?: (key: string) => (el: unknown) => void
+  /** 嵌入模式（消息编辑复用）：去外层留白/居中/欢迎区，直接以输入框原貌嵌入 */
+  embedded?: boolean
+  /** 显示取消按钮（编辑模式用） */
+  cancelable?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
   (e: 'update:effort', value: string): void
   (e: 'send'): void
+  (e: 'cancel'): void
   (e: 'add-files', files: File[]): void
   (e: 'remove-pending', key: string): void
 }>()
@@ -204,6 +210,21 @@ function onFileChange(event: Event): void {
   padding: 24px;
   width: 100%;
   box-sizing: border-box;
+
+  // 嵌入模式（消息编辑复用）：去外层留白与居中，输入框原貌嵌入
+  &.embedded {
+    padding: 0;
+    flex: none;
+    align-items: stretch;
+
+    .welcome-section {
+      display: none;
+    }
+
+    .chat-input-wrapper {
+      max-width: none;
+    }
+  }
 
   // 有消息时组合器固定在底部（常规流布局，消息区不再被遮挡）
   &.has-messages {
@@ -365,6 +386,24 @@ function onFileChange(event: Event): void {
         .effort-caret {
           font-size: 10px;
           color: #86909c;
+        }
+      }
+
+      // 取消按钮（编辑模式）
+      .cancel-btn {
+        height: 30px;
+        padding: 0 14px;
+        border: 1px solid #d9dde3;
+        border-radius: 8px;
+        background: #fff;
+        color: #4e5969;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s;
+
+        &:hover {
+          border-color: $primary-color;
+          color: $primary-color;
         }
       }
 
