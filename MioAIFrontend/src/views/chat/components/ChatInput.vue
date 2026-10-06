@@ -52,7 +52,7 @@
                 <PlusOutlined />
               </button>
             </a-tooltip>
-            <a-dropdown :trigger="['click']" placement="topLeft">
+            <a-dropdown v-if="!cancelable" :trigger="['click']" placement="topLeft">
               <div class="effort-selector" @click.prevent>
                 <BrainIcon :size="14" class="effort-icon" :class="{ dimmed: effort === 'none' }" />
                 <span class="effort-label">{{ effortLabel }}</span>
@@ -70,7 +70,17 @@
           </div>
 
           <button v-if="cancelable" type="button" class="cancel-btn" @mousedown.prevent @click="emit('cancel')">取消</button>
+          <button
+            v-if="cancelable"
+            type="button"
+            class="send-pill"
+            :disabled="!value.trim() || loading"
+            @click="emit('send')"
+          >
+            {{ loading ? '发送中…' : '发送' }}
+          </button>
           <a-button
+            v-if="!cancelable"
             type="primary"
             class="send-btn"
             :disabled="!value.trim() || loading"
@@ -211,7 +221,7 @@ function onFileChange(event: Event): void {
   width: 100%;
   box-sizing: border-box;
 
-  // 嵌入模式（消息编辑复用）：去外层留白与居中，输入框原貌嵌入
+  // 嵌入模式（消息编辑复用）：去外层留白与居中，输入框原貌嵌入；间距与光晕对齐主输入框
   &.embedded {
     padding: 0;
     flex: none;
@@ -223,6 +233,22 @@ function onFileChange(event: Event): void {
 
     .chat-input-wrapper {
       max-width: none;
+    }
+
+    .chat-input-wrapper .chat-input-container {
+      box-shadow: 0 4px 18px rgba(42, 161, 169, 0.1);
+
+      &:focus-within {
+        box-shadow: 0 4px 22px rgba(42, 161, 169, 0.22);
+      }
+    }
+
+    .chat-input-wrapper .chat-input-container .input-main {
+      padding: 16px 16px 8px;
+    }
+
+    .chat-input-wrapper .chat-input-container .input-toolbar {
+      padding: 8px 14px 12px 14px;
     }
   }
 
@@ -389,8 +415,10 @@ function onFileChange(event: Event): void {
         }
       }
 
-      // 取消按钮（编辑模式）
+      // 取消按钮（编辑模式）：靠右与发送成组
       .cancel-btn {
+        margin-left: auto;
+        margin-right: 8px;
         height: 30px;
         padding: 0 14px;
         border: 1px solid #d9dde3;
@@ -404,6 +432,28 @@ function onFileChange(event: Event): void {
         &:hover {
           border-color: $primary-color;
           color: $primary-color;
+        }
+      }
+
+      // 发送 pill（编辑模式，原编辑发送按钮样式）
+      .send-pill {
+        height: 30px;
+        padding: 0 16px;
+        border: none;
+        border-radius: 8px;
+        background: $primary-color;
+        color: #fff;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s;
+
+        &:hover:not(:disabled) {
+          background: darken($primary-color, 8%);
+        }
+
+        &:disabled {
+          background: #c9cdd4;
+          cursor: not-allowed;
         }
       }
 

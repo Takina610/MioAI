@@ -319,9 +319,11 @@ defineExpose({ scrollToBottom, isNearBottom })
           margin-top: 4px;
         }
 
-        // 编辑态：嵌入输入框组件（自身带边框容器/附件卡/工具栏）
+        // 编辑态：嵌入输入框组件，宽度与底部输入框一致（800px 居中）
         .message-edit {
-          margin: 4px 0;
+          width: 100%;
+          max-width: 800px;
+          margin: 4px auto 0;
         }
 
         .message-loading {
