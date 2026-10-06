@@ -40,26 +40,54 @@
                  原生 @input 直读 DOM 同步，双通道保底 -->
           <div
             v-else class="message-edit"
+            :class="{ 'edit-drag-over': editDragOver }"
+            @dragover.prevent="editDragOver = true"
+            @dragleave.prevent="editDragOver = false"
+            @drop.prevent="onEditDrop"
             @keydown.esc="cancelEdit"
             @keydown.enter.exact.prevent="confirmEdit(msg, index)"
           >
+            <!-- DeepSeek 式编辑：布局与输入框完全一致（附件卡在文本上方、支持粘贴/拖拽，底部工具栏 + 最左 / 取消发送最右） -->
+            <AttachmentCards
+              v-if="editRenderCards?.length"
+              :items="editRenderCards"
+              variant="card"
+              removable
+              :ref-setter="editRefSetter"
+              class="edit-attachments"
+              :class="{ 'edit-drag-over': editDragOver }"
+              @remove="emit('removeEditAtt', $event)"
+            />
             <a-textarea
               :value="editText"
               :auto-size="{ minRows: 2, maxRows: 12 }"
               @update:value="(v: string) => editText = v"
               @input="onEditNativeInput"
+              @paste="onEditPaste"
             />
-            <div class="edit-buttons">
-              <button type="button" class="edit-native-btn" @mousedown.prevent @click="cancelEdit">取消</button>
-              <button
-                type="button"
-                class="edit-native-btn edit-native-send"
-                :disabled="!editText.trim()"
-                @mousedown.prevent
-                @click="confirmEdit(msg, index)"
-              >
-                发送
+            <div class="edit-toolbar">
+              <input
+                ref="editFileInputRef"
+                type="file"
+                multiple
+                class="edit-file-input"
+                @change="onEditFileChange"
+              />
+              <button type="button" class="edit-attach-btn" title="上传附件" @click="editFileInputRef?.click()">
+                <PlusOutlined />
               </button>
+              <div class="edit-actions">
+                <button type="button" class="edit-native-btn" @mousedown.prevent @click="cancelEdit">取消</button>
+                <button
+                  type="button"
+                  class="edit-native-btn edit-native-send"
+                  :disabled="!editText.trim()"
+                  @mousedown.prevent
+                  @click="confirmEdit(msg, index)"
+                >
+                  发送
+                </button>
+              </div>
             </div>
           </div>
           <div class="message-actions">
@@ -76,7 +104,7 @@
                 </a-button>
               </a-tooltip>
               <a-tooltip v-if="canModify && msg.role === 'user'" title="编辑">
-                <a-button type="text" size="small" class="copy-btn" @click="startEdit(msg)">
+                <a-button type="text" size="small" class="copy-btn" @click="startEdit(msg, index)">
                   <EditOutlined />
                 </a-button>
               </a-tooltip>
@@ -106,8 +134,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { CopyOutlined, CheckOutlined, EditOutlined, RedoOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons-vue'
-import type { AttachmentDisplay, ChatMessage, MessageBlock } from '@/types'
+import { CopyOutlined, CheckOutlined, EditOutlined, PlusOutlined, RedoOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons-vue'
+import type { AttachmentDisplay, AttachmentItem, ChatMessage, MessageBlock, PendingAttachment } from '@/types'
 import { messageAttachmentDisplays } from '../attachmentUtils'
 import MarkdownView from '@/components/MarkdownView.vue'
 import MioBotMessage from './MioBotMessage.vue'
@@ -120,15 +148,29 @@ const props = defineProps<{
   canModify: boolean
   /** 当前会话 id（问答卡片提交答案用） */
   chatId?: string
+  /** 编辑中卡片渲染列表（含离场动画中的卡，由父级动画组合式维护） */
+  editRenderCards?: PendingAttachment[]
+  /** 编辑中离场的键（隐藏 X） */
+  editLeavingKeys?: Set<string>
+  /** 编辑卡片 v-for 动态 ref 登记器（父级动画组合式需要元素引用） */
+  editRefSetter?: (key: string) => (el: unknown) => void
 }>()
 
 const emit = defineEmits<{
   /** 编辑用户消息后以新内容重发（截断该消息及其后的历史） */
-  (e: 'edit', index: number, content: string): void
+  (e: 'edit', index: number, content: string, attachments: AttachmentItem[]): void
   /** 对最后一条回复重新生成（截断旧回复后重发） */
   (e: 'regenerate'): void
   /** 切换回复版本（编辑/重生成产生的历次回复） */
   (e: 'switchVersion', messageId: string, version: number): void
+  /** 编辑开始（父级据此从消息初始化附件编辑列表） */
+  (e: 'editStart', index: number): void
+  /** 编辑取消（父级清理附件编辑状态） */
+  (e: 'editCancel'): void
+  /** 编辑中新追加文件（父级负责上传） */
+  (e: 'addEditFiles', files: File[]): void
+  /** 编辑中移除附件（父级决定沙箱文件去留） */
+  (e: 'removeEditAtt', key: string): void
 }>()
 
 const messagesRef = ref<HTMLElement | null>(null)
@@ -136,6 +178,35 @@ const hoverMessageId = ref<string>('')
 const copiedMessageId = ref<string>('')
 const editingId = ref<string>('')
 const editText = ref<string>('')
+const editFileInputRef = ref<HTMLInputElement | null>(null)
+const editDragOver = ref(false)
+
+function onEditFileChange(event: Event): void {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  if (files.length) {
+    emit('addEditFiles', files)
+  }
+  input.value = ''
+}
+
+/** 编辑态粘贴文件（Ctrl+V） */
+function onEditPaste(event: ClipboardEvent): void {
+  const files = Array.from(event.clipboardData?.files ?? [])
+  if (files.length) {
+    event.preventDefault()
+    emit('addEditFiles', files)
+  }
+}
+
+/** 编辑态拖入文件 */
+function onEditDrop(event: DragEvent): void {
+  editDragOver.value = false
+  const files = Array.from(event.dataTransfer?.files ?? [])
+  if (files.length) {
+    emit('addEditFiles', files)
+  }
+}
 
 // ---------- 回复版本（编辑/重新生成产生的历次回复） ----------
 /** 该提问下方回复的版本组目标（回复带多版本时返回它，供切换器渲染） */
@@ -170,9 +241,10 @@ function displayOf(msg: ChatMessage): Pick<ChatMessage, 'content' | 'blocks' | '
   return msg.history[version - 1] ?? msg
 }
 
-function startEdit(msg: ChatMessage): void {
+function startEdit(msg: ChatMessage, index: number): void {
   editingId.value = msg.id
   editText.value = msg.content
+  emit('editStart', index)
 }
 
 /** 用户消息随发的附件（attachments 输入块）；图片类型直接出缩略图 */
@@ -188,6 +260,7 @@ function inputAttachmentsOf(msg: ChatMessage): AttachmentDisplay[] {
 function cancelEdit(): void {
   editingId.value = ''
   editText.value = ''
+  emit('editCancel')
 }
 
 function confirmEdit(msg: ChatMessage, index: number): void {
@@ -197,9 +270,13 @@ function confirmEdit(msg: ChatMessage, index: number): void {
     cancelEdit()
     return
   }
+  // 同步捕获编辑后的附件清单（父级据此发送与清理沙箱孤儿）
+  const finalAttachments = (props.editRenderCards ?? [])
+    .filter(p => p.status === 'done' && p.item && !props.editLeavingKeys?.has(p.key))
+    .map(p => p.item as AttachmentItem)
   // 内容未变化也照常发送（= 从这条消息重新发送）；只有空内容才取消
   cancelEdit()
-  emit('edit', index, content)
+  emit('edit', index, content, finalAttachments)
 }
 
 /** 原生 input 直读 DOM 同步（IME 输入下 antd v-model 中间层断链的双通道保底） */
@@ -312,58 +389,107 @@ defineExpose({ scrollToBottom, isNearBottom })
           margin-top: 4px;
         }
 
+        // 编辑态：与输入框同款容器（附件卡在文本上方，底部工具栏 + 最左 / 取消发送最右）
         .message-edit {
-          max-width: 70%;
           width: 100%;
-          position: relative;
+          background: #fff;
+          border: 1px solid #e5e6eb;
+          border-radius: 16px;
+          transition: border-color 0.2s;
 
-          // 取消/发送嵌在输入框内右下角
-          .edit-buttons {
-            position: absolute;
-            right: 10px;
-            bottom: 10px;
+          &:focus-within,
+          &.edit-drag-over {
+            border-color: $primary-color;
+          }
+
+          &.edit-drag-over {
+            background: rgba(42, 161, 169, 0.04);
+          }
+
+          // 编辑态附件卡区
+          .edit-attachments {
+            padding: 10px 16px 0;
+          }
+
+          .edit-file-input {
+            display: none;
+          }
+
+          // 底部工具栏：+ 最左 / 取消发送最右
+          .edit-toolbar {
             display: flex;
-            gap: 8px;
+            align-items: center;
+            padding: 6px 12px 10px 12px;
+          }
 
-            .edit-native-btn {
-              height: 24px;
-              padding: 0 10px;
-              border: 1px solid #d9dde3;
-              border-radius: 6px;
-              background: #fff;
-              color: #4e5969;
-              font-size: 12px;
-              line-height: 22px;
-              cursor: pointer;
+          .edit-attach-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            border: none;
+            border-radius: 10px;
+            background: transparent;
+            color: #4e5969;
+            font-size: 15px;
+            cursor: pointer;
+            transition: background 0.2s;
 
-              &:hover {
-                border-color: $primary-color;
-                color: $primary-color;
-              }
-
-              &:disabled {
-                border-color: #e5e6eb;
-                background: #f7f8fa;
-                color: #c9cdd4;
-                cursor: not-allowed;
-              }
-            }
-
-            .edit-native-send {
-              padding: 0 14px;
-              background: $primary-color;
-              border-color: $primary-color;
-              color: #fff;
-
-              &:hover:not(:disabled) {
-                background: darken($primary-color, 8%);
-                color: #fff;
-              }
+            &:hover {
+              background: #f2f3f5;
+              color: $primary-color;
             }
           }
 
+          .edit-actions {
+            margin-left: auto;
+            display: flex;
+            gap: 8px;
+          }
+
           :deep(.ant-input) {
-            padding-bottom: 44px;
+            padding: 4px 16px 6px;
+            border: none;
+            box-shadow: none;
+            background: transparent;
+          }
+
+          .edit-native-btn {
+            height: 30px;
+            padding: 0 14px;
+            border: 1px solid #d9dde3;
+            border-radius: 8px;
+            background: #fff;
+            color: #4e5969;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+
+            &:hover {
+              border-color: $primary-color;
+              color: $primary-color;
+            }
+
+            &:disabled {
+              border-color: #e5e6eb;
+              background: #f7f8fa;
+              color: #c9cdd4;
+              cursor: not-allowed;
+            }
+          }
+
+          .edit-native-send {
+            background: $primary-color;
+            border-color: $primary-color;
+            color: #fff;
+
+            &:hover:not(:disabled) {
+              background: darken($primary-color, 8%);
+              border-color: darken($primary-color, 8%);
+              color: #fff;
+            }
           }
         }
 

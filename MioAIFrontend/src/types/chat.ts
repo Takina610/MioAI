@@ -86,6 +86,8 @@ export interface PendingAttachment extends AttachmentDisplay {
   item?: AttachmentItem
   /** 本地文件预览 URL（图片类型），移除时需 revoke */
   localPreviewUrl?: string
+  /** 编辑会话中新追加的附件（发送/取消时区别处理沙箱文件） */
+  addedDuringEdit?: boolean
 }
 
 /** 任务清单步骤（SSE plan 事件快照，渲染于输入框上方） */

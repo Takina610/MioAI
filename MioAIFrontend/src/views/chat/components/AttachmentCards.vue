@@ -3,11 +3,14 @@
     <AttachmentCard
       v-for="item in items"
       :key="item.key"
+      :ref="refSetter ? refSetter(item.key) : undefined"
       :item="item"
       :variant="variant"
       :downloadable="downloadable"
       :large-image="allImages"
       compact
+      :removable="removable"
+      @remove="$emit('remove', $event)"
     />
   </div>
 </template>
@@ -29,6 +32,14 @@ const props = defineProps<{
   variant?: 'card' | 'chip'
   /** 可下载（Agent 产出）：整条点击即下载 */
   downloadable?: boolean
+  /** 可移除（编辑态附件）：X 触发 remove 事件 */
+  removable?: boolean
+  /** v-for 动态 ref 登记器（编辑态动画需要元素引用） */
+  refSetter?: (key: string) => (el: unknown) => void
+}>()
+
+defineEmits<{
+  (e: 'remove', key: string): void
 }>()
 
 /** 纯图片列表：图片卡放大 */

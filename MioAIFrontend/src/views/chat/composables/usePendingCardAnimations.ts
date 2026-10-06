@@ -145,7 +145,11 @@ export function usePendingCardAnimations(pending: Ref<PendingAttachment[] | unde
           finishLeave(r.key)
         }
         gsap
-          .timeline({ onComplete: finish })
+          .timeline({
+            onComplete: finish,
+            // GSAP ticker 异常停摆时的兜底：离场仍会完成（真实前台用户走动画）
+            onStart: () => window.setTimeout(finish, 900),
+          })
           .to(el, {
             scale: 0,
             opacity: 0,

@@ -31,7 +31,14 @@
           :is-loading="isLoading"
           :can-modify="userStore.isLoggedIn"
           :chat-id="currentChatId ?? undefined"
+          :edit-render-cards="renderEditCards"
+          :edit-leaving-keys="leavingEditKeys"
+          :edit-ref-setter="setEditCardRef"
           @edit="handleEditMessage"
+          @edit-start="handleEditStart"
+          @edit-cancel="handleEditCancel"
+          @add-edit-files="handleAddEditFiles"
+          @remove-edit-att="handleRemoveEditAtt"
           @regenerate="handleRegenerate"
           @switch-version="handleSwitchVersion"
         />
@@ -399,6 +406,90 @@ function cleanupPendingAttachments(): void {
 
 const MAX_PENDING_ATTACHMENTS = 50
 
+/** 编辑会话消息时的附件（原附件 + 新追加），发送时按最终清单生效 */
+const editAttachments = ref<PendingAttachment[]>([])
+
+// 编辑列表与输入框同一套 GSAP 进出场动画（独立实例，互不干扰）
+const {
+  renderCards: renderEditCards,
+  leavingKeys: leavingEditKeys,
+  setCardRef: setEditCardRef,
+} = usePendingCardAnimations(computed(() => editAttachments.value))
+
+function handleEditStart(index: number): void {
+  const msg = messagesApi.getChatMessages(currentChatId.value)[index]
+  if (!msg) return
+  editAttachments.value = attachmentsOf(msg).map(a => ({
+    key: a.path,
+    name: a.name,
+    size: a.size,
+    status: 'done' as const,
+    progress: 1,
+    item: { ...a },
+    previewSrc: isImageName(a.name)
+      ? `${import.meta.env.VITE_API_BASE_URL || ''}/bot/attachment/download?path=${encodeURIComponent(a.path)}`
+      : undefined
+  }))
+}
+
+function handleEditCancel(): void {
+  for (const record of editAttachments.value) {
+    if (record.localPreviewUrl) {
+      URL.revokeObjectURL(record.localPreviewUrl)
+    }
+  }
+  editAttachments.value = []
+}
+
+/** 编辑中新追加文件：走与输入框相同的上传流程 */
+async function handleAddEditFiles(files: File[]): Promise<void> {
+  const chatId = currentChatId.value
+  if (!chatId) return
+  for (const file of files.slice(0, Math.max(0, MAX_PENDING_ATTACHMENTS - editAttachments.value.length))) {
+    const record: PendingAttachment = {
+      key: `edit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      name: file.name,
+      size: file.size,
+      status: 'uploading',
+      progress: 0,
+      previewSrc: isImageName(file.name) ? URL.createObjectURL(file) : undefined,
+      addedDuringEdit: true
+    }
+    record.localPreviewUrl = record.previewSrc
+    editAttachments.value.push(record)
+    const live = editAttachments.value[editAttachments.value.length - 1]
+    uploadAttachment(file, chatId, percent => {
+      live.progress = percent
+    })
+      .then(item => {
+        live.status = 'done'
+        live.progress = 1
+        live.item = item
+        if (live.localPreviewUrl) {
+          URL.revokeObjectURL(live.localPreviewUrl)
+          live.localPreviewUrl = undefined
+          live.previewSrc = `${import.meta.env.VITE_API_BASE_URL || ''}/bot/attachment/download?path=${encodeURIComponent(item.path)}`
+        }
+      })
+      .catch(error => {
+        console.error('附件上传失败:', error)
+        live.status = 'error'
+      })
+  }
+}
+
+/** 编辑中移除附件：本次编辑新追加且已上传的立即从沙箱删除；原附件在发送时按 diff 删除 */
+function handleRemoveEditAtt(key: string): void {
+  const record = editAttachments.value.find(p => p.key === key)
+  if (record?.localPreviewUrl) {
+    URL.revokeObjectURL(record.localPreviewUrl)
+  }
+  if (record?.addedDuringEdit && record.item?.path) {
+    deleteAttachment(record.item.path).catch(() => {})
+  }
+  editAttachments.value = editAttachments.value.filter(p => p.key !== key)
+}
+
 // 待上传卡片动画（GSAP）：实例挂在本页——会话切换的 watcher 里能先 arm 静默再换表，
 // 保证切换/新建时卡片直接落位（子组件内实例化时 watcher 顺序颠倒，静默标志永远晚到）
 const {
@@ -495,7 +586,7 @@ async function handleRegenerate(): Promise<void> {
 }
 
 /** 编辑用户消息：截断该消息及其后历史（本地+服务端），以新内容重新发送；旧回复存为版本 */
-async function handleEditMessage(index: number, newContent: string): Promise<void> {
+async function handleEditMessage(index: number, newContent: string, editAttachments?: AttachmentItem[]): Promise<void> {
   if (!canModifyMessages()) return
   const chatId = currentChatId.value
   const msgs = messagesApi.getChatMessages(chatId)
@@ -526,7 +617,16 @@ async function handleEditMessage(index: number, newContent: string): Promise<voi
   }
 
   messagesApi.setChatMessages(chatId, msgs.slice(0, index))
-  sendMessage(newContent, { reasoningEffort: reasoningEffort.value, history, groupSeq: groupKey, attachments: attachmentsOf(msgs[index]) })
+
+  // 编辑后的附件清单（确认时同步捕获）：保留的沿用原路径；被移除的原附件从沙箱删除（消息已截断，成为孤儿）
+  const finalAttachments = editAttachments ?? []
+  const finalPaths = new Set(finalAttachments.map(a => a.path))
+  for (const a of attachmentsOf(msgs[index])) {
+    if (!finalPaths.has(a.path)) {
+      deleteAttachment(a.path).catch(() => {})
+    }
+  }
+  sendMessage(newContent, { reasoningEffort: reasoningEffort.value, history, groupSeq: groupKey, attachments: finalAttachments })
 }
 
 /** 该消息随发的附件（attachments 输入块）：编辑/重生成重发时沿用原路径 */
