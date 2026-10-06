@@ -1,7 +1,8 @@
 package com.mio.ai.framework.zagent.tools;
 
-import com.mio.ai.framework.zagent.tools.SandboxFs.FileStat;
+import com.fasterxml.jackson.databind.JsonNode;
 
+import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 
@@ -11,6 +12,9 @@ import static com.mio.ai.framework.zagent.tools.ToolDescriptions.READ;
  * Read 工具（zcode handlers/read.ts 的对位移植）：
  * cat -n 行号格式、默认 2000 行、256KB 上限、25000 token 预算（超限整读降级部分视图）、
  * 未变更重读拦截、空文件/越界/不存在/二进制的逐字文案。
+ * <p>图片分支（zcode read-image.ts 的对位移植）：png/jpg/jpeg/gif/webp 在文本
+ * 检查之前拦截，SFTP 读字节 → ImagePrepare 预算预处理 → 媒体结果，模型可见文本
+ * 为 [Attached &lt;mime&gt;: Read image] 占位，图像由投影层拆成后置 user 消息投递。
  */
 final class ReadTool {
 
@@ -35,7 +39,7 @@ final class ReadTool {
         return ToolEntry.ofReadOnly("Read", READ, schema, ReadTool::execute);
     }
 
-    static String execute(com.fasterxml.jackson.databind.JsonNode input, ToolContext ctx) {
+    static ToolResult execute(com.fasterxml.jackson.databind.JsonNode input, ToolContext ctx) {
         String rawPath = Args.str(input, "file_path");
         if (rawPath == null) {
             throw new ToolUseFailure(12, "Tool path must not be empty");
@@ -50,12 +54,16 @@ final class ReadTool {
             throw new ToolUseFailure(12, "Cannot read '" + rawPath + "': " + e.getMessage());
         }
 
-        FileStat stat = fs.stat(path);
+        SandboxFs.FileStat stat = fs.stat(path);
         if (!stat.exists()) {
             throw new ToolUseFailure(2, notFoundMessage(fs, rawPath, path));
         }
         if (stat.directory()) {
             throw new ToolUseFailure(11, "Error: EISDIR: illegal operation on a directory, read");
+        }
+        String imageMime = inferImageMime(path);
+        if (imageMime != null) {
+            return readImage(fs, path, imageMime, stat);
         }
         String extension = extensionOf(path);
         if (BINARY_EXTENSIONS.contains(extension)) {
@@ -76,21 +84,23 @@ final class ReadTool {
         if (view != null && !view.partial() && view.startLine() == startLine
                 && view.endLine() == endLine
                 && view.mtimeSec() == stat.mtimeSec() && view.size() == stat.size()) {
-            return "Wasted call — file unchanged since your last Read. "
-                    + "Refer to that earlier tool_result instead.";
+            return ToolResult.of("Wasted call — file unchanged since your last Read. "
+                    + "Refer to that earlier tool_result instead.");
         }
 
         List<String> lines = fs.readLines(path, startLine, endLine);
         int totalLines = fs.countLines(path);
         if (lines.isEmpty()) {
             if (startLine > 1 && totalLines == 0 && stat.size() == 0) {
-                return "<system-reminder>Warning: the file exists but the contents are empty.</system-reminder>";
+                return ToolResult.of(
+                        "<system-reminder>Warning: the file exists but the contents are empty.</system-reminder>");
             }
             if (startLine > Math.max(totalLines, 1)) {
-                return "Warning: the file exists but is shorter than the provided offset (" + startLine
-                        + "). The file has " + totalLines + " lines.";
+                return ToolResult.of("Warning: the file exists but is shorter than the provided offset ("
+                        + startLine + "). The file has " + totalLines + " lines.");
             }
-            return "<system-reminder>Warning: the file exists but the contents are empty.</system-reminder>";
+            return ToolResult.of(
+                    "<system-reminder>Warning: the file exists but the contents are empty.</system-reminder>");
         }
 
         boolean wholeFile = offset == null && limit == null;
@@ -134,7 +144,56 @@ final class ReadTool {
 
         ctx.readFileState.put(path, new ReadFileState.FileView(
                 stat.mtimeSec(), stat.size(), startLine, startLine + lines.size() - 1, partial));
-        return rendered;
+        return ToolResult.of(rendered);
+    }
+
+    /**
+     * 图片分支（zcode readImageFile）：20MB 输入上限 → SFTP 字节读取 →
+     * 预算预处理 → [Attached &lt;mime&gt;: Read image] 文本 + 媒体负载。
+     * 图片读取不进入 readFileState（zcode 图片路径同样不缓存）。
+     */
+    private static ToolResult readImage(SandboxFs fs, String path, String mime, SandboxFs.FileStat stat) {
+        if (stat.size() > ImagePrepare.MAX_INPUT_BYTES) {
+            throw new ToolUseFailure(15, "Image file is too large to read (" + stat.size() + " bytes). "
+                    + "Maximum image input size is 20MB.");
+        }
+        byte[] data;
+        try {
+            data = fs.readFileBytes(path, ImagePrepare.MAX_INPUT_BYTES);
+        } catch (IllegalStateException e) {
+            throw new ToolUseFailure(15, e.getMessage());
+        }
+        ImagePrepare.Prepared prepared;
+        try {
+            prepared = ImagePrepare.prepare(data, mime);
+        } catch (ImagePrepare.ImagePrepareException e) {
+            throw new ToolUseFailure(15, e.getMessage());
+        }
+        ToolMedia media = new ToolMedia(prepared.mimeType(),
+                Base64.getEncoder().encodeToString(prepared.data()),
+                prepared.originalSize(), prepared.data().length,
+                prepared.resized(), prepared.compressed(),
+                prepared.originalWidth(), prepared.originalHeight(),
+                prepared.width(), prepared.height());
+        return ToolResult.withMedia("[Attached " + prepared.mimeType() + ": Read image]", media);
+    }
+
+    /** zcode inferImageMimeFromPath：扩展名推断图片 MIME，非图片返回 null */
+    private static String inferImageMime(String path) {
+        String lower = path.toLowerCase(Locale.ROOT);
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
+            return "image/jpeg";
+        }
+        if (lower.endsWith(".png")) {
+            return "image/png";
+        }
+        if (lower.endsWith(".gif")) {
+            return "image/gif";
+        }
+        if (lower.endsWith(".webp")) {
+            return "image/webp";
+        }
+        return null;
     }
 
     /** zcode 未找到文案：附当前目录与相似名建议（同干名优先，其次编辑距离 ≤3） */
@@ -186,8 +245,9 @@ final class ReadTool {
         }
         for (int i = 1; i <= a.length(); i++) {
             for (int j = 1; j <= b.length(); j++) {
-                int cost = a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1;
-                dp[i][j] = Math.min(Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1), dp[i - 1][j - 1] + cost);
+                int cost = a.charAt(i) == b.charAt(j) ? 0 : 1;
+                dp[i][j] = Math.min(Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1),
+                        dp[i - 1][j - 1] + cost);
             }
         }
         return dp[a.length()][b.length()];

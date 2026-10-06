@@ -186,6 +186,11 @@ public class SandboxSession {
         return "~/" + StrUtil.blankToDefault(props.getWorkdir(), "sandbox").replaceFirst("^~/?", "");
     }
 
+    /** 工作目录相对名（去 ~/ 前缀；供 SFTP cd 到工作区，对齐 SandboxFileTransfer.cdWorkdir） */
+    public String workdirRelative() {
+        return StrUtil.blankToDefault(props.getWorkdir(), "sandbox").replaceFirst("^~/?", "");
+    }
+
     // ---------- 连接管理 ----------
 
     private void ensureSession() throws Exception {

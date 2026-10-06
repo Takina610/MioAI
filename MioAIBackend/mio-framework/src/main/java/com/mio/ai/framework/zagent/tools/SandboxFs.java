@@ -3,6 +3,7 @@ package com.mio.ai.framework.zagent.tools;
 import cn.hutool.core.util.StrUtil;
 import com.mio.ai.framework.sandbox.SandboxSession;
 
+import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -63,6 +64,49 @@ public final class SandboxFs {
     /** 读全文（UTF-8）；文件不存在时抛异常 */
     public String readAll(String relPath) {
         return session.readFile(relPath);
+    }
+
+    /** 读原始字节（SFTP 二进制安全，图片读取用）；超 maxBytes 抛 IllegalStateException */
+    public byte[] readFileBytes(String relPath, long maxBytes) {
+        String safe;
+        try {
+            safe = session.resolveRelative(relPath);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException(e.getMessage(), e);
+        }
+        try {
+            return session.withSftp(sftp -> {
+                cdWorkdir(sftp);
+                try (java.io.InputStream in = sftp.get(safe);
+                     ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                    byte[] buffer = new byte[8192];
+                    long total = 0;
+                    int n;
+                    while ((n = in.read(buffer)) != -1) {
+                        total += n;
+                        if (total > maxBytes) {
+                            throw new IllegalStateException(
+                                    "File exceeds maximum readable size of " + maxBytes + " bytes");
+                        }
+                        out.write(buffer, 0, n);
+                    }
+                    return out.toByteArray();
+                }
+            });
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("读取失败: " + relPath + "（" + e.getMessage() + "）", e);
+        }
+    }
+
+    /** SFTP 通道先 cd 到工作目录，之后的相对路径都落在工作区内（对齐 SandboxFileTransfer） */
+    private void cdWorkdir(com.jcraft.jsch.ChannelSftp sftp) throws Exception {
+        String workdir = session.workdirRelative();
+        if (StrUtil.isBlank(workdir)) {
+            return;
+        }
+        sftp.cd(workdir);
     }
 
     /** 行切片 [startLine, endLine]（1 闭区间），返回实际行数组 */

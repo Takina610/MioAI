@@ -27,8 +27,13 @@ public final class ToolRegistry {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    /** 一次执行的结果（含失败信封内容） */
-    public record Executed(String toolName, String content, boolean error, long durationMs) {
+    /** 一次执行的结果（含失败信封内容；media 为 Read 图片等媒体负载，纯文本结果为空） */
+    public record Executed(String toolName, String content, boolean error, long durationMs,
+                           List<ToolMedia> media) {
+
+        public Executed(String toolName, String content, boolean error, long durationMs) {
+            this(toolName, content, error, durationMs, List.of());
+        }
     }
 
     /** 待执行的调用（模型步的输出） */
@@ -121,10 +126,10 @@ public final class ToolRegistry {
                     true, System.currentTimeMillis() - startedAt);
         }
         try {
-            Future<String> future = executor.submit(() -> entry.handler().execute(input, context));
-            String content;
+            Future<ToolResult> future = executor.submit(() -> entry.handler().execute(input, context));
+            ToolResult result;
             try {
-                content = entry.timeoutMs() > 0
+                result = entry.timeoutMs() > 0
                         ? future.get(entry.timeoutMs(), TimeUnit.MILLISECONDS)
                         : future.get();
             } catch (TimeoutException timeout) {
@@ -144,8 +149,9 @@ public final class ToolRegistry {
                         "<tool_use_error>" + call.name() + " failed: " + cause.getMessage() + "</tool_use_error>",
                         true, System.currentTimeMillis() - startedAt);
             }
-            return new Executed(call.name(), content == null ? "" : content, false,
-                    System.currentTimeMillis() - startedAt);
+            String content = result.content() == null ? "" : result.content();
+            return new Executed(call.name(), content, false,
+                    System.currentTimeMillis() - startedAt, result.media());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return new Executed(call.name(), "<tool_use_error>Tool execution was interrupted</tool_use_error>",

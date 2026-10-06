@@ -155,9 +155,10 @@ public final class AgentEngine {
         for (int i = 0; i < executed.size(); i++) {
             ToolRegistry.Executed result = executed.get(i);
             String id = calls.get(i).id();
+            // content 对媒体结果已是 [Attached ...] 占位文本，展示/落库不含 base64
             events.toolResult(id, result.toolName(), result.content());
             state.add(ConversationEntry.toolResult(id, calls.get(i).name(),
-                    result.content(), result.error()));
+                    result.content(), result.error(), result.media()));
         }
         emitTodosIfChanged();
     }
