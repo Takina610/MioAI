@@ -40,9 +40,17 @@ public class StreamTurnCollector {
     /** 本轮是否已向外发出任何内容（重试边界哨兵：发出后瞬态失败不再重试） */
     private boolean emitted;
 
+    /** 本轮是否已向外发出过正文增量（兜底收束时判断是否需要分段分隔） */
+    private boolean textEmitted;
+
     /** 本轮是否已向外发出思考/正文/工具调用任一内容（zcode 重试边界：false 才允许无感重试） */
     public boolean hasEmitted() {
         return emitted;
+    }
+
+    /** 本轮是否已向外发出过正文增量 */
+    public boolean hasEmittedText() {
+        return textEmitted;
     }
 
     public StreamTurnCollector(Consumer<String> thinkingDeltaSink,
@@ -88,6 +96,7 @@ public class StreamTurnCollector {
             text.append(textDelta);
             answerDeltaSink.accept(textDelta);
             emitted = true;
+            textEmitted = true;
         }
 
         mergeToolCalls(output.getToolCalls());

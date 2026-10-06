@@ -27,6 +27,9 @@ public final class ModelStepRunner {
     private final String reasoningEffort;
     private final int modelRetries;
 
+    /** 最近一步是否已流出部分正文（兜底收束时判断是否需要先分段） */
+    private volatile boolean lastStepTextEmitted;
+
     public ModelStepRunner(ChatModel chatModel, long streamTimeoutSeconds, String reasoningEffort,
                            int modelRetries) {
         this.chatModel = chatModel;
@@ -46,8 +49,10 @@ public final class ModelStepRunner {
             try {
                 Prompt prompt = new Prompt(messages, buildOptions(toolCallbacks));
                 chatModel.stream(prompt).doOnNext(collector::accept).blockLast();
+                lastStepTextEmitted = collector.hasEmittedText();
                 return new StepResult(collector.getText(), collector.getToolCallInputs(), collector.getUsage());
             } catch (Throwable error) {
+                lastStepTextEmitted = collector.hasEmittedText();
                 StreamFailureClassifier.Classification failure = StreamFailureClassifier.classify(error);
                 boolean canRetry = failure.retryable()
                         && !collector.hasEmitted()
@@ -64,6 +69,11 @@ public final class ModelStepRunner {
                 }
             }
         }
+    }
+
+    /** 最近一步失败前是否已流出部分正文（引擎兜底收束时用于决定是否插入分段） */
+    public boolean lastStepTextEmitted() {
+        return lastStepTextEmitted;
     }
 
     /** 指数退避 + 抖动：min(60s, 2s × 2^(attempt-1))，±20% 随机化 */

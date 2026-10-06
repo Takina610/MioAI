@@ -168,12 +168,14 @@ public class MioBot {
                 }
 
                 long durationMs = System.currentTimeMillis() - startTime;
+                channel.abortRunningTools();
                 channel.persistDisplay("assistant", null, durationMs);
                 channel.usage((int) engine.inputTokens(), (int) engine.outputTokens(), durationMs);
                 channel.done();
                 complete(sseEmitter);
             } catch (Exception e) {
                 log.error("MioBot 执行异常, chatId={}", chatId, e);
+                channel.abortRunningTools();
                 channel.persistDisplay("assistant", null, System.currentTimeMillis() - startTime);
                 channel.error("执行出错：" + e.getMessage());
                 complete(sseEmitter);

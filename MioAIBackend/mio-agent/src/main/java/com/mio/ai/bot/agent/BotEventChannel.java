@@ -28,6 +28,10 @@ public class BotEventChannel {
     /** 工具结果块的持久化上限：供水合重建请求历史（对齐 zcode 模型可见预算量级） */
     private static final int TOOL_RESULT_PERSIST_CAP = 24_000;
 
+    /** 步中断时悬挂工具块的合成结果（与水合器 ConversationHydrator 的合成文案一致） */
+    private static final String INTERRUPTED_TOOL_RESULT =
+            "<tool_use_error>Interrupted before completion</tool_use_error>";
+
     private final AgentMessageService agentMessageService;
     private final String chatId;
     private final Long userId;
@@ -140,6 +144,24 @@ public class BotEventChannel {
         String preview = full.length() > TOOL_RESULT_PREVIEW_LENGTH
                 ? full.substring(0, TOOL_RESULT_PREVIEW_LENGTH) + "…" : full;
         emit(SseChunk.toolResult(id, tool, preview).fields());
+    }
+
+    /**
+     * 中断收尾：把未配对完成的 running 工具块标记为中断结果。
+     * 兜底收束后调用——防止本轮结束时仍有悬挂的"执行中"工具块（前端转圈、落库后刷新仍显示执行中）。
+     */
+    public void abortRunningTools() {
+        for (Map<String, Object> block : displayBlocks) {
+            if (!"tool".equals(block.get("type")) || !"running".equals(block.get("status"))) {
+                continue;
+            }
+            block.put("status", "done");
+            block.put("result", INTERRUPTED_TOOL_RESULT);
+            Object id = block.get("id");
+            String idText = id instanceof String text && !text.isBlank() ? text : null;
+            emit(SseChunk.toolResult(idText, String.valueOf(block.get("tool")),
+                    INTERRUPTED_TOOL_RESULT).fields());
+        }
     }
 
     /** 任务清单变化：推送结构化步骤列表，前端渲染为计划面板 */

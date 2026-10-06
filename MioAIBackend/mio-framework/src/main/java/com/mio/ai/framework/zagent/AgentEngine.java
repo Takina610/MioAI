@@ -30,6 +30,17 @@ public final class AgentEngine {
             "[system] The step limit for this turn has been reached. Do not call any more tools. "
                     + "Summarize the results obtained so far and suggest how to continue.";
 
+    /** 兜底收束指令（不落会话历史，仅随抢救请求发出） */
+    private static final String RESCUE_INSTRUCTION =
+            "[system] The previous model step was interrupted or ended without any final answer text "
+                    + "(the model service request failed mid-turn). Based on the conversation above and the "
+                    + "tool results already obtained, provide your complete final answer to the user's "
+                    + "request now. Do not call any more tools.";
+
+    /** 兜底回复（用户可见）：抢救也失败时保证本轮必有落库回复，避免会话出现空结果 */
+    private static final String TURN_FAILED_FALLBACK =
+            "抱歉，模型服务连续多次请求失败，本轮未能生成回复。请点击重新生成，或稍后重新发送。";
+
     private final ChatModel chatModel;
     private final AgentEngineConfig config;
     private final String reasoningEffort;
@@ -112,15 +123,23 @@ public final class AgentEngine {
             List<Message> messages = HistoryProjector.project(prefix, state.entries());
             List<ToolCallback> callbacks = finalStep ? List.of() : registry.asToolCallbacks();
 
-            ModelStepRunner.StepResult result = runStepWithReactiveCompact(messages, callbacks);
-            if (result.usage() != null) {
-                inputTokens += result.usage().getPromptTokens() != null
-                        ? result.usage().getPromptTokens() : 0;
-                outputTokens += result.usage().getCompletionTokens() != null
-                        ? result.usage().getCompletionTokens() : 0;
+            ModelStepRunner.StepResult result = runStepOrFallback(messages, callbacks);
+
+            // 模型空收尾（流被截断/工具调用幻觉后停住，只有思考没有答复）：抢救一次
+            if (result.toolCalls().isEmpty() && isBlank(result.text())) {
+                log.warn("模型步无文本无工具调用，兜底收束, chatId={}, step={}", chatId, step);
+                result = rescueOrFallback(messages);
             }
+            // 步数上限后模型仍要调工具：不再执行（防无上限循环与孤儿 tool_call），强制收束
+            if (!result.toolCalls().isEmpty() && finalStep) {
+                log.warn("步数上限后仍请求工具，强制收束, chatId={}, step={}", chatId, step);
+                result = rescueOrFallback(messages);
+            }
+
+            accumulateUsage(result.usage());
             events.stepFinished(step, inputTokens, outputTokens, result.toolCalls());
-            state.add(ConversationEntry.assistant(result.text(), result.toolCalls()));
+            state.add(ConversationEntry.assistant(result.text() == null ? "" : result.text(),
+                    result.toolCalls()));
 
             if (result.toolCalls().isEmpty()) {
                 return;
@@ -128,6 +147,72 @@ public final class AgentEngine {
             state.noteToolTurn();
             executeToolBatch(result.toolCalls());
         }
+    }
+
+    /** 一步模型请求：失败时兜底收束（抢救 → 静态文案），循环永不因模型服务失败中断 */
+    private ModelStepRunner.StepResult runStepOrFallback(List<Message> messages,
+                                                         List<ToolCallback> callbacks) {
+        try {
+            return runStepWithReactiveCompact(messages, callbacks);
+        } catch (Throwable error) {
+            if (isInterruption(error)) {
+                throw error;
+            }
+            log.warn("模型步失败，进入兜底收束, chatId={}", chatId, error);
+            // 与已流出的部分正文分段，避免兜底内容拼接在残句后
+            if (modelRunner.lastStepTextEmitted()) {
+                events.answerDelta("\n\n");
+            }
+            return rescueOrFallback(messages);
+        }
+    }
+
+    /** 兜底收束：禁工具再调一次模型生成最终答复；再失败则落静态兜底文案（保证本轮必有可见回复） */
+    private ModelStepRunner.StepResult rescueOrFallback(List<Message> messages) {
+        try {
+            List<Message> rescueMessages = new ArrayList<>(messages);
+            rescueMessages.add(new org.springframework.ai.chat.messages.UserMessage(
+                    HistoryProjector.wrapReminder(RESCUE_INSTRUCTION)));
+            ModelStepRunner.StepResult rescue = modelRunner.run(rescueMessages, List.of(), events);
+            if (!isBlank(rescue.text())) {
+                return new ModelStepRunner.StepResult(rescue.text(), List.of(), rescue.usage());
+            }
+            log.warn("兜底收束返回空文本, chatId={}", chatId);
+        } catch (Throwable error) {
+            log.warn("兜底收束调用失败, chatId={}: {}", chatId, error.toString());
+        }
+        // 静态兜底：流式外发（进展示块/落库）+ 作为本轮 assistant 文本
+        events.answerDelta(TURN_FAILED_FALLBACK);
+        return new ModelStepRunner.StepResult(TURN_FAILED_FALLBACK, List.of(), null);
+    }
+
+    private void accumulateUsage(org.springframework.ai.chat.metadata.Usage usage) {
+        if (usage == null) {
+            return;
+        }
+        if (usage.getPromptTokens() != null) {
+            inputTokens += usage.getPromptTokens();
+        }
+        if (usage.getCompletionTokens() != null) {
+            outputTokens += usage.getCompletionTokens();
+        }
+    }
+
+    private static boolean isBlank(String text) {
+        return text == null || text.isBlank();
+    }
+
+    /** 中断类失败（线程被打断）不做兜底，原样上抛 */
+    private static boolean isInterruption(Throwable error) {
+        Throwable current = error;
+        while (current != null) {
+            if (current instanceof InterruptedException
+                    || Thread.currentThread().isInterrupted()) {
+                return true;
+            }
+            current = current.getCause() == current ? null : current.getCause();
+        }
+        return false;
     }
 
     /** 上下文超限错误的反应式压缩（zcode recoverModelStepAfterContextExceeded） */
