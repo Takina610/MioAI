@@ -141,21 +141,22 @@ export const isChatActive = async (chatId: string): Promise<boolean> => {
   return Boolean(result)
 }
 
+/** 生成会话标题；失败返回 null（调用方保留首条消息兜底标题，不覆盖为占位） */
 export const generateTitle = async (
   agentId: number,
   conversationId: string,
   content: string
-): Promise<string> => {
+): Promise<string | null> => {
   try {
     const response = await request.post<string>('/summary', {
       conversationId,
       agentId,
       content
     } satisfies ChatMessageRequest)
-    return response || '新对话'
+    return response || null
   } catch (error) {
     console.error('Failed to generate title:', error)
-    return '新对话'
+    return null
   }
 }
 

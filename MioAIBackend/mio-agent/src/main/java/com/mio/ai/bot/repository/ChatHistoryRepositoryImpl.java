@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mio.ai.bot.mapper.ChatConversationDOMapper;
 import com.mio.ai.bot.model.entity.ChatConversationDO;
 import com.mio.ai.bot.model.vo.ChatVO;
+import com.mio.ai.bot.util.ChatTitles;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -34,6 +35,8 @@ public class ChatHistoryRepositoryImpl implements ChatHistoryRepository {
             newChat.setConversationId(chatVO.getChatId());
             newChat.setUserId(chatVO.getUserId());
             newChat.setAgentId(chatVO.getAgentId());
+            // 创建即落首条消息兜底标题：标题精化失败/用户中途离开时不再出现"新对话"占位
+            newChat.setTitle(ChatTitles.fallbackTitle(chatVO.getMessage()));
             chatConversationDOMapper.insert(newChat);
         } else {
             exist.setUpdateTime(new Date());

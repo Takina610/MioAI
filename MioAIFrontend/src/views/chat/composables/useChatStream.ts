@@ -42,7 +42,7 @@ const RECOVERY_MAX_WAIT_MS = 600000
 export function useChatStream(options: {
   agentId: Ref<number>
   messagesApi: ChatMessagesApi
-  ensureSession: (chatId: string) => void
+  ensureSession: (chatId: string, firstMessage?: string) => void
   updateTitle: (userContent: string, aiContent: string, chatId: string) => void
   scrollToBottom: () => void
   /** 流式期间的贴底跟随：用户已滚离底部时不应拉动滚动条（由页面实现判断） */
@@ -149,7 +149,7 @@ export function useChatStream(options: {
     messagesApi.setChatMessages(chatId, chatMessages)
 
     if (!skipUserMessage && userStore.isLoggedIn) {
-      options.ensureSession(chatId)
+      options.ensureSession(chatId, content)
     }
     if (isNewChat && userStore.isLoggedIn) {
       router.push(`/chat/${options.agentId.value}/${chatId}`)

@@ -58,13 +58,13 @@ export function useChatSessions(options: {
     return true
   }
 
-  /** 发送消息后将会话置顶；不存在（新会话）则插入占位项 */
-  function ensureSession(chatId: string): void {
+  /** 发送消息后将会话置顶；不存在（新会话）则插入占位项，标题取首条消息兜底（与后端 ChatTitles 规则一致） */
+  function ensureSession(chatId: string, firstMessage?: string): void {
     const index = chatList.value.findIndex(c => c.id === chatId)
     if (index === -1) {
       chatList.value.unshift({
         id: chatId,
-        title: '新对话',
+        title: deriveFallbackTitle(firstMessage),
         updateTime: new Date(),
         hasMessage: true
       })
@@ -76,16 +76,17 @@ export function useChatSessions(options: {
     }
   }
 
-  /** 新会话首轮对话完成后生成标题，并逐字打出 */
+  /** 新会话首轮对话完成后生成标题，并逐字打出；生成失败保留现有兜底标题不覆盖 */
   async function updateChatTitleWithTypewriter(
     userContent: string,
     aiContent: string,
     chatId: string
   ): Promise<void> {
     const title = await generateTitle(options.agentId.value, chatId, userContent + '\n' + aiContent)
+    if (!title) return
 
     const chatItem = chatList.value.find(c => c.id === chatId)
-    if (!chatItem) return
+    if (!chatItem || chatItem.title === title) return
 
     chatItem.title = ''
 
@@ -93,6 +94,25 @@ export function useChatSessions(options: {
       chatItem.title += title[i]
       await new Promise(resolve => setTimeout(resolve, 50))
     }
+  }
+
+  /** 首条消息兜底标题：取首个非空行清洗截断（与后端 ChatTitles 规则一致） */
+  function deriveFallbackTitle(firstMessage?: string): string {
+    if (firstMessage) {
+      for (const line of firstMessage.split(/\r?\n/)) {
+        const cleaned = line
+          .trim()
+          .replace(/^[#>\s]+/, '')
+          .replace(/[*_~`]+/g, '')
+          .replace(/^["'“”‘’]+|["'“”‘’]+$/g, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+        if (cleaned) {
+          return cleaned.length > 24 ? cleaned.slice(0, 24) + '…' : cleaned
+        }
+      }
+    }
+    return '新对话'
   }
 
   function shareChat(conversationId: string): void {
