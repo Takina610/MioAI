@@ -1,0 +1,126 @@
+/* 首页 Anthropic 风格共享层:Token 挂在 .home-page 上,类名以 hm- 前缀隔离 */
+
+.home-page {
+  /* 颜色:暖米色大地调,强调色保留 MioAI 主绿 */
+  --hm-bg: #f0eee6;
+  --hm-bg-raised: #faf9f5;
+  --hm-bg-dark: #141413;
+  --hm-text: #141413;
+  --hm-text-2: #6e6b62;
+  --hm-text-muted: #b0aea5;
+  --hm-text-invert: #faf9f5;
+  --hm-border: #d8d5cc;
+  --hm-border-subtle: #e8e6dc;
+  --hm-green: #2aa1a9;
+  --hm-green-deep: #238b92;
+  --hm-green-soft: rgba(42, 161, 169, 0.12);
+
+  /* 字体:Latin 用 AnthropicSans,标题 CJK 落宋体(衬线编辑感),正文 CJK 落黑体 */
+  --hm-font-display: 'AnthropicSans Display', 'Songti SC', 'STSong', 'SimSun', serif;
+  --hm-font-text: 'AnthropicSans Text', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+
+  --hm-ease: cubic-bezier(0.16, 1, 0.3, 1);
+
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--hm-bg);
+  color: var(--hm-text);
+  font-family: var(--hm-font-text);
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.home-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-inline: clamp(20px, 4vw, 40px);
+}
+
+/* 胶囊按钮:主绿填充 / 深色描边 */
+.hm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 28px;
+  border-radius: 999px;
+  font-family: var(--hm-font-text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  color: #fff;
+  background: var(--hm-green);
+  transition: background 0.25s var(--hm-ease), transform 0.25s var(--hm-ease),
+    border-color 0.25s var(--hm-ease), color 0.25s var(--hm-ease);
+
+  &:hover {
+    background: var(--hm-green-deep);
+  }
+}
+
+.hm-btn--outline {
+  color: var(--hm-text);
+  background: transparent;
+  border: 1px solid rgba(20, 20, 19, 0.35);
+
+  &:hover {
+    background: transparent;
+    border-color: var(--hm-text);
+  }
+}
+
+/* 小节标签(字距拉开的分类小字) */
+.hm-tag {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--hm-green);
+}
+
+/* 内容自下而上淡入(Hero 载入错落) */
+@keyframes hm-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hm-reveal {
+  opacity: 0;
+  animation: hm-fade-up 0.6s var(--hm-ease) forwards;
+}
+
+/* 滚动进入视口后显现 */
+.hm-scroll-reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.55s var(--hm-ease), transform 0.55s var(--hm-ease);
+
+  &.is-visible {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hm-reveal,
+  .hm-scroll-reveal {
+    animation: none;
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* 头部用户下拉菜单与暖色页面协调 */
+.hm-user-menu {
+  border-radius: 12px;
+  border: 1px solid var(--hm-border-subtle);
+  box-shadow: 0 8px 32px rgba(20, 20, 19, 0.1);
+}
