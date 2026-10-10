@@ -88,7 +88,17 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限删除该知识库");
         }
 
-        documentService.deleteDocumentsByKbId(id, userId);
+        return deleteKnowledgeBaseCascade(id);
+    }
+
+    @Override
+    public boolean deleteKnowledgeBaseCascade(Long id) {
+        if (id == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "知识库ID不能为空");
+        }
+
+        // 级联清理文档关联资源（向量数据、R2 文件、文档记录）
+        documentService.deleteDocumentsByKbIdCascade(id);
 
         // 删除智能体与该知识库的关联记录
         agentKnowledgeMapper.delete(new LambdaQueryWrapper<AgentKnowledge>().eq(AgentKnowledge::getKbId, id));

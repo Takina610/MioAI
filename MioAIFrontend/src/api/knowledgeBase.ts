@@ -82,6 +82,47 @@ export function cancelKnowledgeCreation(kbId: number): Promise<boolean> {
   })
 }
 
+export interface GithubFileInfo {
+  path: string
+  size: number
+}
+
+export interface GithubPreview {
+  owner: string
+  repo: string
+  branch: string
+  totalMatched: number
+  truncated: boolean
+  skippedUnsupported: number
+  skippedTooLarge: number
+  files: GithubFileInfo[]
+}
+
+export interface GithubImportItem {
+  path: string
+  fileName?: string
+  docId?: number
+  fileSize: number
+  status: 'success' | 'error'
+  error?: string
+}
+
+export function previewGithubImport(url: string): Promise<GithubPreview> {
+  return request({
+    url: '/knowledge-bases/create/github/preview',
+    method: 'post',
+    data: { url }
+  })
+}
+
+export function importGithubFiles(kbId: number, url: string, paths: string[]): Promise<GithubImportItem[]> {
+  return request({
+    url: '/knowledge-bases/create/github/import',
+    method: 'post',
+    data: { kbId, url, paths }
+  })
+}
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
 export function vectorizeKnowledgeFiles(kbId: number, token: string): EventSource {

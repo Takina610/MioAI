@@ -352,8 +352,8 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
         }
 
         // 删除知识库及其所有数据
-        deleteKnowledgeBaseAndDocuments(kbId);
-        
+        knowledgeBaseService.deleteKnowledgeBaseCascade(kbId);
+
         // 清除中断标志
         cancellationFlags.remove(kbId);
     }
@@ -397,24 +397,8 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
      * 清理失败的知识库数据
      */
     private void cleanupFailedKnowledgeBase(Long kbId) {
-        deleteKnowledgeBaseAndDocuments(kbId);
+        knowledgeBaseService.deleteKnowledgeBaseCascade(kbId);
         log.info("清理失败知识库完成: kbId={}", kbId);
-    }
-    
-    /**
-     * 删除知识库及其所有关联数据（向量数据、R2文件、数据库记录）
-     */
-    private void deleteKnowledgeBaseAndDocuments(Long kbId) {
-        List<Document> documents = documentMapper.selectList(
-            new QueryWrapper<Document>()
-                .eq("kb_id", kbId)
-        );
-
-        for (Document doc : documents) {
-            documentCleanupService.deleteDocumentAssets(doc);
-        }
-
-        knowledgeBaseService.removeById(kbId);
     }
 
     private String buildProgressEvent(int total, int current, String message) {

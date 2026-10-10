@@ -72,7 +72,25 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
         if (kb == null || !kb.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "文档不存在");
         }
+        return deleteDocumentInternal(document);
+    }
 
+    @Override
+    public boolean deleteDocumentByAdmin(Long docId) {
+        if (docId == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "文档ID不能为空");
+        }
+        Document document = this.getById(docId);
+        if (document == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "文档不存在");
+        }
+        return deleteDocumentInternal(document);
+    }
+
+    /**
+     * 文档删除公共路径：R2 文件 -> 向量分块 -> 记录 -> 知识库统计
+     */
+    private boolean deleteDocumentInternal(Document document) {
         if (document.getFilePath() != null && !document.getFilePath().isEmpty()) {
             try {
                 r2Util.deleteFile(document.getFilePath());
@@ -82,9 +100,9 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
         }
 
         // 向量清理按 metadata.docId 过滤删除，与文档状态无关（半途失败的文档也可能有残留分块）
-        documentCleanupService.deleteVectorsByDocId(id);
+        documentCleanupService.deleteVectorsByDocId(document.getId());
 
-        boolean removed = this.removeById(id);
+        boolean removed = this.removeById(document.getId());
 
         documentCleanupService.updateKnowledgeBaseStats(document.getKbId());
 
@@ -160,15 +178,23 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
         if (kbId == null) {
             return false;
         }
-        LambdaQueryWrapper<Document> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Document::getKbId, kbId);
-        List<Document> documents = this.list(wrapper);
-        
+        // 归属校验已在知识库删除入口完成，这里只做资源级联清理
+        return deleteDocumentsByKbIdCascade(kbId);
+    }
+
+    @Override
+    public boolean deleteDocumentsByKbIdCascade(Long kbId) {
+        if (kbId == null) {
+            return false;
+        }
+        List<Document> documents = this.list(
+                new LambdaQueryWrapper<Document>().eq(Document::getKbId, kbId));
+
         for (Document document : documents) {
-            deleteDocument(document.getId(), userId);
+            deleteDocumentInternal(document);
         }
 
-        return this.remove(wrapper);
+        return true;
     }
 
     private DocumentVO convertToVO(Document document) {

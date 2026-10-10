@@ -89,6 +89,8 @@ services:
       EMBED_APIKEY: ${EMBED_APIKEY:-}
       EMBED_BASE_URL: ${EMBED_BASE_URL:-https://api.42x.shop/v1}
       EMBED_MODEL: ${EMBED_MODEL:-mistral-embed}
+      # 知识库 GitHub 导入：PAT 提升 API 限额（匿名 60 次/小时/IP），可选
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       # 仅重排（rerank）还依赖 DashScope 原生端点，默认关闭，可留空
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
       WEB_SEARCH_API_KEY: ${WEB_SEARCH_API_KEY:-}

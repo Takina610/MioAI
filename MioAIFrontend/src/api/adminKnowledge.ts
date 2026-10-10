@@ -47,3 +47,10 @@ export function deleteKnowledgeBase(id: number): Promise<boolean> {
     method: 'delete'
   })
 }
+
+export function deleteAdminDocument(kbId: number, docId: number): Promise<boolean> {
+  return request({
+    url: `/admin/knowledge/${kbId}/documents/${docId}`,
+    method: 'delete'
+  })
+}

@@ -18,6 +18,7 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 import java.io.IOException;
+import java.util.UUID;
 
 @Component
 public class R2Util {
@@ -55,6 +56,50 @@ public class R2Util {
             r2Client.putObject(putRequest, RequestBody.fromBytes(file.getBytes()));
             return cdnDomain + "/" + fileKey;
 
+        } catch (S3Exception e) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "上传文件到R2失败: " + e.awsErrorDetails().errorMessage());
+        }
+    }
+
+    /**
+     * 上传内存中的文件内容（GitHub 导入等非 MultipartFile 来源）
+     * @param originalFilename 原始文件名
+     * @param bytes 文件内容
+     * @param fileType 文件类型枚举
+     * @param entityId 实体ID（如知识库ID）
+     * @return 文件访问URL
+     */
+    public String uploadFile(String originalFilename,
+                             byte[] bytes,
+                             FileType fileType,
+                             String entityId) {
+        if (bytes == null || bytes.length == 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件内容不能为空");
+        }
+        if (bytes.length > fileType.getMaxSize()) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, String.format(
+                    "文件大小超过限制: %s (最大 %.2f MB)",
+                    fileType.getDescription(),
+                    fileType.getMaxSize() / (1024.0 * 1024.0)
+            ));
+        }
+        if (!fileType.isExtensionAllowed(originalFilename)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, String.format(
+                    "不支持的文件类型: %s (允许的格式: %s)",
+                    originalFilename,
+                    String.join(", ", fileType.getAllowedExtensions())
+            ));
+        }
+
+        String fileKey = buildFileKey(originalFilename, fileType, entityId);
+        try {
+            PutObjectRequest putRequest = PutObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(fileKey)
+                    .contentType(probeContentType(originalFilename))
+                    .build();
+            r2Client.putObject(putRequest, RequestBody.fromBytes(bytes));
+            return cdnDomain + "/" + fileKey;
         } catch (S3Exception e) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "上传文件到R2失败: " + e.awsErrorDetails().errorMessage());
         }
@@ -242,42 +287,59 @@ public class R2Util {
      * 知识库格式: knowledge/{knowledgeId}/{清理后的原始文件名}_{timestamp}.{ext}
      */
     public String buildFileKey(MultipartFile file, FileType fileType, String entityId) {
-        StringBuilder keyBuilder = new StringBuilder();
+        return buildFileKey(file.getOriginalFilename(), fileType, entityId);
+    }
 
-        // 1. 添加基础路径
+    /**
+     * 构建文件存储路径（核心）
+     * 头像格式: avatars/{user|agent}/{entityId}_{timestamp}.{ext}
+     * 知识库格式: knowledge_base/{kbId}/{清理后的原始文件名}_{timestamp}_{rand}.{ext}
+     */
+    public String buildFileKey(String originalFilename, FileType fileType, String entityId) {
+        StringBuilder keyBuilder = new StringBuilder();
         keyBuilder.append(fileType.getBasePath());
 
-        // 2. 如果是知识库，添加知识库ID作为文件夹
         if (fileType.needEntityFolder()) {
             keyBuilder.append("/").append(entityId);
         }
-
-        // 3. 添加文件名
         keyBuilder.append("/");
 
-        String originalFilename = file.getOriginalFilename();
         String extension = getFileExtension(originalFilename);
         String nameWithoutExt = getNameWithoutExtension(originalFilename);
-
-        // 生成时间戳版本号
         String timestamp = String.valueOf(System.currentTimeMillis());
 
         if (fileType.needEntityFolder()) {
-            // 知识库：原始文件名 + 时间戳
             String cleanedName = cleanFileName(nameWithoutExt);
-            keyBuilder.append(cleanedName).append("_").append(timestamp);
-            if (!extension.isEmpty()) {
-                keyBuilder.append(".").append(extension);
-            }
+            // 同名文件批量导入会落在同一毫秒，追加随机段保证 key 唯一，避免互相覆盖
+            String random = UUID.randomUUID().toString().substring(0, 8);
+            keyBuilder.append(cleanedName).append("_").append(timestamp).append("_").append(random);
         } else {
-            // 头像：entityId + 时间戳
             keyBuilder.append(entityId).append("_").append(timestamp);
-            if (!extension.isEmpty()) {
-                keyBuilder.append(".").append(extension);
-            }
         }
 
+        if (!extension.isEmpty()) {
+            keyBuilder.append(".").append(extension);
+        }
         return keyBuilder.toString();
+    }
+
+    /**
+     * 按扩展名推断存储对象的 Content-Type
+     */
+    private String probeContentType(String fileName) {
+        String extension = getFileExtension(fileName);
+        return switch (extension) {
+            case "pdf" -> "application/pdf";
+            case "doc" -> "application/msword";
+            case "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            case "md", "markdown" -> "text/markdown";
+            case "txt" -> "text/plain";
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "png" -> "image/png";
+            case "gif" -> "image/gif";
+            case "webp" -> "image/webp";
+            default -> "application/octet-stream";
+        };
     }
 
     /**

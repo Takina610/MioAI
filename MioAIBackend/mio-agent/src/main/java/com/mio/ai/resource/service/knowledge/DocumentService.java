@@ -19,6 +19,11 @@ public interface DocumentService extends IService<Document> {
     boolean deleteDocument(Long id, Long userId);
 
     /**
+     * 管理员删除文档（跳过归属校验，权限由调用方保证），级联清理 R2 文件与向量分块
+     */
+    boolean deleteDocumentByAdmin(Long docId);
+
+    /**
      * 根据ID获取文档（校验所有者或公开知识库可见）
      */
     DocumentVO getDocumentById(Long id, Long userId);
@@ -34,4 +39,10 @@ public interface DocumentService extends IService<Document> {
      * 删除知识库下的所有文档
      */
     boolean deleteDocumentsByKbId(Long kbId, Long userId);
+
+    /**
+     * 级联删除知识库下所有文档（向量分块 + R2 文件 + 记录），不做归属校验，
+     * 供知识库整体删除复用，权限由调用方保证
+     */
+    boolean deleteDocumentsByKbIdCascade(Long kbId);
 }

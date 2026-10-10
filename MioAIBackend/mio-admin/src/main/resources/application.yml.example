@@ -93,6 +93,10 @@ mio:
       # 入库前用对话模型给每个分块提关键词写入 metadata（当前检索并不消费该字段，
       # 且每块多一次模型调用），默认关闭
       keyword-enrich: false
+    # 知识库 GitHub 导入：PAT 仅用于提升 GitHub API 限额（匿名 60 次/小时/IP，
+    # 带 token 5000 次/小时），可选
+    github:
+      token: ${GITHUB_TOKEN:}
     # 长会话摘要记忆
     memory:
       summary-enabled: true

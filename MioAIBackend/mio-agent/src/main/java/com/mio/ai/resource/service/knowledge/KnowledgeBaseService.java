@@ -31,6 +31,12 @@ public interface KnowledgeBaseService extends IService<KnowledgeBase> {
     boolean deleteKnowledgeBase(Long id, Long userId);
 
     /**
+     * 级联删除知识库（文档向量/R2 文件/记录 + 智能体绑定 + 知识库本身），
+     * 不做归属校验，权限由调用方保证（用户路径校验所有者，管理路径校验 admin 角色）
+     */
+    boolean deleteKnowledgeBaseCascade(Long id);
+
+    /**
      * 根据ID获取知识库
      */
     KnowledgeBaseVO getKnowledgeBaseById(Long id);

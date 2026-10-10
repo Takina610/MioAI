@@ -2,10 +2,16 @@ package com.mio.ai.resource.controller.knowledge;
 
 import com.mio.ai.common.aop.annotation.LogInfo;
 import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.resource.model.dto.githubimport.GithubImportPreviewRequest;
+import com.mio.ai.resource.model.dto.githubimport.GithubImportRequest;
+import com.mio.ai.resource.model.vo.knowledge.GithubImportItemVO;
+import com.mio.ai.resource.model.vo.knowledge.GithubPreviewVO;
 import com.mio.ai.user.utils.RedisComponent;
 import com.mio.ai.common.utils.ResultUtils;
+import com.mio.ai.resource.service.knowledge.GithubImportService;
 import com.mio.ai.resource.service.knowledge.KnowledgeBaseCreateService;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.web.bind.annotation.*;
@@ -26,6 +32,9 @@ public class KnowledgeBaseCreateController {
 
     @Autowired
     private KnowledgeBaseCreateService knowledgeBaseCreateService;
+
+    @Autowired
+    private GithubImportService githubImportService;
 
     @Autowired
     private RedisComponent redisComponent;
@@ -79,5 +88,33 @@ public class KnowledgeBaseCreateController {
         Long userId = redisComponent.getUserId(request.getHeader("token"));
         knowledgeBaseCreateService.cancelCreation(kbId, userId);
         return ResultUtils.success(true);
+    }
+
+    /**
+     * 解析 GitHub 链接，返回可导入文件清单
+     */
+    @PostMapping("/github/preview")
+    @LogInfo
+    public BaseResponse<GithubPreviewVO> previewGithubImport(
+            @Valid @RequestBody GithubImportPreviewRequest previewRequest,
+            HttpServletRequest request) {
+        Long userId = redisComponent.getUserId(request.getHeader("token"));
+        GithubPreviewVO preview = githubImportService.preview(userId, previewRequest.getUrl());
+        return ResultUtils.success(preview);
+    }
+
+    /**
+     * 导入选中的 GitHub 文件到知识库（下载→R2→文档记录），向量化沿用既有流程
+     */
+    @PostMapping("/github/import")
+    @LogInfo
+    @CacheEvict(value = "knowledgeBases", allEntries = true)
+    public BaseResponse<List<GithubImportItemVO>> importGithubFiles(
+            @Valid @RequestBody GithubImportRequest importRequest,
+            HttpServletRequest request) {
+        Long userId = redisComponent.getUserId(request.getHeader("token"));
+        List<GithubImportItemVO> result = githubImportService.importToKnowledgeBase(
+                importRequest.getKbId(), userId, importRequest.getUrl(), importRequest.getPaths());
+        return ResultUtils.success(result);
     }
 }

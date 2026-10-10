@@ -160,7 +160,7 @@ public class KnowledgeAdminController {
     }
 
     /**
-     * 删除知识库
+     * 删除知识库（级联清理文档、向量数据、R2 文件与智能体绑定）
      */
     @DeleteMapping("/{id}")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
@@ -169,8 +169,24 @@ public class KnowledgeAdminController {
         ThrowUtils.throwIf(id == null || id <= 0, ErrorCode.PARAMS_ERROR, "知识库 id 不合法");
         KnowledgeBase kb = knowledgeBaseService.getById(id);
         ThrowUtils.throwIf(kb == null, ErrorCode.NOT_FOUND_ERROR, "知识库不存在");
-        // 级联删除文档和 agent_knowledge 关联已在 KnowledgeBaseServiceImpl 中处理
-        boolean result = knowledgeBaseService.removeById(id);
+        boolean result = knowledgeBaseService.deleteKnowledgeBaseCascade(id);
+        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "删除失败");
+        return ResultUtils.success(true);
+    }
+
+    /**
+     * 删除知识库下的单个文档（级联清理向量数据与 R2 文件）
+     */
+    @DeleteMapping("/{id}/documents/{docId}")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @LogInfo
+    public BaseResponse<Boolean> deleteDocument(@PathVariable Long id, @PathVariable Long docId) {
+        ThrowUtils.throwIf(id == null || id <= 0, ErrorCode.PARAMS_ERROR, "知识库 id 不合法");
+        ThrowUtils.throwIf(docId == null || docId <= 0, ErrorCode.PARAMS_ERROR, "文档 id 不合法");
+        Document document = documentService.getById(docId);
+        ThrowUtils.throwIf(document == null, ErrorCode.NOT_FOUND_ERROR, "文档不存在");
+        ThrowUtils.throwIf(!id.equals(document.getKbId()), ErrorCode.PARAMS_ERROR, "文档不属于该知识库");
+        boolean result = documentService.deleteDocumentByAdmin(docId);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "删除失败");
         return ResultUtils.success(true);
     }

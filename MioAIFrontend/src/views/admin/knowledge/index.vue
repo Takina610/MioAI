@@ -118,6 +118,16 @@
                         </a-tag>
                       </div>
                     </div>
+                    <a-popconfirm
+                      title="删除后向量数据与源文件一并清理，确认删除？"
+                      ok-text="删除"
+                      cancel-text="取消"
+                      @confirm="handleDeleteDocument(kb, doc.id)"
+                    >
+                      <a-button type="text" size="small" danger class="doc-delete-btn">
+                        <DeleteOutlined />
+                      </a-button>
+                    </a-popconfirm>
                   </div>
                 </div>
                 <div v-else class="empty-resource">暂无文档</div>
@@ -231,7 +241,8 @@ import {
   searchKnowledgeBases,
   listDocuments,
   updateKnowledgeBase,
-  deleteKnowledgeBase
+  deleteKnowledgeBase,
+  deleteAdminDocument
 } from '@/api/adminKnowledge'
 import type { KnowledgeAdminUpdateRequest } from '@/api/adminKnowledge'
 import type { KnowledgeBase } from '@/types'
@@ -365,6 +376,19 @@ async function handleDelete(id: number) {
     fetchKnowledgeList()
   } catch (e) {
     message.error('删除失败')
+  }
+}
+
+async function handleDeleteDocument(kb: KbWithDetail, docId: number) {
+  try {
+    await deleteAdminDocument(kb.id, docId)
+    message.success('文档已删除')
+    kb._docs = (kb._docs || []).filter(d => d.id !== docId)
+    if (kb.documentCount != null) {
+      kb.documentCount = Math.max(0, kb.documentCount - 1)
+    }
+  } catch (e) {
+    console.error(e)
   }
 }
 
@@ -645,12 +669,19 @@ onMounted(() => {
             overflow-y: auto;
 
             .doc-item {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              gap: 8px;
               padding: 10px 12px;
               background: #fff;
               border-radius: 6px;
               border: 1px solid #ece9de;
 
               .doc-info {
+                flex: 1;
+                min-width: 0;
+
                 .doc-header {
                   display: flex;
                   align-items: center;
