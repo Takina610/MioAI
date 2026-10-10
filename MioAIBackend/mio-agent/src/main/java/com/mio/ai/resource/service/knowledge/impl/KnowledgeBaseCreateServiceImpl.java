@@ -74,6 +74,12 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
     @Value("${mio.ai.rag.keyword-enrich:false}")
     private boolean keywordEnrichEnabled;
 
+    /**
+     * 嵌入请求全局节流（与查询嵌入共享 RPM 限额）
+     */
+    @Autowired
+    private com.mio.ai.framework.rag.EmbeddingThrottle embeddingThrottle;
+
     @Autowired
     private DocumentCleanupService documentCleanupService;
 
@@ -397,17 +403,41 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
     }
 
     /**
-     * 嵌入批次写入，瞬态失败（网络抖动/网关 429、5xx）自动重试一次；仍失败则抛出让该文件走失败保留逻辑
+     * 嵌入批次写入：触发网关限流（429）时按 15s/30s/60s 退避重试，其他异常快速重试一次；
+     * 仍失败则抛出，让该文件走失败保留逻辑
      */
     private void addEmbeddingBatchWithRetry(List<org.springframework.ai.document.Document> batch)
             throws InterruptedException {
-        try {
-            vectorStore.add(batch);
-        } catch (Exception first) {
-            log.warn("向量化批次失败，2s 后重试: {}", first.getMessage());
-            Thread.sleep(2000);
-            vectorStore.add(batch);
+        int attempt = 0;
+        long backoff = 15000L;
+        while (true) {
+            embeddingThrottle.awaitTurn();
+            try {
+                vectorStore.add(batch);
+                return;
+            } catch (Exception e) {
+                boolean rateLimited = isRateLimitError(e);
+                attempt++;
+                if (rateLimited && attempt <= 3) {
+                    log.warn("嵌入请求触发限流，{}s 后重试({}/3): {}", backoff / 1000, attempt, e.getMessage());
+                    Thread.sleep(backoff);
+                    backoff = Math.min(backoff * 2, 60000L);
+                    continue;
+                }
+                if (!rateLimited && attempt == 1) {
+                    log.warn("向量化批次失败，2s 后重试: {}", e.getMessage());
+                    Thread.sleep(2000);
+                    continue;
+                }
+                throw e;
+            }
         }
+    }
+
+    private boolean isRateLimitError(Exception e) {
+        String message = e.getMessage();
+        return e.getClass().getSimpleName().contains("RateLimit")
+                || (message != null && (message.contains("429") || message.contains("请求数限制")));
     }
 
     private String buildProgressEvent(int total, int current, String message) {

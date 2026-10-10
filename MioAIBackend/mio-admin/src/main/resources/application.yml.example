@@ -90,6 +90,8 @@ mio:
       rerank-api-key: ${DASHSCOPE_API_KEY:your-dashscope-api-key}
       # 分块大小（token），消融实验可取 400/800/1200
       chunk-size: 800
+      # 相邻嵌入请求最小间隔（毫秒）：按嵌入网关的 RPM 限额调整（42x key 为 5 RPM）
+      embed-min-interval-ms: ${EMBED_MIN_INTERVAL_MS:12500}
       # 入库前用对话模型给每个分块提关键词写入 metadata（当前检索并不消费该字段，
       # 且每块多一次模型调用），默认关闭
       keyword-enrich: false

@@ -29,11 +29,11 @@
           </div>
 
           <div v-else-if="fileType === 'pdf'" class="pdf-preview">
-            <vue-office-pdf :src="proxyUrl" @rendered="handleRendered" @error="handlePreviewError" />
+            <vue-office-pdf :src="officeSrc" @rendered="handleRendered" @error="handlePreviewError" />
           </div>
 
           <div v-else-if="fileType === 'doc' || fileType === 'docx'" class="docx-preview">
-            <vue-office-docx :src="proxyUrl" @rendered="handleRendered" @error="handlePreviewError" />
+            <vue-office-docx :src="officeSrc" @rendered="handleRendered" @error="handlePreviewError" />
           </div>
 
           <div v-else class="unsupported-preview">
@@ -71,6 +71,12 @@ const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
 const loading = ref(false)
 const error = ref('')
 const textContent = ref('')
+const officeSrc = ref('')
+
+// 预览接口要求登录态：原生 fetch / vue-office 的 src 都不会自动附带 token，必须手动带上
+function authHeaders(): Record<string, string> {
+  return { token: localStorage.getItem('token') || '' }
+}
 
 const fileType = computed(() => {
   const name = props.fileName.toLowerCase()
@@ -100,24 +106,23 @@ async function loadPreview(): Promise<void> {
     return
   }
 
-  if (type === 'txt' || type === 'md') {
-    loading.value = true
-    error.value = ''
-    try {
-      const response = await fetch(proxyUrl.value)
-      if (!response.ok) {
-        throw new Error('文件加载失败')
-      }
-      const text = await response.text()
-      textContent.value = text
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : '文件加载失败'
-    } finally {
-      loading.value = false
+  loading.value = true
+  error.value = ''
+  try {
+    const response = await fetch(proxyUrl.value, { headers: authHeaders() })
+    if (!response.ok) {
+      throw new Error('文件加载失败')
     }
-  } else {
-    loading.value = true
-    error.value = ''
+    if (type === 'txt' || type === 'md') {
+      textContent.value = await response.text()
+    } else {
+      const blob = await response.blob()
+      officeSrc.value = URL.createObjectURL(blob)
+    }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '文件加载失败'
+  } finally {
+    loading.value = false
   }
 }
 
@@ -125,6 +130,10 @@ function resetState(): void {
   loading.value = false
   error.value = ''
   textContent.value = ''
+  if (officeSrc.value) {
+    URL.revokeObjectURL(officeSrc.value)
+    officeSrc.value = ''
+  }
 }
 
 function handleRendered(): void {
@@ -140,14 +149,25 @@ function handleClose(): void {
   emit('update:visible', false)
 }
 
-function handleDownload(): void {
-  const link = document.createElement('a')
-  link.href = proxyUrl.value
-  link.download = props.fileName
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  message.success('开始下载')
+async function handleDownload(): Promise<void> {
+  try {
+    const response = await fetch(proxyUrl.value, { headers: authHeaders() })
+    if (!response.ok) {
+      throw new Error('下载失败')
+    }
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = props.fileName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    message.success('开始下载')
+  } catch {
+    message.error('下载失败')
+  }
 }
 </script>
 

@@ -48,6 +48,9 @@ public class KnowledgeRetrievalServiceImpl implements KnowledgeRetrievalService 
     @Autowired
     private VectorStore vectorStore;
 
+    @Autowired
+    private com.mio.ai.framework.rag.EmbeddingThrottle embeddingThrottle;
+
     @Resource
     private AgentKnowledgeService agentKnowledgeService;
 
@@ -159,11 +162,25 @@ public class KnowledgeRetrievalServiceImpl implements KnowledgeRetrievalService 
                 .similarityThreshold(threshold)
                 .filterExpression(filterExpression)
                 .build();
-        List<Document> documents = vectorStore.similaritySearch(request);
+        List<Document> documents = searchWithRetry(request);
         if (documents == null) {
             return List.of();
         }
         return documents.stream().map(this::toResult).toList();
+    }
+
+    /**
+     * 查询嵌入同样走嵌入接口、与向量化共享 RPM 限额（429 时会报错）：
+     * 失败后先过全局节流队列（保证与上次嵌入请求间隔足够）再重试一次，仍失败再抛出
+     */
+    private List<Document> searchWithRetry(SearchRequest request) {
+        try {
+            return vectorStore.similaritySearch(request);
+        } catch (Exception first) {
+            log.warn("向量检索失败（多为嵌入请求限流），节流排队后重试一次: {}", first.getMessage());
+            embeddingThrottle.awaitTurn();
+            return vectorStore.similaritySearch(request);
+        }
     }
 
     private KnowledgeRetrievalResult toResult(Document doc) {

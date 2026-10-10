@@ -36,7 +36,11 @@ public class RetrievalConfig implements Serializable {
     private boolean enableRerank = false;
 
     public static final int DEFAULT_TOP_K = 5;
-    public static final double DEFAULT_THRESHOLD = 0.4;
+    /**
+     * mistral-embed 的余弦基线相似度很高（实测不相关跨主题查询也有 ~0.72，相关查询 ~0.84-0.86），
+     * 旧的 0.4 阈值等于放行全部结果；0.7 可滤掉跨主题噪声。已存量的绑定级 threshold 不受影响
+     */
+    public static final double DEFAULT_THRESHOLD = 0.7;
 
     public static RetrievalConfig defaults() {
         return new RetrievalConfig(DEFAULT_TOP_K, DEFAULT_THRESHOLD, false);
