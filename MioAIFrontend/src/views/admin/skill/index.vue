@@ -24,10 +24,10 @@
         </div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon public"><GlobalOutlined /></div>
+        <div class="stat-icon installed"><DownloadOutlined /></div>
         <div class="stat-info">
-          <div class="stat-value">{{ stats.publicCount }}</div>
-          <div class="stat-label">公开</div>
+          <div class="stat-value">{{ stats.installedCount }}</div>
+          <div class="stat-label">已安装</div>
         </div>
       </div>
     </div>
@@ -62,9 +62,9 @@
         <div class="card-meta">
           <span class="meta-item"><UserOutlined /> {{ skill.userName || '未知用户' }}</span>
           <span class="meta-item">
-            <LockOutlined v-if="skill.isPublic !== 1" />
-            <GlobalOutlined v-else />
-            {{ skill.isPublic === 1 ? '公开' : '私有' }}
+            <DownloadOutlined v-if="skill.installed === 1" />
+            <CloudOutlined v-else />
+            {{ skill.installed === 1 ? '已安装' : '未安装' }}
           </span>
           <span class="meta-item"><FileTextOutlined /> {{ (skill.files?.length || 0) + 1 }} 文件</span>
         </div>
@@ -143,12 +143,6 @@
             <a-select-option :value="0">已禁用</a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item label="是否公开">
-          <a-radio-group v-model:value="editForm.isPublic">
-            <a-radio :value="0">私有</a-radio>
-            <a-radio :value="1">公开</a-radio>
-          </a-radio-group>
-        </a-form-item>
       </a-form>
     </a-modal>
   </div>
@@ -161,8 +155,8 @@ import {
   DatabaseOutlined,
   CheckCircleOutlined,
   StopOutlined,
-  GlobalOutlined,
-  LockOutlined,
+  CloudOutlined,
+  DownloadOutlined,
   UserOutlined,
   FileTextOutlined,
   FileMarkdownOutlined,
@@ -192,12 +186,12 @@ const stats = reactive({
   total: 0,
   active: 0,
   disabled: 0,
-  publicCount: 0
+  installedCount: 0
 })
 
 const editModalVisible = ref(false)
 const saving = ref(false)
-const editForm = reactive<{ id: number; name: string; description: string; status?: number; isPublic?: number }>({
+const editForm = reactive<{ id: number; name: string; description: string; status?: number }>({
   id: 0,
   name: '',
   description: ''
@@ -217,7 +211,7 @@ async function fetchSkills() {
     stats.total = pagination.total
     stats.active = skillList.value.filter(s => s.status === 1).length
     stats.disabled = skillList.value.filter(s => s.status === 0).length
-    stats.publicCount = skillList.value.filter(s => s.isPublic === 1).length
+    stats.installedCount = skillList.value.filter(s => s.installed === 1).length
   } catch (e) {
     message.error('获取技能列表失败')
   } finally {
@@ -250,7 +244,6 @@ function openEditModal(skill: Skill) {
   editForm.name = skill.name || ''
   editForm.description = skill.description || ''
   editForm.status = skill.status
-  editForm.isPublic = skill.isPublic
   editModalVisible.value = true
 }
 
@@ -319,7 +312,7 @@ onMounted(() => {
       &.total { background: rgba(#2aa1a9, 0.1); color: #2aa1a9; }
       &.active { background: rgba(#10b981, 0.1); color: #10b981; }
       &.disabled { background: rgba(#c0453a, 0.1); color: #c0453a; }
-      &.public { background: rgba(#f59e0b, 0.1); color: #f59e0b; }
+      &.installed { background: rgba(#f59e0b, 0.1); color: #f59e0b; }
     }
 
     .stat-value {

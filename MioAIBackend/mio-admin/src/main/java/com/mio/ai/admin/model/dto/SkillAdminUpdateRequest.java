@@ -26,9 +26,4 @@ public class SkillAdminUpdateRequest implements Serializable {
      * 状态（0-禁用 1-正常）
      */
     private Integer status;
-
-    /**
-     * 是否公开（0-私有 1-公开）
-     */
-    private Integer isPublic;
 }

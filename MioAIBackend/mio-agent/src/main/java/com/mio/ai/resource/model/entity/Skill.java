@@ -49,14 +49,39 @@ public class Skill implements Serializable {
     private String sourceUrl;
 
     /**
+     * 来源仓库 owner（GitHub 来源时有值）
+     */
+    private String repoOwner;
+
+    /**
+     * 来源仓库名（GitHub 来源时有值）
+     */
+    private String repoName;
+
+    /**
+     * 导入时的分支（GitHub 来源时有值）
+     */
+    private String repoBranch;
+
+    /**
+     * 技能在仓库内的目录（根目录为空串）
+     */
+    private String skillPath;
+
+    /**
+     * 仓库内 SKILL.md 的跳转链接
+     */
+    private String docUrl;
+
+    /**
+     * 是否已安装（0-仅登记 1-已安装，已安装才有内容）
+     */
+    private Integer installed;
+
+    /**
      * 状态（0-禁用 1-正常）
      */
     private Integer status;
-
-    /**
-     * 是否公开（0-私有 1-公开）
-     */
-    private Integer isPublic;
 
     /**
      * 创建时间

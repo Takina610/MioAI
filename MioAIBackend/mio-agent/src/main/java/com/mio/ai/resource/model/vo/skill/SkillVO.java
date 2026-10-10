@@ -52,6 +52,36 @@ public class SkillVO implements Serializable {
     private String sourceUrl;
 
     /**
+     * 来源仓库 owner（GitHub 来源时有值）
+     */
+    private String repoOwner;
+
+    /**
+     * 来源仓库名
+     */
+    private String repoName;
+
+    /**
+     * 导入时的分支
+     */
+    private String repoBranch;
+
+    /**
+     * 技能在仓库内的目录
+     */
+    private String skillPath;
+
+    /**
+     * 仓库内 SKILL.md 的跳转链接
+     */
+    private String docUrl;
+
+    /**
+     * 是否已安装（0-仅登记 1-已安装）
+     */
+    private Integer installed;
+
+    /**
      * 状态
      */
     private Integer status;
@@ -60,11 +90,6 @@ public class SkillVO implements Serializable {
      * 状态描述
      */
     private String statusDesc;
-
-    /**
-     * 是否公开
-     */
-    private Integer isPublic;
 
     private Date createTime;
 

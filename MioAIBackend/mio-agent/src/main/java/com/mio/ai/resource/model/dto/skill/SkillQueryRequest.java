@@ -28,11 +28,6 @@ public class SkillQueryRequest extends PageRequest implements Serializable {
     private Integer status;
 
     /**
-     * 是否公开
-     */
-    private Integer isPublic;
-
-    /**
      * 用户ID（服务端强制以登录态覆盖）
      */
     private Long userId;

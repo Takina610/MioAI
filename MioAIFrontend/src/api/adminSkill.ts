@@ -7,7 +7,6 @@ export interface SkillAdminUpdateRequest {
   name?: string
   description?: string
   status?: number
-  isPublic?: number
 }
 
 export function searchSkills(data: SkillQueryRequest): Promise<PageResponse<Skill>> {

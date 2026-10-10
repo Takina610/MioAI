@@ -60,9 +60,6 @@ public class SkillAdminController {
         if (request.getStatus() != null) {
             queryWrapper.eq("status", request.getStatus());
         }
-        if (request.getIsPublic() != null) {
-            queryWrapper.eq("is_public", request.getIsPublic());
-        }
         queryWrapper.orderByDesc("update_time");
 
         Page<Skill> skillPage = skillService.page(new Page<>(current, size), queryWrapper);
@@ -113,7 +110,6 @@ public class SkillAdminController {
         }
         update.setDescription(request.getDescription());
         update.setStatus(request.getStatus());
-        update.setIsPublic(request.getIsPublic());
         boolean result = skillService.updateById(update);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "更新失败");
         return ResultUtils.success(true);

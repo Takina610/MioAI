@@ -2,41 +2,17 @@ import request from '@/utils/request'
 import type { PageResponse } from '@/types'
 import type {
   Skill,
-  SkillAddRequest,
-  SkillUpdateRequest,
   SkillQueryRequest,
   GithubSkill,
-  GithubSkillPreview
+  GithubSkillPreview,
+  SkillZipInstallResult,
+  SkillsShSearchResult
 } from '@/types/skill'
-
-export function addSkill(data: SkillAddRequest): Promise<number> {
-  return request({
-    url: '/skills',
-    method: 'post',
-    data,
-    timeout: 300000
-  })
-}
-
-export function updateSkill(data: SkillUpdateRequest): Promise<boolean> {
-  return request({
-    url: '/skills',
-    method: 'put',
-    data
-  })
-}
 
 export function deleteSkill(id: number): Promise<boolean> {
   return request({
     url: `/skills/${id}`,
     method: 'delete'
-  })
-}
-
-export function getSkillById(id: number): Promise<Skill> {
-  return request({
-    url: `/skills/${id}`,
-    method: 'get'
   })
 }
 
@@ -48,11 +24,29 @@ export function querySkills(data: SkillQueryRequest): Promise<PageResponse<Skill
   })
 }
 
-export function getPublicSkills(params?: { current?: number; size?: number }): Promise<PageResponse<Skill>> {
+export function installSkillZip(file: File): Promise<SkillZipInstallResult> {
+  const formData = new FormData()
+  formData.append('file', file)
   return request({
-    url: '/skills/market',
-    method: 'get',
-    params
+    url: '/skills/zip',
+    method: 'post',
+    data: formData,
+    timeout: 120000
+  })
+}
+
+export function installSkill(id: number): Promise<Skill> {
+  return request({
+    url: `/skills/${id}/install`,
+    method: 'post',
+    timeout: 120000
+  })
+}
+
+export function uninstallSkill(id: number): Promise<Skill> {
+  return request({
+    url: `/skills/${id}/uninstall`,
+    method: 'post'
   })
 }
 
@@ -69,6 +63,24 @@ export function importGithubSkills(url: string, skillPaths: string[]): Promise<G
     url: '/skills/github/import',
     method: 'post',
     data: { url, skillPaths },
-    timeout: 300000
+    timeout: 120000
+  })
+}
+
+export function searchSkillsSh(query: string, limit = 20, offset = 0): Promise<SkillsShSearchResult> {
+  return request({
+    url: '/skills/skillssh/search',
+    method: 'post',
+    data: { query, limit, offset },
+    timeout: 30000
+  })
+}
+
+export function installSkillsSh(owner: string, repo: string, skillId: string): Promise<number> {
+  return request({
+    url: '/skills/skillssh/install',
+    method: 'post',
+    data: { owner, repo, skillId },
+    timeout: 120000
   })
 }

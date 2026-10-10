@@ -145,15 +145,14 @@ public class AccessGuardService {
     }
 
     /**
-     * 校验用户能否读取技能（所有者，或公开技能）
+     * 校验用户能否读取技能（仅所有者，技能不公开）
      */
     public Skill checkSkillReadable(Long skillId, Long userId) {
         Skill skill = skillService.getById(skillId);
         if (skill == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "技能不存在");
         }
-        boolean owner = userId != null && skill.getUserId() != null && skill.getUserId().equals(userId);
-        if (!owner && !Integer.valueOf(1).equals(skill.getIsPublic())) {
+        if (userId == null || skill.getUserId() == null || !skill.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限访问该技能");
         }
         return skill;

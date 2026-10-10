@@ -48,14 +48,14 @@
       />
 
       <div class="import-actions">
-        <span class="selected-info">已选 {{ selectedRowKeys.length }} 个技能</span>
+        <span class="selected-info">已选 {{ selectedRowKeys.length }} 个技能，添加后可在列表中安装</span>
         <a-button
           type="primary"
           :loading="importing"
           :disabled="selectedRowKeys.length === 0"
           @click="handleImport"
         >
-          导入选中技能
+          添加
         </a-button>
       </div>
     </template>
@@ -119,12 +119,12 @@ async function handleImport(): Promise<void> {
   if (!preview.value || selectedRowKeys.value.length === 0) return
   importing.value = true
   try {
-    const imported = await importGithubSkills(url.value.trim(), selectedRowKeys.value)
-    if (imported.length === 0) {
-      message.error('导入失败，请稍后重试')
+    const registered = await importGithubSkills(url.value.trim(), selectedRowKeys.value)
+    if (registered.length === 0) {
+      message.error('添加失败，请稍后重试')
       return
     }
-    message.success(`成功导入 ${imported.length} 个技能`)
+    message.success(`已添加 ${registered.length} 个技能，点击「安装」获取内容`)
     emit('update:visible', false)
     emit('success')
   } catch (e) {

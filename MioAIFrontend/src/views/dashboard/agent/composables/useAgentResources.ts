@@ -5,7 +5,7 @@ import { addAgentMcp, removeAgentMcpByMcpId } from '@/api/agentMcp'
 import { addAgentSkill, removeAgentSkillBySkillId } from '@/api/agentSkill'
 import { getPublicKnowledgeBases, queryKnowledgeBases, queryDocuments, type Document } from '@/api/knowledgeBase'
 import { getPublicMcpTools, queryMcpTools } from '@/api/mcpTool'
-import { getPublicSkills, querySkills } from '@/api/skill'
+import { querySkills } from '@/api/skill'
 import { parseMcpTools } from '@/utils/mcpTool'
 import type { AgentDetail, KnowledgeBase, McpTool, Skill } from '@/types'
 
@@ -25,7 +25,6 @@ export function useAgentResources(agentId: number, agentDetail: Ref<AgentDetail 
   const customKnowledgeBases = ref<KnowledgeBase[]>([])
   const publicMcpTools = ref<McpTool[]>([])
   const customMcpTools = ref<McpTool[]>([])
-  const publicSkills = ref<Skill[]>([])
   const customSkills = ref<Skill[]>([])
   const selectedKnowledgeIds = ref<number[]>([])
   const selectedMcpIds = ref<number[]>([])
@@ -86,12 +85,9 @@ export function useAgentResources(agentId: number, agentDetail: Ref<AgentDetail 
 
   async function fetchSkills(): Promise<void> {
     try {
-      const [publicRes, customRes] = await Promise.all([
-        getPublicSkills({ current: 1, size: 100 }),
-        querySkills({ current: 1, pageSize: 100 })
-      ])
-      publicSkills.value = publicRes.records || []
-      customSkills.value = customRes.records || []
+      const res = await querySkills({ current: 1, pageSize: 100 })
+      // 未安装的技能没有内容，不进入绑定候选
+      customSkills.value = (res.records || []).filter(skill => skill.installed === 1)
     } catch (e) {
       console.error(e)
     }
@@ -244,7 +240,6 @@ export function useAgentResources(agentId: number, agentDetail: Ref<AgentDetail 
     customKnowledgeBases,
     publicMcpTools,
     customMcpTools,
-    publicSkills,
     customSkills,
     selectedKnowledgeIds,
     selectedMcpIds,

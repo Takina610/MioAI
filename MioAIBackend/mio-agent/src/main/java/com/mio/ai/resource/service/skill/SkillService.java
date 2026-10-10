@@ -2,9 +2,7 @@ package com.mio.ai.resource.service.skill;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.mio.ai.resource.model.dto.skill.SkillAddRequest;
 import com.mio.ai.resource.model.dto.skill.SkillQueryRequest;
-import com.mio.ai.resource.model.dto.skill.SkillUpdateRequest;
 import com.mio.ai.resource.model.entity.Skill;
 import com.mio.ai.resource.model.vo.skill.SkillVO;
 
@@ -18,22 +16,12 @@ import java.util.List;
 public interface SkillService extends IService<Skill> {
 
     /**
-     * 创建技能
-     */
-    Long addSkill(SkillAddRequest request, Long userId);
-
-    /**
-     * 更新技能（校验所有者）
-     */
-    boolean updateSkill(SkillUpdateRequest request, Long userId);
-
-    /**
      * 删除技能（级联解除智能体绑定）
      */
     boolean deleteSkill(Long id, Long userId);
 
     /**
-     * 技能详情（校验所有者或公开）
+     * 技能详情（仅所有者可见）
      */
     SkillVO getSkillById(Long id, Long userId);
 
@@ -43,9 +31,14 @@ public interface SkillService extends IService<Skill> {
     Page<SkillVO> querySkills(SkillQueryRequest request);
 
     /**
-     * 公开技能列表（供智能体绑定抽屉选择）
+     * 安装技能：未安装时按仓库来源拉取内容并置为已安装
      */
-    Page<SkillVO> getPublicSkills(long current, long size);
+    SkillVO installSkill(Long id, Long userId);
+
+    /**
+     * 卸载技能：仅去除已安装标记（保留元数据，可随时重新安装）
+     */
+    SkillVO uninstallSkill(Long id, Long userId);
 
     /**
      * 智能体已启用的技能（对话装配用，权限由绑定关系保证）

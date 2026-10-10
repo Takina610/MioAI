@@ -1,6 +1,7 @@
 package com.mio.ai.resource.service.skill.impl;
 
 import cn.hutool.core.util.StrUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.utils.JacksonUtil;
@@ -13,6 +14,7 @@ import com.mio.ai.resource.model.enums.SkillStatusEnum;
 import com.mio.ai.resource.model.vo.skill.GithubSkillPreviewVO;
 import com.mio.ai.resource.model.vo.skill.GithubSkillVO;
 import com.mio.ai.resource.service.skill.SkillGithubImportService;
+import com.mio.ai.resource.service.skill.SkillMdSupport;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -26,9 +28,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -43,26 +44,16 @@ import java.util.stream.Collectors;
 @Service
 public class SkillGithubImportServiceImpl implements SkillGithubImportService {
 
-    /** 附属文件扩展名白名单（技能常含脚本/参考文档/模板） */
-    private static final Set<String> FILE_EXTENSIONS = Set.of(
-            "md", "markdown", "txt", "py", "sh", "js", "ts", "mjs", "cjs", "json",
-            "yaml", "yml", "toml", "csv", "tsv", "html", "htm", "css", "xml", "sql",
-            "rb", "go", "rs", "java", "kt", "c", "cpp", "h", "hpp", "cs", "php",
-            "swift", "bat", "ps1", "ini", "cfg", "conf", "properties", "proto");
-
-    private static final Set<String> FILE_NAMES = Set.of(
-            "dockerfile", "makefile", "license", ".gitignore", ".env.example");
-
-    private static final long MAX_FILE_SIZE = 200L * 1024;
-    private static final long MAX_SKILL_TOTAL_SIZE = 2L * 1024 * 1024;
-    private static final int MAX_FILES_PER_SKILL = 30;
-    private static final int PREVIEW_LIST_LIMIT = 20;
     /** 分支名含斜杠（feature/x）时逐级探测的最大层级 */
     private static final int MAX_REF_SEGMENTS = 3;
+    private static final int PREVIEW_LIST_LIMIT = 20;
 
     private static final int PREVIEW_LIMIT_PER_HOUR = 60;
-    private static final int IMPORT_LIMIT_PER_HOUR = 20;
+    private static final int IMPORT_LIMIT_PER_HOUR = 40;
     private static final DateTimeFormatter RATE_WINDOW = DateTimeFormatter.ofPattern("yyyyMMddHH");
+
+    /** owner/repo/skillId 坐标段合法性（skills.sh 安装入口的字符串来自外部） */
+    private static final Pattern REPO_SEGMENT = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]*$");
 
     @Resource
     private GithubClient githubClient;
@@ -86,14 +77,15 @@ public class SkillGithubImportServiceImpl implements SkillGithubImportService {
         List<GithubSkillVO> skills = new ArrayList<>();
         long totalFound = 0;
         for (GithubClient.GithubTreeEntry entry : resolved.tree().entries()) {
-            if (!isSkillMarker(entry, resolved.subPath())) {
+            if (!isMarkerInSubPath(entry, resolved.subPath())) {
                 continue;
             }
             totalFound++;
             if (skills.size() >= PREVIEW_LIST_LIMIT) {
                 continue;
             }
-            GithubSkillVO skillVo = describeSkill(parsed, resolved.branch(), entry, resolved.tree().entries());
+            GithubSkillVO skillVo = describeSkill(parsed.owner(), parsed.repo(), resolved.branch(),
+                    entry, resolved.tree().entries());
             if (skillVo != null) {
                 skills.add(skillVo);
             }
@@ -118,58 +110,129 @@ public class SkillGithubImportServiceImpl implements SkillGithubImportService {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "仓库文件数过多，无法完整读取，请改用更精确的目录链接");
         }
 
-        Map<String, GithubClient.GithubTreeEntry> blobByPath = resolved.tree().entries().stream()
-                .filter(e -> "blob".equals(e.type()))
-                .collect(Collectors.toMap(GithubClient.GithubTreeEntry::path, e -> e, (a, b) -> a, LinkedHashMap::new));
-
-        List<GithubSkillVO> imported = new ArrayList<>();
+        Map<String, GithubClient.GithubTreeEntry> blobByPath = blobByPath(resolved.tree());
+        List<GithubSkillVO> registered = new ArrayList<>();
         for (String skillPath : new LinkedHashSet<>(skillPaths)) {
             GithubClient.GithubTreeEntry marker = blobByPath.get(skillPath);
-            if (marker == null || !isSkillMarker(marker, resolved.subPath())) {
+            if (marker == null || !isMarkerInSubPath(marker, resolved.subPath())) {
                 log.warn("跳过无效的技能路径: {}", skillPath);
                 continue;
             }
             try {
-                GithubSkillVO vo = importSingleSkill(userId, parsed, resolved.branch(), marker, blobByPath);
+                GithubSkillVO vo = registerSkill(userId, parsed.owner(), parsed.repo(),
+                        resolved.branch(), marker, blobByPath);
                 if (vo != null) {
-                    imported.add(vo);
+                    registered.add(vo);
                 }
             } catch (BusinessException e) {
-                log.warn("导入技能失败: path={}, {}", skillPath, e.getMessage());
+                log.warn("登记技能失败: path={}, {}", skillPath, e.getMessage());
             } catch (Exception e) {
-                log.error("导入技能异常: path={}", skillPath, e);
+                log.error("登记技能异常: path={}", skillPath, e);
             }
         }
-        log.info("GitHub 技能导入完成: userId={}, 成功 {}/{}", userId, imported.size(), skillPaths.size());
-        return imported;
+        log.info("GitHub 技能登记完成: userId={}, 成功 {}/{}", userId, registered.size(), skillPaths.size());
+        return registered;
     }
 
-    private GithubSkillVO importSingleSkill(Long userId, GithubRepoRef parsed, String branch,
-                                            GithubClient.GithubTreeEntry marker,
-                                            Map<String, GithubClient.GithubTreeEntry> blobByPath) {
+    /** 预览单个技能：SKILL.md frontmatter + 目录内文件统计 */
+    private GithubSkillVO describeSkill(String owner, String repo, String branch,
+                                        GithubClient.GithubTreeEntry marker,
+                                        List<GithubClient.GithubTreeEntry> treeEntries) {
         String skillDir = dirOf(marker.path());
-        byte[] markerBytes = githubClient.fetchRawFile(parsed.owner(), parsed.repo(), branch,
-                marker.path(), MAX_FILE_SIZE);
-        String skillMd = new String(markerBytes, StandardCharsets.UTF_8);
-        if (StrUtil.isBlank(skillMd)) {
+        GithubSkillVO vo = new GithubSkillVO();
+        vo.setPath(marker.path());
+        vo.setFileCount(countFilesUnder(treeEntries, skillDir));
+        vo.setTotalSize(treeEntries.stream()
+                .filter(e -> "blob".equals(e.type()) && isUnderDir(e.path(), skillDir))
+                .mapToLong(GithubClient.GithubTreeEntry::size)
+                .sum());
+        try {
+            byte[] bytes = githubClient.fetchRawFile(owner, repo, branch, marker.path(), SkillMdSupport.MAX_FILE_SIZE);
+            Map<String, String> frontmatter = SkillMdSupport.parseFrontmatter(new String(bytes, StandardCharsets.UTF_8));
+            vo.setName(frontmatter.getOrDefault("name", baseName(skillDir)));            vo.setDescription(SkillMdSupport.descriptionOf(frontmatter, 500));
+        } catch (Exception e) {
+            log.warn("读取技能 frontmatter 失败，使用目录名: path={}, {}", marker.path(), e.getMessage());
+            vo.setName(baseName(skillDir));
+        }
+        return vo;
+    }
+
+    /** 登记单个技能：只解析 frontmatter + 记录仓库坐标，不下载内容 */
+    private GithubSkillVO registerSkill(Long userId, String owner, String repo, String branch,
+                                        GithubClient.GithubTreeEntry marker,
+                                        Map<String, GithubClient.GithubTreeEntry> blobByPath) {
+        String skillDir = dirOf(marker.path());
+        if (findRegistered(userId, owner, repo, skillDir) != null) {
             return null;
         }
-        Map<String, String> frontmatter = parseFrontmatter(skillMd);
+        byte[] markerBytes = githubClient.fetchRawFile(owner, repo, branch, marker.path(), SkillMdSupport.MAX_FILE_SIZE);
+        Map<String, String> frontmatter = SkillMdSupport.parseFrontmatter(
+                new String(markerBytes, StandardCharsets.UTF_8));
 
-        // 收集技能目录内的附属文件（相对路径 -> 文本内容）
+        String name = frontmatter.getOrDefault("name", baseName(skillDir));
+        Skill skill = new Skill();
+        skill.setUserId(userId);
+        skill.setName(name);
+        skill.setDescription(SkillMdSupport.descriptionOf(frontmatter, 500));
+        skill.setRepoOwner(owner);
+        skill.setRepoName(repo);
+        skill.setRepoBranch(branch);
+        skill.setSkillPath(skillDir);
+        skill.setDocUrl(SkillMdSupport.buildDocUrl(owner, repo, branch, skillDir));
+        skill.setSourceUrl("https://github.com/" + owner + "/" + repo
+                + "/tree/" + branch + (skillDir.isEmpty() ? "" : "/" + skillDir));
+        skill.setStatus(SkillStatusEnum.ACTIVE.getCode());
+        skill.setInstalled(0);
+        skillMapper.insert(skill);
+
+        GithubSkillVO vo = new GithubSkillVO();
+        vo.setPath(marker.path());
+        vo.setName(skill.getName());
+        vo.setDescription(skill.getDescription());
+        vo.setFileCount(countFilesUnder(blobByPath.values().stream().toList(), skillDir));
+        vo.setTotalSize(0);
+        return vo;
+    }
+
+    @Override
+    public void fetchContent(Skill skill) {
+        String owner = skill.getRepoOwner();
+        String repo = skill.getRepoName();
+        String branch = skill.getRepoBranch();
+        if (StrUtil.isBlank(owner) || StrUtil.isBlank(repo)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "该技能没有仓库来源，无法拉取内容");
+        }
+        if (StrUtil.isBlank(branch)) {
+            branch = githubClient.fetchRepoInfo(owner, repo).defaultBranch();
+        }
+        GithubClient.GithubTree tree = githubClient.fetchTree(owner, repo, branch);
+        if (tree.truncated()) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "仓库文件数过多，无法完整读取");
+        }
+        Map<String, GithubClient.GithubTreeEntry> blobByPath = blobByPath(tree);
+        String skillDir = StrUtil.nullToEmpty(skill.getSkillPath());
+        GithubClient.GithubTreeEntry marker = blobByPath.get(markerPath(skillDir));
+        if (marker == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "仓库内未找到该技能的 SKILL.md，可能已被移除");
+        }
+
+        byte[] markerBytes = githubClient.fetchRawFile(owner, repo, branch, marker.path(), SkillMdSupport.MAX_FILE_SIZE);
+        String skillMd = new String(markerBytes, StandardCharsets.UTF_8);
+        Map<String, String> frontmatter = SkillMdSupport.parseFrontmatter(skillMd);
+
         List<Map<String, String>> files = new ArrayList<>();
-        long totalSize = 0;
+        long totalSize = markerBytes.length;
         for (GithubClient.GithubTreeEntry entry : blobByPath.values()) {
             if (entry.path().equals(marker.path()) || !isUnderDir(entry.path(), skillDir)
-                    || !isSupportedFile(entry.path())) {
+                    || !SkillMdSupport.isSupportedFile(entry.path())) {
                 continue;
             }
-            if (files.size() >= MAX_FILES_PER_SKILL || totalSize + entry.size() > MAX_SKILL_TOTAL_SIZE) {
-                log.warn("技能附属文件超出上限，截断: skill={}", marker.path());
+            if (files.size() >= SkillMdSupport.MAX_FILES_PER_SKILL
+                    || totalSize + entry.size() > SkillMdSupport.MAX_SKILL_TOTAL_SIZE) {
+                log.warn("技能附属文件超出上限，截断: skill={}/{} {}", owner, repo, skillDir);
                 break;
             }
-            byte[] bytes = githubClient.fetchRawFile(parsed.owner(), parsed.repo(), branch,
-                    entry.path(), MAX_FILE_SIZE);
+            byte[] bytes = githubClient.fetchRawFile(owner, repo, branch, entry.path(), SkillMdSupport.MAX_FILE_SIZE);
             totalSize += bytes.length;
             Map<String, String> file = new LinkedHashMap<>();
             file.put("path", relativePath(entry.path(), skillDir));
@@ -177,55 +240,60 @@ public class SkillGithubImportServiceImpl implements SkillGithubImportService {
             files.add(file);
         }
 
-        Skill skill = new Skill();
-        skill.setUserId(userId);
-        skill.setName(frontmatter.getOrDefault("name", baseName(skillDir)));
-        skill.setDescription(frontmatter.get("description"));
         skill.setContent(skillMd);
         skill.setFiles(files.isEmpty() ? null : JacksonUtil.writeValueAsString(files));
-        skill.setSourceUrl("https://github.com/" + parsed.owner() + "/" + parsed.repo()
-                + "/tree/" + branch + (skillDir.isEmpty() ? "" : "/" + skillDir));
-        skill.setStatus(SkillStatusEnum.ACTIVE.getCode());
-        skill.setIsPublic(0);
-        skillMapper.insert(skill);
-
-        GithubSkillVO vo = new GithubSkillVO();
-        vo.setPath(marker.path());
-        vo.setName(skill.getName());
-        vo.setDescription(skill.getDescription());
-        vo.setFileCount(files.size() + 1);
-        vo.setTotalSize(totalSize + markerBytes.length);
-        return vo;
+        skill.setRepoBranch(branch);
+        skill.setDocUrl(SkillMdSupport.buildDocUrl(owner, repo, branch, skillDir));
+        // frontmatter 可能比登记时更新，一并刷新展示信息
+        skill.setName(frontmatter.getOrDefault("name", StrUtil.blankToDefault(skill.getName(), baseName(skillDir))));
+        skill.setDescription(SkillMdSupport.descriptionOf(frontmatter, 500));
     }
 
-    /** 预览单个技能：SKILL.md frontmatter + 目录内文件统计 */
-    private GithubSkillVO describeSkill(GithubRepoRef parsed, String branch,
-                                        GithubClient.GithubTreeEntry marker,
-                                        List<GithubClient.GithubTreeEntry> treeEntries) {
+    @Override
+    public Skill installFromRegistry(Long userId, String owner, String repo, String skillId) {
+        checkRateLimit("install", userId, IMPORT_LIMIT_PER_HOUR);
+        validateSegment(owner, "owner");
+        validateSegment(repo, "repo");
+        validateSegment(skillId, "skillId");
+
+        String branch = githubClient.fetchRepoInfo(owner, repo).defaultBranch();
+        GithubClient.GithubTree tree = githubClient.fetchTree(owner, repo, branch);
+        if (tree.truncated()) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "仓库文件数过多，无法完整读取");
+        }
+        // 定位目录名为 skillId 的技能（如 skills/pdf/SKILL.md）；仓库本身即技能时兜底根目录
+        List<GithubClient.GithubTreeEntry> markers = tree.entries().stream()
+                .filter(e -> "blob".equals(e.type()) && SkillMdSupport.isSkillMarker(e.path()))
+                .filter(e -> skillId.equalsIgnoreCase(baseName(dirOf(e.path())))
+                        || (dirOf(e.path()).isEmpty() && skillId.equalsIgnoreCase(repo)))
+                .toList();
+        if (markers.isEmpty()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "仓库内未找到技能 " + skillId);
+        }
+        GithubClient.GithubTreeEntry marker = markers.stream()
+                .reduce((a, b) -> a.path().length() <= b.path().length() ? a : b).orElseThrow();
+
         String skillDir = dirOf(marker.path());
-        GithubSkillVO vo = new GithubSkillVO();
-        vo.setPath(marker.path());
-        long totalSize = 0;
-        int fileCount = 0;
-        for (GithubClient.GithubTreeEntry entry : treeEntries) {
-            if ("blob".equals(entry.type()) && isUnderDir(entry.path(), skillDir)) {
-                fileCount++;
-                totalSize += entry.size();
-            }
+        Skill exist = findRegistered(userId, owner, repo, skillDir);
+        if (exist == null) {
+            exist = new Skill();
+            exist.setUserId(userId);
+            exist.setRepoOwner(owner);
+            exist.setRepoName(repo);
+            exist.setRepoBranch(branch);
+            exist.setSkillPath(skillDir);
+            exist.setSourceUrl("https://github.com/" + owner + "/" + repo
+                    + "/tree/" + branch + (skillDir.isEmpty() ? "" : "/" + skillDir));
+            exist.setStatus(SkillStatusEnum.ACTIVE.getCode());
         }
-        vo.setFileCount(fileCount);
-        vo.setTotalSize(totalSize);
-        try {
-            byte[] bytes = githubClient.fetchRawFile(parsed.owner(), parsed.repo(), branch,
-                    marker.path(), MAX_FILE_SIZE);
-            Map<String, String> frontmatter = parseFrontmatter(new String(bytes, StandardCharsets.UTF_8));
-            vo.setName(frontmatter.getOrDefault("name", baseName(skillDir)));
-            vo.setDescription(frontmatter.get("description"));
-        } catch (Exception e) {
-            log.warn("读取技能 frontmatter 失败，使用目录名: path={}, {}", marker.path(), e.getMessage());
-            vo.setName(baseName(skillDir));
+        fetchContent(exist);
+        exist.setInstalled(1);
+        if (exist.getId() == null) {
+            skillMapper.insert(exist);
+        } else {
+            skillMapper.updateById(exist);
         }
-        return vo;
+        return exist;
     }
 
     /**
@@ -271,16 +339,21 @@ public class SkillGithubImportServiceImpl implements SkillGithubImportService {
         throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "无法解析链接中的分支或路径");
     }
 
-    /** 是否为技能标记文件：SKILL.md（不区分大小写），且位于链接子目录内 */
-    private boolean isSkillMarker(GithubClient.GithubTreeEntry entry, String subPath) {
-        if (!"blob".equals(entry.type())) {
-            return false;
-        }
-        String fileName = entry.path().substring(entry.path().lastIndexOf('/') + 1);
-        if (!"skill.md".equalsIgnoreCase(fileName)) {
-            return false;
-        }
-        return isUnderDir(entry.path(), subPath);
+    private boolean isMarkerInSubPath(GithubClient.GithubTreeEntry entry, String subPath) {
+        return "blob".equals(entry.type()) && SkillMdSupport.isSkillMarker(entry.path())
+                && isUnderDir(entry.path(), subPath);
+    }
+
+    private Map<String, GithubClient.GithubTreeEntry> blobByPath(GithubClient.GithubTree tree) {
+        return tree.entries().stream()
+                .filter(e -> "blob".equals(e.type()))
+                .collect(Collectors.toMap(GithubClient.GithubTreeEntry::path, e -> e, (a, b) -> a, LinkedHashMap::new));
+    }
+
+    private int countFilesUnder(List<GithubClient.GithubTreeEntry> entries, String dir) {
+        return (int) entries.stream()
+                .filter(e -> "blob".equals(e.type()) && isUnderDir(e.path(), dir))
+                .count();
     }
 
     /** 子路径前缀匹配（目录边界对齐，"doc" 不命中 "docs/..."） */
@@ -289,6 +362,10 @@ public class SkillGithubImportServiceImpl implements SkillGithubImportService {
             return true;
         }
         return path.equals(dir) || path.startsWith(dir + "/");
+    }
+
+    private String markerPath(String skillDir) {
+        return skillDir.isEmpty() ? "SKILL.md" : skillDir + "/SKILL.md";
     }
 
     private String dirOf(String skillMdPath) {
@@ -307,49 +384,19 @@ public class SkillGithubImportServiceImpl implements SkillGithubImportService {
         return dir.substring(dir.lastIndexOf('/') + 1);
     }
 
-    private boolean isSupportedFile(String path) {
-        String fileName = path.substring(path.lastIndexOf('/') + 1).toLowerCase(Locale.ROOT);
-        if (FILE_NAMES.contains(fileName)) {
-            return true;
-        }
-        int dot = fileName.lastIndexOf('.');
-        if (dot <= 0 || dot == fileName.length() - 1) {
-            return false;
-        }
-        return FILE_EXTENSIONS.contains(fileName.substring(dot + 1));
+    private Skill findRegistered(Long userId, String owner, String repo, String skillDir) {
+        return skillMapper.selectOne(new LambdaQueryWrapper<Skill>()
+                .eq(Skill::getUserId, userId)
+                .eq(Skill::getRepoOwner, owner)
+                .eq(Skill::getRepoName, repo)
+                .eq(Skill::getSkillPath, StrUtil.nullToEmpty(skillDir))
+                .last("LIMIT 1"));
     }
 
-    /**
-     * 解析 SKILL.md frontmatter（--- 包裹的 key: value 区块），key 统一小写
-     */
-    private Map<String, String> parseFrontmatter(String content) {
-        Map<String, String> result = new LinkedHashMap<>();
-        if (content == null) {
-            return result;
+    private void validateSegment(String value, String field) {
+        if (value == null || !REPO_SEGMENT.matcher(value).matches() || value.contains("..")) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "非法的仓库" + field + ": " + value);
         }
-        String[] lines = content.split("\n", -1);
-        if (lines.length < 2 || !"---".equals(lines[0].trim())) {
-            return result;
-        }
-        for (int i = 1; i < lines.length; i++) {
-            String line = lines[i].trim();
-            if (line.equals("---")) {
-                break;
-            }
-            int colon = line.indexOf(':');
-            if (colon <= 0) {
-                continue;
-            }
-            String key = line.substring(0, colon).trim().toLowerCase(Locale.ROOT);
-            String value = line.substring(colon + 1).trim();
-            if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
-                value = value.substring(1, value.length() - 1);
-            }
-            if (!value.isEmpty()) {
-                result.put(key, value);
-            }
-        }
-        return result;
     }
 
     private void checkRateLimit(String scene, Long userId, int limit) {

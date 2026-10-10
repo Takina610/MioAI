@@ -210,7 +210,7 @@
     <ResourceSelectDrawer
       v-model:open="skillDrawerVisible"
       title="添加技能"
-      create-label="创建技能"
+      create-label="安装技能"
       :tabs="skillTabs"
       :selected-count="selectedSkillIds.length"
       :confirm-loading="addSkillLoading"
@@ -280,7 +280,6 @@ const {
   customKnowledgeBases,
   publicMcpTools,
   customMcpTools,
-  publicSkills,
   customSkills,
   selectedKnowledgeIds,
   selectedMcpIds,
@@ -316,8 +315,7 @@ const mcpTabs = computed(() => [
 ])
 
 const skillTabs = computed(() => [
-  { key: 'public', label: '公开技能', items: publicSkills.value },
-  { key: 'custom', label: '我的技能', items: customSkills.value }
+  { key: 'skills', label: '技能', items: customSkills.value }
 ])
 
 function handleEditSuccess(): void {

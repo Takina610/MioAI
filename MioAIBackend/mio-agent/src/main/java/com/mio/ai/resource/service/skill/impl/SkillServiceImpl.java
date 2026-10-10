@@ -11,14 +11,13 @@ import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.utils.JacksonUtil;
 import com.mio.ai.resource.mapper.agent.AgentSkillMapper;
 import com.mio.ai.resource.mapper.skill.SkillMapper;
-import com.mio.ai.resource.model.dto.skill.SkillAddRequest;
 import com.mio.ai.resource.model.dto.skill.SkillQueryRequest;
-import com.mio.ai.resource.model.dto.skill.SkillUpdateRequest;
 import com.mio.ai.resource.model.entity.AgentSkill;
 import com.mio.ai.resource.model.entity.Skill;
 import com.mio.ai.resource.model.enums.SkillStatusEnum;
 import com.mio.ai.resource.model.vo.skill.SkillVO;
 import com.mio.ai.resource.service.agent.AgentSkillService;
+import com.mio.ai.resource.service.skill.SkillGithubImportService;
 import com.mio.ai.resource.service.skill.SkillService;
 import com.mio.ai.user.service.UserService;
 import jakarta.annotation.Resource;
@@ -34,7 +33,7 @@ import java.util.List;
 /**
  * @author: Takina
  * @date: 2026/10/10
- * @description: 技能服务实现
+ * @description: 技能服务实现。技能只有本人可见；安装 = 拉取内容并打标记，卸载 = 去除标记保留元数据。
  */
 @Slf4j
 @Service
@@ -48,53 +47,11 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill> implements
     private AgentSkillService agentSkillService;
 
     @Resource
+    @Lazy
+    private SkillGithubImportService skillGithubImportService;
+
+    @Resource
     private UserService userService;
-
-    @Override
-    public Long addSkill(SkillAddRequest request, Long userId) {
-        if (StrUtil.isBlank(request.getName())) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "技能名称不能为空");
-        }
-        Skill skill = new Skill();
-        skill.setUserId(userId);
-        skill.setName(request.getName().trim());
-        skill.setDescription(request.getDescription());
-        skill.setContent(request.getContent());
-        skill.setFiles(serializeFiles(request.getFiles()));
-        skill.setSourceUrl(request.getSourceUrl());
-        skill.setStatus(SkillStatusEnum.ACTIVE.getCode());
-        skill.setIsPublic(request.getIsPublic() != null ? request.getIsPublic() : 0);
-        this.save(skill);
-        return skill.getId();
-    }
-
-    @Override
-    public boolean updateSkill(SkillUpdateRequest request, Long userId) {
-        Skill exist = this.getById(request.getId());
-        if (exist == null) {
-            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "技能不存在");
-        }
-        if (!exist.getUserId().equals(userId)) {
-            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限修改该技能");
-        }
-        Skill update = new Skill();
-        update.setId(request.getId());
-        if (StrUtil.isNotBlank(request.getName())) {
-            update.setName(request.getName().trim());
-        }
-        update.setDescription(request.getDescription());
-        update.setContent(request.getContent());
-        if (request.getFiles() != null) {
-            update.setFiles(serializeFiles(request.getFiles()));
-        }
-        update.setStatus(request.getStatus());
-        update.setIsPublic(request.getIsPublic());
-        update.setUpdateTime(new Date());
-        // ignoreNullValue：未传字段保持原值
-        Skill target = new Skill();
-        BeanUtil.copyProperties(update, target, CopyOptions.create().setIgnoreNullValue(true));
-        return this.updateById(target);
-    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -103,9 +60,7 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill> implements
         if (skill == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "技能不存在");
         }
-        if (!skill.getUserId().equals(userId)) {
-            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限删除该技能");
-        }
+        checkOwner(skill, userId);
         // 级联解除智能体绑定
         agentSkillMapper.delete(new LambdaQueryWrapper<AgentSkill>().eq(AgentSkill::getSkillId, id));
         return this.removeById(id);
@@ -117,10 +72,7 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill> implements
         if (skill == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "技能不存在");
         }
-        boolean owner = userId != null && skill.getUserId().equals(userId);
-        if (!owner && !Integer.valueOf(1).equals(skill.getIsPublic())) {
-            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限查看该技能");
-        }
+        checkOwner(skill, userId);
         return convertToVO(skill);
     }
 
@@ -135,12 +87,37 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill> implements
     }
 
     @Override
-    public Page<SkillVO> getPublicSkills(long current, long size) {
-        LambdaQueryWrapper<Skill> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Skill::getIsPublic, 1)
-                .eq(Skill::getStatus, SkillStatusEnum.ACTIVE.getCode())
-                .orderByDesc(Skill::getUpdateTime);
-        return pageToVO(this.page(new Page<>(current, size), wrapper));
+    public SkillVO installSkill(Long id, Long userId) {
+        Skill skill = this.getById(id);
+        if (skill == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "技能不存在");
+        }
+        checkOwner(skill, userId);
+        if (!Integer.valueOf(1).equals(skill.getInstalled())) {
+            if (StrUtil.isBlank(skill.getContent())) {
+                // 内容为空时必须从仓库来源拉取
+                skillGithubImportService.fetchContent(skill);
+            }
+            skill.setInstalled(1);
+            skill.setUpdateTime(new Date());
+            this.updateById(skill);
+        }
+        return convertToVO(skill);
+    }
+
+    @Override
+    public SkillVO uninstallSkill(Long id, Long userId) {
+        Skill skill = this.getById(id);
+        if (skill == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "技能不存在");
+        }
+        checkOwner(skill, userId);
+        if (!Integer.valueOf(0).equals(skill.getInstalled())) {
+            skill.setInstalled(0);
+            skill.setUpdateTime(new Date());
+            this.updateById(skill);
+        }
+        return convertToVO(skill);
     }
 
     @Override
@@ -155,9 +132,18 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill> implements
             return List.of();
         }
         List<Long> skillIds = bindings.stream().map(AgentSkill::getSkillId).toList();
+        // 未安装的技能没有内容，不参与对话装配
         LambdaQueryWrapper<Skill> skillWrapper = new LambdaQueryWrapper<>();
-        skillWrapper.in(Skill::getId, skillIds).eq(Skill::getStatus, SkillStatusEnum.ACTIVE.getCode());
+        skillWrapper.in(Skill::getId, skillIds)
+                .eq(Skill::getStatus, SkillStatusEnum.ACTIVE.getCode())
+                .eq(Skill::getInstalled, 1);
         return this.list(skillWrapper);
+    }
+
+    private void checkOwner(Skill skill, Long userId) {
+        if (userId == null || skill.getUserId() == null || !skill.getUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限操作该技能");
+        }
     }
 
     private Page<SkillVO> pageToVO(Page<Skill> page) {
@@ -182,13 +168,6 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill> implements
             }
         }
         return vo;
-    }
-
-    private String serializeFiles(List<?> files) {
-        if (files == null || files.isEmpty()) {
-            return null;
-        }
-        return JacksonUtil.writeValueAsString(files);
     }
 
     @SuppressWarnings("unchecked")
