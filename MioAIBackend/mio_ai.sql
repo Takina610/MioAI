@@ -310,4 +310,41 @@ CREATE TABLE IF NOT EXISTS SPRING_AI_CHAT_MEMORY (
     INDEX `SPRING_AI_CHAT_MEMORY_CONVERSATION_ID_SEQUENCE_ID_IDX` (`conversation_id`, `sequence_id`)
 );
 
+-- ----------------------------
+-- Table structure for skill（智能体技能：SKILL.md 内容 + 附属文件）
+-- ----------------------------
+CREATE TABLE IF NOT EXISTS `skill` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL COMMENT '创建者ID',
+  `name` varchar(100) NOT NULL COMMENT '技能名称',
+  `description` varchar(500) NULL DEFAULT NULL COMMENT '技能描述（供智能体判断何时使用）',
+  `content` mediumtext NULL COMMENT 'SKILL.md 内容',
+  `files` json NULL COMMENT '附属文件 [{path, content}]',
+  `source_url` varchar(500) NULL DEFAULT NULL COMMENT '来源链接（GitHub 仓库/目录）',
+  `status` tinyint NULL DEFAULT 1 COMMENT '状态:0-禁用,1-正常',
+  `is_public` tinyint NULL DEFAULT 0 COMMENT '是否公开:0-私有,1-公开',
+  `is_deleted` tinyint NULL DEFAULT 0,
+  `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`) USING BTREE,
+  INDEX `idx_user_id`(`user_id` ASC) USING BTREE,
+  INDEX `idx_status`(`status` ASC) USING BTREE,
+  INDEX `idx_is_deleted`(`is_deleted` ASC) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '技能表' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Table structure for agent_skill（智能体-技能绑定）
+-- ----------------------------
+CREATE TABLE IF NOT EXISTS `agent_skill` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `agent_id` bigint NOT NULL COMMENT '智能体ID',
+  `skill_id` bigint NOT NULL COMMENT '技能ID',
+  `enabled` tinyint NULL DEFAULT 1 COMMENT '是否启用:0-禁用,1-启用',
+  `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_agent_skill`(`agent_id` ASC, `skill_id` ASC) USING BTREE,
+  INDEX `idx_agent_id`(`agent_id` ASC) USING BTREE,
+  INDEX `idx_skill_id`(`skill_id` ASC) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '智能体技能绑定表' ROW_FORMAT = Dynamic;
+
 SET FOREIGN_KEY_CHECKS = 1;

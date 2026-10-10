@@ -3,7 +3,9 @@
     <PageHeader :title="`MCP广场 ${mcpList.length}`" />
 
     <div class="dash-page-content">
-      <a-empty v-if="!loading && mcpList.length === 0" description="暂无公开MCP工具" />
+      <div v-if="!loading && mcpList.length === 0" class="dash-empty">
+        <a-empty description="暂无公开MCP工具" />
+      </div>
 
       <a-row v-else :gutter="[16, 16]">
         <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="mcp in mcpList" :key="mcp.id">

@@ -43,12 +43,9 @@
           </a-col>
         </a-row>
 
-        <EmptyState
-          v-else
-          :image="emptyImage"
-          description="你还没有知识库"
-          hint="前往右上角创建知识库"
-        />
+        <div v-else class="dash-empty">
+          <a-empty description="你还没有知识库" />
+        </div>
 
         <KnowledgeBaseModal
           v-model:visible="createModalVisible"
@@ -73,10 +70,8 @@ import {
   FileTextOutlined
 } from '@ant-design/icons-vue'
 import KnowledgeBaseModal from '@/components/KnowledgeBaseModal.vue'
-import emptyImage from '@/assets/agent.png'
 import PageHeader from '../components/PageHeader.vue'
 import LoginPrompt from '../components/LoginPrompt.vue'
-import EmptyState from '../components/EmptyState.vue'
 
 const emit = defineEmits<{
   (e: 'login-required'): void

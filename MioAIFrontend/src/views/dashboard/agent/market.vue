@@ -3,7 +3,11 @@
     <PageHeader :title="`智能体广场 ${agentList.length}`" />
 
     <div class="dash-page-content">
-      <a-row :gutter="[16, 16]">
+      <div v-if="!loading && agentList.length === 0" class="dash-empty">
+        <a-empty description="暂无公开智能体" />
+      </div>
+
+      <a-row v-else :gutter="[16, 16]">
         <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="agent in agentList" :key="agent.id">
           <div class="dash-card agent-card">
             <div class="card-header">

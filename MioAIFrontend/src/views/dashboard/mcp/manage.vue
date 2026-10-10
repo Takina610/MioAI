@@ -39,12 +39,9 @@
           </a-col>
         </a-row>
 
-        <EmptyState
-          v-else
-          :image="emptyImage"
-          description="创建MCP服务，即刻连接智能"
-          hint="前往右上角创建MCP服务"
-        />
+        <div v-else class="dash-empty">
+          <a-empty description="暂无MCP服务" />
+        </div>
 
         <McpCreateModal
           v-model:visible="modalVisible"
@@ -65,10 +62,8 @@ import { addMcpTool, queryMcpTools, updateMcpTool, deleteMcpTool } from '@/api/m
 import type { McpTool, McpToolAddRequest, PageResponse } from '@/types'
 import { PlusOutlined, ToolOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import McpCreateModal from '@/components/McpCreateModal.vue'
-import emptyImage from '@/assets/mcp.png'
 import PageHeader from '../components/PageHeader.vue'
 import LoginPrompt from '../components/LoginPrompt.vue'
-import EmptyState from '../components/EmptyState.vue'
 
 const emit = defineEmits<{
   (e: 'login-required'): void

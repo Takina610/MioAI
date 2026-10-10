@@ -57,12 +57,9 @@
           </a-col>
         </a-row>
 
-        <EmptyState
-          v-else
-          :image="emptyImage"
-          description="你还没有智能体应用"
-          hint="前往右上角创建智能体应用"
-        />
+        <div v-else class="dash-empty">
+          <a-empty description="你还没有智能体应用" />
+        </div>
 
         <AgentCreateModal
           v-model:visible="createModalVisible"
@@ -100,8 +97,6 @@ import {
 import AgentCreateModal from '@/components/AgentCreateModal.vue'
 import PageHeader from '../components/PageHeader.vue'
 import LoginPrompt from '../components/LoginPrompt.vue'
-import EmptyState from '../components/EmptyState.vue'
-import emptyImage from '@/assets/agent.png'
 
 const emit = defineEmits<{
   (e: 'login-required'): void

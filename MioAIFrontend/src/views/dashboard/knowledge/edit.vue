@@ -27,9 +27,18 @@
         <div class="dash-section document-section">
           <div class="section-header">
             <h3 class="section-title">文档列表</h3>
-            <a-button type="primary" @click="uploadModalVisible = true">
-              <PlusOutlined /> 上传文档
-            </a-button>
+            <div class="section-actions">
+              <a-button
+                v-if="hasRetryableDocs"
+                :loading="vectorizing"
+                @click="handleRevectorize"
+              >
+                <ReloadOutlined /> 重新向量化
+              </a-button>
+              <a-button type="primary" @click="uploadModalVisible = true">
+                <PlusOutlined /> 上传文档
+              </a-button>
+            </div>
           </div>
 
           <DocumentTable
@@ -62,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useUserStore } from '@/store/user'
@@ -70,11 +79,12 @@ import {
   getKnowledgeBaseById,
   updateKnowledgeBase,
   deleteDocument,
+  vectorizeKnowledgeFiles,
   type Document
 } from '@/api/knowledgeBase'
 import { formatFileSize } from '@/utils/format'
 import type { KnowledgeBase } from '@/types'
-import { PlusOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import KnowledgeBaseModal from '@/components/KnowledgeBaseModal.vue'
 import FilePreviewDrawer from '@/components/FilePreviewDrawer.vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -181,6 +191,55 @@ function handlePreview(record: Document): void {
   previewVisible.value = true
 }
 
+const vectorizing = ref(false)
+let eventSource: EventSource | null = null
+const hasRetryableDocs = computed(() =>
+  documentList.value.some((d) => d.status === 1 || d.status === 3)
+)
+
+function closeVectorizeStream(): void {
+  eventSource?.close()
+  eventSource = null
+  vectorizing.value = false
+}
+
+function handleRevectorize(): void {
+  if (vectorizing.value) {
+    return
+  }
+  vectorizing.value = true
+  const token = localStorage.getItem('token') || ''
+  eventSource = vectorizeKnowledgeFiles(kbId.value, token)
+  eventSource.onmessage = (event) => {
+    try {
+      const payload = JSON.parse(event.data)
+      if (payload.type === 'done') {
+        message.success(payload.data?.message || '向量化完成')
+        closeVectorizeStream()
+        refresh()
+      } else if (payload.type === 'error') {
+        message.error(payload.data?.message || '向量化失败，文件已保留，可重试')
+        closeVectorizeStream()
+        refresh()
+      } else if (payload.type === 'cancelled') {
+        closeVectorizeStream()
+        refresh()
+      }
+    } catch {
+      // 忽略无法解析的行
+    }
+  }
+  eventSource.onerror = () => {
+    message.error('连接中断')
+    closeVectorizeStream()
+    refresh()
+  }
+}
+
+onBeforeUnmount(() => {
+  closeVectorizeStream()
+})
+
 onMounted(() => {
   refresh()
 })
@@ -200,6 +259,11 @@ onMounted(() => {
       margin-bottom: 0;
       padding-bottom: 0;
       border-bottom: none;
+    }
+
+    .section-actions {
+      display: flex;
+      gap: 12px;
     }
   }
 }

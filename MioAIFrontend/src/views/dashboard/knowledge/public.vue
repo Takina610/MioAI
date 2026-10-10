@@ -3,8 +3,8 @@
     <PageHeader :title="`公共知识库 ${knowledgeList.length}`" />
 
     <div class="dash-page-content">
-      <a-spin :spinning="loading">
-        <a-row :gutter="[16, 16]" v-if="knowledgeList.length > 0">
+      <a-spin v-if="loading || knowledgeList.length > 0" :spinning="loading">
+        <a-row :gutter="[16, 16]">
           <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="kb in knowledgeList" :key="kb.id">
             <div class="dash-card kb-card" @click="goToDetail(kb.id)">
               <div class="card-header">
@@ -28,9 +28,11 @@
             </div>
           </a-col>
         </a-row>
-
-        <a-empty v-else-if="!loading" description="暂无公开知识库" />
       </a-spin>
+
+      <div v-else class="dash-empty">
+        <a-empty description="暂无公开知识库" />
+      </div>
     </div>
   </div>
 </template>

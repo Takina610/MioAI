@@ -156,7 +156,8 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
                 List<Document> documents = documentMapper.selectList(
                     new QueryWrapper<Document>()
                         .eq("kb_id", kbId)
-                        .eq("status", 0)
+                        // 0=待处理，1=上次中断残留，3=上次失败：三者都允许（重新）向量化
+                        .in("status", 0, 1, 3)
                 );
 
                 int total = documents.size();
@@ -196,6 +197,9 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
                                 }
                                 
                                 try {
+                                    // 重试场景：先清掉上次可能残留的部分向量，避免向量主键冲突
+                                    documentCleanupService.deleteVectorsByDocId(doc.getId());
+
                                     doc.setStatus(1);
                                     documentMapper.updateById(doc);
 
@@ -260,7 +264,7 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
                                         int end = Math.min(i + embeddingBatchSize, enrichedDocuments.size());
                                         List<org.springframework.ai.document.Document> embeddingBatch =
                                                 enrichedDocuments.subList(i, end);
-                                        vectorStore.add(embeddingBatch);
+                                        addEmbeddingBatchWithRetry(embeddingBatch);
                                         log.info("向量化批次完成: {}/{}", Math.min(i + embeddingBatchSize, enrichedDocuments.size()), enrichedDocuments.size());
                                     }
 
@@ -307,14 +311,13 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
                     return;
                 }
                 
-                // 检查是否所有文件都失败了
+                // 检查是否所有文件都失败了：保留文件与记录，修复问题后重新向量化即可重试
                 int finalFailedCount = failedCount.get();
                 if (finalFailedCount == total) {
-                    log.warn("所有文件处理失败，自动清理: kbId={}", kbId);
-                    // 清理所有数据
-                    cleanupFailedKnowledgeBase(kbId);
+                    log.warn("所有文件处理失败，已保留待重试: kbId={}", kbId);
                     emitter.send(SseEmitter.event()
-                            .data("{\"type\":\"error\",\"data\":{\"message\":\"所有文件处理失败，已自动清理\"}}"));
+                            .data("{\"type\":\"error\",\"data\":{\"message\":\"全部 " + total
+                                    + " 个文件处理失败，文件已保留，可重新向量化重试\"}}"));
                     emitter.complete();
                     return;
                 }
@@ -394,11 +397,17 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
     }
 
     /**
-     * 清理失败的知识库数据
+     * 嵌入批次写入，瞬态失败（网络抖动/网关 429、5xx）自动重试一次；仍失败则抛出让该文件走失败保留逻辑
      */
-    private void cleanupFailedKnowledgeBase(Long kbId) {
-        knowledgeBaseService.deleteKnowledgeBaseCascade(kbId);
-        log.info("清理失败知识库完成: kbId={}", kbId);
+    private void addEmbeddingBatchWithRetry(List<org.springframework.ai.document.Document> batch)
+            throws InterruptedException {
+        try {
+            vectorStore.add(batch);
+        } catch (Exception first) {
+            log.warn("向量化批次失败，2s 后重试: {}", first.getMessage());
+            Thread.sleep(2000);
+            vectorStore.add(batch);
+        }
     }
 
     private String buildProgressEvent(int total, int current, String message) {

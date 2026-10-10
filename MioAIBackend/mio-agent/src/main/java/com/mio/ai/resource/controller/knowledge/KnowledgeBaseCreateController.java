@@ -62,7 +62,8 @@ public class KnowledgeBaseCreateController {
             @PathVariable Long kbId,
             @RequestParam String token) {
         Long userId = redisComponent.getUserId(token);
-        SseEmitter emitter = new SseEmitter(300000L);
+        // 超时对齐服务端 30 分钟的批次等待：大文件多分块的向量化不应中途掐断 SSE
+        SseEmitter emitter = new SseEmitter(1800000L);
         knowledgeBaseCreateService.vectorizeFiles(kbId, userId, emitter);
         return emitter;
     }

@@ -84,6 +84,14 @@
   }
 }
 
+/* 列表空状态：内容区内水平+垂直居中 */
+.dash-empty {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* 列表卡片公共样式（广场/管理页的卡片） */
 .dash-card {
   background: $bg-ivory;
