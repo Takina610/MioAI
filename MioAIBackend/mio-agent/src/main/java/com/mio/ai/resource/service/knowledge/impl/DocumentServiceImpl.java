@@ -15,18 +15,15 @@ import com.mio.ai.resource.model.entity.Document;
 import com.mio.ai.resource.model.entity.KnowledgeBase;
 import com.mio.ai.resource.model.enums.DocumentStatusEnum;
 import com.mio.ai.resource.model.vo.knowledge.DocumentVO;
+import com.mio.ai.resource.service.knowledge.DocumentCleanupService;
 import com.mio.ai.resource.service.knowledge.DocumentService;
 import com.mio.ai.resource.service.knowledge.KnowledgeBaseService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 @Slf4j
 @Service
@@ -40,10 +37,8 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
     private R2Util r2Util;
 
     @Resource
-    private VectorStore vectorStore;
-
-    @Resource
-    private StringRedisTemplate stringRedisTemplate;
+    @Lazy
+    private DocumentCleanupService documentCleanupService;
 
     @Override
     public Long addDocument(DocumentAddRequest request, Long userId) {
@@ -86,31 +81,12 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
             }
         }
 
-        if (document.getStatus() == DocumentStatusEnum.COMPLETED.getCode()) {
-            try {
-                List<String> idsToDelete = new ArrayList<>();
-                String pattern = "rag:doc_" + id + "_*";
-                
-                Set<String> keys = stringRedisTemplate.keys(pattern);
-                if (keys != null && !keys.isEmpty()) {
-                    for (String key : keys) {
-                        String docId = key.substring(4);
-                        idsToDelete.add(docId);
-                    }
-                }
-                
-                if (!idsToDelete.isEmpty()) {
-                    vectorStore.delete(idsToDelete);
-                    log.info("删除向量数据成功: docId={}, 共{}个分块", id, idsToDelete.size());
-                }
-            } catch (Exception e) {
-                log.warn("删除向量数据失败: docId={}", id, e);
-            }
-        }
+        // 向量清理按 metadata.docId 过滤删除，与文档状态无关（半途失败的文档也可能有残留分块）
+        documentCleanupService.deleteVectorsByDocId(id);
 
         boolean removed = this.removeById(id);
 
-        updateKnowledgeBaseStats(document.getKbId());
+        documentCleanupService.updateKnowledgeBaseStats(document.getKbId());
 
         return removed;
     }
@@ -193,25 +169,6 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
         }
 
         return this.remove(wrapper);
-    }
-
-    private void updateKnowledgeBaseStats(Long kbId) {
-        LambdaQueryWrapper<Document> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Document::getKbId, kbId)
-                .eq(Document::getStatus, DocumentStatusEnum.COMPLETED.getCode());
-        List<Document> successDocuments = this.list(wrapper);
-
-        int documentCount = successDocuments.size();
-        long totalSize = successDocuments.stream()
-                .mapToLong(Document::getFileSize)
-                .sum();
-
-        KnowledgeBase kb = knowledgeBaseService.getById(kbId);
-        if (kb != null) {
-            kb.setDocumentCount(documentCount);
-            kb.setStorageSize(totalSize);
-            knowledgeBaseService.updateById(kb);
-        }
     }
 
     private DocumentVO convertToVO(Document document) {

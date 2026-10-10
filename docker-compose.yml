@@ -84,7 +84,13 @@ services:
       PG_DATABASE: ${PG_DATABASE:-mio_ai_vec}
       REDIS_HOST: redis
       REDIS_PORT: "6379"
-      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
+      # Embedding 网关（OpenAI 兼容）。密钥填在 .env 的 EMBED_APIKEY；
+      # 注意带连字符的 EMBED-APIKEY 无法在 compose 插值中使用，容器内走下划线别名
+      EMBED_APIKEY: ${EMBED_APIKEY:-}
+      EMBED_BASE_URL: ${EMBED_BASE_URL:-https://api.42x.shop/v1}
+      EMBED_MODEL: ${EMBED_MODEL:-mistral-embed}
+      # 仅重排（rerank）还依赖 DashScope 原生端点，默认关闭，可留空
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
       WEB_SEARCH_API_KEY: ${WEB_SEARCH_API_KEY:-}
       PEXELS_API_KEY: ${PEXELS_API_KEY:-}
       R2_ENDPOINT: ${R2_ENDPOINT}

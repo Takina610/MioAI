@@ -13,6 +13,7 @@ import com.mio.ai.framework.rag.MarkdownReader;
 import com.mio.ai.framework.rag.PdfReader;
 import com.mio.ai.framework.rag.TikaReader;
 import com.mio.ai.framework.rag.TxtReader;
+import com.mio.ai.resource.service.knowledge.DocumentCleanupService;
 import com.mio.ai.resource.service.knowledge.KnowledgeBaseCreateService;
 import com.mio.ai.resource.service.knowledge.KnowledgeBaseService;
 import com.mio.ai.framework.rag.CustomTokenTextSplitter;
@@ -22,19 +23,13 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.URL;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -65,9 +60,6 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
     private VectorStore vectorStore;
 
     @Autowired
-    private StringRedisTemplate stringRedisTemplate;
-
-    @Autowired
     private KeywordEnricher keywordEnricher;
 
     /**
@@ -75,6 +67,15 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
      */
     @Value("${mio.ai.rag.chunk-size:800}")
     private int chunkSize;
+
+    /**
+     * 入库前用对话模型为分块提取关键词写入 metadata（当前检索不消费该字段），默认关闭
+     */
+    @Value("${mio.ai.rag.keyword-enrich:false}")
+    private boolean keywordEnrichEnabled;
+
+    @Autowired
+    private DocumentCleanupService documentCleanupService;
 
     @Autowired
     MarkdownReader markdownReader;
@@ -224,6 +225,8 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
                                     List<org.springframework.ai.document.Document> documentsWithId = new ArrayList<>();
                                     for (org.springframework.ai.document.Document aiDoc : splitDocuments) {
                                         Map<String, Object> metadata = new HashMap<>(aiDoc.getMetadata());
+                                        // kbId/docId 必须存数值：检索与清理的过滤条件走
+                                        // metadata::jsonb @@ '$.kbId == 5' 的 jsonpath 数值比较，字符串值永远匹配不上
                                         metadata.put("kbId", kbId);
                                         metadata.put("docId", doc.getId());
                                         metadata.put("fileName", doc.getFileName());
@@ -236,8 +239,14 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
                                         chunkIndex++;
                                     }
 
-                                    List<org.springframework.ai.document.Document> enrichedDocuments =
-                                            keywordEnricher.enrich(documentsWithId);
+                                    List<org.springframework.ai.document.Document> enrichedDocuments = documentsWithId;
+                                    if (keywordEnrichEnabled) {
+                                        try {
+                                            enrichedDocuments = keywordEnricher.enrich(documentsWithId);
+                                        } catch (Exception e) {
+                                            log.warn("关键词增强失败，使用原始分块继续向量化: {}", e.getMessage());
+                                        }
+                                    }
 
                                     // 分批添加到向量存储，每批最多5个文档
                                     int embeddingBatchSize = 5;
@@ -311,9 +320,9 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
                 }
                 
                 emitter.send(SseEmitter.event().data(buildDoneEvent(total, completed.get(), finalFailedCount)));
-                
-                updateKnowledgeBaseStats(kbId);
-                
+
+                documentCleanupService.updateKnowledgeBaseStats(kbId);
+
                 emitter.complete();
 
             } catch (Exception e) {
@@ -352,8 +361,12 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
     private List<org.springframework.ai.document.Document> readDocumentFromUrl(String fileUrl,
                                                                                String fileType
     ) throws IOException {
-        File tempFile = downloadFileFromUrl(fileUrl);
+        // 直接走 S3 API 取回对象：自托管 CDN 证书/网络抖动都会掐断整个向量化，
+        // 且文件本来就在自己的 R2 桶里，没有理由绕道公网域名
+        byte[] bytes = r2Util.downloadFile(fileUrl);
+        File tempFile = File.createTempFile("kb_doc_", ".tmp");
         try {
+            java.nio.file.Files.write(tempFile.toPath(), bytes);
             FileSystemResource resource = new FileSystemResource(tempFile);
             switch (fileType.toLowerCase()) {
                 case "pdf":
@@ -371,94 +384,6 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
                 tempFile.delete();
             }
         }
-    }
-
-    private File downloadFileFromUrl(String fileUrl) throws IOException {
-        String encodedUrl = encodeUrl(fileUrl);
-        URL url = new URL(encodedUrl);
-        File tempFile = File.createTempFile("kb_doc_", ".tmp");
-        
-        // 重试机制，最多重试3次
-        int maxRetries = 3;
-        IOException lastException = null;
-        
-        for (int retry = 0; retry < maxRetries; retry++) {
-            try {
-                try (InputStream in = url.openStream();
-                     FileOutputStream out = new FileOutputStream(tempFile)) {
-                    byte[] buffer = new byte[8192];
-                    int bytesRead;
-                    while ((bytesRead = in.read(buffer)) != -1) {
-                        out.write(buffer, 0, bytesRead);
-                    }
-                }
-                // 下载成功，返回文件
-                return tempFile;
-            } catch (IOException e) {
-                lastException = e;
-                log.warn("下载文件失败(重试 {}/{}): {}", retry + 1, maxRetries, fileUrl, e);
-                if (retry < maxRetries - 1) {
-                    try {
-                        Thread.sleep(1000 * (retry + 1)); // 递增等待时间
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        throw new IOException("下载被中断", ie);
-                    }
-                }
-            }
-        }
-        
-        // 所有重试都失败
-        if (tempFile.exists()) {
-            tempFile.delete();
-        }
-        throw new IOException("下载文件失败，已重试" + maxRetries + "次: " + fileUrl, lastException);
-    }
-
-    private String encodeUrl(String url) {
-        try {
-            URL parsedUrl = new URL(url);
-            String protocol = parsedUrl.getProtocol();
-            String host = parsedUrl.getHost();
-            String path = parsedUrl.getPath();
-            String query = parsedUrl.getQuery();
-            String ref = parsedUrl.getRef();
-
-            String encodedPath = encodePath(path);
-
-            StringBuilder result = new StringBuilder();
-            result.append(protocol).append("://").append(host).append(encodedPath);
-
-            if (query != null) {
-                result.append("?").append(query);
-            }
-            if (ref != null) {
-                result.append("#").append(ref);
-            }
-
-            return result.toString();
-        } catch (Exception e) {
-            log.warn("URL编码失败，使用原始URL: {}", url, e);
-            return url;
-        }
-    }
-
-    private String encodePath(String path) {
-        if (path == null || path.isEmpty()) {
-            return path;
-        }
-        StringBuilder encoded = new StringBuilder();
-        String[] segments = path.split("/");
-        for (int i = 0; i < segments.length; i++) {
-            if (i > 0) {
-                encoded.append("/");
-            }
-            String segment = segments[i];
-            if (!segment.isEmpty()) {
-                encoded.append(URLEncoder.encode(segment, StandardCharsets.UTF_8).replace("+", "%20"));
-            }
-        }
-        return encoded.toString();
     }
 
     private String getFileExtension(String fileName) {
@@ -486,62 +411,10 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
         );
 
         for (Document doc : documents) {
-            deleteDocumentData(doc);
+            documentCleanupService.deleteDocumentAssets(doc);
         }
 
         knowledgeBaseService.removeById(kbId);
-    }
-    
-    /**
-     * 删除单个文档的所有数据（向量数据、R2文件、数据库记录）
-     * 删除顺序：向量数据 -> R2文件 -> 数据库记录（确保外部资源先清理，避免孤立数据）
-     */
-    private void deleteDocumentData(Document doc) {
-        boolean vectorDeleted = false;
-        boolean r2Deleted = false;
-        
-        // 1. 删除向量数据
-        try {
-            List<String> idsToDelete = new ArrayList<>();
-            String pattern = "rag:doc_" + doc.getId() + "_*";
-            
-            Set<String> keys = stringRedisTemplate.keys(pattern);
-            if (keys != null && !keys.isEmpty()) {
-                for (String key : keys) {
-                    String docId = key.substring(4);
-                    idsToDelete.add(docId);
-                }
-            }
-            
-            if (!idsToDelete.isEmpty()) {
-                vectorStore.delete(idsToDelete);
-                log.info("删除向量数据成功: docId={}, 共{}个分块", doc.getId(), idsToDelete.size());
-            }
-            vectorDeleted = true;
-        } catch (Exception e) {
-            log.warn("删除向量数据失败: docId={}", doc.getId(), e);
-            // 向量数据删除失败，但继续尝试删除其他资源
-        }
-        
-        // 2. 删除 R2 存储中的文件
-        try {
-            if (doc.getFilePath() != null && !doc.getFilePath().isEmpty()) {
-                r2Util.deleteFile(doc.getFilePath());
-            }
-            r2Deleted = true;
-        } catch (Exception e) {
-            log.error("删除R2文件失败: {}", doc.getFileName(), e);
-            // R2文件删除失败，但继续删除数据库记录
-        }
-        
-        // 3. 最后删除数据库记录（只有在外部资源都删除成功，或者即使失败也要删除记录避免孤立）
-        try {
-            documentMapper.deleteById(doc.getId());
-            log.info("删除文档记录成功: docId={}, 向量删除:{}, R2删除:{}", 
-                    doc.getId(), vectorDeleted, r2Deleted);
-        } catch (Exception e) {
-            log.error("删除数据库记录失败: docId={}", doc.getId(), e);
-        }
     }
 
     private String buildProgressEvent(int total, int current, String message) {
@@ -576,25 +449,5 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
         event.put("type", "done");
         event.put("data", data);
         return JacksonUtil.writeValueAsString(event);
-    }
-
-    private void updateKnowledgeBaseStats(Long kbId) {
-        List<Document> successDocuments = documentMapper.selectList(
-            new QueryWrapper<Document>()
-                .eq("kb_id", kbId)
-                .eq("status", 2)
-        );
-
-        int documentCount = successDocuments.size();
-        long totalSize = successDocuments.stream()
-                .mapToLong(Document::getFileSize)
-                .sum();
-
-        KnowledgeBase kb = knowledgeBaseService.getById(kbId);
-        if (kb != null) {
-            kb.setDocumentCount(documentCount);
-            kb.setStorageSize(totalSize);
-            knowledgeBaseService.updateById(kb);
-        }
     }
 }

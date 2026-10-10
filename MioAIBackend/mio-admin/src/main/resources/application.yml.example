@@ -26,17 +26,19 @@ spring:
       database: 0
 
   ai:
-    # 阿里云百炼（DashScope）走 OpenAI 兼容模式 —— 兼容模式支持全部 qwen 系列对话模型（含免费额度模型，改 model 名即可）
-    # 与向量模型 text-embedding-v3/v4（v4 可加 spring.ai.openai.embedding.dimensions: 1024 指定维度）。
+    # chat 走 OpenAI 兼容网关（MODEL_* 三件套可覆盖），embedding 走 42x 网关（EMBED_* 可覆盖）。
     # 注意：2.0 底层为 openai-java SDK，不再自动补 /v1，base-url 必须以 /v1 结尾。
-    # rerank 不在兼容模式内，由 mio.ai.rag.rerank-api-url 直连原生端点实现。
+    # rerank 不在 OpenAI 兼容协议内，由 mio.ai.rag.rerank-api-url 直连原生端点实现。
     openai:
-      api-key: ${DASHSCOPE_API_KEY:your-dashscope-api-key}
-      base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      api-key: ${MODEL_API_KEY:mio-local-o2a-key-2026}
+      base-url: ${MODEL_BASE_URL:http://127.0.0.1:8090/v1}
       chat:
-        model: ${DASHSCOPE_CHAT_MODEL:fledge-alpha-free}
+        model: ${MODEL_CHAT_MODEL:fledge-alpha-free}
       embedding:
-        model: ${DASHSCOPE_EMBEDDING_MODEL:text-embedding-v3}
+        # 42x 网关（OpenAI 兼容 /v1/embeddings），mistral-embed 输出 1024 维
+        api-key: ${EMBED-APIKEY:${EMBED_APIKEY:your-embed-api-key}}
+        base-url: ${EMBED_BASE_URL:https://api.42x.shop/v1}
+        model: ${EMBED_MODEL:mistral-embed}
 
     # 聊天记忆入库（启动时自动建表；取值为 DatabaseInitializationMode：always/embedded/never）
     chat:
@@ -74,7 +76,7 @@ mio:
       jdbc-url: jdbc:postgresql://${PG_HOST:localhost}:${PG_PORT:5432}/${PG_DATABASE:mio_ai_vec}
       username: ${PG_USERNAME:postgres}
       password: ${PG_PASSWORD:mioai}
-      # 与向量模型输出维度一致（text-embedding-v3 默认 1024），不一致时启动建表即报错
+      # 与向量模型输出维度一致（mistral-embed 为 1024），不一致时启动建表即报错
       dimensions: ${PG_VECTOR_DIMENSIONS:1024}
     # RAG 检索配置
     rag:
@@ -82,11 +84,15 @@ mio:
       rerank-enabled: false
       rerank-model: gte-rerank
       rerank-top-n: 5
-      # DashScope 原生重排 API（OpenAI 兼容模式不提供 rerank，需直连原生端点）
+      # 重排仍依赖 DashScope 原生端点（42x 网关暂无 rerank 模型），不开重排可无视；
+      # 失败会自动降级为向量检索原始顺序
       rerank-api-url: ${DASHSCOPE_RERANK_URL:https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank}
       rerank-api-key: ${DASHSCOPE_API_KEY:your-dashscope-api-key}
       # 分块大小（token），消融实验可取 400/800/1200
       chunk-size: 800
+      # 入库前用对话模型给每个分块提关键词写入 metadata（当前检索并不消费该字段，
+      # 且每块多一次模型调用），默认关闭
+      keyword-enrich: false
     # 长会话摘要记忆
     memory:
       summary-enabled: true

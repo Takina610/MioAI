@@ -60,3 +60,6 @@ build/
 /RunKit/
 .deploy/
 MioAIBackend/data/
+
+# 含已泄露(已作废)的密钥，仅本地留档，禁止跟踪
+/env.tmp

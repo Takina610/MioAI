@@ -39,9 +39,12 @@ public class VectorStoreConfig implements DisposableBean {
         ds.setPoolName("mio-ai-vector");
         this.vectorDataSource = ds;
 
-        // 启动时自动建扩展/表/HNSW 索引（CREATE EXTENSION 需要超级用户账号）
+        // 启动时自动建扩展/表/HNSW 索引（CREATE EXTENSION 需要超级用户账号）。
+        // idType 必须用 TEXT：向量 ID 是 doc_{docId}_{chunkIndex} 字符串，
+        // 默认 UUID 会建 uuid 列导致所有分块插入失败
         return PgVectorStore.builder(new JdbcTemplate(ds), embeddingModel)
                 .dimensions(dimensions)
+                .idType(PgVectorStore.PgIdType.TEXT)
                 .initializeSchema(true)
                 .build();
     }

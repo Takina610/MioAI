@@ -72,10 +72,10 @@ public class KnowledgeBaseController {
     }
 
     @GetMapping("/{id:\\d+}")
-    @Cacheable(value = "knowledgeBases", key = "#id")
     public BaseResponse<KnowledgeBaseVO> getKnowledgeBase(@PathVariable Long id, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
-        // 可见性校验：所有者或公开知识库（在读取缓存前执行）
+        // 可见性校验：所有者或公开知识库。此接口不能加 @Cacheable——缓存命中会跳过方法体内的权限校验，
+        // 私有知识库元数据会被任意登录用户读到
         accessGuardService.checkKbReadable(id, userId);
         KnowledgeBaseVO kb = knowledgeBaseService.getKnowledgeBaseById(id);
         return ResultUtils.success(kb);

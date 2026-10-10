@@ -24,7 +24,7 @@ MioAI 是一个基于 Spring Boot 3、Spring AI 和 Vue 3 的智能体应用平�
 - Java 21
 - Spring Boot 4.1.1
 - Spring AI 2.0.1
-- Spring AI Alibaba DashScope
+- Spring AI OpenAI 兼容接入（对话走本地 opencode2api/zen 网关，Embedding 走 42x 网关 mistral-embed）
 - Spring MVC / WebFlux / SSE
 - MyBatis-Plus 3.5.11
 - MySQL 8
@@ -93,7 +93,7 @@ mio-ai
 - Node.js 20+，推荐配合 pnpm 使用
 - MySQL 8
 - PostgreSQL 16（向量检索依赖 pgvector 扩展）+ Redis（缓存）
-- 可用的 DashScope API Key
+- 可用的 Embedding API Key（OpenAI 兼容 /v1/embeddings，默认 42x 网关 mistral-embed）
 - 如需完整文件能力，还需要配置 Cloudflare R2 或其他 S3 兼容对象存储
 
 ## 本地启动
@@ -112,7 +112,7 @@ mysql -u root -p < mio_ai.sql
 cp src/main/resources/application.yml.example src/main/resources/application.yml
 ```
 
-编辑 `application.yml`，至少填写 MySQL、Redis、DashScope API Key、R2 配置。`application.yml` 已被 `.gitignore` 排除，不会误提交；所有敏感项均支持用同名大写环境变量覆盖。
+编辑 `application.yml`，至少填写 MySQL、Redis、Embedding API Key（`EMBED-APIKEY` 或 `EMBED_APIKEY`）、R2 配置。`application.yml` 已被 `.gitignore` 排除，不会误提交；所有敏感项均支持用同名大写环境变量覆盖。
 
 ### 3. 启动后端
 
