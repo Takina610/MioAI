@@ -78,32 +78,24 @@
 
       <!-- Step 2: 上传文件 -->
       <div v-show="currentStep === 1" class="step-upload">
-        <a-tabs v-model:activeKey="uploadTab" size="small" class="upload-tabs">
-          <a-tab-pane key="local" tab="本地上传">
-            <div class="upload-area" @dragover.prevent>
-              <a-upload-dragger
-                v-model:file-list="fileList"
-                :before-upload="beforeUpload"
-                :multiple="true"
-                accept=".pdf,.doc,.docx,.md,.txt"
-                :show-remove-button="!uploading"
-                @remove="handleRemove"
-              >
-                <p class="ant-upload-drag-icon">
-                  <InboxOutlined />
-                </p>
-                <p class="ant-upload-text">点击或拖拽文件到此区域上传</p>
-                <p class="ant-upload-hint">
-                  支持 PDF、DOC、DOCX、MD、TXT 格式，单个文件不超过 50MB
-                </p>
-              </a-upload-dragger>
-            </div>
-          </a-tab-pane>
-
-          <a-tab-pane key="github" tab="GitHub 导入">
-            <GithubImportPanel :kb-id="kbId" @imported="handleGithubImported" />
-          </a-tab-pane>
-        </a-tabs>
+        <div class="upload-area" @dragover.prevent>
+          <a-upload-dragger
+            v-model:file-list="fileList"
+            :before-upload="beforeUpload"
+            :multiple="true"
+            accept=".pdf,.doc,.docx,.md,.txt"
+            :show-remove-button="!uploading"
+            @remove="handleRemove"
+          >
+            <p class="ant-upload-drag-icon">
+              <InboxOutlined />
+            </p>
+            <p class="ant-upload-text">点击或拖拽文件到此区域上传</p>
+            <p class="ant-upload-hint">
+              支持 PDF、DOC、DOCX、MD、TXT 格式，单个文件不超过 50MB
+            </p>
+          </a-upload-dragger>
+        </div>
 
         <div v-if="uploadedFiles.length > 0" class="uploaded-list">
           <h4>已上传文件 ({{ uploadedFiles.length }})</h4>
@@ -127,7 +119,7 @@
             type="primary"
             @click="handleUploadAndNext"
             :loading="uploading"
-            :disabled="fileList.length === 0 && uploadedFiles.length === 0"
+            :disabled="fileList.length === 0"
           >
             开始向量化
           </a-button>
@@ -197,8 +189,7 @@ import {
   QuestionCircleOutlined,
   LoadingOutlined
 } from '@ant-design/icons-vue'
-import { addKnowledgeBase, updateKnowledgeBase, uploadKnowledgeFiles, cancelKnowledgeCreation, vectorizeKnowledgeFiles, type UploadResult, type GithubImportItem } from '@/api/knowledgeBase'
-import GithubImportPanel from '@/components/GithubImportPanel.vue'
+import { addKnowledgeBase, updateKnowledgeBase, uploadKnowledgeFiles, cancelKnowledgeCreation, vectorizeKnowledgeFiles, type UploadResult } from '@/api/knowledgeBase'
 
 interface Props {
   visible: boolean
@@ -234,7 +225,6 @@ const formRef = ref<FormInstance | null>(null)
 const kbId = ref<number | null>(null)
 const fileList = ref<any[]>([])
 const uploadedFiles = ref<UploadResult[]>([])
-const uploadTab = ref<'local' | 'github'>('local')
 
 const originalFormData = reactive({
   name: '',
@@ -299,7 +289,6 @@ function resetState(): void {
   kbId.value = null
   fileList.value = []
   uploadedFiles.value = []
-  uploadTab.value = 'local'
   vectorizeProgress.value = 0
   vectorizeStatusTitle.value = '准备向量化'
   vectorizeStatusMessage.value = '请稍候...'
@@ -382,24 +371,22 @@ function handleRemove(file: any): void {
 }
 
 async function handleUploadAndNext(): Promise<void> {
-  if (!kbId.value || (fileList.value.length === 0 && uploadedFiles.value.length === 0)) return
-
-  // GitHub 导入的文件已在服务端落库，无本地文件时直接进入向量化
-  const filesToUpload: File[] = []
-  fileList.value.forEach((f: any) => {
-    if (f.originFileObj) {
-      filesToUpload.push(f.originFileObj)
-    }
-  })
-
-  if (filesToUpload.length === 0) {
-    currentStep.value = 2
-    startVectorization()
-    return
-  }
+  if (!kbId.value || fileList.value.length === 0) return
 
   uploading.value = true
   try {
+    const filesToUpload: File[] = []
+    fileList.value.forEach((f: any) => {
+      if (f.originFileObj) {
+        filesToUpload.push(f.originFileObj)
+      }
+    })
+
+    if (filesToUpload.length === 0) {
+      message.warning('请选择要上传的文件')
+      return
+    }
+
     const results = await uploadKnowledgeFiles(kbId.value, filesToUpload)
     uploadedFiles.value = results
 
@@ -425,19 +412,6 @@ async function handleUploadAndNext(): Promise<void> {
   } finally {
     uploading.value = false
   }
-}
-
-function handleGithubImported(items: GithubImportItem[]): void {
-  const imported = items
-    .filter(item => item.status === 'success' && item.docId != null)
-    .map(item => ({
-      docId: item.docId as number,
-      fileName: item.fileName || item.path,
-      fileUrl: '',
-      fileSize: item.fileSize,
-      status: 'success' as const
-    }))
-  uploadedFiles.value = [...uploadedFiles.value, ...imported]
 }
 
 function startVectorization(): void {
@@ -663,10 +637,6 @@ onUnmounted(() => {
   }
 
   .step-upload {
-    .upload-tabs {
-      margin-bottom: 8px;
-    }
-
     .upload-area {
       margin-bottom: 20px;
     }
