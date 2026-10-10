@@ -42,8 +42,8 @@ const adminEntries = [
 <style lang="scss" scoped>
 .header {
   height: 64px;
-  background: #f9fafd;
-  border-bottom: 1px solid #e8eaed;
+  background: #f5f3ec;
+  border-bottom: 1px solid #e8e6dc;
   padding: 0 24px;
   display: flex;
   justify-content: space-between;
@@ -68,18 +68,18 @@ const adminEntries = [
       align-items: center;
       gap: 8px;
       padding: 8px 18px;
-      background: linear-gradient(180deg, #ffffff 0%, #f5f7fa 100%);
-      border: 1px solid #e2e8f0;
+      background: linear-gradient(180deg, #ffffff 0%, #f0eee6 100%);
+      border: 1px solid #e0ddd2;
       border-radius: 8px;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04), inset 0 1px 0 #ffffff;
-      color: #4b5563;
+      color: #5f5d55;
       font-size: 14px;
       font-weight: 500;
       text-decoration: none;
       transition: all 0.2s ease;
 
       &:hover {
-        background: linear-gradient(180deg, #f0fdfd 0%, #e6f7f7 100%);
+        background: linear-gradient(180deg, #f2f8f8 0%, #e3f1f2 100%);
         border-color: #2aa1a9;
         color: #2aa1a9;
         box-shadow: 0 4px 10px rgba(42, 161, 169, 0.12), 0 1px 3px rgba(0, 0, 0, 0.06), inset 0 1px 0 #ffffff;

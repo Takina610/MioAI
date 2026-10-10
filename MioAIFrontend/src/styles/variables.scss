@@ -1,9 +1,20 @@
 $primary-color: #2aa1a9;
 $secondary-color: #263749;
 $background-light: #feead2;
-$text-dark: #38393b;
+$text-dark: #141413;
 $text-light: #ffffff;
-$danger-color: #ff4d4f;
+$danger-color: #c0453a;
+
+/* Anthropic 风格暖色 Token（与首页 .home-page 的 --hm-* 同源） */
+$bg-cream: #f0eee6;         // 页面底色
+$bg-ivory: #faf9f5;         // 卡片/面板/输入容器
+$bg-dark: #141413;          // 深色区块
+$text-secondary: #6e6b62;   // 次要文字
+$text-muted: #8c8a82;       // 弱化文字
+$border-warm: #d8d5cc;      // 常规边框
+$border-warm-subtle: #e8e6dc; // 弱边框
+$font-display: 'AnthropicSans Display', 'Songti SC', 'STSong', 'SimSun', serif;
+$font-text: 'AnthropicSans Text', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
 
 
 $border-radius: 8px;
@@ -34,7 +45,7 @@ $spacing-xl: 32px;
 // 细滚动条：替换浏览器默认样式（消息区/思考/工具详情等内部滚动容器）
 @mixin thin-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #d4d7dc transparent;
+  scrollbar-color: #d2cfc5 transparent;
 
   &::-webkit-scrollbar {
     width: 6px;
@@ -42,15 +53,38 @@ $spacing-xl: 32px;
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #d4d7dc;
+    background: #d2cfc5;
     border-radius: 3px;
 
     &:hover {
-      background: #b8bcc4;
+      background: #b5b1a7;
     }
   }
 
   &::-webkit-scrollbar-track {
     background: transparent;
   }
+}
+
+// zcode animated-gradient-text：运行态文案渐变扫光（工具动词/思考标签）。
+// 只含背景动画本身，使用处需在各自组件内声明 @keyframes gradient-flow（scoped 隔离）
+@mixin animated-gradient-text($strong, $soft) {
+  display: inline-block;
+  background: linear-gradient(
+    90deg,
+    $strong 0%,
+    $strong 34%,
+    $soft 50%,
+    $strong 66%,
+    $strong 100%
+  );
+  background-size: 300% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: gradient-flow 4s linear infinite;
+  will-change: background-position;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }

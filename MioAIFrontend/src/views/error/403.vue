@@ -29,7 +29,7 @@ function goKnowledge(): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #fff;
+  background: $bg-cream;
 
   .content {
     text-align: center;
@@ -43,13 +43,13 @@ function goKnowledge(): void {
     h1 {
       font-size: 18px;
       font-weight: 500;
-      color: #333;
+      color: #141413;
       margin-bottom: 12px;
     }
 
     p {
       font-size: 14px;
-      color: #999;
+      color: #8c8a82;
       margin-bottom: 32px;
     }
 

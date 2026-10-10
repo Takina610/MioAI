@@ -60,7 +60,7 @@
           <a-avatar :src="user.userAvatar" :size="64" class="user-avatar">
             {{ user.userName?.charAt(0) || 'U' }}
           </a-avatar>
-          <a-tag :color="user.userRole === 'admin' ? '#2aa1a9' : '#6b7280'" class="role-tag">
+          <a-tag :color="user.userRole === 'admin' ? '#2aa1a9' : '#6e6b62'" class="role-tag">
             {{ user.userRole === 'admin' ? '管理员' : '普通用户' }}
           </a-tag>
         </div>
@@ -271,8 +271,8 @@ onMounted(() => {
       align-items: center;
       gap: 16px;
       padding: 20px 24px;
-      background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-      border: 1px solid #e2e8f0;
+      background: linear-gradient(180deg, #ffffff 0%, #f5f3ec 100%);
+      border: 1px solid #e0ddd2;
       border-radius: 12px;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04), inset 0 1px 0 #ffffff;
 
@@ -296,20 +296,20 @@ onMounted(() => {
       }
 
       &.user .stat-icon {
-        background: linear-gradient(135deg, #6366f1, #4f46e5);
+        background: linear-gradient(135deg, #2aa1a9, #238b92);
       }
 
       .stat-info {
         .stat-value {
           font-size: 24px;
           font-weight: 700;
-          color: #1f2937;
+          color: #141413;
           line-height: 1.2;
         }
 
         .stat-label {
           font-size: 13px;
-          color: #6b7280;
+          color: #6e6b62;
           margin-top: 2px;
         }
       }
@@ -338,7 +338,7 @@ onMounted(() => {
 
     .user-card {
       background: #ffffff;
-      border: 1px solid #e8eaed;
+      border: 1px solid #e8e6dc;
       border-radius: 12px;
       padding: 20px;
       cursor: pointer;
@@ -358,7 +358,7 @@ onMounted(() => {
         margin-bottom: 14px;
 
         .user-avatar {
-          border: 2px solid #f3f4f6;
+          border: 2px solid #f0ede4;
         }
 
         .role-tag {
@@ -373,7 +373,7 @@ onMounted(() => {
         .user-name {
           font-size: 16px;
           font-weight: 600;
-          color: #1f2937;
+          color: #141413;
           margin-bottom: 4px;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -382,13 +382,13 @@ onMounted(() => {
 
         .user-account {
           font-size: 13px;
-          color: #6b7280;
+          color: #6e6b62;
           margin-bottom: 8px;
         }
 
         .user-profile {
           font-size: 12px;
-          color: #9ca3af;
+          color: #a5a29a;
           line-height: 1.5;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -404,11 +404,11 @@ onMounted(() => {
         align-items: center;
         justify-content: space-between;
         padding-top: 12px;
-        border-top: 1px solid #f3f4f6;
+        border-top: 1px solid #f0ede4;
 
         .create-time {
           font-size: 12px;
-          color: #9ca3af;
+          color: #a5a29a;
         }
 
         .card-actions {

@@ -179,11 +179,11 @@ defineExpose({ checkListFilled, scrollToTop })
 <style lang="scss" scoped>
 .sidebar {
   width: 280px;
-  background: #f9fafd;
+  background: #f5f3ec;
   display: flex;
   flex-direction: column;
   transition: width 0.3s;
-  border-right: 1px solid #e8eaed;
+  border-right: 1px solid #e8e6dc;
 
   &.collapsed {
     width: 64px;
@@ -195,7 +195,7 @@ defineExpose({ checkListFilled, scrollToTop })
     align-items: center;
     justify-content: space-between;
     padding: 0 16px;
-    border-bottom: 1px solid #e8eaed;
+    border-bottom: 1px solid #e8e6dc;
 
     .logo-section {
       flex: 1;
@@ -213,7 +213,7 @@ defineExpose({ checkListFilled, scrollToTop })
       .agent-name {
         font-size: 16px;
         font-weight: 600;
-        color: #202124;
+        color: #141413;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -221,7 +221,7 @@ defineExpose({ checkListFilled, scrollToTop })
     }
 
     .collapse-btn {
-      color: #5f6368;
+      color: #5f5d55;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -334,9 +334,9 @@ defineExpose({ checkListFilled, scrollToTop })
       justify-content: flex-start;
       padding: 0 16px;
       background: #fff;
-      border: 1px solid #e5e6eb;
+      border: 1px solid #e8e6dc;
       border-radius: 8px;
-      color: #5f6368;
+      color: #5f5d55;
       font-size: 15px;
       font-weight: 500;
 
@@ -360,7 +360,7 @@ defineExpose({ checkListFilled, scrollToTop })
       height: 40px;
       margin: 0 auto;
       background: #fff;
-      border: 1px solid #e5e6eb;
+      border: 1px solid #e8e6dc;
       border-radius: 8px;
       cursor: pointer;
 
@@ -374,7 +374,7 @@ defineExpose({ checkListFilled, scrollToTop })
 
   .sidebar-footer {
     padding: 16px;
-    border-top: 1px solid #e8eaed;
+    border-top: 1px solid #e8e6dc;
 
     .user-info {
       display: flex;
@@ -396,13 +396,13 @@ defineExpose({ checkListFilled, scrollToTop })
         .user-name {
           font-size: 14px;
           font-weight: 500;
-          color: #202124;
+          color: #141413;
         }
 
         .user-role {
           margin-top: 4px;
           font-size: 12px;
-          color: #909399;
+          color: #8c8a82;
         }
       }
 

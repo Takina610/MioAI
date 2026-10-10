@@ -44,12 +44,12 @@ const pageTitle = computed(() => pageTitleMap[route.path] || '管理后台')
 <style lang="scss" scoped>
 .admin-layout {
   min-height: 100vh;
-  background: #f5f7fa;
+  background: #f0eee6;
 
   .admin-header {
     height: 56px;
-    background: #f9fafd;
-    border-bottom: 1px solid #e8eaed;
+    background: #f5f3ec;
+    border-bottom: 1px solid #e8e6dc;
     display: flex;
     align-items: center;
     padding: 0 24px;
@@ -67,18 +67,18 @@ const pageTitle = computed(() => pageTitleMap[route.path] || '管理后台')
       .logo-text {
         font-size: 16px;
         font-weight: 600;
-        color: #1f2937;
+        color: #141413;
       }
 
       .header-divider {
-        color: #d1d5db;
+        color: #b0aea5;
         font-weight: 300;
       }
 
       .page-title {
         font-size: 15px;
         font-weight: 500;
-        color: #4b5563;
+        color: #5f5d55;
       }
     }
   }

@@ -37,29 +37,29 @@ function onClick(e: MouseEvent): void {
 // 代码块外壳：header（语言标签 + 复制按钮）与代码区一体（全局样式：v-html 内容不吃 scoped）
 .md-view .md-code-wrap {
   margin: 10px 0;
-  border: 1px solid #e5e6eb;
+  border: 1px solid #e8e6dc;
   border-radius: 10px;
   overflow: hidden;
-  background: #f8f9fb;
+  background: #f5f3ec;
 
   .md-code-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 5px 12px;
-    border-bottom: 1px solid #ecedf1;
-    background: #f2f3f7;
+    border-bottom: 1px solid #ece9de;
+    background: #f0ede4;
     user-select: none;
 
     .md-code-lang {
       font-size: 12px;
-      color: #86909c;
+      color: #8c8a82;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
 
     .md-copy-btn {
       font-size: 12px;
-      color: #4e5969;
+      color: #5f5d55;
       cursor: pointer;
       padding: 1px 8px;
       border-radius: 6px;

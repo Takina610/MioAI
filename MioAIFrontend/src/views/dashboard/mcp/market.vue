@@ -89,7 +89,7 @@ onMounted(() => {
 
     .author {
       font-size: 12px;
-      color: #999;
+      color: #8c8a82;
     }
   }
 }

@@ -23,6 +23,9 @@ public class ModelEffortCapabilities {
     /** 全量候选档位（与 ReasoningEffort 枚举一致，按强度排序） */
     private static final List<String> ALL_EFFORTS = List.of("minimal", "low", "medium", "high", "xhigh", "max", "none");
 
+    /** 探测不可判定（网关不可达/整体限流）时的兜底档位：宁可少给也不能给出会 400 的档位 */
+    private static final List<String> DEFAULT_EFFORTS = List.of("low", "medium", "high");
+
     private static final long CACHE_TTL_MS = 3600_000L;
 
     private final String baseUrl;
@@ -41,7 +44,7 @@ public class ModelEffortCapabilities {
         this.model = model;
     }
 
-    /** 支持的档位列表（探测失败回退全量，前端宁可多显示也不能空） */
+    /** 支持的档位列表（探测失败回退默认子集，前端对空列表还有自己的兜底） */
     public List<String> supportedEfforts() {
         List<String> snapshot = cached;
         if (snapshot != null && System.currentTimeMillis() - cachedAt < CACHE_TTL_MS) {
@@ -51,13 +54,25 @@ public class ModelEffortCapabilities {
             if (cached != null && System.currentTimeMillis() - cachedAt < CACHE_TTL_MS) {
                 return cached;
             }
-            List<String> supported = ALL_EFFORTS.parallelStream()
-                    .filter(this::probe)
+            List<ProbeResult> results = ALL_EFFORTS.parallelStream()
+                    .map(this::probe)
+                    .toList();
+            // 一个可判定的答案都没有 = 网关不可达/整体异常。此时全量兜底会让用户选到必然 400
+            // 的档位（这正是"档位突然变多"事故的根因），改为返回默认子集且不缓存，网关恢复后重新探测
+            if (results.stream().noneMatch(ProbeResult::definitive)) {
+                log.warn("思考档位探测不可判定（网关 {} 无有效响应），返回默认档位且不缓存", baseUrl);
+                return DEFAULT_EFFORTS;
+            }
+            List<String> supported = results.stream()
+                    .filter(ProbeResult::supported)
+                    .map(ProbeResult::effort)
                     .toList();
             if (supported.isEmpty()) {
-                // 整体探测失败（网络/反代不可达）：不缓存，回退全量
-                log.warn("思考档位探测整体失败，回退全量档位");
-                return ALL_EFFORTS;
+                // 模型对 reasoning_effort 全部明确拒绝：如实返回空，前端会隐藏/兜底档位选择
+                log.info("模型 {} 明确不支持任何思考档位", model);
+                cached = List.of();
+                cachedAt = System.currentTimeMillis();
+                return cached;
             }
             cached = supported;
             cachedAt = System.currentTimeMillis();
@@ -67,10 +82,13 @@ public class ModelEffortCapabilities {
     }
 
     /**
-     * 单档探测：200 = 支持；400 且错误信息点名 reasoning_effort = 不支持；
-     * 其他结果（限流/超时等）保守视为支持，避免误砍可用档位。
+     * 单档探测结果：supported=该档位是否可用；definitive=网关是否给出了可判定的答案
+     * （200 或点名 reasoning_effort 的 400）。限流/超时等模糊结果按支持处理但不算可判定。
      */
-    private boolean probe(String effort) {
+    private record ProbeResult(String effort, boolean supported, boolean definitive) {
+    }
+
+    private ProbeResult probe(String effort) {
         String body = JacksonUtil.writeValueAsString(Map.of(
                 "model", model,
                 "messages", List.of(Map.of("role", "user", "content", "1")),
@@ -83,15 +101,15 @@ public class ModelEffortCapabilities {
                 .timeout(8000)
                 .execute()) {
             if (resp.getStatus() == 200) {
-                return true;
+                return new ProbeResult(effort, true, true);
             }
             if (resp.getStatus() == 400 && resp.body().contains("reasoning_effort")) {
-                return false;
+                return new ProbeResult(effort, false, true);
             }
-            return true;
+            return new ProbeResult(effort, true, false);
         } catch (Exception e) {
-            log.debug("档位 {} 探测异常，保守视为支持: {}", effort, e.getMessage());
-            return true;
+            log.debug("档位 {} 探测异常: {}", effort, e.getMessage());
+            return new ProbeResult(effort, true, false);
         }
     }
 }

@@ -44,7 +44,7 @@ withDefaults(defineProps<{
 .resource-expand-list {
   .expand-header {
     font-size: 12px;
-    color: #666;
+    color: #6e6b62;
     display: flex;
     align-items: center;
     gap: 4px;
@@ -56,7 +56,7 @@ withDefaults(defineProps<{
     align-items: center;
     gap: 8px;
     padding: 6px 0;
-    border-bottom: 1px solid #f5f5f5;
+    border-bottom: 1px solid #f0ede4;
 
     &:last-child {
       border-bottom: none;
@@ -64,7 +64,7 @@ withDefaults(defineProps<{
 
     .row-icon {
       font-size: 14px;
-      color: #999;
+      color: #8c8a82;
     }
 
     .item-text {
@@ -75,7 +75,7 @@ withDefaults(defineProps<{
     .item-name {
       font-size: 13px;
       font-weight: 500;
-      color: #333;
+      color: #141413;
       display: block;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -85,7 +85,7 @@ withDefaults(defineProps<{
     .item-desc {
       margin: 2px 0 0;
       font-size: 12px;
-      color: #999;
+      color: #8c8a82;
     }
   }
 }

@@ -133,6 +133,8 @@ public class BotEventChannel {
 
     /**
      * 工具结果：块内保留全量（供水合重建请求历史，超长截头），前端事件发预览。
+     * Agent 工具（子代理）例外：其结果是右侧子代理面板的内容主体
+     * （最终报告 + agentId/usage 页脚），预览截断会让面板流式期间缺报告，故与落库同量级下发。
      */
     public void toolResult(String id, String tool, String content) {
         String full = content == null ? "" : content;
@@ -141,8 +143,9 @@ public class BotEventChannel {
                     + "\n[...result truncated at " + TOOL_RESULT_PERSIST_CAP + " chars...]";
         }
         completeDisplayTool(id, tool, full);
-        String preview = full.length() > TOOL_RESULT_PREVIEW_LENGTH
-                ? full.substring(0, TOOL_RESULT_PREVIEW_LENGTH) + "…" : full;
+        int previewCap = "Agent".equals(tool) ? TOOL_RESULT_PERSIST_CAP : TOOL_RESULT_PREVIEW_LENGTH;
+        String preview = full.length() > previewCap
+                ? full.substring(0, previewCap) + "…" : full;
         emit(SseChunk.toolResult(id, tool, preview).fields());
     }
 

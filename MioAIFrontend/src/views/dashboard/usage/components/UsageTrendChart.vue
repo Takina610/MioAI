@@ -28,7 +28,7 @@ const EMPTY_OPTION: EChartsOption = {
     text: '暂无数据',
     left: 'center',
     top: 'center',
-    textStyle: { color: '#999', fontSize: 16, fontWeight: 'normal' }
+    textStyle: { color: '#8c8a82', fontSize: 16, fontWeight: 'normal' }
   },
   xAxis: { type: 'category' as const, data: [] },
   yAxis: { type: 'value' as const },
@@ -52,8 +52,8 @@ function renderChart(): void {
     tooltip: {
       trigger: 'axis',
       backgroundColor: 'rgba(255,255,255,0.95)',
-      borderColor: '#e8eaed',
-      textStyle: { color: '#333' },
+      borderColor: '#e8e6dc',
+      textStyle: { color: '#141413' },
       formatter: (params: any) => {
         const index = params[0].dataIndex
         const time = props.current[index]?.time ?? '-'
@@ -73,13 +73,13 @@ function renderChart(): void {
       type: 'category',
       boundaryGap: false,
       data: times,
-      axisLine: { lineStyle: { color: '#e8eaed' } },
-      axisLabel: { color: '#666' }
+      axisLine: { lineStyle: { color: '#e8e6dc' } },
+      axisLabel: { color: '#6e6b62' }
     },
     yAxis: {
       type: 'value',
-      splitLine: { lineStyle: { color: '#f0f0f0' } },
-      axisLabel: { color: '#666' }
+      splitLine: { lineStyle: { color: '#ece9de' } },
+      axisLabel: { color: '#6e6b62' }
     },
     series: [
       {
@@ -106,8 +106,8 @@ function renderChart(): void {
         symbol: 'circle',
         symbolSize: 6,
         showSymbol: false,
-        lineStyle: { width: 2, color: '#999', type: 'dashed' },
-        itemStyle: { color: '#999' },
+        lineStyle: { width: 2, color: '#8c8a82', type: 'dashed' },
+        itemStyle: { color: '#8c8a82' },
         data: prevValues
       }
     ]

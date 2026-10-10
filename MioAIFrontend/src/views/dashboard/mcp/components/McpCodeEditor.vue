@@ -52,7 +52,7 @@ function syncScroll(): void {
 <style lang="scss" scoped>
 .mcp-code-editor {
   display: flex;
-  border: 1px solid #d9d9d9;
+  border: 1px solid #d8d5cc;
   border-radius: 6px;
   overflow: hidden;
   background: #1e1e1e;

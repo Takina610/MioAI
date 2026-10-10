@@ -51,7 +51,7 @@
                 :maxlength="500"
                 show-count
               />
-              <a-tooltip placement="bottomLeft" :overlay-inner-style="{ width: '500px', maxHeight: '450px', background: '#fff', color: '#333' }" :arrow="false" >
+              <a-tooltip placement="bottomLeft" :overlay-inner-style="{ width: '500px', maxHeight: '450px', background: '#fff', color: '#141413' }" :arrow="false" >
                 <template #title>
                   <div>
                     <p><strong>知识库描述</strong></p>
@@ -141,7 +141,7 @@
           <a-progress
             v-if="vectorizing || vectorizeComplete"
             :percent="vectorizeProgress"
-            :stroke-color="vectorizeError ? '#ff4d4f' : undefined"
+            :stroke-color="vectorizeError ? '#c0453a' : undefined"
             :status="vectorizeError ? 'exception' : (vectorizeComplete ? 'success' : 'active')"
           />
 
@@ -597,7 +597,7 @@ onUnmounted(() => {
 
     .close-btn {
       font-size: 16px;
-      color: #999;
+      color: #8c8a82;
 
       &:hover {
         color: $text-dark;
@@ -652,7 +652,7 @@ onUnmounted(() => {
       .file-items {
         max-height: 180px;
         overflow-y: auto;
-        border: 1px solid #f0f0f0;
+        border: 1px solid #ece9de;
         border-radius: 8px;
         padding: 8px;
       }
@@ -662,7 +662,7 @@ onUnmounted(() => {
         align-items: center;
         padding: 10px 12px;
         border-radius: 6px;
-        background: #fafafa;
+        background: #f5f3ec;
         margin-bottom: 8px;
 
         &:last-child {
@@ -690,7 +690,7 @@ onUnmounted(() => {
 
           .file-size {
             font-size: 12px;
-            color: #999;
+            color: #8c8a82;
           }
         }
 
@@ -700,7 +700,7 @@ onUnmounted(() => {
         }
 
         .status-error {
-          color: #ff4d4f;
+          color: #c0453a;
           font-size: 16px;
         }
 
@@ -726,8 +726,8 @@ onUnmounted(() => {
         justify-content: center;
         margin: 0 auto 24px;
         font-size: 28px;
-        background: #f5f5f5;
-        color: #999;
+        background: #f0ede4;
+        color: #8c8a82;
 
         &.is-processing {
           background: rgba($primary-color, 0.1);
@@ -740,8 +740,8 @@ onUnmounted(() => {
         }
 
         &.is-error {
-          background: rgba(#ff4d4f, 0.1);
-          color: #ff4d4f;
+          background: rgba(#c0453a, 0.1);
+          color: #c0453a;
         }
       }
 
@@ -754,7 +754,7 @@ onUnmounted(() => {
 
       .status-message {
         font-size: 14px;
-        color: #666;
+        color: #6e6b62;
         margin-bottom: 24px;
       }
 
@@ -763,10 +763,10 @@ onUnmounted(() => {
         align-items: center;
         gap: 8px;
         padding: 8px 16px;
-        background: #f5f5f5;
+        background: #f0ede4;
         border-radius: 20px;
         font-size: 13px;
-        color: #666;
+        color: #6e6b62;
         margin-bottom: 24px;
 
         .anticon {
@@ -792,7 +792,7 @@ onUnmounted(() => {
     gap: 12px;
     margin-top: 32px;
     padding-top: 20px;
-    border-top: 1px solid #f0f0f0;
+    border-top: 1px solid #ece9de;
 
     :deep(.ant-btn-primary) {
       background: $primary-color;

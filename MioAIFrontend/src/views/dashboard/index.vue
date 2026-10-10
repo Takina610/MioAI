@@ -39,7 +39,7 @@ function handleAuthSuccess(): void {
 .dashboard-layout {
   display: flex;
   min-height: 100vh;
-  background: #f5f7fa;
+  background: #f0eee6;
 }
 
 .main-container {
@@ -52,7 +52,7 @@ function handleAuthSuccess(): void {
 .content {
   flex: 1;
   overflow-y: auto;
-  background: #ffffff;
+  background: $bg-ivory;
 }
 
 .fade-enter-active,

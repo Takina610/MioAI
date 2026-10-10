@@ -73,8 +73,8 @@ watch(
 // 融合在输入框容器内的任务清单区（与下方输入框同一连续形体：共侧边框，虚线分隔）
 .chat-plan-panel {
   padding: 10px 16px 8px;
-  background: #fafbfc;
-  border-bottom: 1px dashed #e3e6eb;
+  background: #f5f3ec;
+  border-bottom: 1px dashed #e0ddd2;
   border-radius: 15px 15px 0 0;
 
   .plan-header {
@@ -91,12 +91,12 @@ watch(
     .plan-title {
       font-size: 13px;
       font-weight: 600;
-      color: #4e5969;
+      color: #5f5d55;
     }
 
     .plan-progress {
       font-size: 12px;
-      color: #86909c;
+      color: #8c8a82;
       font-variant-numeric: tabular-nums;
     }
 
@@ -110,13 +110,13 @@ watch(
       border: none;
       background: transparent;
       border-radius: 6px;
-      color: #86909c;
+      color: #8c8a82;
       cursor: pointer;
       font-size: 11px;
       transition: all 0.2s;
 
       &:hover {
-        background: #f2f3f5;
+        background: #f0ede4;
         color: $primary-color;
       }
     }
@@ -127,7 +127,7 @@ watch(
 
     .plan-close {
       &:hover {
-        color: #f53f3f;
+        color: #c0453a;
       }
     }
 
@@ -173,16 +173,16 @@ watch(
       width: 7px;
       height: 7px;
       border-radius: 50%;
-      border: 1.5px solid #c9cdd4;
+      border: 1.5px solid #b0aea5;
     }
 
     .step-text {
-      color: #4e5969;
+      color: #5f5d55;
 
       .done & {
-        color: #86909c;
+        color: #8c8a82;
         text-decoration: line-through;
-        text-decoration-color: rgba(134, 144, 156, 0.5);
+        text-decoration-color: rgba(140,138,130, 0.5);
       }
     }
 
@@ -195,7 +195,7 @@ watch(
     }
 
     &.failed .step-mark {
-      color: #f53f3f;
+      color: #c0453a;
     }
   }
 }

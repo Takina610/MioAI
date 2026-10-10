@@ -20,119 +20,90 @@
          等用户切回页面可见时再播放收缩动画 -->
     <CollapseTransition :open="isLoading || processExpanded || holdProcessOpen" :seam-gap="PROCESS_SEAM_GAP">
       <div v-if="processBlocks.length" class="process-list">
-        <template v-for="(block, index) in processBlocks" :key="index">
+        <template v-for="item in processBlocks" :key="item.index">
           <!-- 文本块（过程中的叙述） -->
           <MarkdownView
-            v-if="block.type === 'text'"
+            v-if="item.block.type === 'text'"
             class="answer-content"
-            :content="block.text"
+            :content="item.block.text"
           />
 
           <!-- 思考块（zcode GUI 式）：收起=「图标 思考 · 摘要/时长」单行；展开=竖线内容区（与图标对齐），上方不再重复摘要 -->
-          <div v-else-if="block.type === 'thinking'" class="thinking-block">
-            <div class="thinking-bar" @click="toggleThinking(index)">
-              <BrainIcon :size="13" class="think-icon" :class="{ active: isActiveThinking(index) }" />
-              <span class="thinking-label" :class="{ running: isActiveThinking(index) }">{{ isActiveThinking(index) ? '正在思考' : '思考' }}</span>
+          <div v-else-if="item.block.type === 'thinking'" class="thinking-block">
+            <div class="thinking-bar" @click="toggleThinking(item.index)">
+              <BrainIcon :size="13" class="think-icon" :class="{ active: isActiveThinking(item.index) }" />
+              <span class="thinking-label" :class="{ running: isActiveThinking(item.index) }">{{ isActiveThinking(item.index) ? '正在思考' : '思考' }}</span>
               <span
-                v-if="isActiveThinking(index) && !isThinkingExpanded(index)"
+                v-if="isActiveThinking(item.index) && !isThinkingExpanded(item.index)"
                 class="thinking-live"
-              >· {{ thinkingTail(block) }}</span>
-              <span v-else-if="!isActiveThinking(index)" class="thinking-label">· {{ durationSuffix(block) }}</span>
-              <CaretRightOutlined :rotate="isThinkingExpanded(index) ? 90 : 0" class="caret-icon" />
+              >· {{ thinkingTail(item.block) }}</span>
+              <span v-else-if="!isActiveThinking(item.index)" class="thinking-label">· {{ durationSuffix(item.block) }}</span>
+              <CaretRightOutlined :rotate="isThinkingExpanded(item.index) ? 90 : 0" class="caret-icon" />
             </div>
-            <CollapseTransition :open="isThinkingExpanded(index)">
-              <div class="thinking-text">{{ block.text }}</div>
+            <CollapseTransition :open="isThinkingExpanded(item.index)">
+              <div class="thinking-text">{{ item.block.text }}</div>
             </CollapseTransition>
           </div>
 
           <!-- 问答块（AskUserQuestion）：选项卡片，作答提交后锁定展示所选 -->
           <div
-            v-else-if="block.type === 'question'"
+            v-else-if="item.block.type === 'question'"
             class="question-block"
-            :class="{ answered: questionDone(block) }"
+            :class="{ answered: questionDone(item.block) }"
           >
-            <div v-for="(q, qi) in block.questions" :key="qi" class="question-item">
+            <div v-for="(q, qi) in item.block.questions" :key="qi" class="question-item">
               <div class="question-head">
                 <span class="question-chip">{{ q.header }}</span>
                 <span class="question-text">{{ q.question }}</span>
               </div>
-              <template v-if="!questionDone(block)">
+              <template v-if="!questionDone(item.block)">
                 <div
                   v-for="(opt, oi) in q.options"
                   :key="oi"
                   class="question-option"
-                  :class="{ selected: optionSelected(block, qi, optionKey(opt, oi)) }"
-                  @click="toggleOption(block, qi, optionKey(opt, oi))"
+                  :class="{ selected: optionSelected(item.block, qi, optionKey(opt, oi)) }"
+                  @click="toggleOption(item.block, qi, optionKey(opt, oi))"
                 >
-                  <span class="option-check">{{ optionSelected(block, qi, optionKey(opt, oi)) ? '●' : '○' }}</span>
+                  <span class="option-check">{{ optionSelected(item.block, qi, optionKey(opt, oi)) ? '●' : '○' }}</span>
                   <span v-if="optionKey(opt, oi)" class="option-key">{{ optionKey(opt, oi) }}</span>
                   <span class="option-label">{{ opt.label }}</span>
                   <span v-if="opt.description" class="option-desc">{{ opt.description }}</span>
                 </div>
-                <pre v-if="previewOf(q, block, qi)" class="option-preview">{{ previewOf(q, block, qi) }}</pre>
+                <pre v-if="previewOf(q, item.block, qi)" class="option-preview">{{ previewOf(q, item.block, qi) }}</pre>
                 <div
                   class="question-option option-other"
-                  :class="{ selected: otherSelected(block, qi) }"
-                  @click="focusOther(block, qi)"
+                  :class="{ selected: otherSelected(item.block, qi) }"
+                  @click="focusOther(item.block, qi)"
                 >
-                  <span class="option-check">{{ otherSelected(block, qi) ? '●' : '○' }}</span>
+                  <span class="option-check">{{ otherSelected(item.block, qi) ? '●' : '○' }}</span>
                   <input
                     class="option-custom"
-                    :value="customOf(block, qi)"
+                    :value="customOf(item.block, qi)"
                     placeholder="其他（自定义回答，可引用选项标签如 A）"
-                    @input="setCustom(block, qi, ($event.target as HTMLInputElement).value)"
+                    @input="setCustom(item.block, qi, ($event.target as HTMLInputElement).value)"
                     @click.stop
                   />
                 </div>
               </template>
               <div v-else class="question-answered">
                 <CheckCircleOutlined class="answered-icon" />
-                <span>{{ answeredText(block, qi) }}</span>
+                <span>{{ answeredText(item.block, qi) }}</span>
               </div>
             </div>
-            <div v-if="!questionDone(block)" class="question-actions">
-              <button class="question-submit" :disabled="!submittable(block) || submitting" @click="submitAnswers(block)">
+            <div v-if="!questionDone(item.block)" class="question-actions">
+              <button class="question-submit" :disabled="!submittable(item.block) || submitting" @click="submitAnswers(item.block)">
                 {{ submitting ? '提交中…' : '提交回答' }}
               </button>
             </div>
           </div>
 
-          <!-- 工具块：语义化行（可点击展开看执行结果）+ 可跳转的来源链接（随过程收起/展开）。
-               zcode 约定：图标恒静态，运行态由动词文案扫光表达（animated-gradient-text） -->
-          <div v-else class="tool-block">
-            <div class="tool-row" :class="{ expandable: block.result }" @click="toggleToolResult(index)">
-              <span class="tool-status">
-                <component :is="toolIcon(block.tool)" class="tool-icon" />
-              </span>
-              <span class="tool-verb" :class="{ running: block.status === 'running' }">{{ toolVerb(block) }}</span>
-              <span v-if="shownMeta(index, block)" class="tool-meta">{{ shownMeta(index, block) }}</span>
-              <CaretRightOutlined
-                v-if="block.result && !typing(index, block)"
-                :rotate="expandedTools.has(index) ? 90 : 0"
-                class="caret-icon tool-caret"
-              />
-            </div>
-            <CollapseTransition :open="expandedTools.has(index)">
-              <pre v-if="block.result" class="tool-result">{{ block.result }}</pre>
-            </CollapseTransition>
-
-            <!-- 来源链接（DeepSeek 式：点击直接跳转网页） -->
-            <div v-if="block.status === 'done' && sourceChips(block).length" class="tool-sources">
-              <a
-                v-for="(chip, ci) in sourceChips(block)"
-                :key="ci"
-                :href="chip.url"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="source-chip"
-                :title="chip.title"
-              >
-                <GlobalOutlined class="chip-icon" />
-                <span class="chip-title">{{ chip.title || chip.host }}</span>
-                <span class="chip-idx">{{ ci + 1 }}</span>
-              </a>
-            </div>
-          </div>
+          <!-- 工具块：语义化行（子智能体行点击打开右侧只读面板，其余点击展开执行结果） -->
+          <ToolRow
+            v-else-if="item.block.type === 'tool'"
+            :block="item.block"
+            :streaming="isLoading"
+            @open="openSubagent(item.block, item.index)"
+          />
         </template>
       </div>
     </CollapseTransition>
@@ -167,33 +138,24 @@
 </template>
 
 <script setup lang="ts">
-import { computed, markRaw, onUnmounted, ref, watch } from 'vue'
-import type { Component } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import {
   CaretRightOutlined,
-  CheckCircleOutlined,
-  OrderedListOutlined,
-  SearchOutlined,
-  ReadOutlined,
-  FilePdfOutlined,
-  FileTextOutlined,
-  EditOutlined,
-  PictureOutlined,
-  CodeOutlined,
-  ToolOutlined,
-  GlobalOutlined,
-  FileAddOutlined,
-  FileSearchOutlined
+  CheckCircleOutlined
 } from '@ant-design/icons-vue'
 import MarkdownView from '@/components/MarkdownView.vue'
 import ZcodeSpinner from '@/components/ZcodeSpinner.vue'
 import CollapseTransition from '@/components/CollapseTransition.vue'
 import BrainIcon from '@/components/BrainIcon.vue'
 import AttachmentCards from './AttachmentCards.vue'
+import ToolRow from './ToolRow.vue'
 import { messageAttachmentDisplays } from '../attachmentUtils'
 import { answerQuestion } from '@/api/chat'
-import type { AttachmentDisplay, MessageBlock } from '@/types'
+import { formatDuration, type ToolBlock } from '../toolDisplay'
+import { isMirroredToolBlock } from '../subagentTranscript'
+import type { AttachmentDisplay, MessageBlock, SubagentPanelTarget } from '@/types'
 
+type ThinkingBlock = Extract<MessageBlock, { type: 'thinking' }>
 type QuestionBlock = Extract<MessageBlock, { type: 'question' }>
 
 interface Props {
@@ -210,26 +172,108 @@ interface Props {
   retryNotice?: string
   /** 所属会话 id（提交问答答案用） */
   chatId?: string
+  /** 所属消息 id（打开子代理面板的定位键之一） */
+  messageId?: string
+  /** 当前显示的版本号（历史版本的块里也能打开子代理面板） */
+  version?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
   blocks: () => [],
   isLoading: false,
-  createTime: () => new Date()
+  createTime: () => new Date(),
+  version: 1
 })
+
+const emit = defineEmits<{
+  /** 子智能体行被点击：页面打开该子代理的只读对话面板 */
+  (e: 'openSubagent', target: SubagentPanelTarget): void
+}>()
+
+function openSubagent(block: ToolBlock, index: number): void {
+  emit('openSubagent', {
+    messageId: props.messageId ?? '',
+    version: props.version,
+    blockKey: block.id ? `id:${block.id}` : `idx:${index}`
+  })
+}
 
 const processExpanded = ref(false)
 const expandedThinking = ref<Set<number>>(new Set())
-const expandedTools = ref<Set<number>>(new Set())
 
 /** .mio-bot-message 的 flex gap：工作过程折叠层的接缝补偿（抵消 display 切换时 gap 的瞬移） */
 const PROCESS_SEAM_GAP = 12
 
-function toggleToolResult(index: number): void {
-  const next = new Set(expandedTools.value)
-  next.has(index) ? next.delete(index) : next.add(index)
-  expandedTools.value = next
-}
+// 完成于后台标签页时暂缓收缩：等页面重新可见再收（动画才不会被浏览器吞掉）
+const holdProcessOpen = ref(false)
+let holdVisibleListener: (() => void) | null = null
+
+watch(
+  () => props.isLoading,
+  (loading) => {
+    if (!loading && typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      holdProcessOpen.value = true
+      const onVisible = () => {
+        if (document.visibilityState !== 'visible') return
+        holdProcessOpen.value = false
+        document.removeEventListener('visibilitychange', onVisible)
+        holdVisibleListener = null
+      }
+      if (holdVisibleListener) {
+        document.removeEventListener('visibilitychange', holdVisibleListener)
+      }
+      document.addEventListener('visibilitychange', onVisible)
+      holdVisibleListener = onVisible
+    }
+  }
+)
+
+onUnmounted(() => {
+  if (holdVisibleListener) {
+    document.removeEventListener('visibilitychange', holdVisibleListener)
+    holdVisibleListener = null
+  }
+})
+
+/** 过程块 = 最后一个非文本块及其之前的全部（叙述/思考/工具），携带原 blocks 下标
+ *  （思考块活跃判定与子代理面板定位键都按原下标）；其后的是最终回答。
+ *  附件块不属过程：单独渲染在正文下方。子代理镜像工具行不进主消息流——
+ *  它们归属右侧的子代理只读面板（子代理完成后其 Agent 行可点击查看） */
+const lastNonTextIndex = computed(() => {
+  for (let i = props.blocks.length - 1; i >= 0; i--) {
+    const type = props.blocks[i].type
+    if (type !== 'text' && type !== 'attachments') return i
+  }
+  return -1
+})
+
+const processBlocks = computed(() => {
+  if (lastNonTextIndex.value < 0) return []
+  const out: Array<{ block: MessageBlock; index: number }> = []
+  for (let i = 0; i <= lastNonTextIndex.value; i++) {
+    const block = props.blocks[i]
+    if (block.type === 'attachments' || isMirroredToolBlock(block)) continue
+    out.push({ block, index: i })
+  }
+  return out
+})
+
+const outputAttachments = computed<AttachmentDisplay[]>(() =>
+  messageAttachmentDisplays(
+    props.blocks
+      .filter((b): b is Extract<MessageBlock, { type: 'attachments' }> => b.type === 'attachments')
+      .filter(b => b.side === 'output')
+      .flatMap(b => b.items)
+  )
+)
+
+const finalText = computed(() => {
+  if (!props.blocks.length) return ''
+  const tail = lastNonTextIndex.value >= 0
+    ? props.blocks.slice(lastNonTextIndex.value + 1)
+    : props.blocks
+  return tail.filter(b => b.type === 'text').map(b => b.text).join('')
+})
 
 // ---------- 问答块（AskUserQuestion）的草稿与提交 ----------
 
@@ -279,8 +323,7 @@ function otherSelected(block: QuestionBlock, questionIndex: number): boolean {
 
 /** 点击"其他"行：聚焦输入框并即时成为唯一选中 */
 function focusOther(block: QuestionBlock, questionIndex: number): void {
-  const draft = draftOf(block)
-  draft.selections[questionIndex] = []
+  draftOf(block).selections[questionIndex] = []
 }
 
 function customOf(block: QuestionBlock, questionIndex: number): string {
@@ -288,11 +331,10 @@ function customOf(block: QuestionBlock, questionIndex: number): string {
 }
 
 function setCustom(block: QuestionBlock, questionIndex: number, value: string): void {
-  const draft = draftOf(block)
-  draft.custom[questionIndex] = value
+  draftOf(block).custom[questionIndex] = value
   if (value.trim()) {
     // 输入自定义即选中"其他"：清除预置选项（单选互斥）
-    draft.selections[questionIndex] = []
+    draftOf(block).selections[questionIndex] = []
   }
 }
 
@@ -342,328 +384,6 @@ function answeredText(block: QuestionBlock, questionIndex: number): string {
   return [...selections, ...(custom ? [custom] : [])].join('、') || '未作答'
 }
 
-// 完成于后台标签页时暂缓收缩：等页面重新可见再收（动画才不会被浏览器吞掉）
-const holdProcessOpen = ref(false)
-let holdVisibleListener: (() => void) | null = null
-
-watch(
-  () => props.isLoading,
-  (loading) => {
-    if (!loading && typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-      holdProcessOpen.value = true
-      const onVisible = () => {
-        if (document.visibilityState !== 'visible') return
-        holdProcessOpen.value = false
-        document.removeEventListener('visibilitychange', onVisible)
-        holdVisibleListener = null
-      }
-      if (holdVisibleListener) {
-        document.removeEventListener('visibilitychange', holdVisibleListener)
-      }
-      document.addEventListener('visibilitychange', onVisible)
-      holdVisibleListener = onVisible
-    }
-  }
-)
-
-onUnmounted(() => {
-  if (holdVisibleListener) {
-    document.removeEventListener('visibilitychange', holdVisibleListener)
-    holdVisibleListener = null
-  }
-})
-
-/** 过程块 = 最后一个非文本块及其之前的全部（叙述/思考/工具）；其后的是最终回答。
- * 附件块不属过程：不参与过程/正文分界，单独渲染在正文下方（Agent 产出可下载） */
-const lastNonTextIndex = computed(() => {
-  for (let i = props.blocks.length - 1; i >= 0; i--) {
-    const type = props.blocks[i].type
-    if (type !== 'text' && type !== 'attachments') return i
-  }
-  return -1
-})
-
-const processBlocks = computed(() =>
-  lastNonTextIndex.value >= 0
-    ? props.blocks.slice(0, lastNonTextIndex.value + 1).filter(b => b.type !== 'attachments')
-    : []
-)
-
-const outputAttachments = computed<AttachmentDisplay[]>(() =>
-  messageAttachmentDisplays(
-    props.blocks
-      .filter((b): b is Extract<MessageBlock, { type: 'attachments' }> => b.type === 'attachments')
-      .filter(b => b.side === 'output')
-      .flatMap(b => b.items)
-  )
-)
-
-const finalText = computed(() => {
-  if (!props.blocks.length) return ''
-  const tail = lastNonTextIndex.value >= 0
-    ? props.blocks.slice(lastNonTextIndex.value + 1)
-    : props.blocks
-  return tail.filter(b => b.type === 'text').map(b => b.text).join('')
-})
-
-// ---------- 工具语义化展示 ----------
-// 动词文案照搬 zcode zh-CN 词表（chat.toolCall.*）：[进行中, 完成]，
-// 运行态动词带渐变扫光，完成后切换为过去式并恢复静态浅色
-const TOOL_VERBS: Record<string, [string, string]> = {
-  Bash: ['正在执行', '已执行'],
-  executeTerminalCommand: ['正在执行', '已执行'],
-  runCommand: ['正在执行', '已执行'],
-  Read: ['正在读取', '已读取'],
-  readFile: ['正在读取', '已读取'],
-  Write: ['正在写入', '已写入'],
-  writeFile: ['正在写入', '已写入'],
-  Edit: ['正在编辑', '已编辑'],
-  editFile: ['正在编辑', '已编辑'],
-  Grep: ['正在搜索', '已搜索'],
-  grep: ['正在搜索', '已搜索'],
-  searchImage: ['正在搜索', '已搜索'],
-  Glob: ['正在查找', '已查找'],
-  glob: ['正在查找', '已查找'],
-  WebSearch: ['正在搜索', '已搜索'],
-  searchWeb: ['正在搜索', '已搜索'],
-  WebFetch: ['正在获取', '已获取'],
-  fetchUrl: ['正在获取', '已获取'],
-  scrapeWebPage: ['正在获取', '已获取'],
-  downloadResource: ['正在下载', '已下载'],
-  generatePDF: ['正在生成', '已生成'],
-  Agent: ['子智能体', '子智能体'],
-  AskUserQuestion: ['正在提问', '已提问'],
-  TodoWrite: ['更新中', '待办'],
-  TodoRead: ['读取中', '已读取'],
-  managePlan: ['更新中', '任务清单'],
-  TaskOutput: ['正在获取任务输出', '已获取任务输出'],
-  TaskStop: ['停止任务', '已停止']
-}
-
-/** 工具行动词：运行中→进行式（扫光），完成→过去式；Explore 子代理沿用 zcode 的「查阅」 */
-function toolVerb(block: ToolBlock): string {
-  if (block.tool === 'Agent' && parseArgs(block)?.subagent_type === 'Explore') {
-    return '查阅'
-  }
-  const pair = TOOL_VERBS[block.tool]
-  if (pair) return block.status === 'running' ? pair[0] : pair[1]
-  // 未登记工具（自定义 MCP 等）走 zcode 通用状态词
-  return block.status === 'running' ? '执行中' : '已执行'
-}
-
-const TOOL_ICONS: Record<string, Component> = markRaw({
-  managePlan: OrderedListOutlined,
-  runCommand: CodeOutlined,
-  readFile: FileTextOutlined,
-  writeFile: FileAddOutlined,
-  editFile: EditOutlined,
-  glob: FileSearchOutlined,
-  grep: SearchOutlined,
-  searchWeb: GlobalOutlined,
-  fetchUrl: ReadOutlined,
-  generatePDF: FilePdfOutlined
-})
-
-function toolIcon(tool: string): Component {
-  return TOOL_ICONS[tool] ?? ToolOutlined
-}
-
-type ToolBlock = Extract<MessageBlock, { type: 'tool' }>
-
-function parseArgs(block: ToolBlock): Record<string, any> | null {
-  try {
-    return JSON.parse(block.args || '')
-  } catch {
-    return null
-  }
-}
-
-function hostOf(url?: string): string {
-  if (!url) return ''
-  try {
-    return new URL(url).hostname
-  } catch {
-    return url.replace(/^https?:\/\//, '').slice(0, 40)
-  }
-}
-
-/** 工具行元信息：从参数提取人话摘要，不暴露原始 JSON */
-function toolMeta(block: ToolBlock): string {
-  const a = parseArgs(block)
-  switch (block.tool) {
-    case 'managePlan': {
-      const action = a?.action
-      if (action === 'create') {
-        const n = String(a?.steps ?? '').split('\n').filter(s => s.trim()).length
-        return n ? `创建 ${n} 个步骤` : '创建任务清单'
-      }
-      if (action === 'update') {
-        const idx = Number(a?.stepIndex)
-        return idx ? `第 ${idx} 步${a?.status === 'done' ? '已完成' : '已更新'}` : '更新任务清单'
-      }
-      return '更新任务清单'
-    }
-    case 'searchWeb':
-    case 'WebSearch':
-      return a?.query ? `“${a.query}”` : ''
-    case 'scrapeWebPage':
-    case 'WebFetch':
-      return hostOf(a?.url) || a?.url || ''
-    case 'generatePDF':
-      return a?.fileName ? `“${a.fileName}”` : ''
-    case 'readFile':
-    case 'writeFile':
-    case 'Read':
-    case 'Write':
-    case 'Edit':
-      return a?.file_path ?? a?.fileName ?? ''
-    case 'searchImage':
-      return a?.query ? `“${a.query}”` : ''
-    case 'executeTerminalCommand':
-    case 'Bash':
-      return a?.command ? `$ ${a.command}` : (a?.description ?? '')
-    case 'downloadResource':
-      return a?.fileName || hostOf(a?.url) || ''
-    case 'Glob':
-      return a?.pattern ?? ''
-    case 'Grep':
-      return a?.pattern ?? ''
-    case 'TodoRead':
-      return ''
-    case 'TodoWrite': {
-      const items = Array.isArray(a?.todos) ? a.todos.length : 0
-      return items ? `${items} 项任务` : ''
-    }
-    case 'Agent': {
-      const description = typeof a?.description === 'string' ? a.description.trim() : ''
-      if (description) return description
-      return typeof a?.prompt === 'string' && a.prompt ? `“${a.prompt.slice(0, 30)}${a.prompt.length > 30 ? '…' : ''}”` : ''
-    }
-    case 'AskUserQuestion': {
-      // 结构可能是新式 questions 数组或旧式单 question 字段（模型首试常写错）
-      const questions: Array<Record<string, unknown>> = Array.isArray(a?.questions)
-        ? a.questions
-        : (a?.question ? [{ question: a.question }] : [])
-      const first = questions.length
-        ? String(questions[0].question ?? Object.values(questions[0])[0] ?? '')
-        : ''
-      const suffix = questions.length > 1 ? ` 等 ${questions.length} 个问题` : ''
-      return first ? `“${first}”${suffix}` : partialFirstString(block.args)
-    }
-    case 'TaskOutput':
-    case 'TaskStop':
-      return a?.task_id ?? ''
-    default: {
-      // 语义兜底（zcode 风格）：展示参数里最有意义的一个字符串值，绝不裸显 JSON
-      const fromParsed = firstMeaningfulString(a)
-      if (fromParsed) return fromParsed
-      return partialFirstString(block.args)
-    }
-  }
-}
-
-/** 从已解析参数对象里找第一个有意义的字符串值（浅层，跳过纯布尔/数字键名噪音） */
-function firstMeaningfulString(args: Record<string, unknown> | null | undefined): string {
-  if (!args) return ''
-  const preferred = ['query', 'command', 'path', 'file_path', 'pattern', 'url', 'prompt', 'name', 'description', 'content']
-  for (const key of preferred) {
-    const value = args[key]
-    if (typeof value === 'string' && value.trim()) return value.trim()
-  }
-  for (const value of Object.values(args)) {
-    if (typeof value === 'string' && value.trim()) return value.trim()
-    if (typeof value === 'number' || typeof value === 'boolean') continue
-    if (Array.isArray(value)) {
-      const first = value.find(item => item && typeof item === 'object')
-      const inner = firstMeaningfulString(first as Record<string, unknown> | undefined)
-      if (inner) return inner
-    }
-  }
-  return ''
-}
-
-/** 流式中的参数片段还是不完整 JSON：宽松抓第一个字符串值（引号未闭合也算），避免裸显 JSON */
-function partialFirstString(raw: string | undefined): string {
-  if (!raw) return ''
-  const match = raw.match(/:\s*"([^"]*)"?/)
-  if (match && match[1]) {
-    const value = match[1].replace(/\\n/g, ' ').trim()
-    return value.length > 40 ? `${value.slice(0, 40)}…` : value
-  }
-  return ''
-}
-
-// ---------- 来源链接（DeepSeek 式可跳转源） ----------
-interface SourceChip {
-  title: string
-  url: string
-  host: string
-}
-
-const MAX_CHIPS = 6
-
-/** 联网搜索结果 → 来源链接（title/url 的 JSON 行） */
-function searchSourceChips(result?: string): SourceChip[] {
-  if (!result) return []
-  const pick = (part: string, key: string): string => {
-    const m = part.match(new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`))
-    return m ? m[1].replace(/\\"/g, '"').replace(/\\n/g, ' ') : ''
-  }
-  const chips: SourceChip[] = []
-  for (const part of result.split(/\},\s*\{/)) {
-    const url = pick(part, 'url') || pick(part, 'link')
-    const title = pick(part, 'title')
-    if (!url) continue
-    chips.push({ title: title || hostOf(url), url, host: hostOf(url) })
-    if (chips.length >= MAX_CHIPS) break
-  }
-  return chips
-}
-
-/** 阅读网页 → 单个来源链接（HTML 提取 <title>） */
-function scrapeSourceChip(block: ToolBlock): SourceChip[] {
-  const a = parseArgs(block)
-  const url = a?.url
-  if (!url) return []
-  const titleMatch = block.result?.match(/<title[^>]*>([^<]*)<\/title>/i)
-  return [{ title: titleMatch ? titleMatch[1].trim() : hostOf(url), url, host: hostOf(url) }]
-}
-
-const sourceChipsCache = new Map<string, SourceChip[]>()
-function sourceChips(block: ToolBlock): SourceChip[] {
-  // 以工具+结果内容为键缓存解析结果（无 id 的兜底块也不会互相串卡）
-  const key = `${block.tool}|${block.result?.length ?? 0}|${block.result?.slice(0, 50) ?? ''}`
-  const cached = sourceChipsCache.get(key)
-  if (cached) return cached
-  let chips: SourceChip[] = []
-  if (block.tool === 'searchWeb') {
-    chips = searchSourceChips(block.result)
-  } else if (block.tool === 'scrapeWebPage') {
-    chips = scrapeSourceChip(block)
-  }
-  sourceChipsCache.set(key, chips)
-  return chips
-}
-
-// ---------- 工具行元信息：真流式直显（zcode 方式） ----------
-// 不做"收完再回放"的打字机：tool_args 的每个 SSE 增量到达即重算语义摘要，
-// 显示速率=模型实际生成速率；运行中且参数仍在流式时带光标
-function shownMeta(_index: number, block: ToolBlock): string {
-  return toolMeta(block)
-}
-
-function typing(_index: number, block: ToolBlock): boolean {
-  return props.isLoading && block.status === 'running'
-}
-
-// ---------- 时长 ----------
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.max(0, Math.round(ms / 1000))
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return minutes > 0 ? `${minutes}分${seconds}秒` : `${seconds}秒`
-}
-
 const durationText = computed(() =>
   props.durationMs ? formatDuration(props.durationMs) : '')
 
@@ -689,7 +409,6 @@ onUnmounted(() => {
 const elapsedText = computed(() => formatDuration(now.value - props.createTime.getTime()))
 
 // ---------- 思考块（zcode 式单行折叠条） ----------
-type ThinkingBlock = Extract<MessageBlock, { type: 'thinking' }>
 
 /** 流式进行中的思考 = 消息末块且尚未收尾（换块/结束时会写入 durationMs） */
 function isActiveThinking(index: number): boolean {
@@ -733,27 +452,6 @@ function durationSuffix(block: ThinkingBlock): string {
 <style lang="scss" scoped>
 // zcode animated-gradient-text（styles.css）：运行态文案渐变扫光。
 // 代替旋转图标——长期运行的工具行里旋转动画持续占用渲染资源，zcode 只让文字扫光
-@mixin animated-gradient-text($strong, $soft) {
-  display: inline-block;
-  background: linear-gradient(
-    90deg,
-    $strong 0%,
-    $strong 34%,
-    $soft 50%,
-    $strong 66%,
-    $strong 100%
-  );
-  background-size: 300% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  animation: gradient-flow 4s linear infinite;
-  will-change: background-position;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-}
-
 @keyframes gradient-flow {
   0% {
     background-position: 100% 0;
@@ -779,7 +477,7 @@ function durationSuffix(block: ThinkingBlock): string {
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #86909c;
+  color: #8c8a82;
   user-select: none;
 
   .retry-notice {
@@ -796,11 +494,11 @@ function durationSuffix(block: ThinkingBlock): string {
     margin: 0 -8px;
     width: fit-content;
     border-radius: 8px;
-    color: #4e5969;
+    color: #5f5d55;
     transition: background 0.2s;
 
     &:hover {
-      background: #f2f3f5;
+      background: #f0ede4;
     }
 
     .done-icon {
@@ -822,7 +520,7 @@ function durationSuffix(block: ThinkingBlock): string {
 
 .caret-icon {
   font-size: 11px;
-  color: #86909c;
+  color: #8c8a82;
   transition: transform 0.2s;
 }
 
@@ -838,17 +536,17 @@ function durationSuffix(block: ThinkingBlock): string {
     border-radius: 8px;
     cursor: pointer;
     user-select: none;
-    color: #86909c;
+    color: #8c8a82;
     font-size: 13px;
     transition: background 0.2s;
 
     &:hover {
-      background: #f2f3f5;
+      background: #f0ede4;
     }
 
     .think-icon {
       flex-shrink: 0;
-      color: #86909c;
+      color: #8c8a82;
 
       // 思考进行中：图标微呼吸提示活跃（加载动画只出现在消息下方）
       &.active {
@@ -872,7 +570,7 @@ function durationSuffix(block: ThinkingBlock): string {
       // 思考进行中：「正在思考」文案扫光（与工具行动词同一套 zcode 动效）
       &.running {
         font-weight: 500;
-        @include animated-gradient-text(#86909c, rgba(134, 144, 156, 0.25));
+        @include animated-gradient-text(#8c8a82, rgba(140,138,130, 0.25));
       }
     }
   }
@@ -881,10 +579,10 @@ function durationSuffix(block: ThinkingBlock): string {
   .thinking-text {
     margin: 4px 0 6px 6px;
     padding: 2px 0 4px 14px;
-    border-left: 2px solid #e5e6eb;
+    border-left: 2px solid #e8e6dc;
     font-size: 13px;
     line-height: 1.65;
-    color: #86909c;
+    color: #8c8a82;
     white-space: pre-wrap;
     word-break: break-word;
     max-height: 280px;
@@ -898,156 +596,17 @@ function durationSuffix(block: ThinkingBlock): string {
   50% { opacity: 0.45; }
 }
 
-// 工具块：时间线条目 + 可跳转来源链接
-.tool-block {
-  animation: tool-in 0.18s ease;
-
-  .tool-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 3px 8px;
-    margin: 0 -8px;
-    border-radius: 6px;
-    min-width: 0;
-    user-select: none;
-
-    &.expandable {
-      cursor: pointer;
-
-      &:hover {
-        background: #f2f3f5;
-      }
-    }
-
-    .tool-caret {
-      flex-shrink: 0;
-      font-size: 10px;
-    }
-  }
-
-  // 工具执行结果（点击工具行展开）：与工具行左对齐，内容可选中复制
-  .tool-result {
-    margin: 4px 0 2px 0;
-    padding: 8px 12px;
-    background: #f7f8fa;
-    border-radius: 8px;
-    font-size: 12px;
-    line-height: 1.55;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    color: #4e5969;
-    white-space: pre-wrap;
-    word-break: break-word;
-    user-select: text;
-    max-height: 220px;
-    overflow-y: auto;
-    @include thin-scrollbar;
-  }
-
-  .tool-status {
-    width: 16px;
-    flex-shrink: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-
-  .tool-icon {
-    font-size: 13px;
-    color: $primary-color;
-  }
-
-  // 动词标签（正在执行/已执行…）：zcode kindLabel——运行态扫光 + medium，完成态浅色
-  .tool-verb {
-    flex-shrink: 0;
-    font-size: 13px;
-    font-weight: 500;
-    white-space: nowrap;
-    color: #4e5969;
-
-    &.running {
-      @include animated-gradient-text($primary-color, rgba(42, 161, 169, 0.25));
-    }
-  }
-
-  .tool-meta {
-    flex: 1;
-    min-width: 0;
-    font-size: 12px;
-    color: #86909c;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  // 来源链接：点击直接跳转网页（随工作过程收起/展开）
-  .tool-sources {
-    margin-top: 4px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-
-    .source-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      max-width: 240px;
-      padding: 4px 10px;
-      background: #f7f8fa;
-      border-radius: 8px;
-      text-decoration: none;
-      transition: background 0.2s;
-
-      &:hover {
-        background: #eef1f4;
-
-        .chip-title {
-          color: $primary-color;
-        }
-      }
-
-      .chip-icon {
-        font-size: 12px;
-        color: #86909c;
-        flex-shrink: 0;
-      }
-
-      .chip-title {
-        font-size: 12px;
-        color: #4e5969;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      .chip-idx {
-        flex-shrink: 0;
-        min-width: 14px;
-        height: 14px;
-        padding: 0 3px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 10px;
-        color: #86909c;
-        background: #e8eaee;
-        border-radius: 7px;
-      }
-    }
-  }
-}
-
   // 问答块（AskUserQuestion）：待答=选项卡片；已答=所选摘录
   .question-block {
     margin: 6px 0;
     padding: 10px 12px;
-    border: 1px solid #e5e6eb;
+    border: 1px solid #e8e6dc;
     border-radius: 10px;
-    background: #fbfcfd;
+    background: #faf9f5;
 
     &.answered {
-      background: #f7faf7;
-      border-color: #d9ecd9;
+      background: #f3f6ee;
+      border-color: #dbe7d3;
     }
   }
 
@@ -1055,7 +614,7 @@ function durationSuffix(block: ThinkingBlock): string {
     & + .question-item {
       margin-top: 10px;
       padding-top: 10px;
-      border-top: 1px dashed #e5e6eb;
+      border-top: 1px dashed #e8e6dc;
     }
   }
 
@@ -1080,7 +639,7 @@ function durationSuffix(block: ThinkingBlock): string {
   .question-text {
     font-size: 13px;
     font-weight: 600;
-    color: #1d2129;
+    color: #141413;
   }
 
   .question-option {
@@ -1089,7 +648,7 @@ function durationSuffix(block: ThinkingBlock): string {
     gap: 8px;
     padding: 6px 10px;
     margin: 4px 0;
-    border: 1px solid #e5e6eb;
+    border: 1px solid #e8e6dc;
     border-radius: 8px;
     cursor: pointer;
     user-select: none;
@@ -1123,28 +682,28 @@ function durationSuffix(block: ThinkingBlock): string {
   }
 
   .question-option:not(.selected) .option-check {
-    color: #c9cdd4;
+    color: #b0aea5;
   }
 
   .option-label {
     font-size: 13px;
-    color: #1d2129;
+    color: #141413;
     white-space: nowrap;
   }
 
   .option-desc {
     font-size: 12px;
-    color: #86909c;
+    color: #8c8a82;
   }
 
   .option-preview {
     margin: 4px 0;
     padding: 8px 10px;
-    background: #f7f8fa;
+    background: #f5f3ec;
     border-radius: 8px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 12px;
-    color: #4e5969;
+    color: #5f5d55;
     white-space: pre-wrap;
     word-break: break-word;
     max-height: 180px;
@@ -1164,7 +723,7 @@ function durationSuffix(block: ThinkingBlock): string {
     -webkit-user-select: text;
 
     &::placeholder {
-      color: #c9cdd4;
+      color: #b0aea5;
     }
   }
 
@@ -1177,7 +736,7 @@ function durationSuffix(block: ThinkingBlock): string {
     align-items: center;
     gap: 6px;
     font-size: 13px;
-    color: #1d2129;
+    color: #141413;
 
     .answered-icon {
       color: #00b42a;
@@ -1204,7 +763,7 @@ function durationSuffix(block: ThinkingBlock): string {
     cursor: pointer;
 
     &:disabled {
-      background: #c9cdd4;
+      background: #b0aea5;
       cursor: not-allowed;
     }
   }
@@ -1230,16 +789,5 @@ function durationSuffix(block: ThinkingBlock): string {
 .stream-interrupted {
   font-size: 12px;
   color: #d48806;
-}
-
-@keyframes tool-in {
-  from {
-    opacity: 0;
-    transform: translateY(-3px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 </style>

@@ -186,9 +186,9 @@ async function handleSearch(): Promise<void> {
 
 function getProgressColor(score: number): string {
   if (score >= 0.8) return '#52c41a'
-  if (score >= 0.6) return '#1890ff'
+  if (score >= 0.6) return '#2aa1a9'
   if (score >= 0.4) return '#faad14'
-  return '#ff4d4f'
+  return '#c0453a'
 }
 
 onMounted(() => {
@@ -219,7 +219,7 @@ onMounted(() => {
         display: block;
         font-size: 14px;
         font-weight: 500;
-        color: #5f6368;
+        color: #5f5d55;
         margin-bottom: 12px;
       }
 
@@ -227,7 +227,7 @@ onMounted(() => {
         .config-hint {
           display: block;
           font-size: 12px;
-          color: #999;
+          color: #8c8a82;
           margin-top: 8px;
         }
 
@@ -260,7 +260,7 @@ onMounted(() => {
       .results-title {
         font-size: 14px;
         font-weight: 500;
-        color: #5f6368;
+        color: #5f5d55;
         margin-bottom: 16px;
       }
 
@@ -272,10 +272,10 @@ onMounted(() => {
     }
 
     .result-card {
-      background: #fafafa;
+      background: #f5f3ec;
       border-radius: 8px;
       padding: 16px;
-      border: 1px solid #f0f0f0;
+      border: 1px solid #ece9de;
 
       .card-header {
         display: flex;
@@ -286,7 +286,7 @@ onMounted(() => {
         .card-title {
           font-size: 14px;
           font-weight: 600;
-          color: #202124;
+          color: #141413;
         }
 
         .card-score {
@@ -306,13 +306,13 @@ onMounted(() => {
 
       .card-content {
         font-size: 14px;
-        color: #5f6368;
+        color: #5f5d55;
         line-height: 1.6;
         margin-bottom: 12px;
         cursor: pointer;
 
         &:hover {
-          color: #202124;
+          color: #141413;
         }
       }
 
@@ -321,7 +321,7 @@ onMounted(() => {
         align-items: center;
         gap: 8px;
         font-size: 12px;
-        color: #999;
+        color: #8c8a82;
 
         .anticon {
           color: $primary-color;

@@ -22,7 +22,6 @@ useScrollReveal('.home-page')
 </script>
 
 <style lang="scss">
-/* 字体与共享 Token 为全局层(供各子组件的 scoped 样式引用 CSS 变量) */
-@import '@/styles/home-fonts.scss';
+/* 共享 Token 为全局层(供各子组件的 scoped 样式引用 CSS 变量);字体已由 global.scss 全局引入 */
 @import './home.scss';
 </style>

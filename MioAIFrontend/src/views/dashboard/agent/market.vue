@@ -98,7 +98,7 @@ onMounted(() => {
     justify-content: space-between;
     align-items: center;
     font-size: 12px;
-    color: #999;
+    color: #8c8a82;
     margin-bottom: 12px;
 
     .author {

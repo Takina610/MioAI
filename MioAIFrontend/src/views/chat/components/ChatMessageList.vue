@@ -22,6 +22,9 @@
             :interrupted="displayOf(msg).interrupted"
             :retry-notice="isLatestVersion(msg) ? msg.retryNotice : undefined"
             :chat-id="chatId"
+            :message-id="msg.id"
+            :version="versionOf(msg)"
+            @open-subagent="emit('openSubagent', $event)"
           />
           <template v-else-if="editingId !== msg.id">
             <AttachmentCards
@@ -93,7 +96,7 @@
 import { ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { CopyOutlined, CheckOutlined, EditOutlined, RedoOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons-vue'
-import type { AttachmentDisplay, AttachmentItem, ChatMessage, MessageBlock, PendingAttachment } from '@/types'
+import type { AttachmentDisplay, AttachmentItem, ChatMessage, MessageBlock, PendingAttachment, SubagentPanelTarget } from '@/types'
 import { messageAttachmentDisplays } from '../attachmentUtils'
 import MarkdownView from '@/components/MarkdownView.vue'
 import MioBotMessage from './MioBotMessage.vue'
@@ -130,6 +133,8 @@ const emit = defineEmits<{
   (e: 'addEditFiles', files: File[]): void
   /** 编辑中移除附件（父级决定沙箱文件去留） */
   (e: 'removeEditAtt', key: string): void
+  /** 子智能体行被点击（父级打开右侧只读面板） */
+  (e: 'openSubagent', target: SubagentPanelTarget): void
 }>()
 
 const messagesRef = ref<HTMLElement | null>(null)
@@ -360,7 +365,7 @@ defineExpose({ scrollToBottom, isNearBottom })
           align-items: center;
 
           .copy-btn {
-            color: #86909c;
+            color: #8c8a82;
             padding: 4px 8px;
             height: auto;
             font-size: 14px;
@@ -381,10 +386,10 @@ defineExpose({ scrollToBottom, isNearBottom })
             display: inline-flex;
             align-items: center;
             margin-left: 4px;
-            color: #86909c;
+            color: #8c8a82;
 
             .version-btn {
-              color: #86909c;
+              color: #8c8a82;
               padding: 2px 6px;
               height: auto;
               font-size: 12px;
@@ -406,37 +411,37 @@ defineExpose({ scrollToBottom, isNearBottom })
       }
 
       &.user .message-text {
-        background: $primary-color;
-        color: #fff;
+        background: #ece9de;
+        color: #141413;
 
         :deep(code) {
-          background: rgba(255, 255, 255, 0.2);
+          background: rgba(20, 20, 19, 0.08);
         }
 
         :deep(pre.md-code) {
-          background: rgba(255, 255, 255, 0.1);
+          background: rgba(20, 20, 19, 0.05);
           border-color: transparent;
 
           code {
-            color: #fff;
+            color: #141413;
           }
         }
 
         :deep(a) {
-          color: #fff;
+          color: $primary-color;
           text-decoration: underline;
         }
 
         :deep(blockquote) {
-          background: rgba(255, 255, 255, 0.12);
-          color: rgba(255, 255, 255, 0.9);
-          border-left-color: rgba(255, 255, 255, 0.6);
+          background: rgba(20, 20, 19, 0.05);
+          color: #5f5d55;
+          border-left-color: #b0aea5;
         }
       }
 
       &.assistant .message-text {
         background: transparent;
-        color: #202124;
+        color: #141413;
         max-width: 100%;
         padding: 0;
       }

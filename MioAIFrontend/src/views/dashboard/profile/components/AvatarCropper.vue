@@ -190,7 +190,7 @@ function resetState(): void {
     display: flex;
     justify-content: center;
     align-items: center;
-    background: #f5f5f5;
+    background: #f0ede4;
     border-radius: 8px;
     padding: 16px;
     min-height: 480px;
@@ -300,7 +300,7 @@ function resetState(): void {
 
     h4 {
       font-size: 14px;
-      color: #333;
+      color: #141413;
       margin-bottom: 16px;
       font-weight: 500;
     }
@@ -310,8 +310,8 @@ function resetState(): void {
       height: 200px;
       border-radius: 50%;
       overflow: hidden;
-      border: 3px solid #e8e8e8;
-      background: #f5f5f5;
+      border: 3px solid #e0ddd2;
+      background: #f0ede4;
       margin: 0 auto;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 
@@ -324,8 +324,8 @@ function resetState(): void {
     .preview-info {
       margin-top: 12px;
       font-size: 12px;
-      color: #666;
-      background: #f5f5f5;
+      color: #6e6b62;
+      background: #f0ede4;
       padding: 6px 12px;
       border-radius: 4px;
     }
@@ -333,10 +333,10 @@ function resetState(): void {
     .crop-tips {
       margin-top: 16px;
       font-size: 12px;
-      color: #999;
+      color: #8c8a82;
       line-height: 1.8;
       padding: 12px;
-      background: #fafafa;
+      background: #f5f3ec;
       border-radius: 6px;
     }
   }

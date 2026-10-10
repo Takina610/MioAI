@@ -92,9 +92,9 @@ const {
 .usage-page {
   .tabs-header {
     flex-shrink: 0;
-    background: #f9fafd;
+    background: #f5f3ec;
     padding: 0 24px;
-    border-bottom: 1px solid #e8eaed;
+    border-bottom: 1px solid #e8e6dc;
 
     .usage-tabs {
       :deep(.ant-tabs-nav) {
@@ -112,7 +112,7 @@ const {
     flex: 1;
     overflow-y: auto;
     padding: 24px;
-    background: #f5f7fa;
+    background: #f0eee6;
     -ms-overflow-style: none;
     scrollbar-width: none;
 
@@ -129,7 +129,7 @@ const {
 
     .filter-label {
       font-size: 14px;
-      color: #202124;
+      color: #141413;
       font-weight: 500;
     }
   }

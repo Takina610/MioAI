@@ -133,3 +133,10 @@ export interface ChatSession {
   updateTime: Date
   hasMessage: boolean
 }
+
+/** 子代理面板的定位键：消息 id + 显示版本 + Agent 块键（id 优先，无 id 回退块下标） */
+export interface SubagentPanelTarget {
+  messageId: string
+  version: number
+  blockKey: string
+}

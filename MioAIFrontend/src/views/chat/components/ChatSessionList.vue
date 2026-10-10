@@ -131,7 +131,7 @@ defineExpose({ checkListFilled, scrollToTop })
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  border-top: 1px solid #e8eaed;
+  border-top: 1px solid #e8e6dc;
   padding-top: 12px;
 
   &.collapsed {
@@ -145,7 +145,7 @@ defineExpose({ checkListFilled, scrollToTop })
 
   .section-title {
     font-size: 12px;
-    color: #86909c;
+    color: #8c8a82;
     padding: 0 4px;
     margin-bottom: 8px;
     font-weight: 500;
@@ -196,7 +196,7 @@ defineExpose({ checkListFilled, scrollToTop })
     padding: 10px 12px;
     margin: 4px 0;
     cursor: pointer;
-    color: #5f6368;
+    color: #5f5d55;
     border-radius: 8px;
     transition: all 0.2s;
 
@@ -241,7 +241,7 @@ defineExpose({ checkListFilled, scrollToTop })
 
       .chat-item-time {
         font-size: 12px;
-        color: #909399;
+        color: #8c8a82;
         margin-top: 2px;
       }
     }
@@ -270,28 +270,28 @@ defineExpose({ checkListFilled, scrollToTop })
 }
 
 .delete-menu-item {
-  color: #ff4d4f !important;
+  color: #c0453a !important;
 
   &:hover {
-    background-color: #fff1f0 !important;
-    color: #ff4d4f !important;
+    background-color: #f9ece9 !important;
+    color: #c0453a !important;
   }
 
   :deep(.ant-dropdown-menu-item-icon) {
-    color: #ff4d4f !important;
+    color: #c0453a !important;
   }
 }
 
 :deep(.delete-menu-item) {
-  color: #ff4d4f !important;
+  color: #c0453a !important;
 
   .ant-dropdown-menu-item-icon {
-    color: #ff4d4f !important;
+    color: #c0453a !important;
   }
 
   &:hover {
-    background-color: #fff1f0 !important;
-    color: #ff4d4f !important;
+    background-color: #f9ece9 !important;
+    color: #c0453a !important;
   }
 }
 </style>

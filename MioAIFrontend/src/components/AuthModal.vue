@@ -219,7 +219,7 @@ const rules: Record<string, Rule[]> = {
 const passwordStrength = computed<PasswordStrength>(() => {
   const password = formData.userPassword
   if (!password) {
-    return { percent: 0, color: '#d9d9d9', text: '' }
+    return { percent: 0, color: '#d8d5cc', text: '' }
   }
 
   let score = 0
@@ -232,13 +232,13 @@ const passwordStrength = computed<PasswordStrength>(() => {
   if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) score += 20
 
   if (score <= 30) {
-    return { percent: 25, color: '#ff4d4f', text: '弱' }
+    return { percent: 25, color: '#c0453a', text: '弱' }
   } else if (score <= 50) {
     return { percent: 50, color: '#faad14', text: '一般' }
   } else if (score <= 70) {
     return { percent: 75, color: '#52c41a', text: '强' }
   } else {
-    return { percent: 100, color: '#1890ff', text: '非常强' }
+    return { percent: 100, color: '#2aa1a9', text: '非常强' }
   }
 })
 
@@ -268,7 +268,7 @@ function toggleMode(): void {
 
     p {
       font-size: 14px;
-      color: #666;
+      color: #6e6b62;
     }
   }
 
@@ -290,7 +290,7 @@ function toggleMode(): void {
 
     .strength-label {
       font-size: 12px;
-      color: #666;
+      color: #6e6b62;
       white-space: nowrap;
     }
 
@@ -321,7 +321,7 @@ function toggleMode(): void {
   .form-footer {
     text-align: center;
     margin-top: 16px;
-    color: #666;
+    color: #6e6b62;
 
     a {
       color: $primary-color;

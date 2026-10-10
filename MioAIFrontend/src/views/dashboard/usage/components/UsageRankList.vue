@@ -41,7 +41,7 @@ withDefaults(defineProps<{
   display: flex;
   align-items: center;
   padding: 10px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid #ece9de;
 
   &:last-child {
     border-bottom: none;
@@ -51,8 +51,8 @@ withDefaults(defineProps<{
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    background: #f0f0f0;
-    color: #666;
+    background: #ece9de;
+    color: #6e6b62;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -84,7 +84,7 @@ withDefaults(defineProps<{
 
     .rank-name {
       font-size: 14px;
-      color: #333;
+      color: #141413;
       margin-bottom: 4px;
     }
   }
@@ -92,7 +92,7 @@ withDefaults(defineProps<{
   .rank-value {
     font-size: 14px;
     font-weight: 500;
-    color: #202124;
+    color: #141413;
     margin-left: 16px;
     flex-shrink: 0;
   }

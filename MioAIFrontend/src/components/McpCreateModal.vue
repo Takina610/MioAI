@@ -301,13 +301,13 @@ function resetForm(): void {
   
   .hint-text {
     font-size: 12px;
-    color: #999;
+    color: #8c8a82;
   }
 }
 
 .code-editor {
   display: flex;
-  border: 1px solid #d9d9d9;
+  border: 1px solid #d8d5cc;
   border-radius: 6px;
   overflow: hidden;
   background: #1e1e1e;
@@ -363,7 +363,7 @@ function resetForm(): void {
   gap: 12px;
   margin-top: 16px;
   padding-top: 12px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid #ece9de;
 }
 
 .validate-result {
@@ -392,24 +392,24 @@ function resetForm(): void {
   }
   
   .success-count {
-    color: #666;
+    color: #6e6b62;
     font-size: 13px;
   }
 }
 
 .server-info {
   padding: 8px 12px;
-  background: #fafafa;
+  background: #f5f3ec;
   border-radius: 6px;
   margin-bottom: 12px;
   font-size: 13px;
   
   .info-label {
-    color: #999;
+    color: #8c8a82;
   }
   
   .info-value {
-    color: #333;
+    color: #141413;
     font-weight: 500;
   }
   
@@ -423,28 +423,28 @@ function resetForm(): void {
   display: flex;
   align-items: center;
   padding: 12px 16px;
-  background: #fff2f0;
-  border: 1px solid #ffccc7;
+  background: #f9ece9;
+  border: 1px solid #f0d9d6;
   border-radius: 8px;
   margin-bottom: 12px;
   
   .error-icon {
-    color: #ff4d4f;
+    color: #c0453a;
     font-size: 20px;
     margin-right: 8px;
   }
   
   .error-title {
     font-weight: 600;
-    color: #ff4d4f;
+    color: #c0453a;
   }
 }
 
 .error-message {
   padding: 12px;
-  background: #fafafa;
+  background: #f5f3ec;
   border-radius: 6px;
-  color: #666;
+  color: #6e6b62;
   font-size: 13px;
 }
 
@@ -457,7 +457,7 @@ function resetForm(): void {
   
   p {
     margin-top: 12px;
-    color: #666;
+    color: #6e6b62;
   }
 }
 
@@ -483,7 +483,7 @@ function resetForm(): void {
   
   .tool-item {
     padding: 10px 12px;
-    background: #fafafa;
+    background: #f5f3ec;
     border-radius: 6px;
     margin-bottom: 6px;
     
@@ -504,14 +504,14 @@ function resetForm(): void {
       
       .tool-name {
         font-weight: 500;
-        color: #333;
+        color: #141413;
         font-size: 13px;
       }
     }
     
     .tool-desc {
       font-size: 12px;
-      color: #666;
+      color: #6e6b62;
       margin: 0;
       padding-left: 20px;
     }

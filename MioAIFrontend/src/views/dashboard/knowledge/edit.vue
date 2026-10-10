@@ -194,7 +194,7 @@ onMounted(() => {
     align-items: center;
     margin-bottom: 20px;
     padding-bottom: 12px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid #ece9de;
 
     .section-title {
       margin-bottom: 0;

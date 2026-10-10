@@ -181,7 +181,7 @@ onMounted(() => {
       :deep(.ant-card-head) {
         min-height: 48px;
         padding: 0 20px;
-        border-bottom: 1px solid #f0f0f0;
+        border-bottom: 1px solid #ece9de;
 
         .ant-card-head-title {
           font-weight: 600;
@@ -247,13 +247,13 @@ onMounted(() => {
           .user-name {
             font-size: 16px;
             font-weight: 600;
-            color: #202124;
+            color: #141413;
             margin-bottom: 4px;
           }
 
           .user-role {
             font-size: 13px;
-            color: #666;
+            color: #6e6b62;
           }
         }
       }
@@ -273,7 +273,7 @@ onMounted(() => {
 
           .label {
             font-size: 14px;
-            color: #666;
+            color: #6e6b62;
             min-width: 50px;
             flex-shrink: 0;
           }
@@ -289,7 +289,7 @@ onMounted(() => {
         display: block;
         margin-top: 20px;
         padding-top: 16px;
-        border-top: 1px solid #f0f0f0;
+        border-top: 1px solid #ece9de;
         clear: both;
       }
     }

@@ -80,20 +80,20 @@ const isPublicChecked = computed({
 .info-form {
   :deep(.ant-form-item-label) {
     label {
-      color: #5f6368;
+      color: #5f5d55;
       font-weight: 500;
     }
   }
 
   :deep(.ant-input-disabled) {
-    color: #202124;
-    background: #f5f5f5;
+    color: #141413;
+    background: #f0ede4;
   }
 }
 
 .switch-hint {
   margin-left: 12px;
-  color: #999;
+  color: #8c8a82;
   font-size: 13px;
 }
 </style>

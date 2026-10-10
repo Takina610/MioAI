@@ -67,7 +67,7 @@ function handleModelChange(): void {
 
   #option1:checked + label[for="option1"],
   #option2:checked + label[for="option2"] {
-    color: #f0f0f0;
+    color: #ece9de;
     font-weight: bold;
   }
 

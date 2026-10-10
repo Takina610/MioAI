@@ -36,7 +36,7 @@ function refreshPage(): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #fff;
+  background: $bg-cream;
 
   .content {
     text-align: center;
@@ -50,13 +50,13 @@ function refreshPage(): void {
     h1 {
       font-size: 18px;
       font-weight: 500;
-      color: #333;
+      color: #141413;
       margin-bottom: 12px;
     }
 
     p {
       font-size: 14px;
-      color: #999;
+      color: #8c8a82;
       margin-bottom: 32px;
     }
 
@@ -76,8 +76,8 @@ function refreshPage(): void {
       }
 
       :deep(.ant-btn-default) {
-        border-color: #d9d9d9;
-        color: #666;
+        border-color: #d8d5cc;
+        color: #6e6b62;
 
         &:hover {
           color: $primary-color;

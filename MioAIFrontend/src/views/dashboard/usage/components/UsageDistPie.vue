@@ -21,7 +21,7 @@ function renderChart(): void {
         text: '暂无数据',
         left: 'center',
         top: 'center',
-        textStyle: { color: '#999', fontSize: 16, fontWeight: 'normal' }
+        textStyle: { color: '#8c8a82', fontSize: 16, fontWeight: 'normal' }
       },
       series: []
     })

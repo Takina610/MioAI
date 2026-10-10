@@ -26,13 +26,13 @@ const emit = defineEmits<{
   .prompt-title {
     font-size: 20px;
     font-weight: 600;
-    color: #202124;
+    color: #141413;
     margin-bottom: 12px;
   }
 
   .prompt-desc {
     font-size: 14px;
-    color: #5f6368;
+    color: #5f5d55;
     margin-bottom: 24px;
   }
 }

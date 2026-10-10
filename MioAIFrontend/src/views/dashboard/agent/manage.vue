@@ -224,7 +224,7 @@ onMounted(() => {
   .card-desc {
     padding-bottom: 12px;
     margin-bottom: 12px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid #ece9de;
   }
 
   .card-footer {
@@ -235,7 +235,7 @@ onMounted(() => {
 
     .update-time {
       font-size: 12px;
-      color: #999;
+      color: #8c8a82;
     }
   }
 

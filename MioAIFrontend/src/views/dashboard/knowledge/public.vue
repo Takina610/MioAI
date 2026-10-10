@@ -94,7 +94,7 @@ onMounted(() => {
     }
 
     .card-title {
-      color: #202124;
+      color: #141413;
       margin: 0;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -104,7 +104,7 @@ onMounted(() => {
   }
 
   .card-desc {
-    color: #5f6368;
+    color: #5f5d55;
     font-size: 14px;
     line-height: 1.5;
     margin-bottom: 12px;
@@ -115,9 +115,9 @@ onMounted(() => {
     justify-content: space-between;
     align-items: center;
     padding-top: 12px;
-    border-top: 1px solid #f0f0f0;
+    border-top: 1px solid #ece9de;
     font-size: 12px;
-    color: #999;
+    color: #8c8a82;
     height: 36px;
     transition: opacity 0.3s;
 
@@ -128,7 +128,7 @@ onMounted(() => {
     }
 
     .storage {
-      color: #666;
+      color: #6e6b62;
     }
   }
 }

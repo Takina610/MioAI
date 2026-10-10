@@ -39,7 +39,7 @@ withDefaults(defineProps<{
 
   .empty-desc {
     font-size: 16px;
-    color: #666;
+    color: #6e6b62;
     margin-bottom: 8px;
     position: relative;
     z-index: 1;
@@ -47,7 +47,7 @@ withDefaults(defineProps<{
 
   .empty-hint {
     font-size: 14px;
-    color: #999;
+    color: #8c8a82;
     position: relative;
     z-index: 1;
   }

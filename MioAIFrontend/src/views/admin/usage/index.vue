@@ -336,7 +336,7 @@ function renderLineChart() {
         text: '暂无数据',
         left: 'center',
         top: 'center',
-        textStyle: { color: '#999', fontSize: 16, fontWeight: 'normal' }
+        textStyle: { color: '#8c8a82', fontSize: 16, fontWeight: 'normal' }
       },
       xAxis: { type: 'category', data: [] },
       yAxis: { type: 'value' },
@@ -357,8 +357,8 @@ function renderLineChart() {
     tooltip: {
       trigger: 'axis',
       backgroundColor: 'rgba(255,255,255,0.95)',
-      borderColor: '#e8eaed',
-      textStyle: { color: '#333' },
+      borderColor: '#e8e6dc',
+      textStyle: { color: '#141413' },
       formatter: (params: any) => {
         const index = params[0].dataIndex
         const time = currentTrend[index]?.time ?? '-'
@@ -378,13 +378,13 @@ function renderLineChart() {
       type: 'category',
       boundaryGap: false,
       data: times,
-      axisLine: { lineStyle: { color: '#e8eaed' } },
-      axisLabel: { color: '#666' }
+      axisLine: { lineStyle: { color: '#e8e6dc' } },
+      axisLabel: { color: '#6e6b62' }
     },
     yAxis: {
       type: 'value',
-      splitLine: { lineStyle: { color: '#f0f0f0' } },
-      axisLabel: { color: '#666' }
+      splitLine: { lineStyle: { color: '#ece9de' } },
+      axisLabel: { color: '#6e6b62' }
     },
     series: [
       {
@@ -411,8 +411,8 @@ function renderLineChart() {
         symbol: 'circle',
         symbolSize: 6,
         showSymbol: false,
-        lineStyle: { width: 2, color: '#999', type: 'dashed' },
-        itemStyle: { color: '#999' },
+        lineStyle: { width: 2, color: '#8c8a82', type: 'dashed' },
+        itemStyle: { color: '#8c8a82' },
         data: prevValues
       }
     ]
@@ -431,7 +431,7 @@ function renderPieChart() {
         text: '暂无数据',
         left: 'center',
         top: 'center',
-        textStyle: { color: '#999', fontSize: 16, fontWeight: 'normal' }
+        textStyle: { color: '#8c8a82', fontSize: 16, fontWeight: 'normal' }
       },
       series: []
     })
@@ -527,7 +527,7 @@ window.addEventListener('resize', handleResize)
 
   .page-header {
     flex-shrink: 0;
-    background: #f9fafd;
+    background: #f5f3ec;
 
     .header-content {
       padding: 16px 24px;
@@ -539,7 +539,7 @@ window.addEventListener('resize', handleResize)
         h2 {
           font-size: 24px;
           font-weight: 600;
-          color: #202124;
+          color: #141413;
           margin: 0;
         }
       }
@@ -547,15 +547,15 @@ window.addEventListener('resize', handleResize)
 
     .header-line {
       height: 1px;
-      background: #e8eaed;
+      background: #e8e6dc;
     }
   }
 
   .tabs-header {
     flex-shrink: 0;
-    background: #f9fafd;
+    background: #f5f3ec;
     padding: 0 24px;
-    border-bottom: 1px solid #e8eaed;
+    border-bottom: 1px solid #e8e6dc;
 
     .usage-tabs {
       :deep(.ant-tabs-nav) {
@@ -573,7 +573,7 @@ window.addEventListener('resize', handleResize)
     flex: 1;
     overflow-y: auto;
     padding: 24px;
-    background: #f5f7fa;
+    background: #f0eee6;
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
@@ -589,7 +589,7 @@ window.addEventListener('resize', handleResize)
 
       .filter-label {
         font-size: 14px;
-        color: #202124;
+        color: #141413;
         font-weight: 500;
       }
     }
@@ -605,20 +605,20 @@ window.addEventListener('resize', handleResize)
 
         :deep(.ant-statistic-title) {
           font-size: 13px;
-          color: #666;
+          color: #6e6b62;
           margin-bottom: 8px;
         }
 
         :deep(.ant-statistic-content) {
           font-size: 28px;
           font-weight: 600;
-          color: #202124;
+          color: #141413;
         }
 
         :deep(.ant-statistic-content-suffix) {
           font-size: 16px;
           font-weight: 400;
-          color: #666;
+          color: #6e6b62;
           margin-left: 4px;
         }
 
@@ -636,7 +636,7 @@ window.addEventListener('resize', handleResize)
             gap: 2px;
 
             &.up {
-              color: #cf1322;
+              color: #a83a30;
             }
 
             &.down {
@@ -646,7 +646,7 @@ window.addEventListener('resize', handleResize)
 
           .trend-label {
             font-size: 12px;
-            color: #999;
+            color: #8c8a82;
           }
         }
       }
@@ -703,7 +703,7 @@ window.addEventListener('resize', handleResize)
         display: flex;
         align-items: center;
         padding: 10px 0;
-        border-bottom: 1px solid #f0f0f0;
+        border-bottom: 1px solid #ece9de;
 
         &:last-child {
           border-bottom: none;
@@ -713,8 +713,8 @@ window.addEventListener('resize', handleResize)
           width: 24px;
           height: 24px;
           border-radius: 50%;
-          background: #f0f0f0;
-          color: #666;
+          background: #ece9de;
+          color: #6e6b62;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -746,7 +746,7 @@ window.addEventListener('resize', handleResize)
 
           .rank-name {
             font-size: 14px;
-            color: #333;
+            color: #141413;
             margin-bottom: 4px;
           }
         }
@@ -754,7 +754,7 @@ window.addEventListener('resize', handleResize)
         .rank-value {
           font-size: 14px;
           font-weight: 500;
-          color: #202124;
+          color: #141413;
           margin-left: 16px;
           flex-shrink: 0;
         }

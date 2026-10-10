@@ -91,9 +91,9 @@ function getStatusColor(status: number): string {
 <style lang="scss" scoped>
 :deep(.ant-table) {
   .ant-table-thead > tr > th {
-    background: #fafafa;
+    background: #f5f3ec;
     font-weight: 600;
-    color: #5f6368;
+    color: #5f5d55;
   }
 }
 

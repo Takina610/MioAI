@@ -44,20 +44,20 @@ defineProps<{
 
     :deep(.ant-statistic-title) {
       font-size: 13px;
-      color: #666;
+      color: #6e6b62;
       margin-bottom: 8px;
     }
 
     :deep(.ant-statistic-content) {
       font-size: 28px;
       font-weight: 600;
-      color: #202124;
+      color: #141413;
     }
 
     :deep(.ant-statistic-content-suffix) {
       font-size: 16px;
       font-weight: 400;
-      color: #666;
+      color: #6e6b62;
       margin-left: 4px;
     }
 
@@ -75,7 +75,7 @@ defineProps<{
         gap: 2px;
 
         &.up {
-          color: #cf1322;
+          color: #a83a30;
         }
 
         &.down {
@@ -85,7 +85,7 @@ defineProps<{
 
       .trend-label {
         font-size: 12px;
-        color: #999;
+        color: #8c8a82;
       }
     }
   }

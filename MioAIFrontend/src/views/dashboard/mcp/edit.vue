@@ -315,18 +315,18 @@ onMounted(() => {
     display: flex;
     justify-content: space-between;
     padding: 8px 0;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid #ece9de;
 
     &:last-child {
       border-bottom: none;
     }
 
     .meta-label {
-      color: #666;
+      color: #6e6b62;
     }
 
     .meta-value {
-      color: #333;
+      color: #141413;
     }
   }
 }

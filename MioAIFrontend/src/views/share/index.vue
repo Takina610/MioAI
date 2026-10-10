@@ -176,7 +176,7 @@ function goToChat(): void {
 <style lang="scss" scoped>
 .share-page {
   // 原背景图 bg.jpg 未随仓库提交，构建时报 ENOENT；先回退为纯色背景
-  background: #f1f4fb;
+  background: #f0eee6;
   min-height: 100vh;
   background-attachment: fixed;
 
@@ -207,21 +207,21 @@ function goToChat(): void {
   .conversation-title {
     font-size: 30px;
     font-weight: 600;
-    color: #1d2129;
+    color: #141413;
     margin: 0 0 12px 0;
     line-height: 1.4;
   }
 
   .conversation-meta {
     font-size: 13px;
-    color: #c1c1c1;
+    color: #a5a29a;
     margin: 0;
   }
 }
 
 .card-divider {
   height: 1px;
-  background: #e0e0e0;
+  background: #e8e6dc;
   margin: 0 32px;
 }
 
@@ -260,7 +260,7 @@ function goToChat(): void {
             word-break: break-word;
 
             :deep(pre) {
-              background: #f6f8fa;
+              background: #f5f3ec;
               border-radius: 6px;
               padding: 12px 16px;
               overflow-x: auto;
@@ -273,7 +273,7 @@ function goToChat(): void {
             }
 
             :deep(code) {
-              background: #f6f8fa;
+              background: #f5f3ec;
               padding: 2px 6px;
               border-radius: 4px;
               font-family: 'Consolas', 'Monaco', monospace;
@@ -308,10 +308,10 @@ function goToChat(): void {
             }
 
             :deep(blockquote) {
-              border-left: 3px solid #e5e6eb;
+              border-left: 3px solid #e8e6dc;
               padding-left: 12px;
               margin: 8px 0;
-              color: #666;
+              color: #6e6b62;
             }
           }
 
@@ -323,7 +323,7 @@ function goToChat(): void {
             align-items: center;
 
             .copy-btn {
-              color: #86909c;
+              color: #8c8a82;
               padding: 4px 8px;
               height: auto;
               font-size: 14px;
@@ -368,7 +368,7 @@ function goToChat(): void {
   align-items: center;
   justify-content: center;
   padding: 60px 24px;
-  color: #86909c;
+  color: #8c8a82;
 
   p {
     margin-top: 16px;
@@ -382,7 +382,7 @@ function goToChat(): void {
 
   .copyright {
     font-size: 12px;
-    color: #86909c;
+    color: #8c8a82;
     margin: 0;
   }
 }
@@ -473,17 +473,17 @@ function goToChat(): void {
 }
 
 :deep(table) {
-  border: 1px solid #ccc;
+  border: 1px solid #c5c2b8;
 }
 :deep(table) td,
 :deep(table) th {
-  border-bottom: 1px solid #ccc;
-  border-right: 1px solid #ccc;
+  border-bottom: 1px solid #c5c2b8;
+  border-right: 1px solid #c5c2b8;
   padding: 5px 10px;
 }
 :deep(table) th {
   text-align: center;
-  background: #dee8ee;
+  background: #ece9de;
 }
 :deep(table) th:last-child {
   border-right: none;
@@ -496,16 +496,16 @@ function goToChat(): void {
   border-bottom: none;
 }
 :deep(table) tr:nth-child(even) {
-  background: #eff3f5;
+  background: #f0ede4;
 }
 /* blockquote 样式 */
 :deep(blockquote) {
   display: block;
-  border-left: 8px solid #d0e5f2;
+  border-left: 8px solid #e3f1f2;
   padding: 5px 10px;
   margin: 10px 0;
   line-height: 1.4;
   font-size: 100%;
-  background-color: #f1f1f1;
+  background-color: #f0ede4;
 }
 </style>

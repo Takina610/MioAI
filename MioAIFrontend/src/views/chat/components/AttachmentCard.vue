@@ -169,14 +169,14 @@ async function handleDownload(): Promise<void> {
     max-width: 280px;
     margin: 10px 0 0 16px;
     padding: 20px 26px 20px 20px;
-    background: #f7f8fa;
-    border: 1px solid #e5e6eb;
+    background: #f5f3ec;
+    border: 1px solid #e8e6dc;
     border-radius: 16px;
     vertical-align: top;
     transition: border-color 0.2s;
 
     &:hover {
-      border-color: #c9cdd4;
+      border-color: #b0aea5;
 
       .att-name {
         color: $primary-color;
@@ -279,11 +279,11 @@ async function handleDownload(): Promise<void> {
     gap: 8px;
     max-width: 260px;
     padding: 5px 10px;
-    background: #f7f8fa;
-    border: 1px solid #e5e6eb;
+    background: #f5f3ec;
+    border: 1px solid #e8e6dc;
     border-radius: 8px;
     font-size: 12px;
-    color: #4e5969;
+    color: #5f5d55;
     user-select: none;
 
     &.clickable {
@@ -291,7 +291,7 @@ async function handleDownload(): Promise<void> {
       transition: background 0.2s;
 
       &:hover {
-        background: #eef1f4;
+        background: #ece9de;
 
         .att-name {
           color: $primary-color;
@@ -332,7 +332,7 @@ async function handleDownload(): Promise<void> {
     font-size: 16px;
     line-height: 1.3;
     font-weight: 600;
-    color: #1d2129;
+    color: #141413;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -353,7 +353,7 @@ async function handleDownload(): Promise<void> {
     margin-top: 3px;
     font-size: 13px;
     line-height: 1.3;
-    color: #86909c;
+    color: #8c8a82;
     white-space: nowrap;
   }
 
@@ -421,10 +421,10 @@ async function handleDownload(): Promise<void> {
     width: 18px;
     height: 18px;
     padding: 0;
-    border: 1px solid #e5e6eb;
+    border: 1px solid #e8e6dc;
     border-radius: 50%;
     background: #fff;
-    color: #86909c;
+    color: #8c8a82;
     font-size: 9px;
     cursor: pointer;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
@@ -434,8 +434,8 @@ async function handleDownload(): Promise<void> {
     z-index: 1;
 
     &:hover {
-      background: #1d2129;
-      border-color: #1d2129;
+      background: #141413;
+      border-color: #141413;
       color: #fff;
     }
   }
@@ -452,7 +452,7 @@ async function handleDownload(): Promise<void> {
 
     .ring-bg {
       fill: none;
-      stroke: #e5e6eb;
+      stroke: #e8e6dc;
       stroke-width: 3;
     }
 
@@ -468,7 +468,7 @@ async function handleDownload(): Promise<void> {
 
     text {
       font-size: 8px;
-      fill: #4e5969;
+      fill: #5f5d55;
     }
   }
 

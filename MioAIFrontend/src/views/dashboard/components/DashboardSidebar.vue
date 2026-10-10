@@ -125,11 +125,11 @@ async function handleLogout(): Promise<void> {
 <style lang="scss" scoped>
 .sidebar {
   width: 220px;
-  background: #f9fafd;
+  background: #f5f3ec;
   display: flex;
   flex-direction: column;
   transition: width 0.3s;
-  border-right: 1px solid #e8eaed;
+  border-right: 1px solid #e8e6dc;
 
   &.collapsed {
     width: 64px;
@@ -158,7 +158,7 @@ async function handleLogout(): Promise<void> {
     align-items: center;
     justify-content: space-between;
     padding: 0 16px;
-    border-bottom: 1px solid #e8eaed;
+    border-bottom: 1px solid #e8e6dc;
 
     .logo-section {
       flex: 1;
@@ -180,14 +180,14 @@ async function handleLogout(): Promise<void> {
         .logo-text {
           font-size: 20px;
           font-weight: 700;
-          color: $primary-color;
+          color: $text-dark;
           white-space: nowrap;
         }
       }
     }
 
     .collapse-btn {
-      color: #5f6368;
+      color: #5f5d55;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -212,7 +212,7 @@ async function handleLogout(): Promise<void> {
         padding: 8px 20px;
         font-size: 12px;
         font-weight: 500;
-        color: #909399;
+        color: #8c8a82;
         text-transform: uppercase;
         letter-spacing: 0.5px;
       }
@@ -224,7 +224,7 @@ async function handleLogout(): Promise<void> {
           padding: 10px 16px;
           margin: 4px 12px;
           cursor: pointer;
-          color: #5f6368;
+          color: #5f5d55;
           transition: all 0.2s;
           border-radius: 8px;
 
@@ -256,7 +256,7 @@ async function handleLogout(): Promise<void> {
 
   .sidebar-footer {
     padding: 16px;
-    border-top: 1px solid #e8eaed;
+    border-top: 1px solid #e8e6dc;
 
     .user-info {
       display: flex;
@@ -278,13 +278,13 @@ async function handleLogout(): Promise<void> {
         .user-name {
           font-size: 14px;
           font-weight: 500;
-          color: #202124;
+          color: #141413;
         }
 
         .user-role {
           margin-top: 4px;
           font-size: 12px;
-          color: #909399;
+          color: #8c8a82;
         }
       }
 

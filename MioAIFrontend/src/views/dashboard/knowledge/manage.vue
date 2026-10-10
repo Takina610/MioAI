@@ -168,7 +168,7 @@ onMounted(() => {
   .card-desc {
     padding-bottom: 12px;
     margin-bottom: 12px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid #ece9de;
   }
 
   .card-stats {
@@ -181,7 +181,7 @@ onMounted(() => {
       align-items: center;
       gap: 6px;
       font-size: 13px;
-      color: #666;
+      color: #6e6b62;
 
       .anticon {
         color: $primary-color;
@@ -197,7 +197,7 @@ onMounted(() => {
 
     .update-time {
       font-size: 12px;
-      color: #999;
+      color: #8c8a82;
     }
   }
 }

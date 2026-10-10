@@ -281,7 +281,7 @@ function onFileChange(event: Event): void {
     .welcome-title {
       font-size: 24px;
       font-weight: 600;
-      color: #1d2129;
+      color: #141413;
       margin: 0;
       white-space: nowrap;
     }
@@ -295,9 +295,9 @@ function onFileChange(event: Event): void {
     .chat-input-container {
       width: 100%;
       background: #fff;
-      border: 1px solid #e5e6eb;
+      border: 1px solid #e8e6dc;
       border-radius: 16px;
-      box-shadow: 0 4px 12px rgba(242, 243, 245, 1);
+      box-shadow: 0 4px 14px rgba(20, 20, 19, 0.05);
       // 只过渡视觉属性：高度由卡片 GSAP 逐帧驱动，transition:all 会与之打架造成收回卡顿
       transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 
@@ -322,7 +322,7 @@ function onFileChange(event: Event): void {
           resize: none;
           font-size: 15px;
           line-height: 1.5;
-          color: #1d2129;
+          color: #141413;
 
           &:focus {
             outline: none;
@@ -330,7 +330,7 @@ function onFileChange(event: Event): void {
           }
 
           &::placeholder {
-            color: #86909c;
+            color: #8c8a82;
           }
 
           :deep(.ant-input) {
@@ -374,13 +374,13 @@ function onFileChange(event: Event): void {
         border: none;
         border-radius: 10px;
         background: transparent;
-        color: #4e5969;
+        color: #5f5d55;
         font-size: 15px;
         cursor: pointer;
         transition: background 0.2s;
 
         &:hover {
-          background: #f2f3f5;
+          background: #f0ede4;
           color: $primary-color;
         }
       }
@@ -392,26 +392,26 @@ function onFileChange(event: Event): void {
         padding: 5px 10px;
         border-radius: 10px;
         font-size: 13px;
-        color: #4e5969;
+        color: #5f5d55;
         cursor: pointer;
         user-select: none;
         transition: background 0.2s;
 
         &:hover {
-          background: #f2f3f5;
+          background: #f0ede4;
         }
 
         .effort-icon {
           color: $primary-color;
 
           &.dimmed {
-            color: #c9cdd4;
+            color: #b0aea5;
           }
         }
 
         .effort-caret {
           font-size: 10px;
-          color: #86909c;
+          color: #8c8a82;
         }
       }
 
@@ -421,10 +421,10 @@ function onFileChange(event: Event): void {
         margin-right: 8px;
         height: 30px;
         padding: 0 14px;
-        border: 1px solid #d9dde3;
+        border: 1px solid #d8d5cc;
         border-radius: 8px;
         background: #fff;
-        color: #4e5969;
+        color: #5f5d55;
         font-size: 13px;
         cursor: pointer;
         transition: all 0.2s;
@@ -452,7 +452,7 @@ function onFileChange(event: Event): void {
         }
 
         &:disabled {
-          background: #c9cdd4;
+          background: #b0aea5;
           cursor: not-allowed;
         }
       }
@@ -476,9 +476,9 @@ function onFileChange(event: Event): void {
         }
 
         &:disabled {
-          background: #e5e6eb;
-          border-color: #e5e6eb;
-          color: #c9cdd4;
+          background: #e8e6dc;
+          border-color: #e8e6dc;
+          color: #b0aea5;
         }
 
         :deep(.anticon) {
@@ -496,7 +496,7 @@ function onFileChange(event: Event): void {
   vertical-align: -2px;
 
   &.dimmed {
-    color: #c9cdd4;
+    color: #b0aea5;
   }
 }
 

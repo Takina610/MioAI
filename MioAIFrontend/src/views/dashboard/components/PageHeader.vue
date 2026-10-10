@@ -70,7 +70,7 @@ function goBack(): void {
       h2 {
         font-size: 24px;
         font-weight: 600;
-        color: #202124;
+        color: #141413;
         margin: 0;
         white-space: nowrap;
         overflow: hidden;
@@ -78,7 +78,7 @@ function goBack(): void {
       }
 
       .separator {
-        color: #202124;
+        color: #141413;
         font-weight: 400;
       }
 
@@ -88,7 +88,7 @@ function goBack(): void {
         cursor: pointer;
 
         h2 {
-          color: #5f6368;
+          color: #5f5d55;
           font-weight: 400;
         }
 
@@ -118,13 +118,13 @@ function goBack(): void {
   .header-desc {
     padding: 0 24px 12px;
     margin: 0;
-    color: #5f6368;
+    color: #5f5d55;
     font-size: 14px;
   }
 
   .header-line {
     height: 1px;
-    background: #e8eaed;
+    background: #e8e6dc;
   }
 }
 </style>

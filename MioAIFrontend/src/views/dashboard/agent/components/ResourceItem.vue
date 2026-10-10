@@ -91,12 +91,12 @@ function toggleExpand(): void {
   align-items: center;
   justify-content: space-between;
   padding: 12px;
-  background: #fafafa;
+  background: #f5f3ec;
   border-radius: 8px;
   transition: all 0.3s;
 
   &:hover {
-    background: #f0f0f0;
+    background: #ece9de;
   }
 
   &.already-added {
@@ -148,7 +148,7 @@ function toggleExpand(): void {
       .resource-desc {
         cursor: default;
         font-size: 12px;
-        color: #666;
+        color: #6e6b62;
         margin: 0 16px 0 0;
       }
     }
@@ -161,13 +161,13 @@ function toggleExpand(): void {
     flex-shrink: 0;
 
     .expand-btn {
-      color: #9b9aac;
+      color: #a5a29a;
       opacity: 0;
       transition: opacity 0.3s;
     }
 
     .delete-btn {
-      color: #9b9aac;
+      color: #a5a29a;
       cursor: pointer;
       margin-left: 8px;
     }
@@ -189,7 +189,7 @@ function toggleExpand(): void {
   padding: 12px;
   background: #fff;
   border-radius: 8px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid #ece9de;
   max-height: 200px;
   overflow-y: auto;
 }

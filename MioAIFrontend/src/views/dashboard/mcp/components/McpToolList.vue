@@ -37,7 +37,7 @@ withDefaults(defineProps<{
 
 .tool-item {
   padding: 10px 12px;
-  background: #fafafa;
+  background: #f5f3ec;
   border-radius: 6px;
   margin-bottom: 6px;
 
@@ -58,14 +58,14 @@ withDefaults(defineProps<{
 
     .tool-name {
       font-weight: 500;
-      color: #333;
+      color: #141413;
       font-size: 13px;
     }
   }
 
   .tool-desc {
     font-size: 12px;
-    color: #666;
+    color: #6e6b62;
     margin: 0;
     padding-left: 20px;
   }

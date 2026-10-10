@@ -160,14 +160,14 @@ function handleDownload(): void {
     padding: 40px 0;
 
     p {
-      color: #999;
+      color: #8c8a82;
       margin-top: 16px;
     }
   }
 
   .text-preview {
     pre {
-      background: #f5f5f5;
+      background: #f0ede4;
       padding: 16px;
       border-radius: 8px;
       white-space: pre-wrap;
@@ -190,8 +190,8 @@ function handleDownload(): void {
       line-height: 1.25;
     }
 
-    :deep(h1) { font-size: 2em; border-bottom: 1px solid #eaecef; padding-bottom: .3em; }
-    :deep(h2) { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: .3em; }
+    :deep(h1) { font-size: 2em; border-bottom: 1px solid #ece9de; padding-bottom: .3em; }
+    :deep(h2) { font-size: 1.5em; border-bottom: 1px solid #ece9de; padding-bottom: .3em; }
     :deep(h3) { font-size: 1.25em; }
     :deep(h4) { font-size: 1em; }
 
@@ -200,7 +200,7 @@ function handleDownload(): void {
     }
 
     :deep(code) {
-      background: rgba(27, 31, 35, .05);
+      background: rgba(20,20,19, .05);
       border-radius: 3px;
       font-size: 85%;
       margin: 0;
@@ -208,7 +208,7 @@ function handleDownload(): void {
     }
 
     :deep(pre) {
-      background: #f6f8fa;
+      background: #f5f3ec;
       border-radius: 6px;
       font-size: 85%;
       line-height: 1.45;
@@ -228,8 +228,8 @@ function handleDownload(): void {
     }
 
     :deep(blockquote) {
-      border-left: 4px solid #dfe2e5;
-      color: #6a737d;
+      border-left: 4px solid #e0ddd2;
+      color: #6e6b62;
       margin: 0 0 16px;
       padding: 0 1em;
     }
@@ -240,12 +240,12 @@ function handleDownload(): void {
       margin-bottom: 16px;
 
       th, td {
-        border: 1px solid #dfe2e5;
+        border: 1px solid #e0ddd2;
         padding: 6px 13px;
       }
 
       th {
-        background: #f6f8fa;
+        background: #f5f3ec;
         font-weight: 600;
       }
     }

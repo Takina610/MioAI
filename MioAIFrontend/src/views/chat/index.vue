@@ -41,6 +41,7 @@
           @remove-edit-att="handleRemoveEditAtt"
           @regenerate="handleRegenerate"
           @switch-version="handleSwitchVersion"
+          @open-subagent="subagentPanelTarget = $event"
         />
         <ChatInput
           v-model="inputMessage"
@@ -64,6 +65,17 @@
       </div>
     </div>
 
+    <!-- 子智能体只读对话面板（点击主消息流的子智能体行打开，仅浏览不可交互）。
+         外壳承载宽度动画（0↔最终宽）：聊天区随抽屉展开/收缩平滑推移，面板本体定宽不回流 -->
+    <Transition name="subagent-drawer">
+      <div v-if="subagentTranscript" class="subagent-drawer">
+        <SubagentPanel
+          :transcript="subagentTranscript"
+          @close="subagentPanelTarget = null"
+        />
+      </div>
+    </Transition>
+
     <AuthModal v-model:visible="authModalVisible" @success="handleAuthSuccess" />
 
     <a-modal
@@ -78,7 +90,7 @@
       @ok="handleDeleteConfirm"
       @cancel="deleteModalVisible = false"
     >
-      <p style="color: #666;">确定要删除该对话吗？删除后将无法恢复。</p>
+      <p style="color: #6e6b62;">确定要删除该对话吗？删除后将无法恢复。</p>
     </a-modal>
   </div>
 </template>
@@ -89,17 +101,19 @@ import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getAgentById } from '@/api/agent'
 import { useUserStore } from '@/store/user'
-import type { Agent, AttachmentItem, ChatMessage, MessageBlock, PendingAttachment } from '@/types'
+import type { Agent, AttachmentItem, ChatMessage, MessageBlock, PendingAttachment, SubagentPanelTarget } from '@/types'
 import { isImageName } from './attachmentUtils'
 import AuthModal from '@/components/AuthModal.vue'
 import ChatSidebar from './components/ChatSidebar.vue'
 import ChatMessageList from './components/ChatMessageList.vue'
 import ChatInput from './components/ChatInput.vue'
 import ChatPlanPanel from './components/ChatPlanPanel.vue'
+import SubagentPanel from './components/SubagentPanel.vue'
 import { useChatSessions } from './composables/useChatSessions'
 import { useChatMessages, generateConversationId } from './composables/useChatMessages'
 import { useChatStream } from './composables/useChatStream'
 import { usePendingCardAnimations } from './composables/usePendingCardAnimations'
+import { buildSubagentTranscript } from './subagentTranscript'
 import { truncateConversation, getReasoningEfforts, uploadAttachment, deleteAttachment } from '@/api/chat'
 import { getBotMessages } from '@/api/botMessages'
 
@@ -220,6 +234,38 @@ const activePlan = computed(() => {
   }
   return null
 })
+
+// ---------- 子智能体只读面板 ----------
+// 打开键持久指向某条消息的某个 Agent 块；内容随消息块流实时重建（流式期间面板同步更新）
+const subagentPanelTarget = ref<SubagentPanelTarget | null>(null)
+
+/** 按版本号取该消息显示的内容块（与消息列表的版本切换语义一致） */
+function blocksAtVersion(msg: ChatMessage, version: number): MessageBlock[] | undefined {
+  const total = (msg.history?.length ?? 0) + 1
+  if (version >= total || !msg.history?.length) return msg.blocks
+  return msg.history[version - 1]?.blocks
+}
+
+const subagentTranscript = computed(() => {
+  const target = subagentPanelTarget.value
+  if (!target) return null
+  const msg = messages.value.find(m => m.id === target.messageId)
+  const blocks = msg ? blocksAtVersion(msg, target.version) : undefined
+  if (!blocks?.length) return null
+  const idx = target.blockKey.startsWith('id:')
+    ? blocks.findIndex(b => b.type === 'tool' && b.id === target.blockKey.slice(3))
+    : Number(target.blockKey.slice(4))
+  if (!Number.isInteger(idx) || idx < 0 || idx >= blocks.length) return null
+  return buildSubagentTranscript(blocks, idx)
+})
+
+// 会话切换即收起面板（面板内容属于当前会话的消息块）
+watch(
+  () => messagesApi.currentChatId.value,
+  () => {
+    subagentPanelTarget.value = null
+  }
+)
 
 watch(
   () => route.params.agentId,
@@ -678,7 +724,7 @@ onBeforeUnmount(() => {
 .chat-layout {
   display: flex;
   height: 100vh;
-  background: #f5f7fa;
+  background: #f0eee6;
 }
 
 .main-container {
@@ -686,7 +732,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #fff;
+  background: $bg-ivory;
 }
 
 .chat-header {
@@ -698,18 +744,18 @@ onBeforeUnmount(() => {
   justify-content: center;
   gap: 8px;
   padding: 0 24px;
-  border-bottom: 1px solid #e8eaed;
+  border-bottom: 1px solid #e8e6dc;
 
   .chat-title {
     font-size: 16px;
     font-weight: 600;
-    color: #1d2129;
+    color: #141413;
     margin: 0;
   }
 
   .chat-subtitle {
     font-size: 12px;
-    color: #86909c;
+    color: #8c8a82;
   }
 }
 
@@ -719,5 +765,36 @@ onBeforeUnmount(() => {
   flex-direction: column;
   overflow: hidden;
   position: relative;
+}
+
+// 子智能体面板外壳：宽度驱动的抽屉（0↔最终宽）。聊天区随宽度变化逐帧推移，
+// 面板本体保持定宽由外壳裁切，内容不回流；无 transform，入场/退场结束时聊天区
+// 已处于最终位置，不会出现动画结束后突然回跳
+.subagent-drawer {
+  flex-shrink: 0;
+  width: clamp(360px, 36vw, 560px);
+  height: 100vh;
+  overflow: hidden;
+  background: $bg-ivory;
+  border-left: 1px solid $border-warm-subtle;
+  box-shadow: -8px 0 24px rgba(20, 20, 19, 0.04);
+}
+
+.subagent-drawer-enter-active,
+.subagent-drawer-leave-active {
+  transition: width 0.26s cubic-bezier(0.32, 0.72, 0.35, 1), border-left-width 0.26s;
+  will-change: width;
+}
+
+// enter-from 必须是 width:0（起始态）；leave-from 不能设宽度（须等于当前 560，
+// 否则离场首帧吸附到 0、过渡变成 0→0 退化为瞬隐），离场只由 leave-to 收到 0
+.subagent-drawer-enter-from {
+  width: 0;
+  border-left-width: 0;
+}
+
+.subagent-drawer-leave-to {
+  width: 0;
+  border-left-width: 0;
 }
 </style>

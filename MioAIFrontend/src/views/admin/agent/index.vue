@@ -366,7 +366,7 @@ function statusText(status: number): string {
 }
 
 function statusColor(status: number): string {
-  return { 0: '#9ca3af', 1: '#2aa1a9', 2: '#ef4444' }[status] || '#9ca3af'
+  return { 0: '#a5a29a', 1: '#2aa1a9', 2: '#c0453a' }[status] || '#a5a29a'
 }
 
 function formatDate(dateStr: string) {
@@ -395,8 +395,8 @@ onMounted(() => {
       align-items: center;
       gap: 16px;
       padding: 20px 24px;
-      background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-      border: 1px solid #e2e8f0;
+      background: linear-gradient(180deg, #ffffff 0%, #f5f3ec 100%);
+      border: 1px solid #e0ddd2;
       border-radius: 12px;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04), inset 0 1px 0 #ffffff;
 
@@ -414,18 +414,18 @@ onMounted(() => {
       &.total .stat-icon { background: linear-gradient(135deg, #2aa1a9, #1d7a80); }
       &.published .stat-icon { background: linear-gradient(135deg, #10b981, #059669); }
       &.draft .stat-icon { background: linear-gradient(135deg, #f59e0b, #d97706); }
-      &.disabled .stat-icon { background: linear-gradient(135deg, #ef4444, #dc2626); }
+      &.disabled .stat-icon { background: linear-gradient(135deg, #c0453a, #a83a30); }
 
       .stat-info {
         .stat-value {
           font-size: 24px;
           font-weight: 700;
-          color: #1f2937;
+          color: #141413;
           line-height: 1.2;
         }
         .stat-label {
           font-size: 13px;
-          color: #6b7280;
+          color: #6e6b62;
           margin-top: 2px;
         }
       }
@@ -449,7 +449,7 @@ onMounted(() => {
 
     .agent-card {
       background: #ffffff;
-      border: 1px solid #e8eaed;
+      border: 1px solid #e8e6dc;
       border-radius: 12px;
       padding: 20px;
       transition: all 0.25s ease;
@@ -468,7 +468,7 @@ onMounted(() => {
         margin-bottom: 12px;
 
         .agent-avatar {
-          border: 2px solid #f3f4f6;
+          border: 2px solid #f0ede4;
           flex-shrink: 0;
         }
 
@@ -479,7 +479,7 @@ onMounted(() => {
           .agent-name {
             font-size: 16px;
             font-weight: 600;
-            color: #1f2937;
+            color: #141413;
             margin-bottom: 4px;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -499,7 +499,7 @@ onMounted(() => {
 
             .usage-count {
               font-size: 12px;
-              color: #9ca3af;
+              color: #a5a29a;
             }
           }
         }
@@ -507,7 +507,7 @@ onMounted(() => {
 
       .card-desc {
         font-size: 13px;
-        color: #6b7280;
+        color: #6e6b62;
         line-height: 1.5;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -526,13 +526,13 @@ onMounted(() => {
           align-items: center;
           justify-content: space-between;
           padding: 8px 12px;
-          background: #f8fafc;
+          background: #f5f3ec;
           border-radius: 8px;
           cursor: pointer;
           transition: background 0.2s;
 
           &:hover {
-            background: #f0fdfd;
+            background: #f2f8f8;
           }
 
           .collapse-text {
@@ -540,11 +540,11 @@ onMounted(() => {
             align-items: center;
             gap: 6px;
             font-size: 13px;
-            color: #4b5563;
+            color: #5f5d55;
             font-weight: 500;
 
             .resource-summary {
-              color: #9ca3af;
+              color: #a5a29a;
               font-size: 12px;
               margin-left: 4px;
             }
@@ -552,7 +552,7 @@ onMounted(() => {
 
           .collapse-arrow {
             font-size: 12px;
-            color: #9ca3af;
+            color: #a5a29a;
             transition: transform 0.2s;
 
             &.rotated {
@@ -563,7 +563,7 @@ onMounted(() => {
 
         .collapse-content {
           padding: 12px;
-          background: #fafbfc;
+          background: #f5f3ec;
           border-radius: 8px;
           margin-top: 4px;
 
@@ -580,7 +580,7 @@ onMounted(() => {
               gap: 6px;
               font-size: 12px;
               font-weight: 600;
-              color: #4b5563;
+              color: #5f5d55;
               margin-bottom: 8px;
             }
 
@@ -596,7 +596,7 @@ onMounted(() => {
                 padding: 8px;
                 background: #fff;
                 border-radius: 6px;
-                border: 1px solid #f0f0f0;
+                border: 1px solid #ece9de;
 
                 .resource-icon {
                   color: #2aa1a9;
@@ -612,7 +612,7 @@ onMounted(() => {
                     display: block;
                     font-size: 13px;
                     font-weight: 500;
-                    color: #1f2937;
+                    color: #141413;
                     overflow: hidden;
                     text-overflow: ellipsis;
                     white-space: nowrap;
@@ -621,7 +621,7 @@ onMounted(() => {
                   .resource-desc {
                     display: block;
                     font-size: 12px;
-                    color: #9ca3af;
+                    color: #a5a29a;
                     overflow: hidden;
                     text-overflow: ellipsis;
                     white-space: nowrap;
@@ -639,7 +639,7 @@ onMounted(() => {
 
             .empty-resource {
               font-size: 12px;
-              color: #9ca3af;
+              color: #a5a29a;
               text-align: center;
               padding: 8px 0;
             }
@@ -652,11 +652,11 @@ onMounted(() => {
         align-items: center;
         justify-content: space-between;
         padding-top: 12px;
-        border-top: 1px solid #f3f4f6;
+        border-top: 1px solid #f0ede4;
 
         .create-time {
           font-size: 12px;
-          color: #9ca3af;
+          color: #a5a29a;
         }
 
         .card-actions {
@@ -682,7 +682,7 @@ onMounted(() => {
 }
 
 .disabled-tip {
-  color: #9ca3af;
+  color: #a5a29a;
   font-size: 12px;
   margin-left: 4px;
 }
