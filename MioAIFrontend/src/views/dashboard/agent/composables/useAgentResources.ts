@@ -2,10 +2,12 @@ import { ref, type Ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { addAgentKnowledge, removeAgentKnowledgeByKbId } from '@/api/agentKnowledge'
 import { addAgentMcp, removeAgentMcpByMcpId } from '@/api/agentMcp'
+import { addAgentSkill, removeAgentSkillBySkillId } from '@/api/agentSkill'
 import { getPublicKnowledgeBases, queryKnowledgeBases, queryDocuments, type Document } from '@/api/knowledgeBase'
 import { getPublicMcpTools, queryMcpTools } from '@/api/mcpTool'
+import { getPublicSkills, querySkills } from '@/api/skill'
 import { parseMcpTools } from '@/utils/mcpTool'
-import type { AgentDetail, KnowledgeBase, McpTool } from '@/types'
+import type { AgentDetail, KnowledgeBase, McpTool, Skill } from '@/types'
 
 /** 展开列表的作用域：主列表/抽屉各自缓存一份文档数据 */
 export type DocScope = 'main' | 'drawer'
@@ -14,15 +16,20 @@ export type DocScope = 'main' | 'drawer'
 export function useAgentResources(agentId: number, agentDetail: Ref<AgentDetail | null>, reloadDetail: () => Promise<void>) {
   const knowledgeDrawerVisible = ref(false)
   const mcpDrawerVisible = ref(false)
+  const skillDrawerVisible = ref(false)
   const addKnowledgeLoading = ref(false)
   const addMcpLoading = ref(false)
+  const addSkillLoading = ref(false)
 
   const publicKnowledgeBases = ref<KnowledgeBase[]>([])
   const customKnowledgeBases = ref<KnowledgeBase[]>([])
   const publicMcpTools = ref<McpTool[]>([])
   const customMcpTools = ref<McpTool[]>([])
+  const publicSkills = ref<Skill[]>([])
+  const customSkills = ref<Skill[]>([])
   const selectedKnowledgeIds = ref<number[]>([])
   const selectedMcpIds = ref<number[]>([])
+  const selectedSkillIds = ref<number[]>([])
   const knowledgeDocuments = ref<Map<number, Document[]>>(new Map())
   const drawerKnowledgeDocuments = ref<Map<number, Document[]>>(new Map())
 
@@ -32,6 +39,10 @@ export function useAgentResources(agentId: number, agentDetail: Ref<AgentDetail 
 
   function isMcpAlreadyAdded(mcpId: number): boolean {
     return agentDetail.value?.mcpTools?.some(mcp => mcp.id === mcpId) || false
+  }
+
+  function isSkillAlreadyAdded(skillId: number): boolean {
+    return agentDetail.value?.skills?.some(skill => skill.id === skillId) || false
   }
 
   function toggleId(ids: Ref<number[]>, id: number): void {
@@ -45,6 +56,7 @@ export function useAgentResources(agentId: number, agentDetail: Ref<AgentDetail 
 
   const toggleKnowledgeSelection = (id: number) => toggleId(selectedKnowledgeIds, id)
   const toggleMcpSelection = (id: number) => toggleId(selectedMcpIds, id)
+  const toggleSkillSelection = (id: number) => toggleId(selectedSkillIds, id)
 
   async function fetchKnowledgeBases(): Promise<void> {
     try {
@@ -67,6 +79,19 @@ export function useAgentResources(agentId: number, agentDetail: Ref<AgentDetail 
       ])
       publicMcpTools.value = publicRes.records || []
       customMcpTools.value = customRes.records || []
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  async function fetchSkills(): Promise<void> {
+    try {
+      const [publicRes, customRes] = await Promise.all([
+        getPublicSkills({ current: 1, size: 100 }),
+        querySkills({ current: 1, pageSize: 100 })
+      ])
+      publicSkills.value = publicRes.records || []
+      customSkills.value = customRes.records || []
     } catch (e) {
       console.error(e)
     }
@@ -102,6 +127,12 @@ export function useAgentResources(agentId: number, agentDetail: Ref<AgentDetail 
     mcpDrawerVisible.value = true
     selectedMcpIds.value = []
     await fetchMcpTools()
+  }
+
+  async function showSkillDrawer(): Promise<void> {
+    skillDrawerVisible.value = true
+    selectedSkillIds.value = []
+    await fetchSkills()
   }
 
   async function handleAddKnowledge(): Promise<void> {
@@ -170,29 +201,71 @@ export function useAgentResources(agentId: number, agentDetail: Ref<AgentDetail 
     }
   }
 
+  async function handleAddSkill(): Promise<void> {
+    if (selectedSkillIds.value.length === 0) {
+      message.warning('请选择要添加的技能')
+      return
+    }
+    addSkillLoading.value = true
+    try {
+      await Promise.all(
+        selectedSkillIds.value.map(skillId => addAgentSkill({ agentId, skillId, enabled: 1 }))
+      )
+      message.success('添加成功')
+      skillDrawerVisible.value = false
+      reloadDetail()
+    } catch (e) {
+      console.error(e)
+      message.error('添加失败')
+    } finally {
+      addSkillLoading.value = false
+    }
+  }
+
+  async function handleRemoveSkill(skillId: number): Promise<void> {
+    try {
+      await removeAgentSkillBySkillId(agentId, skillId)
+      message.success('移除成功')
+      reloadDetail()
+    } catch (e) {
+      console.error(e)
+      message.error('移除失败')
+    }
+  }
+
   return {
     knowledgeDrawerVisible,
     mcpDrawerVisible,
+    skillDrawerVisible,
     addKnowledgeLoading,
     addMcpLoading,
+    addSkillLoading,
     publicKnowledgeBases,
     customKnowledgeBases,
     publicMcpTools,
     customMcpTools,
+    publicSkills,
+    customSkills,
     selectedKnowledgeIds,
     selectedMcpIds,
+    selectedSkillIds,
     isKnowledgeAlreadyAdded,
     isMcpAlreadyAdded,
+    isSkillAlreadyAdded,
     toggleKnowledgeSelection,
     toggleMcpSelection,
+    toggleSkillSelection,
     fetchKnowledgeDocuments,
     getDocuments,
     getTools,
     showKnowledgeDrawer,
     showMcpDrawer,
+    showSkillDrawer,
     handleAddKnowledge,
     handleRemoveKnowledge,
     handleAddMcp,
-    handleRemoveMcp
+    handleRemoveMcp,
+    handleAddSkill,
+    handleRemoveSkill
   }
 }

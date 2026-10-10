@@ -7,6 +7,7 @@ import {
   ToolOutlined,
   GlobalOutlined,
   DatabaseOutlined,
+  ThunderboltOutlined,
   BarChartOutlined
 } from '@ant-design/icons-vue'
 
@@ -43,6 +44,12 @@ const menuGroups: MenuGroup[] = [
     items: [
       { key: 'public-knowledge', label: '公共知识库', icon: GlobalOutlined, path: '/dashboard/public-knowledge' },
       { key: 'knowledge', label: '我的知识库', icon: DatabaseOutlined, path: '/dashboard/knowledge' }
+    ]
+  },
+  {
+    title: '技能',
+    items: [
+      { key: 'skill', label: '我的技能', icon: ThunderboltOutlined, path: '/dashboard/skill' }
     ]
   },
   {

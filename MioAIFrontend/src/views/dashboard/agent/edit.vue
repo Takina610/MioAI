@@ -82,6 +82,30 @@
                 </ResourceItem>
               </div>
             </div>
+
+            <a-divider style="margin: 12px 0" />
+
+            <div class="resource-section">
+              <div class="resource-header">
+                <span class="resource-title">技能</span>
+                <a-button type="link" size="small" @click="showSkillDrawer">
+                  <PlusOutlined /> 添加
+                </a-button>
+              </div>
+              <div class="resource-list" v-if="agentDetail?.skills?.length">
+                <ResourceItem
+                  v-for="skill in agentDetail.skills"
+                  :key="skill.id"
+                  :icon="ThunderboltOutlined"
+                  :name="skill.name"
+                  :description="skill.description"
+                  :count="(skill.files?.length || 0) + 1"
+                  :count-icon="FileTextOutlined"
+                  removable
+                  @remove="handleRemoveSkill(skill.id)"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -183,6 +207,33 @@
       </template>
     </ResourceSelectDrawer>
 
+    <ResourceSelectDrawer
+      v-model:open="skillDrawerVisible"
+      title="添加技能"
+      create-label="创建技能"
+      :tabs="skillTabs"
+      :selected-count="selectedSkillIds.length"
+      :confirm-loading="addSkillLoading"
+      @create="router.push('/dashboard/skill')"
+      @confirm="handleAddSkill"
+    >
+      <template #default="{ item: skill }">
+        <ResourceItem
+          selectable
+          :already-added="isSkillAlreadyAdded(skill.id)"
+          :removable="isSkillAlreadyAdded(skill.id)"
+          :selected="selectedSkillIds.includes(skill.id)"
+          :icon="ThunderboltOutlined"
+          :name="skill.name"
+          :description="skill.description"
+          :count="(skill.files?.length || 0) + 1"
+          :count-icon="FileTextOutlined"
+          @select="toggleSkillSelection(skill.id)"
+          @remove="handleRemoveSkill(skill.id)"
+        />
+      </template>
+    </ResourceSelectDrawer>
+
     <AgentCreateModal
       v-model:visible="editModalVisible"
       mode="edit"
@@ -200,7 +251,8 @@ import {
   PlusOutlined,
   BookOutlined,
   ToolOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  ThunderboltOutlined
 } from '@ant-design/icons-vue'
 import AgentCreateModal from '@/components/AgentCreateModal.vue'
 import { countMcpTools } from '@/utils/mcpTool'
@@ -220,27 +272,37 @@ const { loading, publishLoading, agentDetail, formData, fetchAgentDetail, handle
 const {
   knowledgeDrawerVisible,
   mcpDrawerVisible,
+  skillDrawerVisible,
   addKnowledgeLoading,
   addMcpLoading,
+  addSkillLoading,
   publicKnowledgeBases,
   customKnowledgeBases,
   publicMcpTools,
   customMcpTools,
+  publicSkills,
+  customSkills,
   selectedKnowledgeIds,
   selectedMcpIds,
+  selectedSkillIds,
   isKnowledgeAlreadyAdded,
   isMcpAlreadyAdded,
+  isSkillAlreadyAdded,
   toggleKnowledgeSelection,
   toggleMcpSelection,
+  toggleSkillSelection,
   fetchKnowledgeDocuments,
   getDocuments,
   getTools,
   showKnowledgeDrawer,
   showMcpDrawer,
+  showSkillDrawer,
   handleAddKnowledge,
   handleRemoveKnowledge,
   handleAddMcp,
-  handleRemoveMcp
+  handleRemoveMcp,
+  handleAddSkill,
+  handleRemoveSkill
 } = useAgentResources(agentId, agentDetail, fetchAgentDetail)
 
 const knowledgeTabs = computed(() => [
@@ -251,6 +313,11 @@ const knowledgeTabs = computed(() => [
 const mcpTabs = computed(() => [
   { key: 'public', label: 'MCP广场', items: publicMcpTools.value },
   { key: 'custom', label: '自定义MCP', items: customMcpTools.value }
+])
+
+const skillTabs = computed(() => [
+  { key: 'public', label: '公开技能', items: publicSkills.value },
+  { key: 'custom', label: '我的技能', items: customSkills.value }
 ])
 
 function handleEditSuccess(): void {

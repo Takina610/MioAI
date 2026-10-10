@@ -5,10 +5,12 @@ import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.resource.model.entity.Agent;
 import com.mio.ai.resource.model.entity.KnowledgeBase;
 import com.mio.ai.resource.model.entity.McpTool;
+import com.mio.ai.resource.model.entity.Skill;
 import com.mio.ai.resource.model.enums.AgentStatusEnum;
 import com.mio.ai.resource.service.agent.AgentService;
 import com.mio.ai.resource.service.knowledge.KnowledgeBaseService;
 import com.mio.ai.resource.service.mcp.McpToolService;
+import com.mio.ai.resource.service.skill.SkillService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
@@ -34,6 +36,9 @@ public class AccessGuardService {
 
     @Resource
     private McpToolService mcpToolService;
+
+    @Resource
+    private SkillService skillService;
 
     /**
      * 校验用户对智能体的写权限（编辑/删除/绑定关系变更）
@@ -137,6 +142,35 @@ public class AccessGuardService {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限操作该MCP工具");
         }
         return mcpTool;
+    }
+
+    /**
+     * 校验用户能否读取技能（所有者，或公开技能）
+     */
+    public Skill checkSkillReadable(Long skillId, Long userId) {
+        Skill skill = skillService.getById(skillId);
+        if (skill == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "技能不存在");
+        }
+        boolean owner = userId != null && skill.getUserId() != null && skill.getUserId().equals(userId);
+        if (!owner && !Integer.valueOf(1).equals(skill.getIsPublic())) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限访问该技能");
+        }
+        return skill;
+    }
+
+    /**
+     * 校验用户对技能的写权限
+     */
+    public Skill checkSkillOwner(Long skillId, Long userId) {
+        Skill skill = skillService.getById(skillId);
+        if (skill == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "技能不存在");
+        }
+        if (userId == null || skill.getUserId() == null || !skill.getUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限操作该技能");
+        }
+        return skill;
     }
 
     private KnowledgeBase getKb(Long kbId) {

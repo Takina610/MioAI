@@ -3,7 +3,9 @@ package com.mio.ai.bot.agent;
 import com.mio.ai.bot.model.dto.AttachmentItem;
 import com.mio.ai.bot.model.entity.AgentMessageDO;
 import com.mio.ai.bot.service.AgentMessageService;
+import com.mio.ai.bot.service.SkillRuntime;
 import com.mio.ai.bot.util.SseStreams;
+import com.mio.ai.resource.model.entity.Skill;
 import com.mio.ai.framework.sandbox.SandboxFileTransfer;
 import com.mio.ai.framework.zagent.AgentEngine;
 import com.mio.ai.framework.zagent.AgentEngineConfig;
@@ -57,6 +59,7 @@ public class MioBot {
     private final ChatModel chatModel;
     private final ToolsetFactory toolsetFactory;
     private final List<ToolCallback> mcpTools;
+    private final List<Skill> skills;
     private final AgentUsageLogService agentUsageLogService;
     private final ToolCallLogService toolCallLogService;
     private final AgentMessageService agentMessageService;
@@ -95,6 +98,7 @@ public class MioBot {
     public MioBot(ChatModel chatModel,
                   ToolsetFactory toolsetFactory,
                   List<ToolCallback> mcpTools,
+                  List<Skill> skills,
                   AgentUsageLogService agentUsageLogService,
                   ToolCallLogService toolCallLogService,
                   AgentMessageService agentMessageService,
@@ -110,6 +114,7 @@ public class MioBot {
         this.chatModel = chatModel;
         this.toolsetFactory = toolsetFactory;
         this.mcpTools = mcpTools;
+        this.skills = skills == null ? List.of() : skills;
         this.agentUsageLogService = agentUsageLogService;
         this.toolCallLogService = toolCallLogService;
         this.agentMessageService = agentMessageService;
@@ -154,11 +159,14 @@ public class MioBot {
                 state.setTodos(hydrated.todos());
 
                 BotAgentEvents events = new BotAgentEvents(state);
+                // 技能物化到沙箱 skills/ 目录，并生成注入上下文的技能清单段（无技能/沙箱不可用时为 null）
+                SandboxFs fs = toolsetFactory.sandboxFs();
+                String skillsContext = SkillRuntime.materialize(skills, fs);
                 ToolsetFactory.RunContext runContext = new ToolsetFactory.RunContext(
-                        chatId, toolsetFactory.sandboxFs(), mcpTools,
+                        chatId, fs, mcpTools,
                         com.mio.ai.framework.zagent.task.BackgroundTasks.instance());
                 ContextBuilder contextBuilder = new ContextBuilder(
-                        customSystemPrompt, knowledgeContext, runContext.fs(), modelName);
+                        customSystemPrompt, knowledgeContext, skillsContext, runContext.fs(), modelName);
                 AgentEngine engine = new AgentEngine(chatModel, config, reasoningEffort, contextBuilder,
                         state, chatId, events, runContext.tasks());
 

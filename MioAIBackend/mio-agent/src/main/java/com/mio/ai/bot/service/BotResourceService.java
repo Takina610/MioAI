@@ -3,10 +3,13 @@ package com.mio.ai.bot.service;
 import com.mio.ai.bot.agent.MioBot;
 import com.mio.ai.common.utils.JacksonUtil;
 import com.mio.ai.framework.rag.KnowledgeRetrievalResult;
+import com.mio.ai.framework.rag.RetrievalConfig;
 import com.mio.ai.resource.model.entity.RagRetrievalLog;
+import com.mio.ai.resource.model.entity.Skill;
 import com.mio.ai.resource.service.knowledge.KnowledgeRetrievalService;
 import com.mio.ai.resource.service.log.RagRetrievalLogService;
 import com.mio.ai.resource.service.mcp.McpClientManagerService;
+import com.mio.ai.resource.service.skill.SkillService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Service;
@@ -17,8 +20,8 @@ import java.util.Map;
 
 /**
  * MioBot 引擎的动态资源装配。
- * <p>MioBot（内置智能体）是全站共享的：工具池 = 公开 MCP，检索范围 = 公开知识库；
- * 自定义智能体则按其绑定（agent_mcp / agent_knowledge）装配各自的工具池与检索范围。
+ * <p>MioBot（内置智能体）是全站共享的：工具池 = 公开 MCP，检索范围 = 公开知识库，技能 = 空；
+ * 自定义智能体则按其绑定（agent_mcp / agent_knowledge / agent_skill）装配各自的资源。
  */
 @Slf4j
 @Service
@@ -37,13 +40,16 @@ public class BotResourceService {
     private final McpClientManagerService mcpClientManagerService;
     private final KnowledgeRetrievalService knowledgeRetrievalService;
     private final RagRetrievalLogService ragRetrievalLogService;
+    private final SkillService skillService;
 
     public BotResourceService(McpClientManagerService mcpClientManagerService,
                               KnowledgeRetrievalService knowledgeRetrievalService,
-                              RagRetrievalLogService ragRetrievalLogService) {
+                              RagRetrievalLogService ragRetrievalLogService,
+                              SkillService skillService) {
         this.mcpClientManagerService = mcpClientManagerService;
         this.knowledgeRetrievalService = knowledgeRetrievalService;
         this.ragRetrievalLogService = ragRetrievalLogService;
+        this.skillService = skillService;
     }
 
     /**
@@ -71,6 +77,22 @@ public class BotResourceService {
         } catch (Exception e) {
             log.error("装配 MCP 工具失败，本轮仅使用内置工具, agentId={}", agentId, e);
             return McpAssembly.empty();
+        }
+    }
+
+    /**
+     * 装配智能体的技能：内置智能体不绑技能，自定义智能体按 agent_skill（enabled=1）取正常状态技能。
+     * 失败降级为空列表，不阻断对话。
+     */
+    public List<Skill> assembleSkills(Long agentId) {
+        if (agentId == null || agentId == MioBot.AGENT_ID) {
+            return List.of();
+        }
+        try {
+            return skillService.getEnabledSkillsForAgent(agentId);
+        } catch (Exception e) {
+            log.error("装配技能失败，本轮不注入技能, agentId={}", agentId, e);
+            return List.of();
         }
     }
 
@@ -117,7 +139,7 @@ public class BotResourceService {
             retrievalLog.setQuery(query);
             retrievalLog.setRetrievedChunks(JacksonUtil.writeValueAsString(chunks));
             retrievalLog.setTopK(results.size());
-            retrievalLog.setScoreThreshold(0.4f);
+            retrievalLog.setScoreThreshold((float) RetrievalConfig.DEFAULT_THRESHOLD);
             retrievalLog.setResponseTime((int) (System.currentTimeMillis() - startTime));
             retrievalLog.setCreateTime(new Date());
             ragRetrievalLogService.logRetrieval(retrievalLog);

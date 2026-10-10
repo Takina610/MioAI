@@ -23,12 +23,19 @@ public final class ContextBuilder {
 
     private final String customSystemPrompt;
     private final String knowledgeContext;
+    private final String skillsContext;
     private final SandboxFs fs;
     private final String modelName;
 
     public ContextBuilder(String customSystemPrompt, String knowledgeContext, SandboxFs fs, String modelName) {
+        this(customSystemPrompt, knowledgeContext, null, fs, modelName);
+    }
+
+    public ContextBuilder(String customSystemPrompt, String knowledgeContext, String skillsContext,
+                          SandboxFs fs, String modelName) {
         this.customSystemPrompt = customSystemPrompt;
         this.knowledgeContext = knowledgeContext;
+        this.skillsContext = skillsContext;
         this.fs = fs;
         this.modelName = modelName;
     }
@@ -50,6 +57,9 @@ public final class ContextBuilder {
         }
         if (knowledgeContext != null && !knowledgeContext.isBlank()) {
             attachments.add(knowledgeContext);
+        }
+        if (skillsContext != null && !skillsContext.isBlank()) {
+            attachments.add(skillsContext);
         }
         return new Built(systemMessages, attachments);
     }

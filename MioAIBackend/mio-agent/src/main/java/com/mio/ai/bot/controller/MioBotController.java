@@ -16,6 +16,7 @@ import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.utils.JacksonUtil;
 import com.mio.ai.common.utils.ResultUtils;
 import com.mio.ai.resource.model.entity.Agent;
+import com.mio.ai.resource.model.entity.Skill;
 import com.mio.ai.resource.service.log.AgentUsageLogService;
 import com.mio.ai.resource.service.log.ToolCallLogService;
 import com.mio.ai.resource.service.security.AccessGuardService;
@@ -162,12 +163,13 @@ public class MioBotController {
 
         BotResourceService.McpAssembly mcp = botResourceService.assembleMcpTools(resolvedAgentId);
         String knowledgeContext = botResourceService.buildKnowledgeContext(resolvedAgentId, userId, content);
+        List<Skill> skills = botResourceService.assembleSkills(resolvedAgentId);
 
         String effort = reasoningEffort != null && REASONING_EFFORTS.contains(reasoningEffort)
                 ? reasoningEffort : null;
         var engineConfig = new com.mio.ai.framework.zagent.AgentEngineConfig(
                 agentMaxSteps, agentStreamTimeoutSeconds, agentModelRetries, agentContextWindowTokens);
-        MioBot mioBot = new MioBot(chatModel, toolsetFactory, List.of(mcp.callbacks()),
+        MioBot mioBot = new MioBot(chatModel, toolsetFactory, List.of(mcp.callbacks()), skills,
                 agentUsageLogService, toolCallLogService, agentMessageService,
                 chatId, userId, resolvedAgentId, customSystemPrompt, engineModelName, effort, engineConfig,
                 fileTransfer, com.mio.ai.bot.model.dto.AttachmentItem.parseList(attachments));

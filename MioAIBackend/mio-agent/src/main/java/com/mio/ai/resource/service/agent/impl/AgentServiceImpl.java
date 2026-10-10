@@ -1,6 +1,7 @@
 package com.mio.ai.resource.service.agent.impl;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.bean.copier.CopyOptions;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.StringUtils;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -30,6 +31,8 @@ import com.mio.ai.resource.model.vo.agent.AgentDetailVO;
 import com.mio.ai.resource.model.vo.agent.AgentVO;
 import com.mio.ai.resource.model.vo.knowledge.KnowledgeBaseVO;
 import com.mio.ai.resource.model.vo.mcp.McpToolVO;
+import com.mio.ai.resource.model.vo.skill.SkillVO;
+import com.mio.ai.resource.service.skill.SkillService;
 import com.mio.ai.resource.service.agent.AgentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -39,6 +42,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import com.mio.ai.resource.model.entity.Skill;
 import java.util.Objects;
 
 /**
@@ -63,6 +67,10 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
 
     @Autowired
     private McpToolMapper mcpToolMapper;
+
+    @Autowired
+    @org.springframework.context.annotation.Lazy
+    private SkillService skillService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -219,8 +227,21 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
 
         vo.setKnowledgeBases(getKnowledgeBasesByAgentId(id));
         vo.setMcpTools(getMcpToolsByAgentId(id));
+        vo.setSkills(getSkillsByAgentId(id));
 
         return vo;
+    }
+
+    private List<SkillVO> getSkillsByAgentId(Long agentId) {
+        List<Skill> skills = skillService.getEnabledSkillsForAgent(agentId);
+        List<SkillVO> voList = new ArrayList<>();
+        for (Skill skill : skills) {
+            SkillVO vo = new SkillVO();
+            // files 实体侧是 JSON 字符串、VO 侧是列表，BeanUtil 强转会炸，忽略转换错误
+            BeanUtil.copyProperties(skill, vo, CopyOptions.create().setIgnoreError(true));
+            voList.add(vo);
+        }
+        return voList;
     }
 
     private List<KnowledgeBaseVO> getKnowledgeBasesByAgentId(Long agentId) {

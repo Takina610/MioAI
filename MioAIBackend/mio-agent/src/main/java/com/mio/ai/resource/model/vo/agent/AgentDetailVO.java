@@ -49,4 +49,6 @@ public class AgentDetailVO implements Serializable {
     private List<KnowledgeBaseVO> knowledgeBases;
 
     private List<McpToolVO> mcpTools;
+
+    private List<com.mio.ai.resource.model.vo.skill.SkillVO> skills;
 }

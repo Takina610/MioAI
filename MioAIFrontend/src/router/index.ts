@@ -125,6 +125,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '命中测试', requiresAuth: false }
       },
       {
+        path: 'skill',
+        name: 'SkillManage',
+        component: () => import('@/views/dashboard/skill/manage.vue'),
+        meta: { title: '技能管理', requiresAuth: false }
+      },
+      {
         path: 'usage',
         name: 'Usage',
         component: () => import('@/views/dashboard/usage/index.vue'),
@@ -167,6 +173,12 @@ const routes: RouteRecordRaw[] = [
         name: 'AdminKnowledge',
         component: () => import('@/views/admin/knowledge/index.vue'),
         meta: { title: '知识库管理', requiresAuth: true, requiresAdmin: true }
+      },
+      {
+        path: 'skill',
+        name: 'AdminSkill',
+        component: () => import('@/views/admin/skill/index.vue'),
+        meta: { title: '技能管理', requiresAuth: true, requiresAdmin: true }
       },
       {
         path: 'usage',

@@ -35,6 +35,7 @@ const pageTitleMap: Record<string, string> = {
   '/admin/agent': '智能体管理',
   '/admin/mcp': 'MCP 管理',
   '/admin/knowledge': '知识库管理',
+  '/admin/skill': '技能管理',
   '/admin/usage': '使用记录管理'
 }
 
