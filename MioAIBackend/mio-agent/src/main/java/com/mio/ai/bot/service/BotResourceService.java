@@ -47,18 +47,30 @@ public class BotResourceService {
     }
 
     /**
-     * 获取智能体的 MCP 工具回调；初始化失败时返回空数组（智能体仍可用内置工具工作）
+     * MCP 装配结果：可用回调 + 逐工具失败摘要（空摘要 = 全部可用）
      */
-    public ToolCallback[] getMcpToolCallbacks(Long agentId) {
+    public record McpAssembly(ToolCallback[] callbacks, List<String> failures) {
+        public static McpAssembly empty() {
+            return new McpAssembly(new ToolCallback[0], List.of());
+        }
+    }
+
+    /**
+     * 装配智能体的 MCP 工具；单个工具失败不阻断其余工具，失败原因随结果返回供会话内提示
+     */
+    public McpAssembly assembleMcpTools(Long agentId) {
         try {
+            McpClientManagerService.McpInitResult result;
             if (agentId == null || agentId == MioBot.AGENT_ID) {
-                return mcpClientManagerService.getPublicMcpToolCallbacks();
+                result = mcpClientManagerService.getPublicMcpToolsDetailed();
+            } else {
+                result = mcpClientManagerService.initMcpToolsDetailed(
+                        mcpClientManagerService.getAgentMcpTools(agentId));
             }
-            return mcpClientManagerService.initMcpToolCallbacks(
-                    mcpClientManagerService.getAgentMcpTools(agentId));
+            return new McpAssembly(result.callbacks(), result.failures());
         } catch (Exception e) {
             log.error("装配 MCP 工具失败，本轮仅使用内置工具, agentId={}", agentId, e);
-            return new ToolCallback[0];
+            return McpAssembly.empty();
         }
     }
 

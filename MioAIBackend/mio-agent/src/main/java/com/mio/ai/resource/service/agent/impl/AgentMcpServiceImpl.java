@@ -1,13 +1,16 @@
 package com.mio.ai.resource.service.agent.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.StringUtils;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
+import com.mio.ai.framework.mcp.McpClientFactory;
 import com.mio.ai.resource.mapper.agent.AgentMcpMapper;
 import com.mio.ai.resource.model.dto.agentmcp.AgentMcpAddRequest;
 import com.mio.ai.resource.model.entity.AgentMcp;
 import com.mio.ai.resource.service.agent.AgentMcpService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -20,6 +23,9 @@ import java.util.List;
 @Service
 public class AgentMcpServiceImpl extends ServiceImpl<AgentMcpMapper, AgentMcp> implements AgentMcpService {
 
+    @Autowired
+    private McpClientFactory mcpClientFactory;
+
     @Override
     public Long addAgentMcp(AgentMcpAddRequest request) {
         if (request.getAgentId() == null) {
@@ -27,6 +33,13 @@ public class AgentMcpServiceImpl extends ServiceImpl<AgentMcpMapper, AgentMcp> i
         }
         if (request.getMcpId() == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "MCP工具ID不能为空");
+        }
+        if (StringUtils.isNotBlank(request.getConfigOverride())) {
+            // 绑定时就拒绝坏覆盖配置：否则运行时合并失败会静默回退原配置，用户毫无感知
+            String structureError = mcpClientFactory.validateStructure(request.getConfigOverride());
+            if (structureError != null) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, "配置覆盖无效：" + structureError);
+            }
         }
         AgentMcp agentMcp = new AgentMcp();
         agentMcp.setAgentId(request.getAgentId());

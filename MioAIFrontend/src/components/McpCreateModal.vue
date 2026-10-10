@@ -35,7 +35,7 @@
           </a-form-item>
           <a-form-item name="config" label="MCP配置">
             <div class="config-hint">
-              <span class="hint-text">支持 STDIO 和 SSE 两种模式</span>
+              <span class="hint-text">支持 STDIO / SSE / Streamable HTTP，可含 headers 认证</span>
             </div>
             <div class="code-editor">
               <div class="line-numbers" ref="lineNumbersRef">

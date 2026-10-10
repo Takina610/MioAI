@@ -30,6 +30,40 @@ final class McpCommandResolver {
     }
 
     /**
+     * 命令是否可执行（不启动进程）：解析结果必须是真实存在的文件。
+     * Windows 按 .cmd/.exe/.bat 后缀搜索；Linux 在 PATH 中按裸名找。
+     * 用于发起子进程前秒级失败，避免 SDK 对启动失败统一表现为 20s 初始化超时
+     */
+    static boolean resolvable(String command) {
+        if (command == null || command.isBlank()) {
+            return false;
+        }
+        String trimmed = command.trim();
+        if (trimmed.contains("\\") || trimmed.contains("/")) {
+            return Files.isRegularFile(Path.of(trimmed));
+        }
+        String pathEnv = System.getenv("PATH");
+        if (pathEnv == null || pathEnv.isBlank()) {
+            return false;
+        }
+        for (String dir : pathEnv.split(File.pathSeparator)) {
+            if (dir.isBlank()) {
+                continue;
+            }
+            if (WINDOWS) {
+                for (String suffix : EXE_SUFFIXES) {
+                    if (Files.isRegularFile(Path.of(dir, trimmed + suffix))) {
+                        return true;
+                    }
+                }
+            } else if (Files.isRegularFile(Path.of(dir, trimmed))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * pathEnv 可注入便于测试；null/空时取当前进程 PATH
      */
     static String resolve(String command, String pathEnv) {

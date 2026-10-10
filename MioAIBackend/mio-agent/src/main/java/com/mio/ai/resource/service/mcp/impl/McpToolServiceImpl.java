@@ -10,6 +10,7 @@ import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.resource.mapper.agent.AgentMcpMapper;
 import com.mio.ai.resource.mapper.mcp.McpToolMapper;
+import com.mio.ai.resource.service.mcp.McpStdioGuard;
 import com.mio.ai.resource.model.dto.mcptool.McpToolAddRequest;
 import com.mio.ai.resource.model.dto.mcptool.McpToolQueryRequest;
 import com.mio.ai.resource.model.dto.mcptool.McpToolUpdateRequest;
@@ -48,6 +49,9 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
     @Autowired
     McpClientManagerService mcpClientManagerService;
 
+    @Autowired
+    McpStdioGuard mcpStdioGuard;
+
     @Override
     public Long addMcpTool(McpToolAddRequest request, Long userId) {
         if (StringUtils.isBlank(request.getName())) {
@@ -57,6 +61,10 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
         String configError = mcpClientFactory.validateStructure(request.getConfig());
         if (configError != null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, configError);
+        }
+        String denyReason = mcpStdioGuard.denyReason(request.getConfig(), userId);
+        if (denyReason != null) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, denyReason);
         }
         McpTool mcpTool = new McpTool();
         BeanUtil.copyProperties(request, mcpTool);
@@ -82,6 +90,10 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
             String configError = mcpClientFactory.validateStructure(request.getConfig());
             if (configError != null) {
                 throw new BusinessException(ErrorCode.PARAMS_ERROR, configError);
+            }
+            String denyReason = mcpStdioGuard.denyReason(request.getConfig(), userId);
+            if (denyReason != null) {
+                throw new BusinessException(ErrorCode.NO_AUTH_ERROR, denyReason);
             }
         }
         // 忽略 null 字段：部分更新时不能把未传字段清空（如只改名称会把 config 置空）

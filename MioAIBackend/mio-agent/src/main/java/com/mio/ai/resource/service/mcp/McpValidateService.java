@@ -12,7 +12,7 @@ import com.mio.ai.resource.model.vo.mcp.McpValidateResultVO;
 public interface McpValidateService {
 
     /**
-     * 校验MCP配置
+     * 校验MCP配置（userId 用于 STDIO 门禁，可为 null）
      */
-    McpValidateResultVO validateMcpConfig(McpValidateRequest request);
+    McpValidateResultVO validateMcpConfig(McpValidateRequest request, Long userId);
 }

@@ -65,11 +65,41 @@ public final class McpHttpErrorProbe {
                 : flattened;
     }
 
+    /**
+     * 取链上最有信息量的消息：优先识别已知网络异常类型（Windows 的 java.net.http 对
+     * 拒绝连接可能抛无消息的 ClosedChannelException，必须按类型穿透）；否则取最外层有效消息，
+     * 一路走到最深反而会拿到无信息量的类名
+     */
     private static String rootMessage(Throwable e) {
+        for (Throwable cur = e; cur != null; cur = cur.getCause() == cur ? null : cur.getCause()) {
+            if (cur instanceof java.net.ConnectException) {
+                return messageOr(cur, "连接被拒绝（服务未启动或端口不正确）");
+            }
+            if (cur instanceof java.net.UnknownHostException) {
+                return messageOr(cur, "域名无法解析");
+            }
+            if (cur instanceof java.net.SocketTimeoutException) {
+                return messageOr(cur, "连接超时");
+            }
+        }
         Throwable cur = e;
-        while (cur.getCause() != null && cur.getCause() != cur) {
+        while (cur != null) {
+            if (cur.getMessage() != null && !cur.getMessage().isBlank()) {
+                return cur.getMessage();
+            }
+            if (cur.getCause() == cur) {
+                break;
+            }
             cur = cur.getCause();
         }
-        return cur.getMessage() != null ? cur.getMessage() : cur.getClass().getSimpleName();
+        Throwable deepest = e;
+        while (deepest.getCause() != null && deepest.getCause() != deepest) {
+            deepest = deepest.getCause();
+        }
+        return deepest.getClass().getSimpleName();
+    }
+
+    private static String messageOr(Throwable t, String fallback) {
+        return t.getMessage() != null && !t.getMessage().isBlank() ? t.getMessage() : fallback;
     }
 }

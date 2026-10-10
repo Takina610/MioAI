@@ -5,9 +5,11 @@ import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.toolkit.StringUtils;
 import com.mio.ai.resource.model.dto.mcptool.McpValidateRequest;
 import com.mio.ai.resource.model.vo.mcp.McpValidateResultVO;
+import com.mio.ai.resource.service.mcp.McpStdioGuard;
 import com.mio.ai.resource.service.mcp.McpValidateService;
 import com.mio.ai.framework.mcp.McpClientFactory;
 import com.mio.ai.framework.mcp.McpHttpErrorProbe;
+import com.mio.ai.framework.mcp.McpProcessStartException;
 import io.modelcontextprotocol.spec.McpSchema;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,14 +30,26 @@ public class McpValidateServiceImpl implements McpValidateService {
 
     private static final Duration VALIDATE_TIMEOUT = Duration.ofSeconds(30);
 
+    /** 握手预算：SDK 默认 20s 且对启动失败/连接拒绝照等不误，校验场景缩短到 10s 让失败尽快暴露 */
+    private static final Duration VALIDATE_INIT_TIMEOUT = Duration.ofSeconds(10);
+
     private final McpClientFactory mcpClientFactory;
 
+    /** 可空：单测直接 new 时无门禁（仅跳过 STDIO 拦截，不影响错误分类逻辑） */
+    private final McpStdioGuard stdioGuard;
+
     public McpValidateServiceImpl(McpClientFactory mcpClientFactory) {
+        this(mcpClientFactory, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public McpValidateServiceImpl(McpClientFactory mcpClientFactory, McpStdioGuard stdioGuard) {
         this.mcpClientFactory = mcpClientFactory;
+        this.stdioGuard = stdioGuard;
     }
 
     @Override
-    public McpValidateResultVO validateMcpConfig(McpValidateRequest request) {
+    public McpValidateResultVO validateMcpConfig(McpValidateRequest request, Long userId) {
         McpValidateResultVO result = new McpValidateResultVO();
 
         if (StringUtils.isBlank(request.getConfig())) {
@@ -45,23 +59,28 @@ public class McpValidateServiceImpl implements McpValidateService {
             return result;
         }
 
-        JSONObject configJson;
-        try {
-            configJson = JSONUtil.parseObj(request.getConfig());
-        } catch (Exception e) {
+        // 结构校验复用工厂实现：缺 mcpServers、缺 url/command 等在发起连接前就以 CONFIG_INVALID 拒绝
+        String structureError = mcpClientFactory.validateStructure(request.getConfig());
+        if (structureError != null) {
             result.setSuccess(false);
             result.setErrorType("CONFIG_INVALID");
-            result.setErrorMessage("配置JSON格式无效: " + e.getMessage());
+            result.setErrorMessage(structureError);
             return result;
         }
 
-        JSONObject mcpServers = configJson.getJSONObject("mcpServers");
-        if (mcpServers == null || mcpServers.isEmpty()) {
-            result.setSuccess(false);
-            result.setErrorType("CONFIG_INVALID");
-            result.setErrorMessage("配置中未找到mcpServers节点");
-            return result;
+        // STDIO 门禁：会在服务器上执行本地命令，非管理员默认拒绝
+        if (stdioGuard != null) {
+            String denyReason = stdioGuard.denyReason(request.getConfig(), userId);
+            if (denyReason != null) {
+                result.setSuccess(false);
+                result.setErrorType("FORBIDDEN");
+                result.setErrorMessage(denyReason);
+                return result;
+            }
         }
+
+        JSONObject configJson = JSONUtil.parseObj(request.getConfig());
+        JSONObject mcpServers = configJson.getJSONObject("mcpServers");
 
         List<String> warnings = new ArrayList<>();
         if (mcpServers.size() > 1) {
@@ -69,26 +88,12 @@ public class McpValidateServiceImpl implements McpValidateService {
         }
 
         String serverName = mcpServers.keySet().iterator().next();
-        JSONObject serverConfig;
-        try {
-            serverConfig = mcpServers.getJSONObject(serverName);
-        } catch (Exception e) {
-            result.setSuccess(false);
-            result.setErrorType("CONFIG_INVALID");
-            result.setErrorMessage("服务器节点必须是JSON对象");
-            return result;
-        }
-
-        if (serverConfig == null) {
-            result.setSuccess(false);
-            result.setErrorType("CONFIG_INVALID");
-            result.setErrorMessage("服务器配置为空");
-            return result;
-        }
+        JSONObject serverConfig = mcpServers.getJSONObject(serverName);
 
         try {
             try (McpClientFactory.McpClientHandle handle =
-                         mcpClientFactory.createSyncClient("mio-ai-validator", serverConfig, VALIDATE_TIMEOUT)) {
+                         mcpClientFactory.createSyncClient("mio-ai-validator", serverConfig, VALIDATE_TIMEOUT,
+                                 VALIDATE_INIT_TIMEOUT)) {
                 McpSchema.ListToolsResult toolsResult = handle.client().listTools();
                 result.setSuccess(true);
                 result.setTools(extractToolInfos(toolsResult.tools()));
@@ -96,6 +101,13 @@ public class McpValidateServiceImpl implements McpValidateService {
                 result.setWarnings(warnings);
                 log.info("MCP校验成功: {} -> {} 个工具", serverName, toolsResult.tools().size());
             }
+        } catch (McpProcessStartException e) {
+            log.warn("MCP校验失败（命令不可启动）: {} - {}", serverName, e.getMessage());
+            result.setSuccess(false);
+            result.setErrorType("PROCESS_START_FAILED");
+            result.setErrorMessage(e.getMessage());
+            result.setWarnings(warnings);
+            return result;
         } catch (Exception e) {
             log.error("MCP校验失败: {}", serverName, e);
             McpValidateResultVO error = buildErrorResult(e, serverConfig);
@@ -143,15 +155,16 @@ public class McpValidateServiceImpl implements McpValidateService {
         if (url != null && !url.isBlank()) {
             return buildHttpErrorResult(result, serverConfig, collectCauseMessages(e));
         }
-        String messages = collectCauseMessages(e);
-        return applyType(result, messages, "校验失败：" + messages);
+        // 展示消息即原因链原文，类型前缀由 applyType 统一添加（勿在此重复拼接）
+        return applyType(result, collectCauseMessages(e), collectCauseMessages(e));
     }
 
     private McpValidateResultVO buildHttpErrorResult(McpValidateResultVO result, JSONObject serverConfig,
                                                      String sdkMessage) {
         McpHttpErrorProbe.ProbeResult probe = McpHttpErrorProbe.probe(serverConfig);
         if (probe.networkFailed()) {
-            return applyType(result, probe.networkError(), "连接失败：" + probe.networkError());
+            // 前缀由 applyType 统一加，这里只传原因原文，避免"连接失败：连接失败："
+            return applyType(result, probe.networkError(), probe.networkError());
         }
         int status = probe.statusCode();
         if (status == 401 || status == 403) {
@@ -161,9 +174,19 @@ public class McpValidateServiceImpl implements McpValidateService {
             return result;
         }
         if (status == 404 || status == 405) {
-            // 405 常见于把 SSE 端点配成 type=http：SSE 端点不接受 POST
+            // 405 常见于把 SSE 端点配成 type=http：SSE 端点不接受 POST；
+            // 但用户已声明 type=sse 时同一提示就自相矛盾了，按已声明类型给对应解释
             result.setErrorType("CONNECTION_FAILED");
-            String hint = status == 405 ? "，URL 可能不是 MCP 端点或需要 type=sse" : "，URL 可能不是 MCP 端点";
+            String declaredType = serverConfig.getStr("type");
+            boolean declaredSse = "sse".equalsIgnoreCase(declaredType == null ? "" : declaredType.trim());
+            String hint;
+            if (status == 405) {
+                hint = declaredSse
+                        ? "，该端点不接受 MCP 请求，可能已停止提供 SSE 服务"
+                        : "，URL 可能不是 MCP 端点或需要 type=sse";
+            } else {
+                hint = "，URL 可能不是 MCP 端点";
+            }
             result.setErrorMessage("连接失败：服务端返回 " + withBody(status, probe.bodyExcerpt()) + hint);
             return result;
         }
@@ -182,7 +205,7 @@ public class McpValidateServiceImpl implements McpValidateService {
     private McpValidateResultVO applyType(McpValidateResultVO result, String keywordText, String displayMessage) {
         String lower = keywordText.toLowerCase();
         String prefix;
-        if (lower.contains("timeout") || lower.contains("timed out")) {
+        if (lower.contains("timeout") || lower.contains("timed out") || lower.contains("did not observe")) {
             result.setErrorType("TIMEOUT");
             prefix = "连接超时：";
         } else if (lower.contains("401") || lower.contains("403") || lower.contains("unauthorized")
@@ -192,8 +215,10 @@ public class McpValidateServiceImpl implements McpValidateService {
             prefix = "认证失败：";
         } else if (lower.contains("404") || lower.contains("refused") || lower.contains("unreachable")
                 || lower.contains("enoent") || lower.contains("not found") || lower.contains("connection")
+                || lower.contains("closedchannel") || lower.contains("broken pipe") || lower.contains("reset")
                 || lower.contains("unknown host") || lower.contains("unknownhost")
-                || lower.contains("cannot run program") || lower.contains("createprocess")) {
+                || lower.contains("cannot run program") || lower.contains("createprocess")
+                || lower.contains("拒绝") || lower.contains("无法解析")) {
             result.setErrorType("CONNECTION_FAILED");
             prefix = "连接失败：";
         } else {

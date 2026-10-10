@@ -81,8 +81,15 @@ public class MioBot {
     /** 编辑重发场景：本轮 user 行的版本组锚（沿用被编辑轮次的组） */
     private volatile Long userGroupSeq;
 
+    /** 本轮 MCP 装配失败摘要（控制器注入）：非空时会话开头发瞬态系统提示 */
+    private volatile List<String> mcpFailures;
+
     public void setUserGroupSeq(Long userGroupSeq) {
         this.userGroupSeq = userGroupSeq;
+    }
+
+    public void setMcpFailures(List<String> mcpFailures) {
+        this.mcpFailures = mcpFailures;
     }
 
     public MioBot(ChatModel chatModel,
@@ -135,6 +142,12 @@ public class MioBot {
                     channel::heartbeat, HEARTBEAT_INTERVAL_SECONDS, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
             ToolRegistry registry = null;
             try {
+                // MCP 装配失败项在会话开头明说，替代静默降级（瞬态提示不落库，重载后不保留）
+                if (mcpFailures != null && !mcpFailures.isEmpty()) {
+                    String joined = String.join("；", mcpFailures);
+                    channel.notice("以下 MCP 工具本轮不可用：" + (joined.length() > 300
+                            ? joined.substring(0, 300) + "..." : joined));
+                }
                 ConversationHydrator.Hydrated hydrated = hydrate();
                 ConversationState state = new ConversationState();
                 state.entries().addAll(hydrated.entries());

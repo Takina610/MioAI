@@ -1,9 +1,10 @@
 <template>
   <div class="mio-bot-message">
-    <!-- 状态行：进行中显示已工作时长（瞬态重试时附提示）；完成后显示总结行并可展开工作过程 -->
+    <!-- 状态行：进行中显示已工作时长（瞬态重试/MCP失败时附提示）；完成后显示总结行并可展开工作过程 -->
     <div v-if="isLoading" class="status-line running">
       <span>已工作 {{ elapsedText }}</span>
       <span v-if="retryNotice" class="retry-notice">{{ retryNotice }}</span>
+      <span v-if="mcpNotice" class="retry-notice">{{ mcpNotice }}</span>
     </div>
     <div
       v-else-if="processBlocks.length"
@@ -170,6 +171,8 @@ interface Props {
   interrupted?: boolean
   /** 瞬态失败自动重试提示（后端 retry 事件，内容恢复即清除） */
   retryNotice?: string
+  /** 本轮 MCP 工具装配失败提示（后端 notice 事件，瞬态不落历史） */
+  mcpNotice?: string
   /** 所属会话 id（提交问答答案用） */
   chatId?: string
   /** 所属消息 id（打开子代理面板的定位键之一） */

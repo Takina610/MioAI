@@ -28,12 +28,31 @@ public interface McpClientManagerService {
     ToolCallback[] getPublicMcpToolCallbacks();
 
     /**
+     * 同 {@link #getPublicMcpToolCallbacks()}，但带回逐工具的失败原因（供会话内提示用户）
+     */
+    McpInitResult getPublicMcpToolsDetailed();
+
+    /**
      * 初始化指定 MCP 工具的客户端并返回工具回调
      *
      * @param mcpTools MCP工具列表
      * @return 工具回调数组
      */
     ToolCallback[] initMcpToolCallbacks(List<McpTool> mcpTools);
+
+    /**
+     * 同 {@link #initMcpToolCallbacks(List)}，但带回逐工具的失败原因（供会话内提示用户）
+     */
+    McpInitResult initMcpToolsDetailed(List<McpTool> mcpTools);
+
+    /**
+     * MCP 装配结果：可用回调 + 失败摘要（"工具名：原因"）
+     */
+    record McpInitResult(ToolCallback[] callbacks, List<String> failures) {
+        public static McpInitResult empty() {
+            return new McpInitResult(new ToolCallback[0], List.of());
+        }
+    }
 
     /**
      * 关闭所有MCP客户端

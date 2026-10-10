@@ -65,6 +65,10 @@ mybatis-plus:
 # ------------------------------------------------------------
 mio:
   ai:
+    mcp:
+      # STDIO 型 MCP 门禁：STDIO 配置会在服务器上执行本地命令，false 时仅管理员可导入/校验，
+      # true 对全部登录用户开放（HTTP/SSE 型不受影响）
+      stdio-enabled: false
     # PostgreSQL 向量库（pgvector 扩展，mio-framework 的 VectorStoreConfig 装配）
     vector:
       jdbc-url: jdbc:postgresql://${PG_HOST:localhost}:${PG_PORT:5432}/${PG_DATABASE:mio_ai_vec}

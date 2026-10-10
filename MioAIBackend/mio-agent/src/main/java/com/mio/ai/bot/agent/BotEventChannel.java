@@ -207,6 +207,11 @@ public class BotEventChannel {
         emit(SseChunk.retry(attempt, maxAttempts, reason).fields());
     }
 
+    /** 系统提示（瞬态不落库）：本轮资源装配状态等用户须知，如 MCP 工具连接失败 */
+    public void notice(String content) {
+        emit(SseChunk.notice(content).fields());
+    }
+
     public void usage(int inputTokens, int outputTokens, long durationMs) {
         emit(SseChunk.usage(inputTokens, outputTokens, durationMs).fields());
     }

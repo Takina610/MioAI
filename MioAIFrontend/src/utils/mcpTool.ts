@@ -19,7 +19,9 @@ export function countMcpTools(toolInfo?: string | null): number {
 const ERROR_TYPE_LABELS: Record<string, string> = {
   CONNECTION_FAILED: '连接失败',
   AUTH_FAILED: '认证失败',
-  TIMEOUT: '连接超时'
+  TIMEOUT: '连接超时',
+  PROCESS_START_FAILED: '启动失败',
+  FORBIDDEN: '无权限'
 }
 
 /**

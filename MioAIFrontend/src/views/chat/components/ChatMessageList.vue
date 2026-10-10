@@ -21,6 +21,7 @@
             :create-time="displayOf(msg).createTime"
             :interrupted="displayOf(msg).interrupted"
             :retry-notice="isLatestVersion(msg) ? msg.retryNotice : undefined"
+            :mcp-notice="isLatestVersion(msg) ? msg.mcpNotice : undefined"
             :chat-id="chatId"
             :message-id="msg.id"
             :version="versionOf(msg)"

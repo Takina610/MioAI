@@ -9,16 +9,21 @@ import com.mio.ai.resource.mapper.mcp.McpToolMapper;
 import com.mio.ai.resource.model.entity.AgentMcp;
 import com.mio.ai.resource.model.entity.McpTool;
 import com.mio.ai.resource.service.mcp.McpClientManagerService;
+import io.modelcontextprotocol.spec.McpSchema;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.mcp.McpToolUtils;
+import org.springframework.ai.mcp.SyncMcpToolCallback;
+import org.springframework.ai.mcp.ToolContextToMcpMetaConverter;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -120,23 +125,36 @@ public class McpClientManagerServiceImpl implements McpClientManagerService {
 
     @Override
     public ToolCallback[] getPublicMcpToolCallbacks() {
+        return getPublicMcpToolsDetailed().callbacks();
+    }
+
+    @Override
+    public McpInitResult getPublicMcpToolsDetailed() {
         LambdaQueryWrapper<McpTool> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(McpTool::getIsPublic, 1)
                 .eq(McpTool::getStatus, 1);
         List<McpTool> publicTools = mcpToolMapper.selectList(wrapper);
         if (publicTools.isEmpty()) {
-            return new ToolCallback[0];
+            return McpInitResult.empty();
         }
-        return initMcpToolCallbacks(publicTools);
+        return initMcpToolsDetailed(publicTools);
     }
 
     @Override
     public ToolCallback[] initMcpToolCallbacks(List<McpTool> mcpTools) {
+        return initMcpToolsDetailed(mcpTools).callbacks();
+    }
+
+    @Override
+    public McpInitResult initMcpToolsDetailed(List<McpTool> mcpTools) {
         if (mcpTools == null || mcpTools.isEmpty()) {
-            return new ToolCallback[0];
+            return McpInitResult.empty();
         }
 
         List<ToolCallback> allCallbacks = new ArrayList<>();
+        List<String> failures = new ArrayList<>();
+        // 跨服务器去重：两个 MCP 暴露同名子工具时后者加 id 后缀，避免同名 ToolCallback 一起传给模型
+        Set<String> usedNames = new HashSet<>();
 
         for (McpTool mcpTool : mcpTools) {
             try {
@@ -145,12 +163,12 @@ public class McpClientManagerServiceImpl implements McpClientManagerService {
                 if (handle == null) {
                     handle = createHandle(mcpTool);
                     if (handle == null) {
+                        failures.add(mcpTool.getName() + "：配置无效");
                         continue;
                     }
                     clientCache.put(mcpTool.getId(), handle);
                 }
-                List<ToolCallback> callbacks = McpToolUtils.getToolCallbacksFromSyncClients(List.of(handle.client()));
-                allCallbacks.addAll(callbacks);
+                allCallbacks.addAll(buildCallbacks(mcpTool, handle, usedNames));
                 log.info("成功初始化MCP工具: {} - {}", mcpTool.getName(), mcpTool.getId());
             } catch (Exception e) {
                 // 缓存的客户端可能已失效（服务端重启等）：关闭并重建一次
@@ -159,8 +177,7 @@ public class McpClientManagerServiceImpl implements McpClientManagerService {
                     McpClientFactory.McpClientHandle recreated = createHandle(mcpTool);
                     if (recreated != null) {
                         clientCache.put(mcpTool.getId(), recreated);
-                        List<ToolCallback> callbacks = McpToolUtils.getToolCallbacksFromSyncClients(List.of(recreated.client()));
-                        allCallbacks.addAll(callbacks);
+                        allCallbacks.addAll(buildCallbacks(mcpTool, recreated, usedNames));
                         log.info("重建MCP客户端成功: {} - {}", mcpTool.getName(), mcpTool.getId());
                         continue;
                     }
@@ -168,10 +185,67 @@ public class McpClientManagerServiceImpl implements McpClientManagerService {
                     closeQuietly(clientCache.remove(mcpTool.getId()));
                 }
                 log.error("初始化MCP工具失败: {} - {}", mcpTool.getName(), mcpTool.getId(), e);
+                failures.add(mcpTool.getName() + "：" + shortReason(e));
             }
         }
 
-        return allCallbacks.toArray(new ToolCallback[0]);
+        return new McpInitResult(allCallbacks.toArray(new ToolCallback[0]), List.copyOf(failures));
+    }
+
+    /** 失败原因摘要：取首行、截断，供会话内提示（完整堆栈只在日志） */
+    private static String shortReason(Exception e) {
+        String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+        int newline = msg.indexOf('\n');
+        if (newline > 0) {
+            msg = msg.substring(0, newline);
+        }
+        return msg.length() > 120 ? msg.substring(0, 120) + "..." : msg;
+    }
+
+    /**
+     * 把单个客户端的工具投影成带前缀的回调：mcp__<server>__<tool>（zcode 同款命名），
+     * 段内非法字符（OpenAI 函数名只允许字母数字下划线连字符）替换为 _，总长截断到 64
+     */
+    private List<ToolCallback> buildCallbacks(McpTool mcpTool, McpClientFactory.McpClientHandle handle,
+                                              Set<String> usedNames) throws IOException {
+        String serverSegment = sanitizeSegment(firstServerKey(mcpTool.getConfig(), mcpTool.getName()));
+        List<McpSchema.Tool> tools = handle.client().listTools().tools();
+        List<ToolCallback> callbacks = new ArrayList<>(tools.size());
+        for (McpSchema.Tool tool : tools) {
+            String base = truncate("mcp__" + serverSegment + "__" + sanitizeSegment(tool.name()));
+            String name = usedNames.add(base) ? base : truncate(base + "__" + mcpTool.getId());
+            callbacks.add(SyncMcpToolCallback.builder()
+                    .mcpClient(handle.client())
+                    .tool(tool)
+                    .prefixedToolName(name)
+                    .toolContextToMcpMetaConverter(ToolContextToMcpMetaConverter.defaultConverter())
+                    .build());
+        }
+        return callbacks;
+    }
+
+    static String sanitizeSegment(String segment) {
+        String cleaned = segment == null ? "" : segment.replaceAll("[^a-zA-Z0-9_-]", "_")
+                .replaceAll("_+", "_")
+                .replaceAll("^_+|_+$", "");
+        return cleaned.isEmpty() ? "srv" : cleaned;
+    }
+
+    static String truncate(String name) {
+        return name.length() <= 64 ? name : name.substring(0, 64);
+    }
+
+    /** mcpServers 首个服务节点名作为前缀段（与配置展示一致）；解析失败回退实体名 */
+    static String firstServerKey(String config, String fallback) {
+        try {
+            JSONObject root = JSONUtil.parseObj(config);
+            JSONObject servers = root.getJSONObject("mcpServers");
+            if (servers != null && !servers.isEmpty()) {
+                return servers.keySet().iterator().next();
+            }
+        } catch (Exception ignored) {
+        }
+        return fallback;
     }
 
     @Override

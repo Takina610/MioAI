@@ -504,6 +504,9 @@ export function useChatStream(options: {
         const maxAttempts = Number(parsed.maxAttempts) || attempt
         return { ...msg, retryNotice: `网络波动，正在重试（${attempt}/${maxAttempts}）` }
       }
+      case 'notice':
+        // 瞬态系统提示（如 MCP 工具本轮装配失败）：不落历史，刷新后不保留
+        return { ...msg, mcpNotice: String(parsed.content ?? '') }
       case 'done':
         markFinished()
         return { ...msg, blocks: closeOpenThinking(msg.blocks) }

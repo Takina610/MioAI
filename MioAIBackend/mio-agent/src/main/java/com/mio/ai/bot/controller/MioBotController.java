@@ -24,7 +24,6 @@ import jakarta.annotation.Resource;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.tool.ToolCallback;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -161,19 +160,21 @@ public class MioBotController {
             return emitSingleReply(SENSITIVE_REPLY);
         }
 
-        ToolCallback[] mcpTools = botResourceService.getMcpToolCallbacks(resolvedAgentId);
+        BotResourceService.McpAssembly mcp = botResourceService.assembleMcpTools(resolvedAgentId);
         String knowledgeContext = botResourceService.buildKnowledgeContext(resolvedAgentId, userId, content);
 
         String effort = reasoningEffort != null && REASONING_EFFORTS.contains(reasoningEffort)
                 ? reasoningEffort : null;
         var engineConfig = new com.mio.ai.framework.zagent.AgentEngineConfig(
                 agentMaxSteps, agentStreamTimeoutSeconds, agentModelRetries, agentContextWindowTokens);
-        MioBot mioBot = new MioBot(chatModel, toolsetFactory, List.of(mcpTools),
+        MioBot mioBot = new MioBot(chatModel, toolsetFactory, List.of(mcp.callbacks()),
                 agentUsageLogService, toolCallLogService, agentMessageService,
                 chatId, userId, resolvedAgentId, customSystemPrompt, engineModelName, effort, engineConfig,
                 fileTransfer, com.mio.ai.bot.model.dto.AttachmentItem.parseList(attachments));
         // 编辑重发：新 user 行沿用被编辑轮次的组锚（版本组持久化）
         mioBot.setUserGroupSeq(groupSeq);
+        // MCP 装配失败项：本轮会话开头给一条瞬态系统提示，替代旧的静默降级
+        mioBot.setMcpFailures(mcp.failures());
         // 任务真正结束（含异常）时解除会话占用
         mioBot.setOnFinish(() -> ACTIVE_CHATS.remove(chatId));
         return mioBot.run(content, knowledgeContext, !skipUserPersist);
