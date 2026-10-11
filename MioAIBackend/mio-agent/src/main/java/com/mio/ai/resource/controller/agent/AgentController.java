@@ -2,10 +2,8 @@ package com.mio.ai.resource.controller.agent;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mio.ai.common.common.BaseResponse;
-import com.mio.ai.common.common.FileType;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
-import com.mio.ai.common.utils.R2Util;
 import com.mio.ai.user.utils.RedisComponent;
 import com.mio.ai.common.utils.ResultUtils;
 import com.mio.ai.resource.model.dto.agent.AgentAddRequest;
@@ -22,10 +20,7 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.util.UUID;
 
 /**
  * @author: Takina
@@ -43,9 +38,6 @@ public class AgentController {
 
     @Resource
     private RedisComponent redisComponent;
-
-    @Resource
-    private R2Util r2Util;
 
     @Resource
     private com.mio.ai.resource.service.security.AccessGuardService accessGuardService;
@@ -118,38 +110,5 @@ public class AgentController {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         agentService.publishAgent(agentId, request, userId);
         return ResultUtils.success(true);
-    }
-
-    @PostMapping("/avatar/upload")
-    public BaseResponse<String> uploadAvatar(@RequestParam("file") MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件不能为空");
-        }
-        
-        try {
-            String tempId = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
-            String avatarUrl = r2Util.uploadFile(file, FileType.AGENT_AVATAR, "temp_" + tempId);
-            return ResultUtils.success(avatarUrl);
-        } catch (IOException e) {
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "上传头像失败: " + e.getMessage());
-        }
-    }
-
-    @DeleteMapping("/avatar/temp")
-    public BaseResponse<Boolean> deleteTempAvatar(@RequestParam("url") String avatarUrl) {
-        if (avatarUrl == null || avatarUrl.isEmpty()) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "头像URL不能为空");
-        }
-        
-        if (!avatarUrl.contains("temp_")) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "只能删除临时头像");
-        }
-        
-        try {
-            r2Util.deleteFile(avatarUrl);
-            return ResultUtils.success(true);
-        } catch (IOException e) {
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "删除头像失败: " + e.getMessage());
-        }
     }
 }

@@ -6,10 +6,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.StringUtils;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.mio.ai.common.common.FileType;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
-import com.mio.ai.common.utils.R2Util;
 import com.mio.ai.resource.mapper.agent.AgentKnowledgeMapper;
 import com.mio.ai.resource.mapper.agent.AgentMcpMapper;
 import com.mio.ai.resource.mapper.agent.AgentMapper;
@@ -38,7 +36,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -53,8 +50,6 @@ import java.util.Objects;
 @Service
 public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements AgentService {
 
-    @Autowired
-    private R2Util r2Util;
 
     @Autowired
     private AgentMcpMapper agentMcpMapper;
@@ -87,18 +82,6 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         agent.setUsageCount(0);
         this.save(agent);
 
-        String avatar = request.getAvatar();
-        if (StringUtils.isNotBlank(avatar) && avatar.contains("temp_")) {
-            try {
-                String newAvatarUrl = r2Util.copyFile(avatar, FileType.AGENT_AVATAR, String.valueOf(agent.getId()));
-                agent.setAvatar(newAvatarUrl);
-                this.updateById(agent);
-            } catch (IOException e) {
-                this.removeById(agent.getId());
-                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "处理头像失败: " + e.getMessage());
-            }
-        }
-
         return agent.getId();
     }
 
@@ -115,24 +98,6 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限修改该智能体");
         }
         agent.setUpdateTime(new Date());
-
-        String newAvatar = request.getAvatar();
-        String oldAvatar = agent.getAvatar();
-        String defaultAvatar = "https://cdn.tak1na.cn/custom_agent.png";
-
-        if (StringUtils.isNotBlank(newAvatar) && !newAvatar.equals(oldAvatar) && newAvatar.contains("temp_")) {
-            try {
-                // 删除旧头像（如果不是默认头像）
-                if (StringUtils.isNotBlank(oldAvatar) && !oldAvatar.equals(defaultAvatar)) {
-                    r2Util.deleteFile(oldAvatar);
-                }
-                
-                String finalAvatarUrl = r2Util.copyFile(newAvatar, FileType.AGENT_AVATAR, String.valueOf(agent.getId()));
-                request.setAvatar(finalAvatarUrl);
-            } catch (IOException e) {
-                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "处理头像失败: " + e.getMessage());
-            }
-        }
 
         BeanUtil.copyProperties(request, agent);
         return this.updateById(agent);
@@ -291,18 +256,6 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
     @Override
     public void publishAgent(Long agentId, AgentUpdateRequest request, Long userId) {
         Agent agent = checkAgentOwner(agentId, userId);
-
-        String newAvatar = request.getAvatar();
-        String oldAvatar = agent.getAvatar();
-
-        if (newAvatar != null && !Objects.equals(newAvatar, oldAvatar) && newAvatar.contains("temp_")) {
-            try {
-                String finalAvatarUrl = r2Util.copyFile(newAvatar, FileType.AGENT_AVATAR, String.valueOf(agent.getId()));
-                request.setAvatar(finalAvatarUrl);
-            } catch (IOException e) {
-                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "处理头像失败: " + e.getMessage());
-            }
-        }
 
         if (request.getName() != null) {
             agent.setName(request.getName());
