@@ -12,7 +12,7 @@
         eye-color="#faf9f5"
       />
       <img v-else :src="agentAvatar || '/logo.png'" alt="Agent" class="welcome-avatar" />
-      <h2 class="welcome-title">我能帮什么忙吗，{{ userStore.userName }}？</h2>
+      <h2 class="welcome-title">{{ welcomeTitle }}</h2>
     </div>
     <!-- 与输入框融合的上区（任务清单等，共享同一容器边框） -->
     <div class="chat-input-wrapper">
@@ -176,6 +176,30 @@ const emit = defineEmits<{
 }>()
 
 const userStore = useUserStore()
+
+// ---------- 新对话问候语：按时段分短语池随机取一句；有简短画像时混入画像变体 ----------
+// [起始小时, 结束小时(含), 短语池]；池内含 {profile} 的变体仅在画像存在且简短时启用
+const GREETING_BUCKETS: Array<[number, number, string[]]> = [
+  [0, 4, ['还没睡，{name}？', '夜深了，{name}，想聊点什么？', '这么晚还没休息？{name}，我在。', '还没睡，{name}？{profile}的事不急于这一晚。']],
+  [5, 8, ['早安，{name}！今天想从什么开始？', '早上好，{name}。新的一天，有什么想做的？', '早安，{name}！今天{profile}的日程还顺利吗？']],
+  [9, 11, ['上午好，{name}！有什么要一起解决的？', '嗨，{name}，上午想研究点什么？', '上午好，{name}！{profile}的活儿需要搭把手吗？']],
+  [12, 13, ['中午好，{name}！忙碌间隙想聊点什么？', '午安，{name}。有什么我能帮忙的？']],
+  [14, 17, ['下午好，{name}！下午想推进点什么？', '嗨，{name}，下午进展如何？', '下午好，{name}！{profile}那边今天有什么新进展？']],
+  [18, 22, ['晚上好，{name}！今晚想聊点什么？', '晚上好呀，{name}。有什么新鲜事想问？', '晚上好，{name}！今天{profile}的事还顺利吗？']],
+  [23, 23, ['还没睡，{name}？', '夜深了，{name}，想聊点什么？', '这么晚还没休息？{name}，我在。', '还没睡，{name}？{profile}的事不急于这一晚。']]
+]
+
+const welcomeTitle = computed(() => {
+  const name = userStore.userName?.trim() || '朋友'
+  const profile = userStore.userInfo?.userProfile?.trim()
+  const hour = new Date().getHours()
+  const pool = GREETING_BUCKETS.find(([from, to]) => hour >= from && hour <= to)?.[2]
+    ?? ['嗨，{name}！有什么想聊的？']
+  // 画像缺失或过长时不用画像变体，避免占位符漏出
+  const usable = pool.filter(p => !p.includes('{profile}') || (profile && profile.length <= 12))
+  const picked = usable[Math.floor(Math.random() * usable.length)]
+  return picked.split('{name}').join(name).split('{profile}').join(profile ?? '')
+})
 
 /** 欢迎logo：icon 配置优先；无配置且有头像则用头像图；都没有用默认机器人 */
 const agentIconConfig = computed(() => parseBotIcon(props.agentIcon) ?? (props.agentAvatar ? null : DEFAULT_BOT_ICON))
