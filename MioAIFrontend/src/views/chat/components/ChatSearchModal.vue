@@ -153,7 +153,12 @@ const showAgents = computed(() => userStore.isLoggedIn && activeTab.value !== 'c
 let debounceTimer: number | undefined
 let searchSeq = 0
 
+// 加载态最短展示时长：本机搜索太快会让压暗/骨架一闪而过（感知为"闪一下"），
+// 结果就绪后不足此时长则补足，让"加载→完成"是一个可感知的稳定过程
+const MIN_LOADING_MS = 300
+
 async function runSearch(): Promise<void> {
+  const startedAt = Date.now()
   const kw = keyword.value.trim()
   const seq = ++searchSeq
   searchLoading.value = true
@@ -174,6 +179,11 @@ async function runSearch(): Promise<void> {
   if (seq !== searchSeq) return
   sessionResults.value = sessions
   agentResults.value = agents
+  const remain = MIN_LOADING_MS - (Date.now() - startedAt)
+  if (remain > 0) {
+    await new Promise(resolve => window.setTimeout(resolve, remain))
+    if (seq !== searchSeq) return
+  }
   searchLoading.value = false
 }
 

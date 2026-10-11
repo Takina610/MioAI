@@ -165,8 +165,8 @@ async function handleLogout(): Promise<void> {
     transition: padding-left 0.28s cubic-bezier(0.32, 0.72, 0.35, 1);
 
     .logo-link {
-      transform-origin: left center;
-      transition: opacity 0.18s ease, transform 0.18s ease;
+      transform-origin: center;
+      transition: opacity 0.22s ease, transform 0.22s ease;
     }
 
     .logo-link {

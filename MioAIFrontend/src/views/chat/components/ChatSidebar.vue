@@ -213,8 +213,8 @@ defineExpose({ checkListFilled, scrollToTop })
 
     .agent-avatar,
     .agent-name {
-      transform-origin: left center;
-      transition: opacity 0.18s ease, transform 0.18s ease;
+      transform-origin: center;
+      transition: opacity 0.22s ease, transform 0.22s ease;
     }
 
     .agent-avatar {
@@ -246,6 +246,28 @@ defineExpose({ checkListFilled, scrollToTop })
       flex-direction: column;
       gap: 8px;
       margin-bottom: 16px;
+
+      // 快捷键提示盒：搜索入口与新对话按钮共用
+      .shortcut-hint {
+        display: flex;
+        gap: 4px;
+
+        .key-box {
+          padding: 1px 6px;
+          background: #f0eee6;
+          border: 1px solid #e0ddd2;
+          border-radius: 4px;
+          font-size: 11px;
+          color: #8c8a82;
+          font-weight: 500;
+        }
+      }
+
+      .new-chat-btn .shortcut-hint .key-box {
+        background: rgba($primary-color, 0.15);
+        border-color: rgba($primary-color, 0.3);
+        color: $primary-color;
+      }
     }
 
     // 搜索入口：胶囊输入框样式（图2），点击打开命令面板
@@ -277,21 +299,6 @@ defineExpose({ checkListFilled, scrollToTop })
       .btn-text {
         flex: 1;
         text-align: left;
-      }
-
-      .shortcut-hint {
-        display: flex;
-        gap: 4px;
-
-        .key-box {
-          padding: 1px 6px;
-          background: #f0eee6;
-          border: 1px solid #e0ddd2;
-          border-radius: 4px;
-          font-size: 11px;
-          color: #8c8a82;
-          font-weight: 500;
-        }
       }
     }
 
