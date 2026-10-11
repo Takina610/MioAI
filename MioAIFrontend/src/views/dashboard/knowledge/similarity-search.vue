@@ -18,16 +18,25 @@
           <div class="config-section dash-section">
             <h3 class="section-title">检索配置</h3>
             <div class="config-item">
+              <label class="config-label">检索方式</label>
+              <div class="config-control">
+                <a-radio-group v-model:value="config.method" class="method-group">
+                  <a-radio-button value="hybrid">混合检索</a-radio-button>
+                  <a-radio-button value="vector">向量检索</a-radio-button>
+                </a-radio-group>
+                <span class="config-hint">{{ config.method === 'hybrid' ? '语义 + 关键词双路召回并融合，专有名词命中更好' : '纯语义相似度召回' }}</span>
+              </div>
+            </div>
+            <div class="config-item">
               <label class="config-label">返回数量 (TopK)</label>
               <div class="config-control">
                 <a-input-number
                   v-model:value="config.topK"
                   :min="1"
-                  :max="6"
+                  :max="10"
                   :step="1"
                   style="width: 100%"
                 />
-                <span class="config-hint">最多返回 6 条结果</span>
               </div>
             </div>
             <div class="config-item">
@@ -49,6 +58,14 @@
                     class="threshold-input"
                   />
                 </div>
+                <span class="config-hint">低于该相似度的结果将被过滤</span>
+              </div>
+            </div>
+            <div class="config-item">
+              <label class="config-label">重排（Rerank）</label>
+              <div class="config-control rerank-control">
+                <a-switch v-model:checked="config.enableRerank" size="small" />
+                <span class="rerank-text">{{ config.enableRerank ? '对召回结果精排' : '直接使用召回排序' }}</span>
               </div>
             </div>
           </div>
@@ -58,8 +75,8 @@
             <div class="search-input-wrapper">
               <a-textarea
                 v-model:value="searchContent"
-                placeholder="请输入要检索的内容（限20字以内）"
-                :maxlength="20"
+                placeholder="输入要测试的问题或关键词"
+                :maxlength="500"
                 :rows="3"
                 show-count
               />
@@ -74,7 +91,12 @@
                   class="result-card"
                 >
                   <div class="card-header">
-                    <span class="card-title">切片 {{ index + 1 }}</span>
+                    <div class="card-title-wrap">
+                      <span class="card-title">切片 {{ index + 1 }}</span>
+                      <a-tag v-if="getMatchTag(result)" :color="getMatchTagColor(result)" class="match-tag">
+                        {{ getMatchTag(result) }}
+                      </a-tag>
+                    </div>
                     <div class="card-score">
                       <a-progress
                         :percent="Math.round(result.score * 100)"
@@ -93,6 +115,7 @@
                   <div class="card-footer">
                     <FileTextOutlined />
                     <span class="doc-name">{{ result.fileName || '未知文档' }}</span>
+                    <span v-if="result.chunkIndex != null" class="chunk-index">#{{ result.chunkIndex }}</span>
                   </div>
                 </div>
               </div>
@@ -113,17 +136,9 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { FileTextOutlined } from '@ant-design/icons-vue'
-import { similaritySearch, getKnowledgeBaseById } from '@/api/knowledgeBase'
+import { similaritySearchV2, getKnowledgeBaseById, type SimilarityResult } from '@/api/knowledgeBase'
 import { truncateText } from '@/utils/format'
 import PageHeader from '../components/PageHeader.vue'
-
-interface SearchResult {
-  id: string
-  text: string
-  score: number
-  fileName: string
-  metadata?: Record<string, unknown>
-}
 
 const route = useRoute()
 
@@ -135,10 +150,12 @@ const searching = ref(false)
 const hasSearched = ref(false)
 const thresholdPercent = ref(0.5)
 const searchContent = ref('')
-const searchResults = ref<SearchResult[]>([])
+const searchResults = ref<SimilarityResult[]>([])
 
 const config = reactive({
-  topK: 3
+  topK: 5,
+  method: 'hybrid' as 'vector' | 'hybrid',
+  enableRerank: false
 })
 
 const kbId = computed(() => Number(route.params.id))
@@ -168,12 +185,14 @@ async function handleSearch(): Promise<void> {
   searching.value = true
   hasSearched.value = false
   try {
-    const res = await similaritySearch(
-      searchContent.value.trim(),
-      thresholdPercent.value,
-      config.topK,
-      kbId.value
-    )
+    const res = await similaritySearchV2({
+      query: searchContent.value.trim(),
+      kbId: kbId.value,
+      topK: config.topK,
+      threshold: thresholdPercent.value,
+      method: config.method,
+      enableRerank: config.enableRerank
+    })
     searchResults.value = res || []
     hasSearched.value = true
   } catch (e) {
@@ -182,6 +201,18 @@ async function handleSearch(): Promise<void> {
   } finally {
     searching.value = false
   }
+}
+
+function getMatchTag(result: SimilarityResult): string {
+  if (result.matchType === 'keyword') return '关键词'
+  if (result.matchType === 'rerank') return '重排'
+  return ''
+}
+
+function getMatchTagColor(result: SimilarityResult): string {
+  if (result.matchType === 'keyword') return 'orange'
+  if (result.matchType === 'rerank') return 'geekblue'
+  return 'default'
 }
 
 function getProgressColor(score: number): string {
@@ -224,6 +255,16 @@ onMounted(() => {
       }
 
       .config-control {
+        .method-group {
+          display: flex;
+          width: 100%;
+
+          :deep(.ant-radio-button-wrapper) {
+            flex: 1;
+            text-align: center;
+          }
+        }
+
         .config-hint {
           display: block;
           font-size: 12px;
@@ -242,6 +283,17 @@ onMounted(() => {
 
           .threshold-input {
             width: 80px;
+          }
+        }
+
+        .rerank-control {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+
+          .rerank-text {
+            font-size: 13px;
+            color: #6e6b62;
           }
         }
       }
@@ -266,7 +318,7 @@ onMounted(() => {
 
       .results-list {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(2, 1fr);
         gap: 16px;
       }
     }
@@ -277,17 +329,30 @@ onMounted(() => {
       padding: 16px;
       border: 1px solid #ece9de;
 
-      .card-header {
+      .card-title-wrap {
         display: flex;
-        justify-content: space-between;
         align-items: center;
-        margin-bottom: 12px;
+        gap: 8px;
 
         .card-title {
           font-size: 14px;
           font-weight: 600;
           color: #141413;
         }
+
+        .match-tag {
+          margin: 0;
+          font-size: 11px;
+          line-height: 18px;
+          padding: 0 6px;
+        }
+      }
+
+      .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
 
         .card-score {
           display: flex;
@@ -325,6 +390,20 @@ onMounted(() => {
 
         .anticon {
           color: $primary-color;
+        }
+
+        .doc-name {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .chunk-index {
+          flex-shrink: 0;
+          color: $primary-color;
+          background: rgba($primary-color, 0.08);
+          border-radius: 4px;
+          padding: 0 5px;
         }
       }
     }

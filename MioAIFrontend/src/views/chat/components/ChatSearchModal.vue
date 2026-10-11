@@ -53,7 +53,10 @@
             >
               <img v-if="row.avatar" :src="row.avatar" alt="" class="row-avatar" />
               <component v-else :is="row.icon" class="row-icon" />
-              <span class="row-title">{{ row.title }}</span>
+              <span class="row-title">
+                <HighlightText :text="row.title" :indices="row.matchIndices" />
+              </span>
+              <span v-if="row.category" class="row-category">{{ row.category }}</span>
               <EnterOutlined class="row-enter" />
             </div>
             <!-- 加载骨架屏：每个分组一条占位（扫光），结果到达后替换 -->
@@ -81,11 +84,13 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
+import Fuse, { type IFuseOptions } from 'fuse.js'
 import { useUserStore } from '@/store/user'
 import { getChatIdsPage } from '@/api/chatMemory'
 import { queryAgents } from '@/api/agent'
 import type { ChatSession, Agent } from '@/types'
 import type { Component } from 'vue'
+import HighlightText from '@/components/HighlightText.vue'
 import {
   SearchOutlined,
   CloseOutlined,
@@ -97,12 +102,41 @@ import {
 
 type TabKey = 'all' | 'chat' | 'agent'
 
+/** fuse 索引条目：名称 + 分类（会话/智能体）双键可搜 */
+interface SearchItem {
+  kind: 'session' | 'agent'
+  id: string
+  title: string
+  category: string
+}
+
+/**
+ * fuse 参数（scripts/fuse-tune.mjs 以真实数据调参定版）：
+ * threshold 0.4 为甜点——"Dokcer"（转置）可命中 Docker、"Reds"（缺字母）命中 Redis 且居首，
+ * 0.3 漏转置词、0.5 出现明显噪音；ignoreLocation 让中英文都不受位置惩罚；
+ * 名称 0.7 / 分类 0.3，分类词（"会话"/"智能体"）可直达对应类型，纯分类平局按原序（最近使用序）
+ */
+const FUSE_OPTIONS: IFuseOptions<SearchItem> = {
+  includeScore: true,
+  includeMatches: true,
+  ignoreLocation: true,
+  minMatchCharLength: 1,
+  threshold: 0.4,
+  keys: [
+    { name: 'title', weight: 0.7 },
+    { name: 'category', weight: 0.3 }
+  ]
+}
+
 interface PaletteRow {
   key: string
   index: number
   icon?: Component
   avatar?: string
   title: string
+  category?: string
+  /** fuse 命中区间（title，闭区间），供高亮渲染 */
+  matchIndices?: Array<[number, number]>
   activate: () => void
 }
 
@@ -142,72 +176,77 @@ const bodyRef = ref<HTMLElement | null>(null)
 const keyword = ref('')
 const activeTab = ref<TabKey>('all')
 const activeIndex = ref(0)
+
+// ---------- 本地索引：打开面板时一次性拉全量，输入即时 fuse 过滤（无防抖无逐键请求） ----------
 const searchLoading = ref(false)
-const sessionResults = ref<ChatSession[]>([])
-const agentResults = ref<Agent[]>([])
+const allSessions = ref<ChatSession[]>([])
+const allAgents = ref<Agent[]>([])
+let fetchSeq = 0
 
-const showSessions = computed(() => activeTab.value !== 'agent')
-const showAgents = computed(() => userStore.isLoggedIn && activeTab.value !== 'chat')
-
-// ---------- 数据拉取 ----------
-let debounceTimer: number | undefined
-let searchSeq = 0
-
-// 加载态最短展示时长：本机搜索太快会让压暗/骨架一闪而过（感知为"闪一下"），
-// 结果就绪后不足此时长则补足，让"加载→完成"是一个可感知的稳定过程
-const MIN_LOADING_MS = 300
-
-async function runSearch(): Promise<void> {
-  const startedAt = Date.now()
-  const kw = keyword.value.trim()
-  const seq = ++searchSeq
+async function fetchIndex(): Promise<void> {
+  const seq = ++fetchSeq
   searchLoading.value = true
   const [sessions, agents] = await Promise.all([
-    kw && showSessions.value
-      ? getChatIdsPage(props.agentId, 1, 20, kw).then(res => res.records.map(item => ({
-          id: item.conversationId,
-          title: item.title || '新对话',
-          updateTime: item.updateTime ? new Date(item.updateTime) : new Date(),
-          hasMessage: true
-        }))).catch(() => [])
-      : Promise.resolve([]),
-    kw && showAgents.value
-      ? queryAgents({ name: kw, current: 1, pageSize: 10 }).then(res => res.records).catch(() => [])
+    getChatIdsPage(props.agentId, 1, 200)
+      .then(res => res.records.map(item => ({
+        id: item.conversationId,
+        title: item.title || '新对话',
+        updateTime: item.updateTime ? new Date(item.updateTime) : new Date(),
+        hasMessage: true
+      })))
+      .catch(() => []),
+    userStore.isLoggedIn
+      ? queryAgents({ current: 1, pageSize: 100 }).then(res => res.records).catch(() => [])
       : Promise.resolve([])
   ])
-  // 竞态保护：仅采纳最后一次输入的结果
-  if (seq !== searchSeq) return
-  sessionResults.value = sessions
-  agentResults.value = agents
-  const remain = MIN_LOADING_MS - (Date.now() - startedAt)
-  if (remain > 0) {
-    await new Promise(resolve => window.setTimeout(resolve, remain))
-    if (seq !== searchSeq) return
-  }
+  if (seq !== fetchSeq) return
+  allSessions.value = sessions
+  allAgents.value = agents
   searchLoading.value = false
 }
+
+const fuseItems = computed<SearchItem[]>(() => [
+  ...allSessions.value.map(s => ({ kind: 'session' as const, id: s.id, title: s.title, category: '会话' })),
+  ...allAgents.value.map(a => ({ kind: 'agent' as const, id: String(a.id), title: a.name, category: '智能体' }))
+])
+
+const fuse = computed(() => new Fuse(fuseItems.value, FUSE_OPTIONS))
+
+/** 边输入边出：同步模糊搜索（本地索引，微秒级），结果即相关度排序 */
+const matched = computed<Array<{ item: SearchItem; indices: Array<[number, number]> }>>(() => {
+  const kw = keyword.value.trim()
+  if (!kw) return []
+  return fuse.value.search(kw).map(r => {
+    const titleMatch = r.matches?.find(m => m.key === 'title')
+    return { item: r.item, indices: (titleMatch?.indices ?? []) as Array<[number, number]> }
+  })
+})
 
 // ---------- 面板行组装（统一编号供键盘上下移动） ----------
 const sections = computed<PaletteSection[]>(() => {
   const result: PaletteSection[] = []
   let counter = 0
 
-  const sessionRow = (chat: ChatSession): PaletteRow => ({
+  const sessionRow = (chat: ChatSession, indices?: Array<[number, number]>): PaletteRow => ({
     key: `session_${chat.id}`,
     index: counter++,
     icon: MessageOutlined,
     title: chat.title,
+    category: '会话',
+    matchIndices: indices,
     activate: () => {
       close()
       emit('select-session', chat.id)
     }
   })
 
-  const agentRow = (agent: Agent): PaletteRow => ({
+  const agentRow = (agent: Agent, indices?: Array<[number, number]>): PaletteRow => ({
     key: `agent_${agent.id}`,
     index: counter++,
     avatar: agent.avatar,
     title: agent.name,
+    category: '智能体',
+    matchIndices: indices,
     activate: () => {
       close()
       emit('select-agent', agent.id)
@@ -220,27 +259,33 @@ const sections = computed<PaletteSection[]>(() => {
       result.push({
         key: 'recent',
         title: '最近使用',
-        rows: recent.map(sessionRow),
+        rows: recent.map(c => sessionRow(c)),
         empty: userStore.isLoggedIn ? (recent.length ? undefined : '暂无历史会话') : '登录后可搜索历史会话'
       })
     }
   } else {
+    const chatMatches = matched.value.filter(m => m.item.kind === 'session')
+    const agentMatches = matched.value.filter(m => m.item.kind === 'agent')
     if (activeTab.value !== 'agent') {
+      const rows = chatMatches
+        .map(m => sessionRow({ id: m.item.id, title: m.item.title } as ChatSession, m.indices))
       result.push({
         key: 'chats',
         title: '会话',
-        rows: sessionResults.value.map(sessionRow),
-        empty: searchLoading.value || sessionResults.value.length ? undefined : '未找到相关会话'
+        rows,
+        empty: searchLoading.value || rows.length ? undefined : '未找到相关会话'
       })
     }
     if (activeTab.value !== 'chat') {
+      const rows = agentMatches
+        .map(m => agentRow({ id: Number(m.item.id), name: m.item.title } as Agent, m.indices))
       result.push({
         key: 'agents',
         title: '智能体',
-        rows: userStore.isLoggedIn ? agentResults.value.map(agentRow) : [],
-        empty: userStore.isLoggedIn
-          ? (searchLoading.value || agentResults.value.length ? undefined : '未找到相关智能体')
-          : '登录后可搜索智能体'
+        rows,
+        empty: !userStore.isLoggedIn
+          ? '登录后可搜索智能体'
+          : (searchLoading.value || rows.length ? undefined : '未找到相关智能体')
       })
     }
   }
@@ -335,24 +380,14 @@ watch(() => props.visible, (visible) => {
   if (visible) {
     keyword.value = ''
     activeTab.value = 'all'
-    sessionResults.value = []
-    agentResults.value = []
     activeIndex.value = 0
     nextTick(() => inputRef.value?.focus())
+    fetchIndex()
   }
 })
 
 watch([keyword, activeTab], () => {
   activeIndex.value = 0
-  if (debounceTimer !== undefined) window.clearTimeout(debounceTimer)
-  if (!keyword.value.trim()) {
-    searchSeq++ // 作废在途请求
-    sessionResults.value = []
-    agentResults.value = []
-    searchLoading.value = false
-    return
-  }
-  debounceTimer = window.setTimeout(runSearch, 250)
 })
 </script>
 
@@ -543,9 +578,29 @@ watch([keyword, activeTab], () => {
 
     .row-title {
       flex: 1;
+      min-width: 0;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+
+      // fuse 命中段高亮：主题色淡底
+      :deep(mark.hl),
+      .hl {
+        background: rgba(42, 161, 169, 0.16);
+        color: $primary-color;
+        font-weight: 600;
+        border-radius: 2px;
+        padding: 0 1px;
+      }
+    }
+
+    .row-category {
+      flex-shrink: 0;
+      font-size: 11px;
+      color: #8c8a82;
+      background: #f0eee6;
+      border-radius: 8px;
+      padding: 1px 8px;
     }
 
     .row-enter {
