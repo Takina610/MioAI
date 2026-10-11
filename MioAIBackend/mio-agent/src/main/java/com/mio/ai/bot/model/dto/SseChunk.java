@@ -19,6 +19,7 @@ import java.util.Map;
  *  notice      系统提示         {content}（瞬态不落库，如 MCP 工具本轮装配失败）
  *  usage       用量尾块        {inputTokens, outputTokens, durationMs}
  *  done        结束标记        {}
+ *  stopped     用户主动中断     {}（部分过程已落库，前端状态行显示"已停止"）
  *  error       错误            {content}
  *
  * tool_use / tool_args / tool_result 携带同一 id 配对（端点未返回 id 时回退按顺序配对）。
@@ -103,6 +104,13 @@ public record SseChunk(Map<String, Object> fields) {
     public static SseChunk done() {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("type", "done");
+        return new SseChunk(map);
+    }
+
+    /** 用户主动中断（部分过程已落库；前端状态行显示"已停止"，无折叠入口） */
+    public static SseChunk stopped() {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("type", "stopped");
         return new SseChunk(map);
     }
 

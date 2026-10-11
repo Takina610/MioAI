@@ -29,14 +29,38 @@ export function textOfBlocks(blocks: MessageBlock[]): string {
 /** 后端归档版本 → 消息 history（<n/n> 版本组的持久化恢复） */
 export function historyFromVersions(versions: BotMessageVersion[] | null | undefined): ChatMessage[] | undefined {
   if (!versions || versions.length === 0) return undefined
-  return versions.map((v, i) => ({
-    id: `v_${Date.now()}_${i}_${v.versionIndex}`,
-    role: 'assistant' as const,
-    content: textOfBlocks(((v.blocks ?? []) as MessageBlock[])),
-    createTime: new Date(),
-    blocks: (v.blocks ?? undefined) as MessageBlock[] | undefined,
-    durationMs: v.durationMs ?? undefined
-  }))
+  return versions.map((v, i) => {
+    const rawBlocks = (v.blocks ?? []) as MessageBlock[]
+    const stoppedTurn = rawBlocks.some(b => b.type === 'stopped')
+    return {
+      id: `v_${Date.now()}_${i}_${v.versionIndex}`,
+      role: 'assistant' as const,
+      content: textOfBlocks(rawBlocks),
+      createTime: new Date(),
+      blocks: rawBlocks.filter(b => b.type !== 'stopped') as MessageBlock[] | undefined,
+      durationMs: v.durationMs ?? undefined,
+      stopped: stoppedTurn || undefined
+    }
+  })
+}
+
+/** 持久化 blocks → 展示块：剥离 stopped 标记（转为独立布尔）+ 过期 pending 问答锁定为未作答 */
+export function displayBlocksOf(rawBlocks: MessageBlock[] | null | undefined): {
+  blocks: MessageBlock[] | undefined
+  stopped: boolean
+} {
+  if (!rawBlocks?.length) return { blocks: rawBlocks ?? undefined, stopped: false }
+  const stopped = rawBlocks.some(b => b.type === 'stopped')
+  return {
+    blocks: rawBlocks
+      .filter(b => b.type !== 'stopped')
+      .map(block =>
+        block.type === 'question' && block.status === 'pending'
+          ? { ...block, status: 'answered' as const, answers: [] }
+          : block
+      ),
+    stopped
+  }
 }
 
 export function useChatMessages(options: {
@@ -105,12 +129,9 @@ export function useChatMessages(options: {
       }
       if (rows && rows.length > 0) {
         loadedMessages = rows.map((row, index) => {
-          const blocks = ((row.blocks ?? undefined) as MessageBlock[] | undefined)?.map(block =>
-            // 历史恢复中的过期 pending 问答块：门闸早已不在，锁定为未作答态
-            block.type === 'question' && block.status === 'pending'
-              ? { ...block, status: 'answered' as const, answers: [] }
-              : block
-          )
+          // stopped 标记块转消息停止态（状态行"已停止"，无折叠入口）；历史恢复中的
+          // 过期 pending 问答块：门闸早已不在，锁定为未作答态
+          const { blocks, stopped } = displayBlocksOf((row.blocks ?? undefined) as MessageBlock[] | undefined)
           const history = historyFromVersions(row.versions)
           return {
             id: `${conversationId}_${row.seq ?? index}`,
@@ -120,6 +141,7 @@ export function useChatMessages(options: {
             blocks,
             plan: (row.plan ?? undefined) as ChatMessage['plan'],
             durationMs: row.durationMs ?? undefined,
+            stopped: stopped || undefined,
             history,
             activeVersion: history ? history.length + 1 : undefined
           }

@@ -20,6 +20,7 @@
             :duration-ms="displayOf(msg).durationMs"
             :create-time="displayOf(msg).createTime"
             :interrupted="displayOf(msg).interrupted"
+            :stopped="displayOf(msg).stopped"
             :retry-notice="isLatestVersion(msg) ? msg.retryNotice : undefined"
             :mcp-notice="isLatestVersion(msg) ? msg.mcpNotice : undefined"
             :chat-id="chatId"
@@ -169,7 +170,7 @@ function isLatestVersion(msg: ChatMessage): boolean {
 }
 
 /** 按当前版本号取显示内容：最新=消息本体，旧版=history 快照 */
-function displayOf(msg: ChatMessage): Pick<ChatMessage, 'content' | 'blocks' | 'durationMs' | 'createTime' | 'interrupted'> {
+function displayOf(msg: ChatMessage): Pick<ChatMessage, 'content' | 'blocks' | 'durationMs' | 'createTime' | 'interrupted' | 'stopped'> {
   const version = versionOf(msg)
   if (version === totalVersions(msg) || !msg.history?.length) {
     return msg

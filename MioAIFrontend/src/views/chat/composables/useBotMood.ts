@@ -17,6 +17,7 @@ import type { ChatMessage, MessageBlock, PlanStep } from '@/types'
  * - 回答文本流式 …………………………… writing（铅笔书写）
  * - 回合结束：
  *   - 连接中断 ……………………………… angry（生气，3.6s）
+ *   - 被用户停止 …………………………… confused（懵一下，2.4s，不撒花）
  *   - 任务清单全部完成 ……………………… proud（自豪）
  *   - 回复带笑点（哈哈/233/😂）…………… laughing（大笑）
  *   - 输出超 3000 tokens ……………………… surprised（惊讶）
@@ -92,6 +93,7 @@ export function useBotMood(
       inputHasText.value ? 1 : 0,
       uploading.value ? 1 : 0,
       la?.interrupted ? 1 : 0,
+      la?.stopped ? 1 : 0,
       la?.retryNotice ? 1 : 0,
       planInProgress.value ? 1 : 0
     ].join('|')
@@ -191,6 +193,9 @@ export function useBotMood(
       const la = lastAssistant.value
       if (la?.interrupted) {
         hold('angry', 3600)
+      } else if (la?.stopped) {
+        // 被用户叫停：不是完成也不是失败，懵一下回归闲置，不撒花
+        hold('confused', 2400)
       } else if (la?.retryNotice) {
         hold('confused', 2600)
       } else if (planAllDone.value) {

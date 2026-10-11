@@ -117,6 +117,10 @@ public class MioBotController {
     private static final java.util.concurrent.ConcurrentHashMap<String, String> ACTIVE_CHATS =
             new java.util.concurrent.ConcurrentHashMap<>();
 
+    /** 正在执行的轮次实例：chatId → MioBot（用户中断 /bot/stop 据此定位引擎并打断） */
+    private static final java.util.concurrent.ConcurrentHashMap<String, MioBot> ACTIVE_TURNS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     /** 同一归属（用户/游客IP）最多同时执行的对话轮数 */
     @org.springframework.beans.factory.annotation.Value("${mio.ai.chat.max-concurrent-per-owner:3}")
     private int maxConcurrentPerOwner;
@@ -199,8 +203,12 @@ public class MioBotController {
         mioBot.setUserGroupSeq(groupSeq);
         // MCP 装配失败项：本轮会话开头给一条瞬态系统提示，替代旧的静默降级
         mioBot.setMcpFailures(mcp.failures());
-        // 任务真正结束（含异常）时解除会话占用
-        mioBot.setOnFinish(() -> ACTIVE_CHATS.remove(chatId));
+        // 任务真正结束（含异常）时解除会话占用与轮次登记
+        mioBot.setOnFinish(() -> {
+            ACTIVE_CHATS.remove(chatId);
+            ACTIVE_TURNS.remove(chatId);
+        });
+        ACTIVE_TURNS.put(chatId, mioBot);
         return mioBot.run(content, knowledgeContext, !skipUserPersist);
     }
 
@@ -397,6 +405,30 @@ public class MioBotController {
     @GetMapping("/bot/active/{chatId}")
     public BaseResponse<Boolean> isChatActive(@PathVariable @NotBlank String chatId) {
         return ResultUtils.success(ACTIVE_CHATS.containsKey(chatId));
+    }
+
+    /**
+     * 用户中断正在执行的会话轮次：校验归属后置停止标记并打断轮次线程，
+     * 引擎在当前模型流/工具执行后停下，已流出的部分过程落库并回 stopped 事件。
+     * 会话不在执行时幂等返回成功（前端收尾已由 done/error 事件完成）。
+     */
+    @PostMapping("/bot/stop")
+    public BaseResponse<Boolean> stopTurn(@RequestParam @NotBlank String chatId,
+                                          jakarta.servlet.http.HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        String ownerKey = userId != null ? "u:" + userId : "guest:" + clientIp(httpRequest);
+        String owner = ACTIVE_CHATS.get(chatId);
+        if (owner == null) {
+            return ResultUtils.success(true);
+        }
+        if (!owner.equals(ownerKey)) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限停止该会话的任务");
+        }
+        MioBot turn = ACTIVE_TURNS.get(chatId);
+        if (turn != null) {
+            turn.stop();
+        }
+        return ResultUtils.success(true);
     }
 
     /** 同一归属正在执行的会话数（ACTIVE_CHATS 规模 = 并发轮数，遍历即可） */

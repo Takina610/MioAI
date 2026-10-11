@@ -59,6 +59,9 @@ public final class AgentEngine {
     private int todosVersionSeen = -1;
     private int consecutiveReactiveCompacts;
 
+    /** 轮次取消信号（用户中断）：步间与重试等待处检查，命中即抛 TurnStoppedException */
+    private volatile java.util.function.BooleanSupplier cancelSignal = () -> false;
+
     public AgentEngine(ChatModel chatModel, AgentEngineConfig config, String reasoningEffort,
                        ContextBuilder contextBuilder, ConversationState state, String chatId,
                        AgentEvents events, com.mio.ai.framework.zagent.task.BackgroundTasks tasks) {
@@ -79,6 +82,12 @@ public final class AgentEngine {
     public void bindTools(ToolRegistry toolRegistry) {
         this.registry = toolRegistry;
         this.scheduler = new ToolScheduler(toolRegistry);
+    }
+
+    /** 注入取消信号（用户中断）；同步传给模型步执行器，重试等待同样响应 */
+    public void setCancelSignal(java.util.function.BooleanSupplier signal) {
+        this.cancelSignal = signal;
+        this.modelRunner.setCancelSignal(signal);
     }
 
     public long inputTokens() {
@@ -109,6 +118,9 @@ public final class AgentEngine {
         int step = 0;
         while (true) {
             step++;
+            if (cancelSignal.getAsBoolean()) {
+                throw new TurnStoppedException();
+            }
             boolean finalStep = step >= config.maxSteps();
             compactor.microcompactIfNeeded(state);
             if (compactor.shouldAutoCompact(state)) {
@@ -161,6 +173,9 @@ public final class AgentEngine {
         try {
             return runStepWithReactiveCompact(messages, callbacks);
         } catch (Throwable error) {
+            if (cancelSignal.getAsBoolean()) {
+                throw new TurnStoppedException();
+            }
             if (isInterruption(error)) {
                 throw error;
             }
@@ -175,6 +190,9 @@ public final class AgentEngine {
 
     /** 兜底收束：禁工具再调一次模型生成最终答复；再失败则落静态兜底文案（保证本轮必有可见回复） */
     private ModelStepRunner.StepResult rescueOrFallback(List<Message> messages) {
+        if (cancelSignal.getAsBoolean()) {
+            throw new TurnStoppedException();
+        }
         try {
             List<Message> rescueMessages = new ArrayList<>(messages);
             rescueMessages.add(new org.springframework.ai.chat.messages.UserMessage(

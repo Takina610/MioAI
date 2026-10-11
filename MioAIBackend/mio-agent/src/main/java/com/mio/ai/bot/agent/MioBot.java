@@ -84,6 +84,12 @@ public class MioBot {
     /** 任务结束（含异常）回调：控制器借此解除会话占用 */
     private volatile Runnable onFinish;
 
+    /** 用户主动中断标记：stop() 置位，引擎取消信号据此熔断步循环 */
+    private volatile boolean stopped;
+
+    /** 轮次执行线程：stop() 据此打断模型流/工具等待 */
+    private volatile Thread turnThread;
+
     /** 编辑重发场景：本轮 user 行的版本组锚（沿用被编辑轮次的组） */
     private volatile Long userGroupSeq;
 
@@ -156,6 +162,7 @@ public class MioBot {
 
     private void runTurnTask(String userPrompt, String knowledgeContext, boolean persistUserMessage,
                              SseEmitter sseEmitter) {
+        turnThread = Thread.currentThread();
         long startTime = System.currentTimeMillis();
         ScheduledFuture<?> heartbeat = HEARTBEAT_SCHEDULER.scheduleAtFixedRate(
                 channel::heartbeat, HEARTBEAT_INTERVAL_SECONDS, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
@@ -183,6 +190,8 @@ public class MioBot {
                     customSystemPrompt, knowledgeContext, skillsContext, runContext.fs(), modelName);
             AgentEngine engine = new AgentEngine(chatModel, config, reasoningEffort, contextBuilder,
                     state, chatId, events, runContext.tasks());
+            // 用户中断：引擎步间/重试等待处检查取消信号，命中即停（不走兜底抢救）
+            engine.setCancelSignal(() -> stopped);
 
             if ("/compact".equals(userPrompt.strip())) {
                 runManualCompact(engine, hydrated);
@@ -212,17 +221,31 @@ public class MioBot {
             channel.done();
             complete(sseEmitter);
         } catch (Throwable e) {
-            log.error("MioBot 执行异常, chatId={}", chatId, e);
-            channel.abortRunningTools();
-            boolean persisted = channel.persistDisplay("assistant", null, System.currentTimeMillis() - startTime);
-            channel.finishAssistantWip(persisted);
-            channel.error("执行出错：" + e.getMessage());
-            complete(sseEmitter);
+            if (isStoppedTurn(e)) {
+                // 用户主动中断：悬挂工具块收尾 + 部分过程落库（带中断标记）+ stopped 事件。
+                // 不落 durationMs——前端据 stopped 标记显示"已停止"，不渲染"已完成"折叠行
+                log.info("MioBot 轮次被用户中断, chatId={}", chatId);
+                channel.abortRunningTools();
+                channel.stopped();
+                boolean persisted = channel.persistDisplay("assistant", null, null);
+                channel.finishAssistantWip(persisted);
+                complete(sseEmitter);
+            } else {
+                log.error("MioBot 执行异常, chatId={}", chatId, e);
+                channel.abortRunningTools();
+                boolean persisted = channel.persistDisplay("assistant", null, System.currentTimeMillis() - startTime);
+                channel.finishAssistantWip(persisted);
+                channel.error("执行出错：" + e.getMessage());
+                complete(sseEmitter);
+            }
         } finally {
             heartbeat.cancel(false);
             if (registry != null) {
                 registry.shutdown();
             }
+            turnThread = null;
+            // 清掉中断标记：轮次线程归还线程池，残留标记会让下一轮任务误判为中断
+            Thread.interrupted();
             if (onFinish != null) {
                 try {
                     onFinish.run();
@@ -231,6 +254,30 @@ public class MioBot {
                 }
             }
         }
+    }
+
+    /** 用户主动中断：置停止标记并打断轮次线程（模型流 blockLast/工具 future.get/重试 sleep 均响应中断） */
+    public void stop() {
+        this.stopped = true;
+        Thread t = this.turnThread;
+        if (t != null) {
+            t.interrupt();
+        }
+    }
+
+    /** 本轮是否为用户中断收尾：stop 标记/引擎停止异常/线程中断（沿 cause 链查） */
+    private boolean isStoppedTurn(Throwable error) {
+        if (stopped || error instanceof com.mio.ai.framework.zagent.TurnStoppedException) {
+            return true;
+        }
+        Throwable current = error;
+        while (current != null) {
+            if (current instanceof InterruptedException || Thread.currentThread().isInterrupted()) {
+                return true;
+            }
+            current = current.getCause() == current ? null : current.getCause();
+        }
+        return false;
     }
 
     /** 轮次池打满：明确告知用户而非静默排队 */
@@ -244,6 +291,14 @@ public class MioBot {
         }
         complete(sseEmitter);
         log.warn("轮次线程池已满，拒绝任务, chatId={}", chatId);
+        // 轮次任务未跑，onFinish 不会经 finally 触发：这里补上，否则 ACTIVE_CHATS 占用泄漏
+        if (onFinish != null) {
+            try {
+                onFinish.run();
+            } catch (Exception ignored) {
+                // 清理回调失败不影响主流程
+            }
+        }
     }
 
     /** /compact：手动压缩（zcode executeManualCompact 对位），完成后以简短说明收尾 */

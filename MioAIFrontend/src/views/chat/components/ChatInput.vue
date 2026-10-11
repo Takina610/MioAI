@@ -89,16 +89,19 @@
           >
             {{ loading ? '发送中…' : '发送' }}
           </button>
-          <a-button
-            v-if="!cancelable"
-            type="primary"
-            class="send-btn"
-            :disabled="!value.trim() || loading"
-            :loading="loading"
-            @click="emit('send')"
-          >
-            <ArrowUpOutlined v-if="!loading" />
-          </a-button>
+          <!-- 主输入：生成中变停止按钮（点击中断当前轮次）；空闲为发送 -->
+          <a-tooltip v-if="!cancelable" :title="loading ? '停止' : ''">
+            <a-button
+              type="primary"
+              class="send-btn"
+              :class="{ stopping: loading }"
+              :disabled="!loading && !value.trim()"
+              @click="loading ? emit('stop') : emit('send')"
+            >
+              <StopFilled v-if="loading" />
+              <ArrowUpOutlined v-else />
+            </a-button>
+          </a-tooltip>
         </div>
       </div>
     </div>
@@ -108,7 +111,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useUserStore } from '@/store/user'
-import { ArrowUpOutlined, DownOutlined, PlusOutlined } from '@ant-design/icons-vue'
+import { ArrowUpOutlined, DownOutlined, PlusOutlined, StopFilled } from '@ant-design/icons-vue'
 import BrainIcon from '@/components/BrainIcon.vue'
 import AttachmentCard from './AttachmentCard.vue'
 import BotIcon from '@/components/bot-icon/BotIcon.vue'
@@ -157,6 +160,8 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
   (e: 'update:effort', value: string): void
   (e: 'send'): void
+  /** 生成中点击停止：中断当前轮次 */
+  (e: 'stop'): void
   (e: 'cancel'): void
   (e: 'add-files', files: File[]): void
   (e: 'remove-pending', key: string): void
@@ -503,6 +508,16 @@ function onFileChange(event: Event): void {
         :deep(.anticon) {
           font-size: 15px;
           display: flex;
+        }
+
+        // 生成中的停止态：与主色区分，一眼可辨"这是停止不是发送"
+        &.stopping {
+          background: #141413;
+          border-color: #141413;
+
+          :deep(.anticon) {
+            font-size: 12px;
+          }
         }
       }
     }

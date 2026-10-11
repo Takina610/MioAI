@@ -141,6 +141,14 @@ export const isChatActive = async (chatId: string): Promise<boolean> => {
   return Boolean(result)
 }
 
+/** 中断正在执行的会话轮次：后端置停止标记并打断引擎，已流出的部分过程落库后回 stopped 事件 */
+export const stopChat = async (chatId: string): Promise<boolean> => {
+  const result = await request.post<boolean>('/bot/stop', null, {
+    params: { chatId }
+  })
+  return Boolean(result)
+}
+
 /** 生成会话标题；失败返回 null（调用方保留首条消息兜底标题，不覆盖为占位） */
 export const generateTitle = async (
   agentId: number,

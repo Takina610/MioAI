@@ -67,6 +67,7 @@
           @add-files="handleAddFiles"
           @remove-pending="handleRemovePending"
           @send="handleSend"
+          @stop="handleStop"
           @input-focus="inputListening = true"
           @input-blur="inputListening = false"
         >
@@ -228,7 +229,7 @@ const streamApi = useChatStream({
   followStream,
   scrollToChatListTop
 })
-const { sendMessage, prepareChatId, cleanup: cleanupStream } = streamApi
+const { sendMessage, prepareChatId, cleanup: cleanupStream, stopTurn } = streamApi
 
 /** 正在流式执行中的会话（侧边栏显示加载动画，切走也能看出进度在跑） */
 const streamingChatIds = computed(() => [...messagesApi.chatLoadingMap.value.keys()])
@@ -389,6 +390,13 @@ function handleSend(): void {
   sendMessage(content, { reasoningEffort: reasoningEffort.value, attachments })
   cleanupPendingAttachments()
   inputMessage.value = ''
+}
+
+/** 停止按钮：中断当前会话正在执行的轮次（后端停止引擎，界面由 stopped 事件/恢复轮询收尾） */
+function handleStop(): void {
+  if (currentChatId.value) {
+    stopTurn(currentChatId.value)
+  }
 }
 
 

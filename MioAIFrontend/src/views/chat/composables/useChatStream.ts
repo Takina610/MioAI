@@ -2,7 +2,7 @@ import { nextTick, type Ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
-import { chatWithMioBot, chatWithStream, isChatActive } from '@/api/chat'
+import { chatWithMioBot, chatWithStream, isChatActive, stopChat } from '@/api/chat'
 import { getBotMessages, type BotMessageRow } from '@/api/botMessages'
 import { historyFromVersions } from './useChatMessages'
 import type {
@@ -272,25 +272,13 @@ export function useChatStream(options: {
         }
         messagesApi.setLoading(chatId, false)
       }, (row) => {
-        // 自愈完成：以后端落库的完整工作过程收尾，用户无感
-        patchMessage(chatId, aiMessageIndex, (msg) => ({
-          ...msg,
-          content: textOfBlocks(row.blocks ?? []),
-          blocks: ((row.blocks ?? undefined) as MessageBlock[] | undefined)?.map(block =>
-            block.type === 'question' && block.status === 'pending'
-              ? { ...block, status: 'answered' as const, answers: [] }
-              : block
-          ),
-          plan: (row.plan ?? undefined) as ChatMessage['plan'],
-          durationMs: row.durationMs ?? undefined,
-          history: historyFromVersions(row.versions) ?? msg.history,
-          interrupted: false
-        }))
+        // 自愈完成：以后端落库的完整工作过程收尾，用户无感（被中断的轮次转为"已停止"态）
+        patchMessage(chatId, aiMessageIndex, (msg) => recoveredRowPatch(row, msg))
         if (messagesApi.currentChatId.value === chatId) {
           nextTick(() => options.followStream())
         }
         if (!earlyTitleDone && isNewChat && userStore.isLoggedIn) {
-          options.updateTitle(content, textOfBlocks(row.blocks ?? []), chatId)
+          options.updateTitle(content, textOfBlocks((row.blocks ?? []) as MessageBlock[]), chatId)
         }
         messagesApi.setLoading(chatId, false)
       })
@@ -510,6 +498,10 @@ export function useChatStream(options: {
       case 'done':
         markFinished()
         return { ...msg, blocks: closeOpenThinking(msg.blocks) }
+      case 'stopped':
+        // 用户主动中断：部分过程已由后端落库，状态行显示"已停止"（无折叠入口）
+        markFinished()
+        return { ...msg, blocks: closeOpenThinking(msg.blocks), stopped: true }
       case 'error':
         markFinished()
         return { ...msg, blocks: closeOpenThinking(msg.blocks), interrupted: true }
@@ -577,6 +569,23 @@ export function useChatStream(options: {
     }
   }
 
+  /**
+   * 用户主动中断当前会话轮次：请求后端停止引擎。
+   * 界面收尾由 SSE stopped 事件（连接活着）或恢复轮询取回落库行（连接已断）驱动，
+   * 这里只负责调用与失败提示，不乐观翻转状态。
+   */
+  async function stopTurn(chatId: string): Promise<void> {
+    if (!messagesApi.chatLoadingMap.value.get(chatId)) {
+      return
+    }
+    try {
+      await stopChat(chatId)
+    } catch (e) {
+      console.error('中断失败:', e)
+      message.error('中断失败，请重试')
+    }
+  }
+
   /** 异常收尾：空 AI 消息移除；已有内容则保留并标记中断 */
   function handleEmptyOrPartial(chatId: string, aiMessageIndex: number): void {
     const msgs = messagesApi.getChatMessages(chatId)
@@ -588,6 +597,32 @@ export function useChatStream(options: {
       message.error('连接中断，请重试')
     } else {
       patchMessage(chatId, aiMessageIndex, (msg) => ({ ...msg, interrupted: true }))
+    }
+  }
+
+  /**
+   * 恢复轮询取回的落库行 → 消息补丁（两处恢复路径共用）。
+   * 行尾的 stopped 标记块转为消息停止态（状态行"已停止"，无折叠入口）并不参与渲染；
+   * 等待中的问答块门闸已随连接丢失，锁定为未作答。
+   */
+  function recoveredRowPatch(row: BotMessageRow, msg: ChatMessage): ChatMessage {
+    const rawBlocks = (row.blocks ?? []) as MessageBlock[]
+    const stoppedTurn = rawBlocks.some(b => b.type === 'stopped')
+    return {
+      ...msg,
+      content: textOfBlocks(rawBlocks),
+      blocks: rawBlocks
+        .filter(b => b.type !== 'stopped')
+        .map(block =>
+          block.type === 'question' && block.status === 'pending'
+            ? { ...block, status: 'answered' as const, answers: [] }
+            : block
+        ),
+      plan: (row.plan ?? undefined) as ChatMessage['plan'],
+      durationMs: row.durationMs ?? undefined,
+      history: historyFromVersions(row.versions) ?? msg.history,
+      interrupted: false,
+      stopped: stoppedTurn || undefined
     }
   }
 
@@ -672,20 +707,8 @@ export function useChatStream(options: {
       patchMessage(chatId, pendingIndex, (msg) => ({ ...msg, interrupted: true }))
       messagesApi.setLoading(chatId, false)
     }, (row) => {
-      patchMessage(chatId, pendingIndex, (msg) => ({
-        ...msg,
-        content: textOfBlocks(row.blocks ?? []),
-        blocks: ((row.blocks ?? undefined) as MessageBlock[] | undefined)?.map(block =>
-          // 恢复轮询取回的 pending 问答块：等待中的门闸已随连接丢失，锁定为未作答
-          block.type === 'question' && block.status === 'pending'
-            ? { ...block, status: 'answered' as const, answers: [] }
-            : block
-        ),
-        plan: (row.plan ?? undefined) as ChatMessage['plan'],
-        durationMs: row.durationMs ?? undefined,
-        history: historyFromVersions(row.versions) ?? msg.history,
-        interrupted: false
-      }))
+      // 落库完成：恢复完整回复（被中断的轮次转为"已停止"态）
+      patchMessage(chatId, pendingIndex, (msg) => recoveredRowPatch(row, msg))
       messagesApi.setLoading(chatId, false)
     })
   }
@@ -705,5 +728,5 @@ export function useChatStream(options: {
     }
   }
 
-  return { sendMessage, prepareChatId, cleanup, recoverPendingTurn }
+  return { sendMessage, prepareChatId, cleanup, recoverPendingTurn, stopTurn }
 }

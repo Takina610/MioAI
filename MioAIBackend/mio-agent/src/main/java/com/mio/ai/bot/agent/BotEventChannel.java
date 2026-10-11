@@ -224,6 +224,18 @@ public class BotEventChannel {
         emit(SseChunk.done().fields());
     }
 
+    /**
+     * 用户主动中断收尾：发 stopped 事件，并在展示块末尾追加中断标记
+     * （随本轮持久化，刷新后仍显示"已停止"；水合器跳过未知块类型，不影响下一轮上下文）。
+     * 须在 persistDisplay 之前调用。
+     */
+    public void stopped() {
+        Map<String, Object> block = new LinkedHashMap<>();
+        block.put("type", "stopped");
+        displayBlocks.add(block);
+        emit(SseChunk.stopped().fields());
+    }
+
     public void error(String message) {
         emit(SseChunk.content("error", message).fields());
     }

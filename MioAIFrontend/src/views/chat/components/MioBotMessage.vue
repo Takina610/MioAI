@@ -1,10 +1,15 @@
 <template>
   <div class="mio-bot-message">
-    <!-- 状态行：进行中显示已工作时长（瞬态重试/MCP失败时附提示）；完成后显示总结行并可展开工作过程 -->
+    <!-- 状态行：进行中显示已工作时长（瞬态重试/MCP失败时附提示）；用户中断显示"已停止"
+         （工作过程保持可见，无折叠入口）；完成后显示总结行并可展开工作过程 -->
     <div v-if="isLoading" class="status-line running">
       <span>已工作 {{ elapsedText }}</span>
       <span v-if="retryNotice" class="retry-notice">{{ retryNotice }}</span>
       <span v-if="mcpNotice" class="retry-notice">{{ mcpNotice }}</span>
+    </div>
+    <div v-else-if="stopped" class="status-line stopped">
+      <StopOutlined class="stopped-icon" />
+      <span>已停止</span>
     </div>
     <div
       v-else-if="processBlocks.length"
@@ -16,10 +21,13 @@
       <CaretRightOutlined :rotate="processExpanded ? 90 : 0" class="caret-icon" />
     </div>
 
-    <!-- 工作过程（进行中顺着流式显示；完成后默认收起，点击状态行展开逐个查看）。
-         页面在后台时浏览器抑制 CSS 过渡（会瞬收），故完成瞬间若页面隐藏则先保持展开，
-         等用户切回页面可见时再播放收缩动画 -->
-    <CollapseTransition :open="isLoading || processExpanded || holdProcessOpen" :seam-gap="PROCESS_SEAM_GAP">
+    <!-- 工作过程（进行中顺着流式显示；被中断后保持展开且无折叠按钮；完成后默认收起，
+         点击状态行展开逐个查看）。页面在后台时浏览器抑制 CSS 过渡（会瞬收），
+         故完成瞬间若页面隐藏则先保持展开，等用户切回页面可见时再播放收缩动画 -->
+    <CollapseTransition
+      :open="isLoading || stopped || processExpanded || holdProcessOpen"
+      :seam-gap="PROCESS_SEAM_GAP"
+    >
       <div v-if="processBlocks.length" class="process-list">
         <template v-for="item in processBlocks" :key="item.index">
           <!-- 文本块（过程中的叙述） -->
@@ -142,7 +150,8 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import {
   CaretRightOutlined,
-  CheckCircleOutlined
+  CheckCircleOutlined,
+  StopOutlined
 } from '@ant-design/icons-vue'
 import MarkdownView from '@/components/MarkdownView.vue'
 import RoseFourLoader from '@/components/RoseFourLoader.vue'
@@ -169,6 +178,8 @@ interface Props {
   createTime?: Date
   /** 流式传输异常中断（界面提示回答可能不完整） */
   interrupted?: boolean
+  /** 用户主动中断（状态行显示"已停止"，工作过程保持可见且无折叠入口） */
+  stopped?: boolean
   /** 瞬态失败自动重试提示（后端 retry 事件，内容恢复即清除） */
   retryNotice?: string
   /** 本轮 MCP 工具装配失败提示（后端 notice 事件，瞬态不落历史） */
@@ -511,6 +522,14 @@ function durationSuffix(block: ThinkingBlock): string {
 
     .caret-icon {
       font-size: 11px;
+    }
+  }
+
+  // 用户主动中断：静态行，无折叠入口
+  &.stopped {
+    .stopped-icon {
+      color: #b0aea5;
+      font-size: 13px;
     }
   }
 }

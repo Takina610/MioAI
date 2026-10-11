@@ -59,6 +59,10 @@ export type MessageBlock =
       side: 'input' | 'output'
       items: AttachmentItem[]
     }
+  | {
+      /** 用户主动中断标记（持久化行尾；加载历史时转为消息 stopped 态，不参与渲染） */
+      type: 'stopped'
+    }
 
 /** 会话附件（沙箱工作区内相对路径）：path 形如 uploads/<chatId>/xxx 或 outputs/<chatId>/xxx */
 export interface AttachmentItem {
@@ -117,6 +121,8 @@ export interface ChatMessage {
   durationMs?: number
   /** 流式传输异常中断（已有部分内容时置位，界面提示回答可能不完整） */
   interrupted?: boolean
+  /** 用户主动中断（状态行显示"已停止"，保留工作过程但无折叠入口） */
+  stopped?: boolean
   /** 瞬态失败自动重试中的提示（后端 retry 事件；下一段内容到达即清除） */
   retryNotice?: string
   /** 本轮 MCP 工具装配失败提示（瞬态，不随历史持久化） */

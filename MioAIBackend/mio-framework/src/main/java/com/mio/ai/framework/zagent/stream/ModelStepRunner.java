@@ -1,6 +1,7 @@
 package com.mio.ai.framework.zagent.stream;
 
 import com.mio.ai.framework.zagent.AgentEvents;
+import com.mio.ai.framework.zagent.TurnStoppedException;
 import com.mio.ai.framework.zagent.history.ConversationEntry;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.metadata.Usage;
@@ -40,6 +41,13 @@ public final class ModelStepRunner {
     /** 最近一步是否已流出部分正文（兜底收束时判断是否需要先分段） */
     private volatile boolean lastStepTextEmitted;
 
+    /** 轮次取消信号（用户中断）：每次尝试前与重试等待前检查，命中即停，不再重发/退避 */
+    private volatile java.util.function.BooleanSupplier cancelSignal = () -> false;
+
+    public void setCancelSignal(java.util.function.BooleanSupplier signal) {
+        this.cancelSignal = signal;
+    }
+
     public ModelStepRunner(ChatModel chatModel, long streamTimeoutSeconds, String reasoningEffort,
                            int modelRetries) {
         this.chatModel = chatModel;
@@ -60,6 +68,9 @@ public final class ModelStepRunner {
     public StepResult run(List<Message> messages, List<ToolCallback> toolCallbacks, AgentEvents events) {
         int emptyCompletionRetries = 0;
         for (int attempt = 1; ; attempt++) {
+            if (cancelSignal.getAsBoolean()) {
+                throw new TurnStoppedException();
+            }
             StreamTurnCollector collector = new StreamTurnCollector(
                     events::thinkingDelta, events::answerDelta, events::toolUse, events::toolArgs);
             try {
@@ -87,6 +98,9 @@ public final class ModelStepRunner {
                         && attempt <= modelRetries;
                 if (!canRetry) {
                     throw error;
+                }
+                if (cancelSignal.getAsBoolean()) {
+                    throw new TurnStoppedException();
                 }
                 events.retryScheduled(attempt, modelRetries + 1, failure.reason());
                 try {
