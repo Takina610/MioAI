@@ -50,61 +50,66 @@
     </div>
   </a-modal>
 
-  <!-- 编辑：沿用原名称/描述/头像表单 -->
+  <!-- 编辑：与创建同款图标设计器（形体/颜色）+ 名称/描述；头像已由图标取代 -->
   <a-modal
     v-else
     :open="visible"
     @update:open="handleModalClose"
     title="编辑智能体"
+    :mask-closable="false"
+    width="620px"
     :confirm-loading="submitLoading"
     @ok="handleSubmit"
     @cancel="handleCancel"
-    :mask-closable="false"
-    wrap-class-name="agent-avatar-upload"
-    width="400px"
     ok-text="保存"
     cancel-text="取消"
+    wrap-class-name="agent-create-modal"
   >
-    <a-form ref="formRef" :model="formData" :rules="rules" layout="vertical">
-      <a-form-item name="name" label="名称">
-        <a-input
-          :value="formData.name"
-          @update:value="formData.name = $event"
-          placeholder="请输入智能体名称"
+    <div class="creator">
+      <div class="creator-preview">
+        <BotIcon
+          :shape="config.shape"
+          :fill="config.fill"
+          state="idle"
+          :size="92"
+          follow
+          mood-cycle
+          eye-color="#ffffff"
         />
-      </a-form-item>
-      <a-form-item name="description" label="描述">
-        <a-textarea
-          :value="formData.description"
-          @update:value="formData.description = $event"
-          placeholder="请输入描述"
-          :maxlength="500"
-          :rows="3"
-        />
-      </a-form-item>
-      <a-form-item name="avatar" label="应用头像">
-        <div class="avatar-section">
-          <div class="avatar-preview" @click="triggerFileSelect">
-            <a-avatar :size="60" :src="avatarUrl || defaultAvatarUrl" shape="square" />
-            <div class="avatar-overlay">
-              <EditOutlined />
-            </div>
-          </div>
-        </div>
-      </a-form-item>
-    </a-form>
+      </div>
+
+      <BotIconDesigner :config="config" eye-color="#ffffff" @change="config = $event" />
+
+      <a-form ref="formRef" :model="formData" :rules="rules" layout="vertical" class="form-section">
+        <a-form-item name="name" label="名称" class="compact-item">
+          <a-input
+            :value="formData.name"
+            @update:value="formData.name = $event"
+            placeholder="请输入智能体名称"
+          />
+        </a-form-item>
+        <a-form-item name="description" label="描述" class="compact-item">
+          <a-textarea
+            :value="formData.description"
+            @update:value="formData.description = $event"
+            placeholder="请输入描述"
+            :maxlength="500"
+            :rows="2"
+          />
+        </a-form-item>
+      </a-form>
+    </div>
   </a-modal>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch, onBeforeUnmount } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import { message, type FormInstance } from 'ant-design-vue'
 import type { Rule } from 'ant-design-vue/es/form'
-import { EditOutlined } from '@ant-design/icons-vue'
-import { addAgent, uploadAgentAvatar, deleteTempAvatar, updateAgent, getAgentById } from '@/api/agent'
+import { addAgent, updateAgent, getAgentById } from '@/api/agent'
 import BotIcon from '@/components/bot-icon/BotIcon.vue'
 import BotIconDesigner from '@/components/bot-icon/BotIconDesigner.vue'
-import { DEFAULT_BOT_ICON, serializeBotIcon } from '@/components/bot-icon/types'
+import { DEFAULT_BOT_ICON, parseBotIcon, serializeBotIcon } from '@/components/bot-icon/types'
 import type { BotIconConfig } from '@/components/bot-icon/types'
 import type { AgentAddRequest, AgentUpdateRequest } from '@/types'
 
@@ -125,21 +130,15 @@ const emit = defineEmits<{
   (e: 'success', agentId?: number | void): void
 }>()
 
-const defaultAvatarUrl = 'https://cdn.tak1na.cn/custom_agent.png'
-
 const submitLoading = ref(false)
-const loading = ref(false)
 const formRef = ref<FormInstance | null>(null)
-const avatarUrl = ref<string>('')
-const originalAvatarUrl = ref<string>('')
 
-const isCreate = props.mode !== 'edit'
 const formData = reactive<FormData>({
   name: '',
   description: ''
 })
 
-/** 创建流程的图标配置（颜色/形体设计器） */
+/** 图标配置（创建/编辑共用同一设计器） */
 const config = ref<BotIconConfig>({ ...DEFAULT_BOT_ICON })
 const previewState = ref('idle')
 const previewRef = ref<InstanceType<typeof BotIcon> | null>(null)
@@ -158,68 +157,15 @@ watch(() => props.visible, async (newVal) => {
 
 async function fetchAgentData(): Promise<void> {
   if (!props.agentId) return
-
   try {
-    loading.value = true
     const agent = await getAgentById(props.agentId)
     formData.name = agent.name || ''
     formData.description = agent.description || ''
     formData.avatar = agent.avatar || ''
-    avatarUrl.value = agent.avatar || ''
-    originalAvatarUrl.value = agent.avatar || ''
+    config.value = parseBotIcon(agent.icon) ?? { ...DEFAULT_BOT_ICON }
   } catch (e) {
     console.error(e)
     message.error('获取智能体信息失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-function triggerFileSelect(): void {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.accept = 'image/*'
-  input.onchange = handleFileChange
-  input.click()
-}
-
-async function handleFileChange(event: Event): Promise<void> {
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-
-  if (!file) return
-
-  const isImage = file.type.startsWith('image/')
-  if (!isImage) {
-    message.error('只能上传图片文件')
-    return
-  }
-
-  const isLt20M = file.size / 1024 / 1024 < 20
-  if (!isLt20M) {
-    message.error('图片大小不能超过 20MB')
-    return
-  }
-
-  try {
-    submitLoading.value = true
-
-    // 删除之前的临时头像
-    if (avatarUrl.value && avatarUrl.value.includes('temp_')) {
-      try {
-        await deleteTempAvatar(avatarUrl.value)
-      } catch (e) {
-        console.error('删除之前的临时头像失败', e)
-      }
-    }
-
-    const url = await uploadAgentAvatar(file)
-    avatarUrl.value = url
-  } catch (e) {
-    console.error(e)
-    message.error('上传头像失败')
-  } finally {
-    submitLoading.value = false
   }
 }
 
@@ -230,14 +176,6 @@ function handleModalClose(visible: boolean): void {
 }
 
 async function handleCancel(): Promise<void> {
-  if (avatarUrl.value && avatarUrl.value !== originalAvatarUrl.value && avatarUrl.value.includes('temp_')) {
-    try {
-      await deleteTempAvatar(avatarUrl.value)
-    } catch (e) {
-      console.error('删除临时头像失败', e)
-    }
-  }
-  avatarUrl.value = ''
   emit('update:visible', false)
 }
 
@@ -274,18 +212,16 @@ async function handleSubmit(): Promise<void> {
   try {
     await formRef.value?.validate()
     submitLoading.value = true
-
-    const finalAvatar = avatarUrl.value || defaultAvatarUrl
-
     if (props.agentId) {
+      // 头像保持不动（存量数据兼容），身份展示已由图标接管
       const data: AgentUpdateRequest = {
         id: props.agentId,
-        name: formData.name,
-        description: formData.description,
-        avatar: finalAvatar
+        name: formData.name.trim(),
+        description: formData.description.trim() || undefined,
+        avatar: formData.avatar,
+        icon: serializeBotIcon(config.value)
       }
       await updateAgent(data)
-      avatarUrl.value = ''
       emit('update:visible', false)
       emit('success', props.agentId)
       message.success('更新成功')
@@ -306,19 +242,9 @@ function resetForm(): void {
     description: '',
     avatar: ''
   })
-  avatarUrl.value = ''
-  originalAvatarUrl.value = ''
-  if (isCreate) {
-    config.value = { ...DEFAULT_BOT_ICON }
-    previewState.value = 'idle'
-  }
+  config.value = { ...DEFAULT_BOT_ICON }
+  previewState.value = 'idle'
 }
-
-onBeforeUnmount(() => {
-  if (avatarUrl.value && avatarUrl.value !== originalAvatarUrl.value && avatarUrl.value.includes('temp_')) {
-    deleteTempAvatar(avatarUrl.value).catch(e => console.error('删除临时头像失败', e))
-  }
-})
 </script>
 
 <style lang="scss">
@@ -343,6 +269,10 @@ onBeforeUnmount(() => {
       color: $text-dark;
       margin: 0 0 8px;
     }
+
+    .compact-item {
+      margin-bottom: 12px;
+    }
   }
 
   .creator-footer {
@@ -356,44 +286,6 @@ onBeforeUnmount(() => {
       border-radius: 22px;
       font-size: 15px;
       font-weight: 600;
-    }
-  }
-}
-
-.agent-avatar-upload {
-  .avatar-section {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-    margin-bottom: 24px;
-  }
-
-  .avatar-preview {
-    position: relative;
-    cursor: pointer;
-    border-radius: 10px;
-    overflow: hidden;
-
-    .avatar-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      opacity: 0;
-      transition: opacity 0.3s;
-      font-size: 16px;
-    }
-
-    &:hover .avatar-overlay {
-      opacity: 1;
     }
   }
 }

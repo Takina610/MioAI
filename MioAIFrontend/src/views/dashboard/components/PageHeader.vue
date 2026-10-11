@@ -2,6 +2,7 @@
   <div class="dash-page-header">
     <div class="header-content">
       <div class="header-left">
+        <slot name="icon" />
         <span v-if="backLabel" class="back-btn" @click="goBack">
           <h2>{{ backLabel }}</h2>
         </span>

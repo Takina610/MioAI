@@ -69,24 +69,3 @@ export function publishAgent(agentId: number, data: AgentUpdateRequest): Promise
     data
   })
 }
-
-export function uploadAgentAvatar(file: File): Promise<string> {
-  const formData = new FormData()
-  formData.append('file', file)
-  return request({
-    url: '/agents/avatar/upload',
-    method: 'post',
-    data: formData,
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    }
-  })
-}
-
-export function deleteTempAvatar(url: string): Promise<boolean> {
-  return request({
-    url: '/agents/avatar/temp',
-    method: 'delete',
-    params: { url }
-  })
-}

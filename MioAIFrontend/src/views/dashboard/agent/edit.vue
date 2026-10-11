@@ -7,6 +7,19 @@
       title-clickable
       @title-click="editModalVisible = true"
     >
+      <template #icon>
+        <span class="page-agent-icon" @click="editModalVisible = true">
+          <BotIcon
+            v-if="agentIconConfig"
+            :shape="agentIconConfig.shape"
+            :fill="agentIconConfig.fill"
+            :size="34"
+            :live="false"
+            eye-color="#f0eee6"
+          />
+          <img v-else :src="agentDetail?.avatar || '/logo.png'" alt="" class="page-agent-avatar" />
+        </span>
+      </template>
       <template #actions>
         <a-button type="primary" :loading="publishLoading" @click="handlePublish">
           <SendOutlined /> 发布
@@ -260,6 +273,8 @@ import {
   ThunderboltOutlined
 } from '@ant-design/icons-vue'
 import AgentCreateModal from '@/components/AgentCreateModal.vue'
+import BotIcon from '@/components/bot-icon/BotIcon.vue'
+import { parseBotIcon } from '@/components/bot-icon/types'
 import { countMcpTools } from '@/utils/mcpTool'
 import PageHeader from '../components/PageHeader.vue'
 import ResourceItem from './components/ResourceItem.vue'
@@ -273,6 +288,7 @@ import { useAgentResources } from './composables/useAgentResources'
 const router = useRouter()
 const agentId = Number(useRoute().params.id)
 const editModalVisible = ref(false)
+const agentIconConfig = computed(() => parseBotIcon(agentDetail.value?.icon))
 
 const { loading, publishLoading, agentDetail, formData, fetchAgentDetail, handlePublish } = useAgentEdit(agentId)
 
@@ -332,6 +348,22 @@ function handleEditSuccess(): void {
 </script>
 
 <style lang="scss" scoped>
+.page-agent-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  .page-agent-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 25%;
+    object-fit: cover;
+    display: block;
+  }
+}
+
 .content-wrapper {
   display: flex;
   gap: 24px;
