@@ -16,7 +16,7 @@
 
       <template v-else>
         <div class="skill-toolbar">
-          <a-radio-group v-model:value="source" button-style="solid" size="small">
+          <a-radio-group v-model:value="source" button-style="solid" class="source-switch">
             <a-radio-button value="mine">我的技能</a-radio-button>
             <a-radio-button value="skillssh">skills.sh</a-radio-button>
           </a-radio-group>
@@ -27,30 +27,26 @@
               class="filter-repo"
               placeholder="按仓库筛选"
               allow-clear
-              size="small"
               :options="repoOptions"
             />
             <a-select
               v-model:value="installedFilter"
               class="filter-installed"
               :options="installedOptions"
-              size="small"
             />
             <a-input-search
               v-model:value="searchText"
               class="filter-search"
               placeholder="搜索技能"
               allow-clear
-              size="small"
             />
           </template>
           <template v-else>
             <a-input-search
               v-model:value="skillsShQuery"
               class="filter-search"
-              placeholder="搜索 skills.sh 技能，回车搜索"
+              placeholder="搜索skills.sh(至少2个字符)..."
               allow-clear
-              size="small"
               :loading="skillsShLoading"
               @search="handleSkillsShSearch"
             />
@@ -333,7 +329,7 @@ const skillsShSearched = ref(false)
 const installingShKeys = reactive(new Set<string>())
 
 const skillsShEmptyText = computed(() => {
-  if (!skillsShSearched.value) return '输入关键词搜索 skills.sh 上的技能'
+  if (!skillsShSearched.value) return '输入至少 2 个字符搜索 skills.sh 上的技能'
   return '没有找到相关技能'
 })
 
@@ -343,7 +339,10 @@ function shKey(item: SkillsShSkill): string {
 
 async function handleSkillsShSearch(): Promise<void> {
   const query = skillsShQuery.value.trim()
-  if (!query) return
+  if (query.length < 2) {
+    message.warning('请输入至少 2 个字符')
+    return
+  }
   skillsShLoading.value = true
   try {
     const result = await searchSkillsSh(query)
@@ -418,16 +417,26 @@ onMounted(() => {
   gap: 12px;
   margin-bottom: 16px;
 
+  :deep(.ant-radio-button-wrapper) {
+    min-width: 112px;
+    text-align: center;
+  }
+
+  :deep(.ant-select-selection-item),
+  :deep(.ant-select-selection-placeholder) {
+    text-align: center;
+  }
+
   .filter-repo {
-    min-width: 180px;
+    min-width: 220px;
   }
 
   .filter-installed {
-    width: 110px;
+    width: 140px;
   }
 
   .filter-search {
-    width: 240px;
+    width: 300px;
   }
 }
 
