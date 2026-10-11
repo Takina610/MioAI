@@ -120,7 +120,7 @@ public class MioBotController {
     /** 当前模型实际支持的思考档位（探测缓存），前端据此如实渲染档位选择器 */
     @GetMapping("/bot/efforts")
     public BaseResponse<Map<String, Object>> efforts() {
-        return ResultUtils.success(Map.of("efforts", modelEffortCapabilities.supportedEfforts()));
+        return ResultUtils.success(Map.of("efforts", modelEffortCapabilities.supportedEfforts(engineModelName)));
     }
 
     @GetMapping("/bot/chat")
