@@ -7,7 +7,7 @@
           :shape="agentIconConfig.shape"
           :fill="agentIconConfig.fill"
           :size="32"
-          follow
+          :live="false"
           eye-color="#f5f3ec"
         />
         <img v-else :src="agentInfo?.avatar || '/logo.png'" alt="Avatar" class="agent-avatar" />

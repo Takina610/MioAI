@@ -2,7 +2,7 @@
   <div class="dash-page">
     <PageHeader :title="`智能体管理 ${agentList.length}`">
       <template #actions>
-        <a-button v-if="userStore.isLoggedIn" type="primary" @click="router.push('/dashboard/agent/create')">
+        <a-button v-if="userStore.isLoggedIn" type="primary" @click="createModalVisible = true">
           <PlusOutlined /> 创建智能体
         </a-button>
       </template>
@@ -70,6 +70,12 @@
         </div>
 
         <AgentCreateModal
+          v-model:visible="createModalVisible"
+          mode="create"
+          @success="handleCreateSuccess"
+        />
+
+        <AgentCreateModal
           v-model:visible="editModalVisible"
           mode="edit"
           :agent-id="editingAgentId"
@@ -109,12 +115,19 @@ const emit = defineEmits<{
 const router = useRouter()
 const userStore = useUserStore()
 const loading = ref(false)
+const createModalVisible = ref(false)
 const editModalVisible = ref(false)
 const editingAgentId = ref<number | undefined>(undefined)
 const agentList = ref<Agent[]>([])
 
 function agentIcon(agent: Agent) {
   return parseBotIcon(agent.icon)
+}
+
+function handleCreateSuccess(agentId?: number | void): void {
+  if (agentId) {
+    router.push(`/dashboard/agent/${agentId}`)
+  }
 }
 
 async function fetchAgents(): Promise<void> {

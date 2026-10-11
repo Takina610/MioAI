@@ -5,8 +5,8 @@
         v-if="agentIconConfig"
         :shape="agentIconConfig.shape"
         :fill="agentIconConfig.fill"
-        :size="86"
-        follow
+        :size="56"
+        :live="false"
         eye-color="#faf9f5"
       />
       <img v-else :src="agentAvatar || '/logo.png'" alt="Agent" class="welcome-avatar" />

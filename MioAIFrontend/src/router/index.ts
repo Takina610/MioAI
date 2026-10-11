@@ -59,12 +59,6 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '我的智能体', requiresAuth: false }
       },
       {
-        path: 'agent/create',
-        name: 'AgentCreate',
-        component: () => import('@/views/dashboard/agent/create.vue'),
-        meta: { title: '创建智能体', requiresAuth: false }
-      },
-      {
         path: 'agent/:id',
         name: 'AgentEdit',
         component: () => import('@/views/dashboard/agent/edit.vue'),
