@@ -149,6 +149,16 @@ export const stopChat = async (chatId: string): Promise<boolean> => {
   return Boolean(result)
 }
 
+/**
+ * 断线重连回放：接管正在执行会话的事件流，服务端先回放 lastSeq 之后的事件再续播直播。
+ * 会话不在执行时服务端回一条 replay_unavailable 事件即结束（调用方回退落库还原）
+ */
+export const reconnectChatStream = (
+  chatId: string,
+  lastSeq: number,
+  token: string
+): EventSource => connectSSE('/bot/chat/stream', { chatId, lastSeq, token })
+
 /** 生成会话标题；失败返回 null（调用方保留首条消息兜底标题，不覆盖为占位） */
 export const generateTitle = async (
   agentId: number,

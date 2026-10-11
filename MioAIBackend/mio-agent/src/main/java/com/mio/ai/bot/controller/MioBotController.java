@@ -442,6 +442,51 @@ public class MioBotController {
         return count;
     }
 
+    /**
+     * 断线重连（Claude/ChatGPT 式重连回放）：接管正在执行会话的事件流——
+     * 先回放服务端缓冲中 lastSeq 之后的事件，再续播直播（心跳保活）。
+     * 会话不在执行（已结束/崩溃/未知）时回一条 replay_unavailable 事件即结束，
+     * 前端据此回退到落库还原/恢复轮询。归属校验与 /bot/chat 一致（用户 token / 游客 IP）。
+     */
+    @GetMapping("/bot/chat/stream")
+    public SseEmitter reconnectStream(@RequestParam @NotBlank String chatId,
+                                      @RequestParam(defaultValue = "0") long lastSeq,
+                                      @RequestParam(required = false) String token,
+                                      jakarta.servlet.http.HttpServletRequest httpRequest) {
+        SseEmitter emitter = new SseEmitter(SseStreams.CHAT_TIMEOUT_MS);
+        Long userId = StrUtil.isBlank(token) ? null : redisComponent.getUserId(token);
+        String ownerKey = userId != null ? "u:" + userId : "guest:" + clientIp(httpRequest);
+
+        MioBot turn = ACTIVE_TURNS.get(chatId);
+        String owner = ACTIVE_CHATS.get(chatId);
+        if (turn == null || owner == null || turn.isReplayDisabled()) {
+            return emitUnavailableNotice(emitter);
+        }
+        if (!owner.equals(ownerKey)) {
+            return emitUnavailableNotice(emitter);
+        }
+        turn.attachReplay(emitter, lastSeq);
+        return emitter;
+    }
+
+    /** 单条 replay_unavailable 提示后立即结束连接（前端回退到落库还原路径） */
+    private SseEmitter emitUnavailableNotice(SseEmitter emitter) {
+        if (!com.mio.ai.bot.agent.TurnExecutors.execute(() -> {
+            SseStreams.sendTyped(emitter, SseChunk.content("replay_unavailable",
+                    "会话不在执行中或事件缓冲不可用，请从落库历史还原").fields(), 1);
+            try {
+                emitter.complete();
+            } catch (IllegalStateException ignored) {
+            }
+        })) {
+            try {
+                emitter.complete();
+            } catch (IllegalStateException ignored) {
+            }
+        }
+        return emitter;
+    }
+
     /** 游客归属标识：优先 X-Forwarded-For 首段（反代场景），否则对端地址 */
     private String clientIp(jakarta.servlet.http.HttpServletRequest request) {
         if (request == null) {

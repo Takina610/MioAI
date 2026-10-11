@@ -35,7 +35,9 @@ export function useBotMood(
   listening: Ref<boolean>,
   inputText?: Ref<string>,
   pendingUploads?: Ref<number>,
-  plan?: Ref<PlanStep[] | null>
+  plan?: Ref<PlanStep[] | null>,
+  /** 当前会话 id：切换会话时复位过渡基线，防止把"切走"误判为"回合结束" */
+  chatId?: Ref<string>
 ) {
   const mood = ref('idle')
   /** 里程碑特效信号：+1 = 转一圈撒花 */
@@ -175,6 +177,15 @@ export function useBotMood(
     lastActiveAt = Date.now()
     hold('waking', 1400)
   })
+
+  // 切换会话不是回合过渡：把 busy 基线复位到新会话的加载态。
+  // 否则从"执行中"的会话切走时 isLoading 翻 false 会被 signature watch
+  // 误判成回合结束，触发庆祝/生气等完成情绪（注册顺序须在 signature watch 之前）
+  if (chatId) {
+    watch(chatId, () => {
+      wasLoading = isLoading.value
+    })
+  }
 
   watch(signature, () => {
     const busy = isLoading.value

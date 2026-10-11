@@ -94,11 +94,10 @@
             <a-button
               type="primary"
               class="send-btn"
-              :class="{ stopping: loading }"
               :disabled="!loading && !value.trim()"
               @click="loading ? emit('stop') : emit('send')"
             >
-              <StopFilled v-if="loading" />
+              <span v-if="loading" class="stop-square" />
               <ArrowUpOutlined v-else />
             </a-button>
           </a-tooltip>
@@ -111,7 +110,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useUserStore } from '@/store/user'
-import { ArrowUpOutlined, DownOutlined, PlusOutlined, StopFilled } from '@ant-design/icons-vue'
+import { ArrowUpOutlined, DownOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import BrainIcon from '@/components/BrainIcon.vue'
 import AttachmentCard from './AttachmentCard.vue'
 import BotIcon from '@/components/bot-icon/BotIcon.vue'
@@ -510,14 +509,13 @@ function onFileChange(event: Event): void {
           display: flex;
         }
 
-        // 生成中的停止态：与主色区分，一眼可辨"这是停止不是发送"
-        &.stopping {
-          background: #141413;
-          border-color: #141413;
-
-          :deep(.anticon) {
-            font-size: 12px;
-          }
+        // 生成中的停止态：背景保持主题色，白色小方块即停止（zcode 同款）
+        .stop-square {
+          width: 11px;
+          height: 11px;
+          border-radius: 2px;
+          background: #fff;
+          display: inline-block;
         }
       }
     }

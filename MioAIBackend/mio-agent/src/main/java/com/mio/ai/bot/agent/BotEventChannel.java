@@ -38,8 +38,22 @@ public class BotEventChannel {
     private final Long agentId;
     private final AtomicInteger seq = new AtomicInteger();
 
-    // 当前连接：run 开始时由 MioBot 注入；断开时 sendTyped 静默失败，不影响执行与落库
+    // 当前连接：run 开始时由 MioBot 注入；断开时 sendTyped 静默失败，不影响执行与落库。
+    // 断线重连时被 attachReplay 替换为新连接（回放缓冲后续播直播）
     private volatile SseEmitter emitter;
+
+    // 重连回放缓冲：本轮全部信封事件（心跳除外）按 seq 留存，断线重连按 lastSeq 续播。
+    // 超上限（病态巨轮）时清空并停用缓冲——重连方收到 replay_unavailable 回退落库还原
+    private record BufferedEvent(int seq, Map<String, Object> fields) {
+    }
+
+    private static final int REPLAY_BUFFER_MAX_EVENTS = 20_000;
+
+    private final List<BufferedEvent> replayBuffer = new ArrayList<>();
+    private boolean replayDisabled = false;
+
+    /** emit 与 attachReplay 共用锁：回放+换接在临界区内完成，不留丢事件的缝隙 */
+    private final Object emitLock = new Object();
 
     // 展示持久化：与本轮 SSE 事件同构的内容块（文本/思考/工具）+ 最终清单快照
     private final List<Map<String, Object>> displayBlocks = new ArrayList<>();
@@ -403,10 +417,44 @@ public class BotEventChannel {
     }
 
     private void emit(Map<String, Object> fields) {
-        SseEmitter current = emitter;
-        if (current != null) {
-            SseStreams.sendTyped(current, fields, seq.incrementAndGet());
+        synchronized (emitLock) {
+            int next = seq.incrementAndGet();
+            if (!replayDisabled) {
+                if (replayBuffer.size() >= REPLAY_BUFFER_MAX_EVENTS) {
+                    replayBuffer.clear();
+                    replayDisabled = true;
+                    log.warn("回放缓冲超上限（{} 事件），本轮停用重连回放, chatId={}", REPLAY_BUFFER_MAX_EVENTS, chatId);
+                } else if (!"heartbeat".equals(fields.get("type"))) {
+                    replayBuffer.add(new BufferedEvent(next, fields));
+                }
+            }
+            SseEmitter current = emitter;
+            if (current != null) {
+                SseStreams.sendTyped(current, fields, next);
+            }
         }
+    }
+
+    /**
+     * 断线重连接管（Claude/ChatGPT 式重连回放）：先把缓冲中 seq &gt; lastSeenSeq 的事件
+     * 补送给新连接，再把后续直播切换过去。与 emit 同锁，回放与新事件之间无缝隙。
+     */
+    public void attachReplay(SseEmitter newEmitter, long lastSeenSeq) {
+        synchronized (emitLock) {
+            if (!replayDisabled) {
+                for (BufferedEvent event : replayBuffer) {
+                    if (event.seq() > lastSeenSeq) {
+                        SseStreams.sendTyped(newEmitter, event.fields(), event.seq());
+                    }
+                }
+            }
+            emitter = newEmitter;
+        }
+    }
+
+    /** 重连回放是否已对本轮停用（缓冲超上限）：控制器据此直接回 replay_unavailable */
+    public boolean isReplayDisabled() {
+        return replayDisabled;
     }
 
     private void completeDisplayTool(String id, String tool, String result) {

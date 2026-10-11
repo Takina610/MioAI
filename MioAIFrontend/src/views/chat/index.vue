@@ -259,7 +259,7 @@ const pendingAttachments = ref<PendingAttachment[]>([])
 const inputListening = ref(false)
 const uploadingCount = computed(() => pendingAttachments.value.filter(p => p.status === 'uploading').length)
 const { mood: petMood, fxSignal: petFxSignal } = useBotMood(
-  messages, isLoading, inputListening, inputMessage, uploadingCount, activePlan
+  messages, isLoading, inputListening, inputMessage, uploadingCount, activePlan, currentChatId
 )
 const petIconConfig = computed<BotIconConfig>(
   () => parseBotIcon(agentInfo.value?.icon) ?? DEFAULT_BOT_ICON

@@ -265,6 +265,16 @@ public class MioBot {
         }
     }
 
+    /** 断线重连：把新连接挂到事件通道上，回放 lastSeq 之后的事件并续播直播 */
+    public void attachReplay(SseEmitter emitter, long lastSeq) {
+        channel.attachReplay(emitter, lastSeq);
+    }
+
+    /** 重连回放是否已对本轮停用（缓冲超上限） */
+    public boolean isReplayDisabled() {
+        return channel.isReplayDisabled();
+    }
+
     /** 本轮是否为用户中断收尾：stop 标记/引擎停止异常/线程中断（沿 cause 链查） */
     private boolean isStoppedTurn(Throwable error) {
         if (stopped || error instanceof com.mio.ai.framework.zagent.TurnStoppedException) {

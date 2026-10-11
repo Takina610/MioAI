@@ -2,7 +2,7 @@ import { nextTick, type Ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
-import { chatWithMioBot, chatWithStream, isChatActive, stopChat } from '@/api/chat'
+import { chatWithMioBot, chatWithStream, isChatActive, reconnectChatStream, stopChat } from '@/api/chat'
 import { getBotMessages, type BotMessageRow } from '@/api/botMessages'
 import { historyFromVersions } from './useChatMessages'
 import type {
@@ -23,6 +23,10 @@ import {
 // 看门狗：连续该时长收不到任何事件（含心跳）才判定连接挂死。
 // 后端每 15s 发一次 heartbeat，长工具执行期间也会被持续喂狗。
 const STREAM_WATCHDOG_TIMEOUT_MS = 60000
+
+// 断线重连回放：携 lastSeq 重连 /bot/chat/stream 续播；连续失败到该次数
+// （后端不在执行/网络持续不通）才回退到恢复轮询。每次收到事件即恢复预算
+const MAX_RECONNECT_ATTEMPTS = 3
 
 // 断线自愈：连接被浏览器/代理掐断时后端仍在执行，
 // 结束时会把完整工作过程一次性落库到 agent_message——静默轮询该表，
@@ -234,12 +238,15 @@ export function useChatStream(options: {
       groupSeq: opts?.groupSeq,
       attachments: uploaded
     })
-    const es = eventSource
 
-    // 流式异常处理：连接被掐断时后端通常仍在执行——启动静默自愈而不是报错
+    // 断点续播：服务端为执行中的回合缓冲了全部事件（seq 递增），
+    // 连接断开时携 lastSeq 重连 /bot/chat/stream——先回放缺口再续播直播；
+    // 重连预算耗尽（后端不在执行/网络持续不通）才回退到恢复轮询（落库还原）
+    let lastSeq = 0
+    let reconnectAttempts = MAX_RECONNECT_ATTEMPTS
+
+    // 流式异常处理：先尝试重连回放，失败再走静默自愈
     const handleStreamError = (error: Event) => {
-      console.error('SSE连接错误:', error)
-
       // 不是当前会话的消息则忽略
       if (currentEventSourceChatId !== chatId) {
         return
@@ -249,10 +256,27 @@ export function useChatStream(options: {
         return
       }
 
+      if (reconnectAttempts > 0) {
+        reconnectAttempts--
+        console.warn('SSE 断开，尝试重连回放:', error)
+        disarmStreamWatchdog()
+        if (eventSource) {
+          eventSource.close()
+        }
+        eventSource = reconnectChatStream(chatId, lastSeq, token)
+        currentEventSourceChatId = chatId
+        eventSource.onmessage = onStreamMessage
+        eventSource.onerror = handleStreamError
+        return
+      }
+
+      console.error('SSE连接错误（重连回放不可用）:', error)
       disarmStreamWatchdog()
-      es.close()
-      eventSource = null
-      currentEventSourceChatId = ''
+      if (eventSource) {
+        eventSource.close()
+        eventSource = null
+        currentEventSourceChatId = ''
+      }
 
       const partial = messagesApi.getChatMessages(chatId)[aiMessageIndex]
       const empty = !partial || (!partial.content && !(partial.blocks && partial.blocks.length))
@@ -284,9 +308,6 @@ export function useChatStream(options: {
       })
     }
 
-    // 初始挂一次看门狗；此后每个事件（含心跳）到达都会重挂
-    rearmStreamWatchdog(chatId, () => handleStreamError(new Event('stream-watchdog')))
-
     // 标题不必等回复结束：首答累计够多字或首个工具调用出现时即可总结
     let earlyTitleDone = false
     const maybeTitleEarly = (): void => {
@@ -300,25 +321,35 @@ export function useChatStream(options: {
       }
     }
 
-    es.onmessage = (event: MessageEvent) => {
-      const rawData = event.data
-
+    /** 原流与重连流共用的事件处理：喂狗、追踪 seq 断点、应用信封 */
+    const onStreamMessage = (event: MessageEvent): void => {
       // 不是当前会话的消息则忽略
       if (currentEventSourceChatId !== chatId) {
         return
       }
-      // 任何事件都证明连接活着：喂狗
-      rearmStreamWatchdog(chatId, () => handleStreamError(new Event('stream-watchdog')))
 
       let parsed: Record<string, any> | null = null
       try {
-        const obj = JSON.parse(rawData)
+        const obj = JSON.parse(event.data)
         if (obj && typeof obj === 'object') parsed = obj
       } catch {
         parsed = null
       }
       if (!parsed) {
         return
+      }
+      // 服务端明确不可回放（回合已结束/缓冲停用）：不再重连，交给 onerror 走落库还原
+      if (parsed.type === 'replay_unavailable') {
+        reconnectAttempts = 0
+        return
+      }
+
+      // 任何事件都证明连接活着：喂狗 + 恢复重连预算 + 记录断点
+      rearmStreamWatchdog(chatId, () => handleStreamError(new Event('stream-watchdog')))
+      reconnectAttempts = MAX_RECONNECT_ATTEMPTS
+      const seqNum = Number(parsed.seq)
+      if (Number.isFinite(seqNum) && seqNum > 0) {
+        lastSeq = seqNum
       }
 
       let finished = false
@@ -342,12 +373,17 @@ export function useChatStream(options: {
         options.updateTitle(content, finalMessages[aiMessageIndex]?.content || '', chatId)
       }
       messagesApi.setLoading(chatId, false)
-      es.close()
-      eventSource = null
+      if (eventSource) {
+        eventSource.close()
+        eventSource = null
+      }
       currentEventSourceChatId = ''
     }
 
-    es.onerror = handleStreamError
+    eventSource.onmessage = onStreamMessage
+    eventSource.onerror = handleStreamError
+    // 初始挂一次看门狗；此后每个事件（含心跳）到达都会重挂
+    rearmStreamWatchdog(chatId, () => handleStreamError(new Event('stream-watchdog')))
   }
 
   /** 文本增量：content 累积 + 合并进同类末块（块序即显示序）；重试提示随之清除 */
@@ -692,8 +728,9 @@ export function useChatStream(options: {
   }
 
   /**
-   * 孤儿回合接管：历史加载发现末条是 user 行（页面曾在执行期间被关闭/丢弃），
-   * 该回合仍在后端执行——置为加载中并恢复轮询，落库后自动补全完整回复。
+   * 孤儿回合接管：历史加载发现运行中的回合（末行 user 行，或仍在执行的 WIP
+   * assistant 行被 loadMessages 剥离替换）——置为加载中并重连回放续播；
+   * 重连不可用（回合已结束/网络不通）再回退到恢复轮询，落库后自动补全完整回复。
    */
   function recoverPendingTurn(chatId: string): void {
     const msgs = messagesApi.getChatMessages(chatId)
@@ -702,15 +739,107 @@ export function useChatStream(options: {
       return
     }
     messagesApi.setLoading(chatId, true)
-    startRecoveryPolling(chatId, pendingIndex, () => {
-      // 始终无结果：标记中断（刷新仍可从历史恢复）
-      patchMessage(chatId, pendingIndex, (msg) => ({ ...msg, interrupted: true }))
-      messagesApi.setLoading(chatId, false)
-    }, (row) => {
-      // 落库完成：恢复完整回复（被中断的轮次转为"已停止"态）
+
+    const token: string = localStorage.getItem('token') || ''
+    const onRecoveredRow = (row: BotMessageRow): void => {
       patchMessage(chatId, pendingIndex, (msg) => recoveredRowPatch(row, msg))
       messagesApi.setLoading(chatId, false)
-    })
+    }
+    const fallbackToPolling = (): void => {
+      startRecoveryPolling(chatId, pendingIndex, () => {
+        // 始终无结果：标记中断（刷新仍可从历史恢复）
+        patchMessage(chatId, pendingIndex, (msg) => ({ ...msg, interrupted: true }))
+        messagesApi.setLoading(chatId, false)
+      }, onRecoveredRow)
+    }
+
+    // 重连回放续播（服务端缓冲了本轮事件）：优先于轮询——能看到实时过程而非干等结果
+    let lastSeq = 0
+    let attempts = MAX_RECONNECT_ATTEMPTS
+    let replayEs: EventSource | null = null
+    let stallTimer: ReturnType<typeof setTimeout> | null = null
+
+    const clearStallTimer = (): void => {
+      if (stallTimer) {
+        clearTimeout(stallTimer)
+        stallTimer = null
+      }
+    }
+    // 回放流也有 15s 心跳喂狗；静默超时视为断流，走重连/回退
+    const rearmStallTimer = (): void => {
+      clearStallTimer()
+      stallTimer = setTimeout(() => {
+        if (!messagesApi.chatLoadingMap.value.get(chatId)) return
+        if (replayEs) {
+          replayEs.close()
+          replayEs = null
+        }
+        if (attempts > 0) {
+          attempts--
+          connect()
+        } else {
+          fallbackToPolling()
+        }
+      }, STREAM_WATCHDOG_TIMEOUT_MS)
+    }
+
+    const finishReplay = (): void => {
+      clearStallTimer()
+      if (replayEs) {
+        replayEs.close()
+        replayEs = null
+      }
+      messagesApi.setLoading(chatId, false)
+    }
+
+    const connect = (): void => {
+      replayEs = reconnectChatStream(chatId, lastSeq, token)
+      rearmStallTimer()
+      replayEs.onmessage = (event: MessageEvent) => {
+        let parsed: Record<string, any> | null = null
+        try {
+          const obj = JSON.parse(event.data)
+          if (obj && typeof obj === 'object') parsed = obj
+        } catch {
+          parsed = null
+        }
+        if (!parsed) return
+        if (parsed.type === 'replay_unavailable') {
+          // 回合已结束/缓冲停用：服务端随即关流，onerror 里回退轮询
+          attempts = 0
+          return
+        }
+        rearmStallTimer()
+        const seqNum = Number(parsed.seq)
+        if (Number.isFinite(seqNum) && seqNum > 0) lastSeq = seqNum
+        // 回放/直播期间落库行出现（WIP 步增量刷新）也不切换到轮询：直播更实时，
+        // done/stopped 事件收尾即拿到完整内容
+        let finished = false
+        patchMessage(chatId, pendingIndex, (msg) => applyEnvelope(msg, parsed!, () => {
+          finished = true
+        }))
+        followIfCurrent(chatId)
+        if (finished) {
+          finishReplay()
+        }
+      }
+      replayEs.onerror = () => {
+        if (replayEs) {
+          replayEs.close()
+          replayEs = null
+        }
+        clearStallTimer()
+        // 已被其他路径收尾（如停止后 done 已应用）则不再接续
+        if (!messagesApi.chatLoadingMap.value.get(chatId)) return
+        if (attempts > 0) {
+          attempts--
+          connect()
+        } else {
+          fallbackToPolling()
+        }
+      }
+    }
+    connect()
   }
 
   /** 组件卸载前关闭所有流式连接 */

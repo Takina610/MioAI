@@ -1,6 +1,7 @@
 import { ref, nextTick } from 'vue'
 import { message } from 'ant-design-vue'
 import { getBotMessages, type BotMessageVersion } from '@/api/botMessages'
+import { isChatActive } from '@/api/chat'
 import { useUserStore } from '@/store/user'
 import type { ChatMessage, MessageBlock } from '@/types'
 
@@ -156,22 +157,36 @@ export function useChatMessages(options: {
         chatMessagesMap.value.set(conversationId, loadedMessages)
       }
 
-      // 末尾是 user 行：上一轮的回复仍在后端执行（页面曾被关闭/丢弃/中断）——
-      // 补一条进行中的空消息并交给恢复轮询接管，后端落库后自动补全
-      if (
-        loadedMessages.length > 0 &&
-        loadedMessages[loadedMessages.length - 1].role === 'user' &&
-        !isLoadingThisChat
-      ) {
-        const withPending: ChatMessage[] = [...loadedMessages, {
-          id: `pending_${conversationId}`,
-          role: 'assistant',
-          content: '',
-          blocks: [],
-          createTime: new Date()
-        }]
-        chatMessagesMap.value.set(conversationId, withPending)
-        options.onPendingTurn?.(conversationId)
+      // 运行中的回合接管：末行是 user 行（WIP 行创建失败的降级轮次），或末行是
+      // 后端仍在执行的 WIP assistant 行（每步增量落库，中途刷新即看到）——
+      // 剥离 WIP 行换成空的进行中消息交给 onPendingTurn（重连回放续播，回退恢复轮询）
+      if (!isLoadingThisChat && loadedMessages.length > 0) {
+        const last = loadedMessages[loadedMessages.length - 1]
+        let takeover = false
+        if (last.role === 'user') {
+          takeover = true
+        } else if (last.role === 'assistant') {
+          try {
+            takeover = await isChatActive(conversationId)
+          } catch {
+            takeover = false
+          }
+        }
+        if (takeover) {
+          const base = last.role === 'assistant'
+            ? loadedMessages.slice(0, -1)
+            : loadedMessages
+          const withPending: ChatMessage[] = [...base, {
+            id: `pending_${conversationId}`,
+            role: 'assistant',
+            content: '',
+            blocks: [],
+            // WIP 行接管时沿用其创建时间：刷新后"已工作 X秒"连续计时，不归零
+            createTime: last.role === 'assistant' ? last.createTime : new Date()
+          }]
+          chatMessagesMap.value.set(conversationId, withPending)
+          options.onPendingTurn?.(conversationId)
+        }
       }
 
       if (currentChatId.value === conversationId) {
