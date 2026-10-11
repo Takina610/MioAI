@@ -266,11 +266,13 @@ async function fetchSkills(): Promise<void> {
 
 function openDoc(skill: Skill): void {
   const url = skill.docUrl || skill.sourceUrl
-  if (url) window.open(url, '_blank')
+  openExternal(url || '')
 }
 
+/** 只放行 http(s)：来源链接入库前的历史数据可能带任意协议 */
 function openExternal(url: string): void {
-  window.open(url, '_blank')
+  if (!/^https?:\/\//i.test(url)) return
+  window.open(url, '_blank', 'noopener')
 }
 
 async function handleInstall(skill: Skill): Promise<void> {

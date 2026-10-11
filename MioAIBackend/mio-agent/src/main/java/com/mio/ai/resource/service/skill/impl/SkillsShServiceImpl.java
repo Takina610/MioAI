@@ -7,6 +7,7 @@ import com.mio.ai.resource.mapper.skill.SkillMapper;
 import com.mio.ai.resource.model.entity.Skill;
 import com.mio.ai.resource.model.vo.skill.SkillsShSearchVO;
 import com.mio.ai.resource.service.skill.SkillGithubImportService;
+import com.mio.ai.resource.service.skill.SkillRateLimiter;
 import com.mio.ai.resource.service.skill.SkillsShService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +32,8 @@ public class SkillsShServiceImpl implements SkillsShService {
 
     private static final int DEFAULT_LIMIT = 20;
     private static final int MAX_LIMIT = 50;
+    /** 搜索限流：次/小时/用户（每次搜索都是一次外部接口调用） */
+    private static final int SEARCH_LIMIT_PER_HOUR = 60;
     private static final Pattern OWNER_REPO = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$");
 
     @Resource
@@ -42,8 +45,12 @@ public class SkillsShServiceImpl implements SkillsShService {
     @Resource
     private SkillGithubImportService skillGithubImportService;
 
+    @Resource
+    private SkillRateLimiter skillRateLimiter;
+
     @Override
     public SkillsShSearchVO search(Long userId, String query, int limit, int offset) {
+        skillRateLimiter.check("skillssh", userId, SEARCH_LIMIT_PER_HOUR);
         int safeLimit = limit <= 0 ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
         int safeOffset = Math.max(offset, 0);
         SkillsShClient.SkillsShSearchResult result = skillsShClient.search(query, safeLimit, safeOffset);

@@ -35,7 +35,8 @@ public class SkillsShClient {
 
     private static final HttpClient HTTP = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
-            .followRedirects(HttpClient.Redirect.NORMAL)
+            // 不跟随重定向：搜索目标是固定外部接口，重定向到任意主机只会扩大攻击面
+            .followRedirects(HttpClient.Redirect.NEVER)
             .build();
 
     private static final ObjectMapper MAPPER = new ObjectMapper();

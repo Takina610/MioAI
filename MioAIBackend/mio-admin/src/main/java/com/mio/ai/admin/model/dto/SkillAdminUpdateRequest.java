@@ -1,5 +1,6 @@
 package com.mio.ai.admin.model.dto;
 
+import com.mio.ai.common.aop.annotation.XssClean;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -18,8 +19,10 @@ public class SkillAdminUpdateRequest implements Serializable {
     @NotNull(message = "技能 id 不能为空")
     private Long id;
 
+    @XssClean(mode = "strict")
     private String name;
 
+    @XssClean(mode = "strict")
     private String description;
 
     /**

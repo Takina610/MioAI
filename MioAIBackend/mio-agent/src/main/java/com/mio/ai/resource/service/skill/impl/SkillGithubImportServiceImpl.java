@@ -15,15 +15,12 @@ import com.mio.ai.resource.model.vo.skill.GithubSkillPreviewVO;
 import com.mio.ai.resource.model.vo.skill.GithubSkillVO;
 import com.mio.ai.resource.service.skill.SkillGithubImportService;
 import com.mio.ai.resource.service.skill.SkillMdSupport;
+import com.mio.ai.resource.service.skill.SkillRateLimiter;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -50,9 +47,7 @@ public class SkillGithubImportServiceImpl implements SkillGithubImportService {
 
     private static final int PREVIEW_LIMIT_PER_HOUR = 60;
     private static final int IMPORT_LIMIT_PER_HOUR = 40;
-    private static final DateTimeFormatter RATE_WINDOW = DateTimeFormatter.ofPattern("yyyyMMddHH");
 
-    /** owner/repo/skillId 坐标段合法性（skills.sh 安装入口的字符串来自外部） */
     private static final Pattern REPO_SEGMENT = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]*$");
 
     @Resource
@@ -62,7 +57,7 @@ public class SkillGithubImportServiceImpl implements SkillGithubImportService {
     private SkillMapper skillMapper;
 
     @Resource
-    private StringRedisTemplate stringRedisTemplate;
+    private SkillRateLimiter skillRateLimiter;
 
     /** 已解析引用：分支 + 链接中的子目录 + 完整文件树 */
     private record ResolvedRef(String branch, String subPath, GithubClient.GithubTree tree) {
@@ -70,7 +65,7 @@ public class SkillGithubImportServiceImpl implements SkillGithubImportService {
 
     @Override
     public GithubSkillPreviewVO preview(Long userId, String url) {
-        checkRateLimit("preview", userId, PREVIEW_LIMIT_PER_HOUR);
+        skillRateLimiter.check("preview", userId, PREVIEW_LIMIT_PER_HOUR);
         GithubRepoRef parsed = GithubUrlParser.parse(url);
         ResolvedRef resolved = resolveRef(parsed);
 
@@ -103,7 +98,7 @@ public class SkillGithubImportServiceImpl implements SkillGithubImportService {
 
     @Override
     public List<GithubSkillVO> importSkills(Long userId, String url, List<String> skillPaths) {
-        checkRateLimit("import", userId, IMPORT_LIMIT_PER_HOUR);
+        skillRateLimiter.check("import", userId, IMPORT_LIMIT_PER_HOUR);
         GithubRepoRef parsed = GithubUrlParser.parse(url);
         ResolvedRef resolved = resolveRef(parsed);
         if (resolved.tree().truncated()) {
@@ -172,8 +167,8 @@ public class SkillGithubImportServiceImpl implements SkillGithubImportService {
         String name = frontmatter.getOrDefault("name", baseName(skillDir));
         Skill skill = new Skill();
         skill.setUserId(userId);
-        skill.setName(SkillMdSupport.truncate(name, 100));
-        skill.setDescription(SkillMdSupport.descriptionOf(frontmatter, 500));
+        skill.setName(SkillMdSupport.cleanName(name, 100));
+        skill.setDescription(SkillMdSupport.cleanDescription(frontmatter, 500));
         skill.setRepoOwner(owner);
         skill.setRepoName(repo);
         skill.setRepoBranch(branch);
@@ -245,14 +240,14 @@ public class SkillGithubImportServiceImpl implements SkillGithubImportService {
         skill.setRepoBranch(branch);
         skill.setDocUrl(SkillMdSupport.buildDocUrl(owner, repo, branch, skillDir));
         // frontmatter 可能比登记时更新，一并刷新展示信息
-        skill.setName(SkillMdSupport.truncate(
+        skill.setName(SkillMdSupport.cleanName(
                 frontmatter.getOrDefault("name", StrUtil.blankToDefault(skill.getName(), baseName(skillDir))), 100));
-        skill.setDescription(SkillMdSupport.descriptionOf(frontmatter, 500));
+        skill.setDescription(SkillMdSupport.cleanDescription(frontmatter, 500));
     }
 
     @Override
     public Skill installFromRegistry(Long userId, String owner, String repo, String skillId) {
-        checkRateLimit("install", userId, IMPORT_LIMIT_PER_HOUR);
+        skillRateLimiter.check("install", userId, IMPORT_LIMIT_PER_HOUR);
         validateSegment(owner, "owner");
         validateSegment(repo, "repo");
         validateSegment(skillId, "skillId");
@@ -397,24 +392,6 @@ public class SkillGithubImportServiceImpl implements SkillGithubImportService {
     private void validateSegment(String value, String field) {
         if (value == null || !REPO_SEGMENT.matcher(value).matches() || value.contains("..")) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "非法的仓库" + field + ": " + value);
-        }
-    }
-
-    private void checkRateLimit(String scene, Long userId, int limit) {
-        String window = LocalDateTime.now().format(RATE_WINDOW);
-        String key = "mio:skill-github:" + scene + ":" + userId + ":" + window;
-        try {
-            Long count = stringRedisTemplate.opsForValue().increment(key);
-            if (count != null && count == 1) {
-                stringRedisTemplate.expire(key, Duration.ofHours(2));
-            }
-            if (count != null && count > limit) {
-                throw new BusinessException(ErrorCode.PARAMS_ERROR, "操作过于频繁，请稍后再试");
-            }
-        } catch (BusinessException e) {
-            throw e;
-        } catch (Exception e) {
-            log.warn("技能导入限流检查异常，放行本次请求: {}", e.getMessage());
         }
     }
 }

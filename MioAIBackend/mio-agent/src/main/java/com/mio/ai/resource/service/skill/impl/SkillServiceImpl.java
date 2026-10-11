@@ -78,12 +78,15 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill> implements
 
     @Override
     public Page<SkillVO> querySkills(SkillQueryRequest request) {
+        // 分页参数钳制：pageSize 不设上限会被一次请求拉全表（DoS）
+        long current = Math.max(request.getCurrent(), 1);
+        long pageSize = Math.min(Math.max(request.getPageSize(), 1), 200);
         LambdaQueryWrapper<Skill> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Skill::getUserId, request.getUserId())
                 .like(StrUtil.isNotBlank(request.getName()), Skill::getName, request.getName())
                 .eq(request.getStatus() != null, Skill::getStatus, request.getStatus())
                 .orderByDesc(Skill::getUpdateTime);
-        return pageToVO(this.page(new Page<>(request.getCurrent(), request.getPageSize()), wrapper));
+        return pageToVO(this.page(new Page<>(current, pageSize), wrapper));
     }
 
     @Override

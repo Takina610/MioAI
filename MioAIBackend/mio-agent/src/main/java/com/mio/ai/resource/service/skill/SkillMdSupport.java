@@ -1,5 +1,7 @@
 package com.mio.ai.resource.service.skill;
 
+import com.mio.ai.common.utils.XssUtils;
+
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -124,6 +126,37 @@ public final class SkillMdSupport {
             return null;
         }
         return desc.length() > maxLen ? desc.substring(0, maxLen) : desc;
+    }
+
+    /**
+     * 展示文本清洗：zip/GitHub 来源的内容不经过 DTO 层的 @XssClean，入库前必须显式清洗。
+     * 先剔除控制字符（Jsoup 会把它们转义成 &#x1; 这类实体放行），再做与 DTO 一致的
+     * strict 模式 XSS 清理（Jsoup 去标签），输出保证单行纯文本。
+     */
+    public static String sanitizeDisplay(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+        StringBuilder pre = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            pre.append(c < 0x20 || c == 0x7F ? ' ' : c);
+        }
+        return XssUtils.cleanStrict(pre.toString()).trim();
+    }
+
+    /**
+     * 清洗后的技能名（单行、去标签、限长）
+     */
+    public static String cleanName(String raw, int max) {
+        return truncate(sanitizeDisplay(raw), max);
+    }
+
+    /**
+     * 清洗后的描述（先清洗后截断，避免截断点落在 HTML 实体中间）
+     */
+    public static String cleanDescription(Map<String, String> frontmatter, int maxLen) {
+        return truncate(sanitizeDisplay(descriptionOf(frontmatter, maxLen + 200)), maxLen);
     }
 
     /**

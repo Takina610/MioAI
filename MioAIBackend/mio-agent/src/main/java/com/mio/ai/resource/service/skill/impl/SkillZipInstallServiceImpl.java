@@ -10,6 +10,7 @@ import com.mio.ai.resource.model.entity.Skill;
 import com.mio.ai.resource.model.enums.SkillStatusEnum;
 import com.mio.ai.resource.model.vo.skill.SkillZipInstallVO;
 import com.mio.ai.resource.service.skill.SkillMdSupport;
+import com.mio.ai.resource.service.skill.SkillRateLimiter;
 import com.mio.ai.resource.service.skill.SkillZipInstallService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -43,11 +44,20 @@ import java.util.zip.ZipInputStream;
 public class SkillZipInstallServiceImpl implements SkillZipInstallService {
 
     private static final int MAX_ENTRIES = 5000;
+    /** 压缩包内条目总数上限（含被过滤的文件，防海量条目拖垮解析） */
+    private static final int MAX_ENTRIES_SEEN = 20000;
     /** 压缩包内单文件读取上限（超限文件即使扩展名合法也不收） */
     private static final int MAX_ENTRY_READ = 512 * 1024;
+    /** 解压后总字节预算：30MB 压缩包理论上可膨胀到 GB 级（压缩炸弹），超预算立即中止 */
+    private static final long MAX_DECOMPRESSED_TOTAL = 512L * 1024 * 1024;
+    /** zip 安装限流：次/小时/用户 */
+    private static final int ZIP_INSTALL_LIMIT_PER_HOUR = 20;
 
     @Resource
     private SkillMapper skillMapper;
+
+    @Resource
+    private SkillRateLimiter skillRateLimiter;
 
     /** 一个技能目录：仓库内相对路径 + SKILL.md 路径 + 附属文件（相对路径 -> 内容） */
     private record SkillDir(String dir, String skillMd, Map<String, String> files) {
@@ -55,6 +65,7 @@ public class SkillZipInstallServiceImpl implements SkillZipInstallService {
 
     @Override
     public SkillZipInstallVO installFromZip(Long userId, MultipartFile file) {
+        skillRateLimiter.check("zip", userId, ZIP_INSTALL_LIMIT_PER_HOUR);
         if (file == null || file.isEmpty()) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "请选择 zip 文件");
         }
@@ -93,8 +104,8 @@ public class SkillZipInstallServiceImpl implements SkillZipInstallService {
 
             Skill skill = new Skill();
             skill.setUserId(userId);
-            skill.setName(SkillMdSupport.truncate(name, 100));
-            skill.setDescription(SkillMdSupport.descriptionOf(frontmatter, 500));
+            skill.setName(SkillMdSupport.cleanName(name, 100));
+            skill.setDescription(SkillMdSupport.cleanDescription(frontmatter, 500));
             skill.setContent(new String(markerBytes, StandardCharsets.UTF_8));
             skill.setFiles(skillDir.files().isEmpty() ? null : JacksonUtil.writeValueAsString(toFileList(skillDir.files())));
             skill.setStatus(SkillStatusEnum.ACTIVE.getCode());
@@ -131,32 +142,49 @@ public class SkillZipInstallServiceImpl implements SkillZipInstallService {
 
     private Map<String, byte[]> readEntries(MultipartFile file, Charset charset) throws IOException {
         Map<String, byte[]> entries = new TreeMap<>();
+        long decompressedTotal = 0;
+        int entriesSeen = 0;
         try (InputStream in = file.getInputStream();
              ZipInputStream zip = new ZipInputStream(in, charset)) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
+                if (++entriesSeen > MAX_ENTRIES_SEEN) {
+                    throw new BusinessException(ErrorCode.PARAMS_ERROR, "压缩包内文件数过多");
+                }
                 if (entry.isDirectory()) {
                     continue;
                 }
                 String path = normalizeEntryPath(entry.getName());
-                if (path.isEmpty()) {
-                    continue;
+                if (!path.isEmpty() && (SkillMdSupport.isSkillMarker(path) || SkillMdSupport.isSupportedFile(path))) {
+                    if (entries.size() >= MAX_ENTRIES) {
+                        throw new BusinessException(ErrorCode.PARAMS_ERROR, "压缩包内文件数过多");
+                    }
+                    // 超限文件读满即丢，保证流正常推进
+                    byte[] bytes = zip.readNBytes(MAX_ENTRY_READ + 1);
+                    decompressedTotal += bytes.length;
+                    if (bytes.length <= SkillMdSupport.MAX_FILE_SIZE) {
+                        entries.put(path, bytes);
+                    }
                 }
-                if (!SkillMdSupport.isSkillMarker(path) && !SkillMdSupport.isSupportedFile(path)) {
-                    continue;
+                // 显式排干当前条目剩余字节并计数：留给 getNextEntry 的隐式跳过无法统计，压缩炸弹会从这里漏过去
+                decompressedTotal += drainRemainder(zip);
+                if (decompressedTotal > MAX_DECOMPRESSED_TOTAL) {
+                    throw new BusinessException(ErrorCode.PARAMS_ERROR, "压缩包解压后体积过大，已中止处理");
                 }
-                if (entries.size() >= MAX_ENTRIES) {
-                    throw new BusinessException(ErrorCode.PARAMS_ERROR, "压缩包内文件数过多");
-                }
-                // 超限文件读满即丢，保证流正常推进
-                byte[] bytes = zip.readNBytes(MAX_ENTRY_READ + 1);
-                if (bytes.length > SkillMdSupport.MAX_FILE_SIZE) {
-                    continue;
-                }
-                entries.put(path, bytes);
             }
         }
         return entries;
+    }
+
+    /** 排干当前条目剩余解压字节（entry 边界处 read 返回 -1），返回读取量 */
+    private long drainRemainder(ZipInputStream zip) throws IOException {
+        byte[] buf = new byte[64 * 1024];
+        long total = 0;
+        int n;
+        while ((n = zip.read(buf)) != -1) {
+            total += n;
+        }
+        return total;
     }
 
     /**
