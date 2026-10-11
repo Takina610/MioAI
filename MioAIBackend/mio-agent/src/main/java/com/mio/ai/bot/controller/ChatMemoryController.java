@@ -63,6 +63,7 @@ public class ChatMemoryController {
      * 分页获取会话列表
      * @param current 当前页
      * @param size 每页大小
+     * @param keyword 标题搜索关键字（可空）
      * @param request HTTP请求
      * @return 分页会话列表
      */
@@ -72,10 +73,11 @@ public class ChatMemoryController {
             @PathVariable Long agentId,
             @RequestParam(defaultValue = "1") long current,
             @RequestParam(defaultValue = "10") long size,
+            @RequestParam(required = false) String keyword,
             HttpServletRequest request) {
         return ResultUtils
             .success(chatHistoryRepository
-            .getChatsPage(redisComponent.getUserId(request.getHeader("token")), agentId, current, size));
+            .getChatsPage(redisComponent.getUserId(request.getHeader("token")), agentId, current, size, keyword));
     }
 
     /**

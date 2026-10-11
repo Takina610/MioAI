@@ -25,10 +25,10 @@ export function getChatIds(agentId: number | string): Promise<ChatConversation[]
   })
 }
 
-export function getChatIdsPage(agentId: number | string, current: number = 1, size: number = 10): Promise<PageResponse<ChatConversation>> {
+export function getChatIdsPage(agentId: number | string, current: number = 1, size: number = 10, keyword?: string): Promise<PageResponse<ChatConversation>> {
   return request({
     url: `/memory/getChatIdsPage/${agentId}`,
-    params: { current, size },
+    params: { current, size, keyword: keyword || undefined },
     method: 'get'
   })
 }

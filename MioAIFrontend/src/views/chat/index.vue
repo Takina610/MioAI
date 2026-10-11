@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-layout">
+  <div class="chat-layout" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
     <ChatSidebar
       ref="sidebarRef"
       :agent-info="agentInfo"
@@ -7,8 +7,13 @@
       :current-chat-id="currentChatId"
       :chat-list-loading="chatListLoading"
       :streaming-chat-ids="streamingChatIds"
+      :collapsed="sidebarCollapsed"
+      :peeking="sidebarPeeking"
+      :enter-panel="sidebarEnterPanel"
+      :leave-panel="sidebarLeavePanel"
       @select="selectChat"
       @new-chat="createNewChat"
+      @search="searchModalVisible = true"
       @share="shareChat"
       @delete="requestDelete"
       @load-more="loadSessions(true)"
@@ -16,12 +21,25 @@
     />
 
     <div class="main-container">
-      <div class="chat-header" v-if="currentChatId">
-        <h3 class="chat-title">{{ currentChatTitle }}</h3>
-      </div>
-      <div class="chat-header" v-else>
-        <h3 class="chat-title">新对话</h3>
-        <span class="chat-subtitle">内容由AI动态生成</span>
+      <div class="chat-header">
+        <button
+          class="sidebar-toggle"
+          aria-label="切换侧边栏"
+          @click="sidebarToggle"
+          @mouseenter="sidebarEnterHandle"
+          @mouseleave="sidebarLeaveHandle"
+        >
+          <!-- 侧边栏开关（面板左分栏图标） -->
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <rect x="3.2" y="4.8" width="17.6" height="14.4" rx="3.2" />
+            <line x1="9.2" y1="4.8" x2="9.2" y2="19.2" />
+          </svg>
+        </button>
+        <div class="header-title-wrap">
+          <h3 class="chat-title">{{ currentChatTitle }}</h3>
+          <span v-if="!currentChatId" class="chat-subtitle">内容由AI动态生成</span>
+        </div>
+        <div class="header-spacer"></div>
       </div>
 
       <div class="chat-container">
@@ -91,6 +109,18 @@
 
     <AuthModal v-model:visible="authModalVisible" @success="handleAuthSuccess" />
 
+    <!-- 会话搜索命令面板（Ctrl+K）：会话/智能体检索 + 新建会话等快捷操作 -->
+    <ChatSearchModal
+      v-model:visible="searchModalVisible"
+      :agent-id="agentId"
+      :current-chat-id="currentChatId ?? ''"
+      :recent="chatList"
+      @select-session="selectChat"
+      @select-agent="handleSearchSelectAgent"
+      @new-chat="createNewChat"
+      @open-dashboard="router.push('/dashboard')"
+    />
+
     <a-modal
       v-model:open="deleteModalVisible"
       title="⚠️确定删除对话？"
@@ -124,7 +154,9 @@ import ChatSidebar from './components/ChatSidebar.vue'
 import ChatMessageList from './components/ChatMessageList.vue'
 import ChatInput from './components/ChatInput.vue'
 import ChatPlanPanel from './components/ChatPlanPanel.vue'
+import ChatSearchModal from './components/ChatSearchModal.vue'
 import SubagentPanel from './components/SubagentPanel.vue'
+import { useFloatingSidebar } from '@/composables/useFloatingSidebar'
 import { useChatSessions } from './composables/useChatSessions'
 import { useChatMessages, generateConversationId } from './composables/useChatMessages'
 import { useChatStream } from './composables/useChatStream'
@@ -165,6 +197,25 @@ onMounted(async () => {
 
 const sidebarRef = ref<InstanceType<typeof ChatSidebar> | null>(null)
 const messageListRef = ref<InstanceType<typeof ChatMessageList> | null>(null)
+
+// ---------- 悬浮胶囊侧边栏：收缩按钮在 chat-header，收起后悬浮按钮唤出（peek） ----------
+const {
+  collapsed: sidebarCollapsed,
+  peeking: sidebarPeeking,
+  enterHandle: sidebarEnterHandle,
+  leaveHandle: sidebarLeaveHandle,
+  enterPanel: sidebarEnterPanel,
+  leavePanel: sidebarLeavePanel,
+  toggle: sidebarToggle,
+  closePeek: sidebarClosePeek
+} = useFloatingSidebar()
+
+// ---------- 会话搜索命令面板 ----------
+const searchModalVisible = ref(false)
+
+function handleSearchSelectAgent(targetAgentId: number): void {
+  router.push(`/chat/${targetAgentId}`)
+}
 
 function scrollToBottom(): void {
   messageListRef.value?.scrollToBottom()
@@ -384,6 +435,8 @@ function createNewChat(): void {
 }
 
 function selectChat(conversationId: string): void {
+  // 收起态下从 peek 面板选中会话：先收回面板再展示对话
+  sidebarClosePeek()
   switchChat(conversationId)
   router.push(`/chat/${agentId.value}/${conversationId}`)
   loadMessages(conversationId)
@@ -754,8 +807,12 @@ function handleSwitchVersion(messageId: string, version: number): void {
   messagesApi.setChatMessages(chatId, updated)
 }
 
+/** 全局快捷键：Ctrl/Cmd+K 打开会话搜索（与侧边栏搜索入口提示一致）；Ctrl/Cmd+Shift+O 新对话 */
 function handleKeyboardShortcut(e: KeyboardEvent): void {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault()
+    searchModalVisible.value = true
+  } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'o') {
     e.preventDefault()
     createNewChat()
   }
@@ -785,6 +842,7 @@ onBeforeUnmount(() => {
 
 <style lang="scss" scoped>
 .chat-layout {
+  position: relative;
   display: flex;
   height: 100vh;
   background: #f0eee6;
@@ -796,29 +854,84 @@ onBeforeUnmount(() => {
   flex-direction: column;
   overflow: hidden;
   background: $bg-ivory;
+  // 侧边栏展开时给悬浮胶囊让位（304 = 280 胶囊宽 + 24 出血），收起时收回出血位
+  margin: 12px 12px 12px 316px;
+  border: 1px solid $border-warm-subtle;
+  border-radius: 18px;
+  transition: margin-left 0.28s cubic-bezier(0.32, 0.72, 0.35, 1);
+}
+
+.sidebar-collapsed .main-container {
+  margin-left: 12px;
+}
+
+@media (max-width: 768px) {
+  // 窄屏：侧边栏始终以覆盖层出现，内容不再让位
+  .main-container,
+  .sidebar-collapsed .main-container {
+    margin-left: 12px;
+  }
 }
 
 .chat-header {
   height: 64px;
   min-height: 64px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 0 24px;
+  gap: 12px;
+  padding: 0 16px;
   border-bottom: 1px solid #e8e6dc;
 
-  .chat-title {
-    font-size: 16px;
-    font-weight: 600;
-    color: #141413;
-    margin: 0;
+  .sidebar-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: #5f5d55;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover {
+      color: $primary-color;
+      background: rgba(42, 161, 169, 0.08);
+    }
   }
 
-  .chat-subtitle {
-    font-size: 12px;
-    color: #8c8a82;
+  .header-title-wrap {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+
+    .chat-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #141413;
+      margin: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+
+    .chat-subtitle {
+      font-size: 12px;
+      color: #8c8a82;
+    }
+  }
+
+  // 与左侧按钮等宽的占位，保证标题绝对居中
+  .header-spacer {
+    width: 36px;
+    flex-shrink: 0;
   }
 }
 
@@ -846,20 +959,23 @@ onBeforeUnmount(() => {
 
 // 子智能体面板外壳：宽度驱动的抽屉（0↔最终宽）。聊天区随宽度变化逐帧推移，
 // 面板本体保持定宽由外壳裁切，内容不回流；无 transform，入场/退场结束时聊天区
-// 已处于最终位置，不会出现动画结束后突然回跳
+// 已处于最终位置，不会出现动画结束后突然回跳。
+// 卡片化布局：与主容器同出血（上下 12px），右缘圆角对齐
 .subagent-drawer {
   flex-shrink: 0;
   width: clamp(360px, 36vw, 560px);
-  height: 100vh;
+  height: calc(100vh - 24px);
+  margin: 12px 12px 12px 0;
   overflow: hidden;
   background: $bg-ivory;
-  border-left: 1px solid $border-warm-subtle;
+  border: 1px solid $border-warm-subtle;
+  border-radius: 0 18px 18px 0;
   box-shadow: -8px 0 24px rgba(20, 20, 19, 0.04);
 }
 
 .subagent-drawer-enter-active,
 .subagent-drawer-leave-active {
-  transition: width 0.26s cubic-bezier(0.32, 0.72, 0.35, 1), border-left-width 0.26s;
+  transition: width 0.26s cubic-bezier(0.32, 0.72, 0.35, 1), border-left-width 0.26s, margin-left 0.26s;
   will-change: width;
 }
 
@@ -868,10 +984,12 @@ onBeforeUnmount(() => {
 .subagent-drawer-enter-from {
   width: 0;
   border-left-width: 0;
+  margin-left: 0;
 }
 
 .subagent-drawer-leave-to {
   width: 0;
   border-left-width: 0;
+  margin-left: 0;
 }
 </style>

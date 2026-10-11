@@ -21,5 +21,10 @@ public interface ChatHistoryRepository {
 
     Page<ChatConversationDO> getChatsPage(Long userId, Long agentId, long current, long size);
 
+    /**
+     * 分页获取会话列表（keyword 非空时按标题模糊过滤）
+     */
+    Page<ChatConversationDO> getChatsPage(Long userId, Long agentId, long current, long size, String keyword);
+
     ChatConversationDO getChatByConversationId(String conversationId);
 }

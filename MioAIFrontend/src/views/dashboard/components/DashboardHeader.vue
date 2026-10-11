@@ -1,6 +1,19 @@
 <template>
   <header class="header">
     <div class="header-left">
+      <button
+        class="sidebar-toggle"
+        aria-label="切换侧边栏"
+        @click="toggle"
+        @mouseenter="enterHandle"
+        @mouseleave="leaveHandle"
+      >
+        <!-- 侧边栏开关（面板左分栏图标） -->
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <rect x="3.2" y="4.8" width="17.6" height="14.4" rx="3.2" />
+          <line x1="9.2" y1="4.8" x2="9.2" y2="19.2" />
+        </svg>
+      </button>
       <div v-if="isAdmin" class="admin-btns">
         <a
           v-for="entry in adminEntries"
@@ -23,6 +36,12 @@
 import { computed } from 'vue'
 import { ExportOutlined } from '@ant-design/icons-vue'
 import { useUserStore } from '@/store/user'
+
+defineProps<{
+  toggle: () => void
+  enterHandle: () => void
+  leaveHandle: () => void
+}>()
 
 const userStore = useUserStore()
 const baseUrl = window.location.origin
@@ -51,6 +70,29 @@ const adminEntries = [
 
   .header-left {
     flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .sidebar-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: #5f5d55;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover {
+      color: #2aa1a9;
+      background: rgba(42, 161, 169, 0.08);
+    }
   }
 
   .header-right {

@@ -1,106 +1,90 @@
 <template>
-  <aside class="sidebar" :class="{ collapsed: isCollapsed }">
-    <div class="sidebar-top">
-      <div class="logo-section" v-show="!isCollapsed">
+  <!-- 悬浮胶囊侧边栏：收起时整体滑出屏幕（无图标栏），peek/展开时以圆角面板浮现 -->
+  <aside
+    class="sidebar"
+    :class="{ collapsed: collapsed, peek: peeking }"
+    @mouseenter="enterPanel"
+    @mouseleave="leavePanel"
+  >
+    <div class="sidebar-capsule">
+      <div class="sidebar-top">
         <img :src="agentInfo?.avatar || '/logo.png'" alt="Avatar" class="agent-avatar" />
         <span class="agent-name">{{ agentInfo?.name || 'MioBot' }}</span>
       </div>
-      <a-button
-        type="text"
-        class="collapse-btn"
-        @click="isCollapsed = !isCollapsed"
-      >
-        <MenuFoldOutlined v-if="!isCollapsed" />
-        <MenuUnfoldOutlined v-else />
-      </a-button>
-    </div>
 
-    <div class="sidebar-content">
-      <div class="sidebar-actions">
-        <div class="new-chat-btn-wrapper" v-show="!isCollapsed">
+      <div class="sidebar-content">
+        <div class="sidebar-actions">
+          <!-- 搜索入口：胶囊输入框样式，点击打开命令面板（Ctrl+K） -->
+          <button class="search-entry" @click="emit('search')">
+            <SearchOutlined class="btn-icon" />
+            <span class="btn-text">搜索</span>
+            <span class="shortcut-hint">
+              <span class="key-box">Ctrl</span>
+              <span class="key-box">K</span>
+            </span>
+          </button>
+
           <a-button class="new-chat-btn" @click="emit('new-chat')">
             <FormOutlined />
             <span class="btn-text">新对话</span>
-            <div class="shortcut-hint">
-              <span class="key-box">Ctrl</span>
-              <span class="key-box">K</span>
-            </div>
           </a-button>
-        </div>
-        <a-tooltip placement="right" v-if="isCollapsed">
-          <template #title>新对话</template>
-          <div class="new-chat-btn-collapsed" @click="emit('new-chat')">
-            <FormOutlined />
-          </div>
-        </a-tooltip>
 
-        <div class="app-square-btn-wrapper" v-show="!isCollapsed">
           <a-button class="app-square-btn" @click="goDashboard">
             <RobotOutlined />
             <span class="btn-text">智能体广场</span>
           </a-button>
         </div>
-        <a-tooltip placement="right" v-if="isCollapsed">
-          <template #title>智能体广场</template>
-          <div class="app-square-btn-collapsed" @click="goDashboard">
-            <RobotOutlined />
-          </div>
-        </a-tooltip>
+
+        <ChatSessionList
+          ref="sessionListRef"
+          :chat-list="chatList"
+          :current-chat-id="currentChatId"
+          :chat-list-loading="chatListLoading"
+          :streaming-chat-ids="streamingChatIds"
+          @select="emit('select', $event)"
+          @share="emit('share', $event)"
+          @delete="emit('delete', $event)"
+          @load-more="emit('load-more')"
+        />
       </div>
 
-      <ChatSessionList
-        ref="sessionListRef"
-        :chat-list="chatList"
-        :current-chat-id="currentChatId"
-        :chat-list-loading="chatListLoading"
-        :is-collapsed="isCollapsed"
-        :streaming-chat-ids="streamingChatIds"
-        @select="emit('select', $event)"
-        @share="emit('share', $event)"
-        @delete="emit('delete', $event)"
-        @load-more="emit('load-more')"
-      />
-    </div>
-
-    <div class="sidebar-footer">
-      <template v-if="userStore.isLoggedIn">
-        <a-dropdown :trigger="['click']" placement="topLeft">
-          <div class="user-info" :class="{ collapsed: isCollapsed }">
-            <a-avatar :size="isCollapsed ? 36 : 40" :src="userStore.userAvatar">
-              {{ userStore.userName?.charAt(0)?.toUpperCase() }}
-            </a-avatar>
-            <div class="user-detail" v-show="!isCollapsed">
-              <span class="user-name">{{ userStore.userName }}</span>
-              <span class="user-role">{{ userStore.userInfo?.userProfile }}</span>
+      <div class="sidebar-footer">
+        <template v-if="userStore.isLoggedIn">
+          <a-dropdown :trigger="['click']" placement="topLeft">
+            <div class="user-info">
+              <a-avatar :size="40" :src="userStore.userAvatar">
+                {{ userStore.userName?.charAt(0)?.toUpperCase() }}
+              </a-avatar>
+              <div class="user-detail">
+                <span class="user-name">{{ userStore.userName }}</span>
+                <span class="user-role">{{ userStore.userInfo?.userProfile }}</span>
+              </div>
             </div>
-          </div>
-          <template #overlay>
-            <a-menu>
-              <a-menu-item key="home" @click="goHome">
-                <HomeOutlined /> 返回首页
-              </a-menu-item>
-              <a-menu-item key="profile" @click="goProfile">
-                <UserOutlined /> 个人中心
-              </a-menu-item>
-              <a-menu-item key="dashboard" @click="goDashboard">
-                <SettingOutlined /> 控制台
-              </a-menu-item>
-              <a-menu-divider />
-              <a-menu-item key="logout" @click="handleLogout">
-                <LogoutOutlined /> 退出登录
-              </a-menu-item>
-            </a-menu>
-          </template>
-        </a-dropdown>
-      </template>
-      <template v-else>
-        <a-button type="primary" block @click="emit('login')" v-show="!isCollapsed">
-          登录
-        </a-button>
-        <a-button type="primary" @click="emit('login')" v-show="isCollapsed">
-          <UserOutlined />
-        </a-button>
-      </template>
+            <template #overlay>
+              <a-menu>
+                <a-menu-item key="home" @click="goHome">
+                  <HomeOutlined /> 返回首页
+                </a-menu-item>
+                <a-menu-item key="profile" @click="goProfile">
+                  <UserOutlined /> 个人中心
+                </a-menu-item>
+                <a-menu-item key="dashboard" @click="goDashboard">
+                  <SettingOutlined /> 控制台
+                </a-menu-item>
+                <a-menu-divider />
+                <a-menu-item key="logout" @click="handleLogout">
+                  <LogoutOutlined /> 退出登录
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
+        </template>
+        <template v-else>
+          <a-button type="primary" block @click="emit('login')">
+            登录
+          </a-button>
+        </template>
+      </div>
     </div>
   </aside>
 </template>
@@ -113,8 +97,7 @@ import { useUserStore } from '@/store/user'
 import type { Agent, ChatSession } from '@/types'
 import ChatSessionList from './ChatSessionList.vue'
 import {
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
+  SearchOutlined,
   HomeOutlined,
   RobotOutlined,
   SettingOutlined,
@@ -130,11 +113,17 @@ defineProps<{
   chatListLoading: boolean
   /** 正在流式执行中的会话 ID（列表项显示加载动画） */
   streamingChatIds?: string[]
+  /** 收起态：整体滑出屏幕，悬浮收缩按钮时临时滑出（peek） */
+  collapsed: boolean
+  peeking: boolean
+  enterPanel: () => void
+  leavePanel: () => void
 }>()
 
 const emit = defineEmits<{
   (e: 'select', conversationId: string): void
   (e: 'new-chat'): void
+  (e: 'search'): void
   (e: 'share', conversationId: string): void
   (e: 'delete', conversationId: string): void
   (e: 'load-more'): void
@@ -144,7 +133,6 @@ const emit = defineEmits<{
 const router = useRouter()
 const userStore = useUserStore()
 
-const isCollapsed = ref<boolean>(false)
 const sessionListRef = ref<InstanceType<typeof ChatSessionList> | null>(null)
 
 function checkListFilled(): void {
@@ -178,76 +166,31 @@ defineExpose({ checkListFilled, scrollToTop })
 
 <style lang="scss" scoped>
 .sidebar {
-  width: 280px;
-  background: #f5f3ec;
-  display: flex;
-  flex-direction: column;
-  transition: width 0.3s;
-  border-right: 1px solid #e8e6dc;
-
-  &.collapsed {
-    width: 64px;
-  }
+  @include floating-sidebar-shell(304px);
 
   .sidebar-top {
     height: 64px;
+    min-height: 64px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 12px;
     padding: 0 16px;
     border-bottom: 1px solid #e8e6dc;
 
-    .logo-section {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-
-      .agent-avatar {
-        width: 32px;
-        height: 32px;
-        border-radius: 25%;
-        object-fit: cover;
-      }
-
-      .agent-name {
-        font-size: 16px;
-        font-weight: 600;
-        color: #141413;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
+    .agent-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 25%;
+      object-fit: cover;
     }
 
-    .collapse-btn {
-      color: #5f5d55;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 4px;
-
-      &:hover {
-        color: $primary-color;
-        background: rgba(42, 161, 169, 0.08);
-      }
-    }
-  }
-
-  &.collapsed {
-    .sidebar-top {
-      justify-content: center;
-      padding: 0;
-    }
-
-    .sidebar-content {
-      padding: 8px;
-    }
-
-    .sidebar-footer {
-      padding: 8px;
-      display: flex;
-      justify-content: center;
+    .agent-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #141413;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   }
 
@@ -263,6 +206,53 @@ defineExpose({ checkListFilled, scrollToTop })
       flex-direction: column;
       gap: 8px;
       margin-bottom: 16px;
+    }
+
+    // 搜索入口：胶囊输入框样式（图2），点击打开命令面板
+    .search-entry {
+      width: 100%;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 12px;
+      background: #fff;
+      border: 1px solid #e8e6dc;
+      border-radius: 20px;
+      color: #8c8a82;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+
+      &:hover {
+        border-color: $primary-color;
+        color: $primary-color;
+        background: rgba($primary-color, 0.06);
+      }
+
+      .btn-icon {
+        font-size: 15px;
+      }
+
+      .btn-text {
+        flex: 1;
+        text-align: left;
+      }
+
+      .shortcut-hint {
+        display: flex;
+        gap: 4px;
+
+        .key-box {
+          padding: 1px 6px;
+          background: #f0eee6;
+          border: 1px solid #e0ddd2;
+          border-radius: 4px;
+          font-size: 11px;
+          color: #8c8a82;
+          font-weight: 500;
+        }
+      }
     }
 
     .new-chat-btn {
@@ -289,41 +279,6 @@ defineExpose({ checkListFilled, scrollToTop })
         flex: 1;
         text-align: left;
       }
-
-      .shortcut-hint {
-        display: flex;
-        gap: 4px;
-
-        .key-box {
-          padding: 2px 6px;
-          background: rgba($primary-color, 0.15);
-          border: 1px solid rgba($primary-color, 0.3);
-          border-radius: 4px;
-          font-size: 11px;
-          color: $primary-color;
-          font-weight: 500;
-        }
-      }
-    }
-
-    .new-chat-btn-collapsed {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 40px;
-      height: 40px;
-      margin: 0 auto;
-      background: linear-gradient(135deg, rgba($primary-color, 0.1) 0%, rgba($primary-color, 0.05) 100%);
-      border: 1px solid $primary-color;
-      border-radius: 10px;
-      cursor: pointer;
-      color: $primary-color;
-
-      &:hover {
-        background: linear-gradient(135deg, rgba($primary-color, 0.18) 0%, rgba($primary-color, 0.1) 100%);
-        border-color: darken($primary-color, 5%);
-        color: darken($primary-color, 5%);
-      }
     }
 
     .app-square-btn {
@@ -349,25 +304,6 @@ defineExpose({ checkListFilled, scrollToTop })
       .btn-text {
         flex: 1;
         text-align: left;
-      }
-    }
-
-    .app-square-btn-collapsed {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 40px;
-      height: 40px;
-      margin: 0 auto;
-      background: #fff;
-      border: 1px solid #e8e6dc;
-      border-radius: 8px;
-      cursor: pointer;
-
-      &:hover {
-        background: rgba($primary-color, 0.08);
-        border-color: $primary-color;
-        color: $primary-color;
       }
     }
   }
@@ -405,11 +341,6 @@ defineExpose({ checkListFilled, scrollToTop })
           color: #8c8a82;
         }
       }
-
-      &.collapsed {
-        justify-content: center;
-        padding: 8px;
-      }
     }
 
     :deep(.ant-btn-primary) {
@@ -420,29 +351,6 @@ defineExpose({ checkListFilled, scrollToTop })
         background: darken($primary-color, 10%);
         border-color: darken($primary-color, 10%);
       }
-    }
-  }
-}
-
-@media (max-width: 768px) {
-  .sidebar {
-    width: 240px;
-
-    &.collapsed {
-      width: 64px;
-    }
-  }
-}
-
-@media (max-width: 480px) {
-  .sidebar {
-    position: absolute;
-    z-index: 100;
-    height: 100%;
-
-    &.collapsed {
-      width: 0;
-      overflow: hidden;
     }
   }
 }

@@ -1,90 +1,94 @@
 <template>
-  <aside class="sidebar" :class="{ collapsed: isCollapsed }">
-    <div class="sidebar-top">
-      <div class="logo-section" v-show="!isCollapsed">
+  <!-- 悬浮胶囊侧边栏：收起时整体滑出屏幕，Header 上的收缩按钮悬浮唤出（peek） -->
+  <aside
+    class="sidebar"
+    :class="{ collapsed: collapsed, peek: peeking }"
+    @mouseenter="enterPanel"
+    @mouseleave="leavePanel"
+  >
+    <div class="sidebar-capsule">
+      <div class="sidebar-top">
         <a class="logo-link" @click="refreshPage">
           <img src="/logo.png" alt="Logo" class="logo-img" />
           <span class="logo-text">MioAI</span>
         </a>
       </div>
-      <a-button type="text" class="collapse-btn" @click="isCollapsed = !isCollapsed">
-        <MenuFoldOutlined v-if="!isCollapsed" />
-        <MenuUnfoldOutlined v-else />
-      </a-button>
-    </div>
 
-    <div class="sidebar-menu">
-      <div class="menu-group" v-for="group in menuGroups" :key="group.title">
-        <div class="menu-group-title" v-show="!isCollapsed">{{ group.title }}</div>
-        <div class="menu-items">
-          <a-tooltip v-for="item in group.items" :key="item.key" :title="isCollapsed ? item.label : ''" placement="right">
+      <div class="sidebar-menu">
+        <div class="menu-group" v-for="group in menuGroups" :key="group.title">
+          <div class="menu-group-title">{{ group.title }}</div>
+          <div class="menu-items">
             <div
+              v-for="item in group.items"
+              :key="item.key"
               class="menu-item"
               :class="{ active: currentKey === item.key }"
               @click="navigateTo(item)"
             >
               <component :is="item.icon" class="menu-icon" />
-              <span class="menu-text" v-show="!isCollapsed">{{ item.label }}</span>
-            </div>
-          </a-tooltip>
-        </div>
-      </div>
-    </div>
-
-    <div class="sidebar-footer">
-      <template v-if="userStore.isLoggedIn">
-        <a-dropdown :trigger="['click']" placement="topLeft">
-          <div class="user-info" :class="{ collapsed: isCollapsed }">
-            <a-avatar :size="isCollapsed ? 36 : 40" :src="userStore.userAvatar">
-              {{ userStore.userName?.charAt(0)?.toUpperCase() }}
-            </a-avatar>
-            <div class="user-detail" v-show="!isCollapsed">
-              <span class="user-name">{{ userStore.userName }}</span>
-              <span class="user-role">{{ userStore.userInfo?.userProfile }}</span>
+              <span class="menu-text">{{ item.label }}</span>
             </div>
           </div>
-          <template #overlay>
-            <a-menu>
-              <a-menu-item key="home" @click="router.push('/')">
-                <HomeOutlined /> 返回首页
-              </a-menu-item>
-              <a-menu-item key="profile" @click="router.push('/dashboard/profile')">
-                <UserOutlined /> 个人中心
-              </a-menu-item>
-              <a-menu-divider />
-              <a-menu-item key="logout" @click="handleLogout">
-                <LogoutOutlined /> 退出登录
-              </a-menu-item>
-            </a-menu>
-          </template>
-        </a-dropdown>
-      </template>
+        </div>
+      </div>
 
-      <template v-else>
-        <a-button type="primary" block @click="emit('login-required')" v-show="!isCollapsed">
-          登录
-        </a-button>
-        <a-button type="primary" @click="emit('login-required')" v-show="isCollapsed">
-          <UserOutlined />
-        </a-button>
-      </template>
+      <div class="sidebar-footer">
+        <template v-if="userStore.isLoggedIn">
+          <a-dropdown :trigger="['click']" placement="topLeft">
+            <div class="user-info">
+              <a-avatar :size="40" :src="userStore.userAvatar">
+                {{ userStore.userName?.charAt(0)?.toUpperCase() }}
+              </a-avatar>
+              <div class="user-detail">
+                <span class="user-name">{{ userStore.userName }}</span>
+                <span class="user-role">{{ userStore.userInfo?.userProfile }}</span>
+              </div>
+            </div>
+            <template #overlay>
+              <a-menu>
+                <a-menu-item key="home" @click="router.push('/')">
+                  <HomeOutlined /> 返回首页
+                </a-menu-item>
+                <a-menu-item key="profile" @click="router.push('/dashboard/profile')">
+                  <UserOutlined /> 个人中心
+                </a-menu-item>
+                <a-menu-divider />
+                <a-menu-item key="logout" @click="handleLogout">
+                  <LogoutOutlined /> 退出登录
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
+        </template>
+
+        <template v-else>
+          <a-button type="primary" block @click="emit('login-required')">
+            登录
+          </a-button>
+        </template>
+      </div>
     </div>
   </aside>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useUserStore } from '@/store/user'
 import { useDashboardMenu } from '../composables/useDashboardMenu'
 import {
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
   HomeOutlined,
   UserOutlined,
   LogoutOutlined
 } from '@ant-design/icons-vue'
+
+defineProps<{
+  /** 收起态：整体滑出屏幕，Header 收缩按钮悬浮时临时滑出（peek） */
+  collapsed: boolean
+  peeking: boolean
+  enterPanel: () => void
+  leavePanel: () => void
+}>()
 
 const emit = defineEmits<{
   (e: 'login-required'): void
@@ -94,8 +98,6 @@ const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 const { menuGroups, currentKey, navigateTo } = useDashboardMenu()
-
-const isCollapsed = ref(false)
 
 /** 退出登录后，受保护页面需要回退到对应的公开列表页 */
 const logoutRouteMap: Record<string, string> = {
@@ -124,78 +126,33 @@ async function handleLogout(): Promise<void> {
 
 <style lang="scss" scoped>
 .sidebar {
-  width: 220px;
-  background: #f5f3ec;
-  display: flex;
-  flex-direction: column;
-  transition: width 0.3s;
-  border-right: 1px solid #e8e6dc;
-
-  &.collapsed {
-    width: 64px;
-
-    .sidebar-top {
-      justify-content: center;
-      padding: 0;
-    }
-
-    .sidebar-menu .menu-group .menu-items .menu-item {
-      margin: 4px 8px;
-      padding: 10px;
-      justify-content: center;
-    }
-
-    .sidebar-footer {
-      padding: 8px;
-      display: flex;
-      justify-content: center;
-    }
-  }
+  @include floating-sidebar-shell(244px);
 
   .sidebar-top {
     height: 64px;
+    min-height: 64px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
     padding: 0 16px;
     border-bottom: 1px solid #e8e6dc;
 
-    .logo-section {
-      flex: 1;
+    .logo-link {
       display: flex;
       align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      text-decoration: none;
 
-      .logo-link {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        cursor: pointer;
-        text-decoration: none;
-
-        .logo-img {
-          width: 28px;
-          height: 28px;
-        }
-
-        .logo-text {
-          font-size: 20px;
-          font-weight: 700;
-          color: $text-dark;
-          white-space: nowrap;
-        }
+      .logo-img {
+        width: 28px;
+        height: 28px;
       }
-    }
 
-    .collapse-btn {
-      color: #5f5d55;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 4px;
-
-      &:hover {
-        color: #2aa1a9;
-        background: rgba(42, 161, 169, 0.08);
+      .logo-text {
+        font-size: 20px;
+        font-weight: 700;
+        color: $text-dark;
+        white-space: nowrap;
       }
     }
   }
@@ -286,11 +243,6 @@ async function handleLogout(): Promise<void> {
           font-size: 12px;
           color: #8c8a82;
         }
-      }
-
-      &.collapsed {
-        justify-content: center;
-        padding: 8px;
       }
     }
   }

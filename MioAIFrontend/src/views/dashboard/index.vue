@@ -1,9 +1,19 @@
 <template>
-  <div class="dashboard-layout">
-    <DashboardSidebar @login-required="showAuthModal" />
+  <div class="dashboard-layout" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+    <DashboardSidebar
+      :collapsed="sidebarCollapsed"
+      :peeking="sidebarPeeking"
+      :enter-panel="sidebarEnterPanel"
+      :leave-panel="sidebarLeavePanel"
+      @login-required="showAuthModal"
+    />
 
     <div class="main-container">
-      <DashboardHeader />
+      <DashboardHeader
+        :toggle="sidebarToggle"
+        :enter-handle="sidebarEnterHandle"
+        :leave-handle="sidebarLeaveHandle"
+      />
 
       <main class="content">
         <router-view v-slot="{ Component }">
@@ -23,6 +33,18 @@ import { ref } from 'vue'
 import AuthModal from '@/components/AuthModal.vue'
 import DashboardSidebar from './components/DashboardSidebar.vue'
 import DashboardHeader from './components/DashboardHeader.vue'
+import { useFloatingSidebar } from '@/composables/useFloatingSidebar'
+
+// 悬浮胶囊侧边栏：Header 上的收缩按钮切换，收起后悬浮按钮唤出（peek）
+const {
+  collapsed: sidebarCollapsed,
+  peeking: sidebarPeeking,
+  enterHandle: sidebarEnterHandle,
+  leaveHandle: sidebarLeaveHandle,
+  enterPanel: sidebarEnterPanel,
+  leavePanel: sidebarLeavePanel,
+  toggle: sidebarToggle
+} = useFloatingSidebar()
 
 const authModalVisible = ref(false)
 
@@ -37,8 +59,9 @@ function handleAuthSuccess(): void {
 
 <style lang="scss" scoped>
 .dashboard-layout {
+  position: relative;
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
   background: #f0eee6;
 }
 
@@ -47,6 +70,24 @@ function handleAuthSuccess(): void {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  // 侧边栏展开时给悬浮胶囊让位（244 = 220 胶囊宽 + 24 出血），收起时收回出血位
+  margin: 12px 12px 12px 256px;
+  background: $bg-ivory;
+  border: 1px solid $border-warm-subtle;
+  border-radius: 18px;
+  transition: margin-left 0.28s cubic-bezier(0.32, 0.72, 0.35, 1);
+}
+
+.sidebar-collapsed .main-container {
+  margin-left: 12px;
+}
+
+@media (max-width: 768px) {
+  // 窄屏：侧边栏始终以覆盖层出现，内容不再让位
+  .main-container,
+  .sidebar-collapsed .main-container {
+    margin-left: 12px;
+  }
 }
 
 .content {

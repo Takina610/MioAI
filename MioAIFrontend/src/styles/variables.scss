@@ -88,3 +88,47 @@ $spacing-xl: 32px;
   transform: translateZ(0);
   backface-visibility: hidden;
 }
+
+// 悬浮胶囊侧边栏外壳（聊天页/控制台共用）：固定定位 + 12px 出血，
+// 收起时整体滑出屏幕左侧；peek（悬浮收缩按钮临时唤出）时覆盖在内容之上、阴影加深
+// $width 为外壳总宽（含出血），内层 .sidebar-capsule 为圆角胶囊本体
+@mixin floating-sidebar-shell($width) {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: $width;
+  z-index: 60;
+  padding: 12px;
+  box-sizing: border-box;
+  transform: translateX(0);
+  transition: transform 0.28s cubic-bezier(0.32, 0.72, 0.35, 1);
+  will-change: transform;
+  pointer-events: none;
+
+  .sidebar-capsule {
+    pointer-events: auto;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #f5f3ec;
+    border: 1px solid $border-warm-subtle;
+    border-radius: 18px;
+    box-shadow: 0 8px 24px rgba(20, 20, 19, 0.05);
+    overflow: hidden;
+    transition: box-shadow 0.28s;
+  }
+
+  &.collapsed {
+    transform: translateX(-110%);
+
+    &.peek {
+      transform: translateX(0);
+
+      .sidebar-capsule {
+        box-shadow: 0 16px 44px rgba(20, 20, 19, 0.16);
+      }
+    }
+  }
+}

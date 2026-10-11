@@ -1,61 +1,49 @@
 <template>
-  <div class="chat-list-section" :class="{ collapsed: isCollapsed }">
-    <div class="section-title" v-show="!isCollapsed">历史会话</div>
+  <div class="chat-list-section">
+    <div class="section-title">历史会话</div>
     <div class="chat-list" @scroll="handleChatListScroll" ref="chatListRef">
       <template v-if="chatListLoading && chatList.length === 0">
         <div v-for="i in 3" :key="'skeleton-' + i" class="chat-item-skeleton">
           <a-skeleton :paragraph="{ rows: 1 }" :title="false" active />
         </div>
       </template>
-      <a-tooltip placement="right" v-if="isCollapsed" v-for="chat in chatList" :key="chat.id">
-        <template #title>{{ chat.title }}</template>
-        <div
-          class="chat-item chat-item-collapsed"
-          :class="{ active: currentChatId === chat.id }"
-          @click="emit('select', chat.id)"
-        >
-          <MessageOutlined />
-        </div>
-      </a-tooltip>
-      <template v-if="!isCollapsed">
-        <div
-          v-for="chat in chatList"
-          :key="chat.id"
-          class="chat-item"
-          :class="{ active: currentChatId === chat.id }"
-          @click="emit('select', chat.id)"
-        >
-          <div class="chat-item-content">
-            <div class="chat-item-title">
-              <RoseFourLoader
-                v-if="streamingChatIds?.includes(chat.id)"
-                :size="14"
-                class="chat-item-spinner"
-              />
-              <span class="chat-item-title-text">{{ chat.title }}</span>
-            </div>
-            <div class="chat-item-time">{{ formatTime(chat.updateTime) }}</div>
+      <div
+        v-for="chat in chatList"
+        :key="chat.id"
+        class="chat-item"
+        :class="{ active: currentChatId === chat.id }"
+        @click="emit('select', chat.id)"
+      >
+        <div class="chat-item-content">
+          <div class="chat-item-title">
+            <RoseFourLoader
+              v-if="streamingChatIds?.includes(chat.id)"
+              :size="14"
+              class="chat-item-spinner"
+            />
+            <span class="chat-item-title-text">{{ chat.title }}</span>
           </div>
-          <a-dropdown :trigger="['click']">
-            <a-button type="text" size="small" class="chat-item-more" @click.stop>
-              <MoreOutlined />
-            </a-button>
-            <template #overlay>
-              <a-menu>
-                <a-menu-item key="share" @click="emit('share', chat.id)">
-                  <ShareAltOutlined /> 分享对话
-                </a-menu-item>
-                <a-menu-item key="delete" class="delete-menu-item" @click="emit('delete', chat.id)">
-                  <DeleteOutlined /> 删除对话
-                </a-menu-item>
-              </a-menu>
-            </template>
-          </a-dropdown>
+          <div class="chat-item-time">{{ formatTime(chat.updateTime) }}</div>
         </div>
-        <div v-if="chatListLoading && chatList.length > 0" class="chat-list-loading">
-          <a-spin size="small" />
-        </div>
-      </template>
+        <a-dropdown :trigger="['click']">
+          <a-button type="text" size="small" class="chat-item-more" @click.stop>
+            <MoreOutlined />
+          </a-button>
+          <template #overlay>
+            <a-menu>
+              <a-menu-item key="share" @click="emit('share', chat.id)">
+                <ShareAltOutlined /> 分享对话
+              </a-menu-item>
+              <a-menu-item key="delete" class="delete-menu-item" @click="emit('delete', chat.id)">
+                <DeleteOutlined /> 删除对话
+              </a-menu-item>
+            </a-menu>
+          </template>
+        </a-dropdown>
+      </div>
+      <div v-if="chatListLoading && chatList.length > 0" class="chat-list-loading">
+        <a-spin size="small" />
+      </div>
     </div>
   </div>
 </template>
@@ -65,7 +53,6 @@ import { ref } from 'vue'
 import type { ChatSession } from '@/types'
 import RoseFourLoader from '@/components/RoseFourLoader.vue'
 import {
-  MessageOutlined,
   MoreOutlined,
   DeleteOutlined,
   ShareAltOutlined
@@ -75,7 +62,6 @@ defineProps<{
   chatList: ChatSession[]
   currentChatId: string
   chatListLoading: boolean
-  isCollapsed: boolean
   /** 正在流式执行中的会话（对应列表项标题前显示加载动画） */
   streamingChatIds?: string[]
 }>()
@@ -133,15 +119,6 @@ defineExpose({ checkListFilled, scrollToTop })
   flex-direction: column;
   border-top: 1px solid #e8e6dc;
   padding-top: 12px;
-
-  &.collapsed {
-    padding-top: 12px;
-
-    .chat-item {
-      justify-content: center;
-      padding: 10px;
-    }
-  }
 
   .section-title {
     font-size: 12px;
@@ -207,14 +184,6 @@ defineExpose({ checkListFilled, scrollToTop })
     &.active {
       background: rgba(42, 161, 169, 0.12);
       color: $primary-color;
-    }
-
-    &.chat-item-collapsed {
-      justify-content: center;
-      width: 40px;
-      height: 40px;
-      margin: 4px auto;
-      padding: 0;
     }
 
     .chat-item-content {
