@@ -1,5 +1,6 @@
 package com.mio.ai.framework.zagent.context;
 
+import com.mio.ai.framework.zagent.memory.AgentMemory;
 import com.mio.ai.framework.zagent.tools.SandboxFs;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -12,8 +13,8 @@ import java.util.List;
 
 /**
  * 上下文构建器（zcode ContextBuilder 的对位移植）：
- * 系统消息三段（cli 前缀 / 稳定身份 / 动态段）+ 附件（AGENTS.md + currentDate、知识库）。
- * 自定义智能体的 system_prompt 走 zcode customSystemPrompt 路径：
+ * 系统消息三段（cli 前缀 / 稳定身份 / 动态段）+ 附件（AGENTS.md + currentDate、知识库、
+ * 技能清单、跨会话记忆索引）。自定义智能体的 system_prompt 走 zcode customSystemPrompt 路径：
  * 替换身份与动态段，环境事实仍以附件注入。
  */
 public final class ContextBuilder {
@@ -26,18 +27,26 @@ public final class ContextBuilder {
     private final String skillsContext;
     private final SandboxFs fs;
     private final String modelName;
+    /** 记忆归属智能体（null = 不注入记忆：游客或子代理） */
+    private final Long memoryAgentId;
 
     public ContextBuilder(String customSystemPrompt, String knowledgeContext, SandboxFs fs, String modelName) {
-        this(customSystemPrompt, knowledgeContext, null, fs, modelName);
+        this(customSystemPrompt, knowledgeContext, null, fs, modelName, null);
     }
 
     public ContextBuilder(String customSystemPrompt, String knowledgeContext, String skillsContext,
                           SandboxFs fs, String modelName) {
+        this(customSystemPrompt, knowledgeContext, skillsContext, fs, modelName, null);
+    }
+
+    public ContextBuilder(String customSystemPrompt, String knowledgeContext, String skillsContext,
+                          SandboxFs fs, String modelName, Long memoryAgentId) {
         this.customSystemPrompt = customSystemPrompt;
         this.knowledgeContext = knowledgeContext;
         this.skillsContext = skillsContext;
         this.fs = fs;
         this.modelName = modelName;
+        this.memoryAgentId = memoryAgentId;
     }
 
     public Built build() {
@@ -60,6 +69,10 @@ public final class ContextBuilder {
         }
         if (skillsContext != null && !skillsContext.isBlank()) {
             attachments.add(skillsContext);
+        }
+        String memoryContext = AgentMemory.loadContext(fs, memoryAgentId);
+        if (memoryContext != null && !memoryContext.isBlank()) {
+            attachments.add(memoryContext);
         }
         return new Built(systemMessages, attachments);
     }

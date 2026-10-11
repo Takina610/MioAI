@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.mio.ai.framework.sandbox.SandboxSession;
 import com.mio.ai.framework.zagent.AgentEvents;
 import com.mio.ai.framework.zagent.history.ConversationState;
+import com.mio.ai.framework.zagent.hooks.AgentHooks;
 import com.mio.ai.framework.zagent.subagent.SubagentLauncher;
 import com.mio.ai.framework.zagent.task.BackgroundTasks;
 import org.springframework.ai.chat.model.ChatModel;
@@ -23,7 +24,11 @@ import java.util.List;
 public final class ToolsetFactory {
 
     public record RunContext(String chatId, SandboxFs fs, List<ToolCallback> mcpTools,
-                             BackgroundTasks tasks) {
+                             BackgroundTasks tasks, AgentHooks hooks) {
+
+        public RunContext(String chatId, SandboxFs fs, List<ToolCallback> mcpTools, BackgroundTasks tasks) {
+            this(chatId, fs, mcpTools, tasks, null);
+        }
     }
 
     private final ChatModel chatModel;
@@ -58,13 +63,15 @@ public final class ToolsetFactory {
      * @param allowedTools 工具白名单（null/"*" = 全量；子代理档案传入裁剪清单）
      * @param launcher     子代理启动器（null = 本运行不注册 Agent 工具）
      * @param events       引擎事件通道（null = 非交互运行，不注册 AskUserQuestion）
+     * @param hooks        工具调用钩子（null = 无钩子；子代理注册表沿用运行级钩子）
      */
     public ToolRegistry build(String chatId, ConversationState state, List<ToolCallback> mcpTools,
-                              List<String> allowedTools, SubagentLauncher launcher, AgentEvents events) {
+                              List<String> allowedTools, SubagentLauncher launcher, AgentEvents events,
+                              AgentHooks hooks) {
         SandboxFs fs = sandboxFs();
         ToolContext context = new ToolContext(chatId, state, ReadFileState.forChat(chatId), fs,
                 BackgroundTasks.instance(), launcher, events);
-        ToolRegistry registry = new ToolRegistry(context);
+        ToolRegistry registry = new ToolRegistry(context, hooks);
         boolean all = allowedTools == null || allowedTools.isEmpty() || allowedTools.contains("*");
 
         if (fs != null) {

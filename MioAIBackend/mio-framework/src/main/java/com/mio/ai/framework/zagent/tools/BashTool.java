@@ -2,10 +2,9 @@ package com.mio.ai.framework.zagent.tools;
 
 import cn.hutool.core.util.StrUtil;
 import com.mio.ai.framework.zagent.task.BackgroundTasks;
+import com.mio.ai.framework.zagent.task.DetachedBash;
 
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import static com.mio.ai.framework.zagent.tools.ToolDescriptions.BASH;
 import static com.mio.ai.framework.zagent.tools.ToolDescriptions.BASH_COMMAND_PARAM;
@@ -13,20 +12,14 @@ import static com.mio.ai.framework.zagent.tools.ToolDescriptions.BASH_COMMAND_PA
 /**
  * Bash 工具（zcode handlers/bash.ts 的对位移植）：
  * 工作目录跨调用持久、默认 120s/上限 600s 超时、失败首行 "Exit code N"、
- * run_in_background 后台执行（TaskOutput 查询 + 下轮任务通知）、超大输出截断信封。
+ * run_in_background 沙箱脱离执行（setsid+nohup，后端重启不丢；TaskOutput 查询 +
+ * 下轮任务通知 + 超时即杀）、超大输出截断信封。
  */
 final class BashTool {
 
     private static final int DEFAULT_TIMEOUT_MS = 120_000;
     private static final int MAX_TIMEOUT_MS = 600_000;
     private static final int MAX_OUTPUT_CHARS = 30_000;
-
-    /** 后台命令执行线程池（守护线程，量小常驻） */
-    private static final ExecutorService BACKGROUND_POOL = Executors.newCachedThreadPool(runnable -> {
-        Thread thread = new Thread(runnable, "zagent-bash-bg");
-        thread.setDaemon(true);
-        return thread;
-    });
 
     /** 会话级持久 cwd（相对工作目录）；离开工作目录时重置（zcode 语义） */
     private final ThreadLocal<String> cwd = new ThreadLocal<>();
@@ -72,12 +65,13 @@ final class BashTool {
 
     private String runBackground(ToolContext ctx, String command, int timeoutMs, String description) {
         BackgroundTasks.Task task = ctx.tasks.register(ctx.chatId, "bash", description);
-        BACKGROUND_POOL.execute(() -> {
-            String wrapped = wrap(command);
-            SandboxFs.ExecResult result = ctx.fs.exec(wrapped, timeoutMs / 1000, null);
-            ctx.tasks.complete(task, result.exitCode() != null && result.exitCode() != 0,
-                    result.exitCode(), render(stripCwdMarker(result.output()), result.exitCode(), result.timedOut()));
-        });
+        boolean launched = DetachedBash.launch(ctx.fs, task, command, timeoutMs / 1000);
+        if (!launched) {
+            ctx.tasks.complete(task, true, null, "Failed to launch background command on sandbox.");
+            return "Failed to launch background command on sandbox.";
+        }
+        // 脱离启动成功：回写 detached/pid/deadline，重启对账据此识别存活任务
+        ctx.tasks.touch(task);
         return "Command running in background with ID: " + task.id
                 + ". You will be notified when it completes. To check interim output, "
                 + "use TaskOutput with task_id \"" + task.id + "\".";

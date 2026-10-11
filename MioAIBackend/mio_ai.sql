@@ -353,4 +353,26 @@ CREATE TABLE IF NOT EXISTS `agent_skill` (
   INDEX `idx_skill_id`(`skill_id` ASC) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '智能体技能绑定表' ROW_FORMAT = Dynamic;
 
+-- ----------------------------
+-- Table structure for agent_background_task（后台任务持久化）
+-- ----------------------------
+CREATE TABLE IF NOT EXISTS `agent_background_task` (
+  `task_id` varchar(32) NOT NULL COMMENT '任务ID(b_<seq>,序号跨重启续接)',
+  `chat_id` varchar(64) NOT NULL COMMENT '会话ID',
+  `type` varchar(32) NOT NULL COMMENT '类型:bash/agent',
+  `description` varchar(512) NULL DEFAULT NULL COMMENT '任务描述',
+  `status` varchar(16) NOT NULL DEFAULT 'running' COMMENT '状态:running/completed/failed/stopped/interrupted',
+  `exit_code` int NULL DEFAULT NULL COMMENT '退出码',
+  `output` text NULL COMMENT '输出尾部(保尾部截断)',
+  `detached` tinyint NULL DEFAULT 0 COMMENT '是否沙箱脱离式:0-否,1-是(重启后进程仍活可重连)',
+  `sandbox_pid` bigint NULL DEFAULT NULL COMMENT '沙箱侧进程PID',
+  `started_at` bigint NULL DEFAULT NULL COMMENT '开始时间(epoch ms)',
+  `finished_at` bigint NULL DEFAULT NULL COMMENT '结束时间(epoch ms)',
+  `deadline_at` bigint NULL DEFAULT NULL COMMENT '超时截止(epoch ms,0不限时)',
+  `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`task_id`) USING BTREE,
+  INDEX `idx_chat_status`(`chat_id` ASC, `status` ASC) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '后台任务持久化表' ROW_FORMAT = Dynamic;
+
 SET FOREIGN_KEY_CHECKS = 1;

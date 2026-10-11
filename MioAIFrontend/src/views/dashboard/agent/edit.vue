@@ -106,6 +106,10 @@
                 />
               </div>
             </div>
+
+            <a-divider style="margin: 12px 0" />
+
+            <AgentMemorySection :agent-id="agentId" />
           </div>
         </div>
 
@@ -260,6 +264,7 @@ import PageHeader from '../components/PageHeader.vue'
 import ResourceItem from './components/ResourceItem.vue'
 import ResourceExpandList from './components/ResourceExpandList.vue'
 import ResourceSelectDrawer from './components/ResourceSelectDrawer.vue'
+import AgentMemorySection from './components/AgentMemorySection.vue'
 import { useAgentEdit } from './composables/useAgentEdit'
 import { useAgentResources } from './composables/useAgentResources'
 

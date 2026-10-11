@@ -15,6 +15,7 @@ import com.mio.ai.framework.zagent.context.ContextBuilder;
 import com.mio.ai.framework.zagent.history.ConversationHydrator;
 import com.mio.ai.framework.zagent.history.ConversationState;
 import com.mio.ai.framework.zagent.history.TodoItem;
+import com.mio.ai.framework.zagent.hooks.AgentHooks;
 import com.mio.ai.framework.zagent.subagent.Subagents;
 import com.mio.ai.framework.zagent.tools.SandboxFs;
 import com.mio.ai.framework.zagent.tools.ToolRegistry;
@@ -48,9 +49,6 @@ public class MioBot {
     public static final long AGENT_ID = 1L;
 
     private static final long HEARTBEAT_INTERVAL_SECONDS = 15;
-
-    /** 工具日志的结果预览上限（output_result 为 text 列，完整结果已在 agent_message.blocks） */
-    private static final int TOOL_RESULT_LOG_CAP = 2_000;
 
     private static final java.util.concurrent.ScheduledExecutorService HEARTBEAT_SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -183,11 +181,14 @@ public class MioBot {
             // 技能物化到沙箱 skills/ 目录，并生成注入上下文的技能清单段（无技能/沙箱不可用时为 null）
             SandboxFs fs = toolsetFactory.sandboxFs();
             String skillsContext = SkillRuntime.materialize(skills, fs);
+            // 工具调用钩子：审计落库从事件通道解耦为可插拔钩子（引擎核心不再硬编码横切关注点）
+            AgentHooks toolHooks = AgentHooks.chain(List.of(new ToolAuditHook()));
             ToolsetFactory.RunContext runContext = new ToolsetFactory.RunContext(
                     chatId, fs, mcpTools,
-                    com.mio.ai.framework.zagent.task.BackgroundTasks.instance());
+                    com.mio.ai.framework.zagent.task.BackgroundTasks.instance(), toolHooks);
             ContextBuilder contextBuilder = new ContextBuilder(
-                    customSystemPrompt, knowledgeContext, skillsContext, runContext.fs(), modelName);
+                    customSystemPrompt, knowledgeContext, skillsContext, runContext.fs(), modelName,
+                    userId != null ? agentId : null);
             AgentEngine engine = new AgentEngine(chatModel, config, reasoningEffort, contextBuilder,
                     state, chatId, events, runContext.tasks());
             // 用户中断：引擎步间/重试等待处检查取消信号，命中即停（不走兜底抢救）
@@ -198,7 +199,7 @@ public class MioBot {
             } else {
                 Subagents launcher = new Subagents(chatModel, config, reasoningEffort,
                         toolsetFactory, runContext, events, modelName);
-                registry = toolsetFactory.build(chatId, state, mcpTools, null, launcher, events);
+                registry = toolsetFactory.build(chatId, state, mcpTools, null, launcher, events, toolHooks);
                 engine.bindTools(registry);
 
                 boolean appendUserEntry = persistUserMessage || state.entries().isEmpty();
@@ -208,6 +209,8 @@ public class MioBot {
                 }
                 // WIP 行：轮次开始即落库，此后每个模型步增量刷新（进程崩溃后过程可恢复）
                 channel.beginAssistantWip();
+                // 轮次开始前刷新脱离式后台任务：沙箱侧已完结的补状态并入队 task-notification
+                runContext.tasks().refreshDetached(chatId, runContext.fs());
                 java.util.Set<String> outputsBefore = snapshotOutputs(runContext.fs());
                 engine.runTurn(buildModelPrompt(userPrompt, runContext.fs()), appendUserEntry);
                 collectOutputs(runContext.fs(), outputsBefore);
@@ -442,7 +445,6 @@ public class MioBot {
         @Override
         public void toolResult(String id, String name, String content, boolean error, long durationMs) {
             channel.toolResult(id, name, content);
-            logToolCallResult(id, name, content, error, durationMs);
         }
 
         @Override
@@ -507,31 +509,47 @@ public class MioBot {
             usageLog.setOutputTokens((int) Math.max(0, outputDelta));
             agentUsageLogService.logUsage(usageLog);
         }
+    }
 
-        /** 工具调用日志：真实状态/耗时/结果预览（此前 status 恒 1、无耗时，无法定位失败工具） */
-        private void logToolCallResult(String id, String name, String content,
-                                       boolean error, long durationMs) {
+    /**
+     * 工具调用审计钩子（afterToolCall）：工具调用日志从引擎事件通道解耦为插件。
+     * 注册表在每次工具执行（含失败/超时/子代理）后回调，真实状态/耗时/结果在此落库。
+     */
+    private final class ToolAuditHook implements AgentHooks {
+
+        /** 工具日志的结果预览上限（output_result 为 text 列，完整结果已在 agent_message.blocks） */
+        private static final int RESULT_LOG_CAP = 2_000;
+
+        @Override
+        public void afterToolCall(ToolCall call, com.mio.ai.framework.zagent.tools.ToolRegistry.Executed result,
+                                  com.mio.ai.framework.zagent.tools.ToolContext context) {
             if (toolCallLogService == null) {
                 return;
             }
-            ToolCallLog toolCallLog = new ToolCallLog();
-            toolCallLog.setAgentId(agentId);
-            toolCallLog.setUserId(userId);
-            toolCallLog.setConversationId(parseConversationId());
-            toolCallLog.setToolId(0L);
-            toolCallLog.setName(name);
-            toolCallLog.setInputParams(validJsonOrNull(channel.toolArgsOf(id)));
-            toolCallLog.setStatus(resolveToolStatus(error, content));
-            toolCallLog.setExecutionTime((int) Math.min(Integer.MAX_VALUE, Math.max(0, durationMs)));
-            if (error) {
-                toolCallLog.setErrorMsg(content == null ? "" : content);
-            } else if (content != null && content.length() > TOOL_RESULT_LOG_CAP) {
-                toolCallLog.setOutputResult(content.substring(0, TOOL_RESULT_LOG_CAP)
-                        + "\n[...truncated at " + TOOL_RESULT_LOG_CAP + " chars...]");
-            } else {
-                toolCallLog.setOutputResult(content);
+            try {
+                ToolCallLog toolCallLog = new ToolCallLog();
+                toolCallLog.setAgentId(agentId);
+                toolCallLog.setUserId(userId);
+                toolCallLog.setConversationId(parseConversationId());
+                toolCallLog.setToolId(0L);
+                toolCallLog.setName(call.name());
+                toolCallLog.setInputParams(validJsonOrNull(call.argumentsJson()));
+                toolCallLog.setStatus(resolveToolStatus(result.error(), result.content()));
+                toolCallLog.setExecutionTime((int) Math.min(Integer.MAX_VALUE,
+                        Math.max(0, result.durationMs())));
+                String content = result.content();
+                if (result.error()) {
+                    toolCallLog.setErrorMsg(content == null ? "" : content);
+                } else if (content != null && content.length() > RESULT_LOG_CAP) {
+                    toolCallLog.setOutputResult(content.substring(0, RESULT_LOG_CAP)
+                            + "\n[...truncated at " + RESULT_LOG_CAP + " chars...]");
+                } else {
+                    toolCallLog.setOutputResult(content);
+                }
+                toolCallLogService.logToolCall(toolCallLog);
+            } catch (Exception ignored) {
+                // 审计失败不影响工具链
             }
-            toolCallLogService.logToolCall(toolCallLog);
         }
 
         /** 表字典：1-成功 0-失败 2-超时（超时信封文案来自 ToolRegistry 的超时分支） */

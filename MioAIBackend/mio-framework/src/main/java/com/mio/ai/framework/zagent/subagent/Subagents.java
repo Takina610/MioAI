@@ -60,6 +60,7 @@ public final class Subagents implements SubagentLauncher {
             var task = runContext.tasks().register(runContext.chatId(), "agent",
                     description == null ? profile.name() : description);
             POOL.execute(() -> {
+                task.runnerThread = Thread.currentThread();
                 Outcome outcome = runChild(profile, agentId, prompt);
                 runContext.tasks().complete(task, outcome.failed(), 0, outcome.content());
             });
@@ -84,7 +85,7 @@ public final class Subagents implements SubagentLauncher {
         AgentEngine child = new AgentEngine(chatModel, config, reasoningEffort, childContext,
                 childState, runContext.chatId() + "/" + agentId, childEvents, runContext.tasks());
         ToolRegistry childRegistry = toolsetFactory.build(runContext.chatId(), childState,
-                runContext.mcpTools(), profile.tools(), null, null);
+                runContext.mcpTools(), profile.tools(), null, null, runContext.hooks());
         child.bindTools(childRegistry);
         try {
             child.runTurn(prompt, true);

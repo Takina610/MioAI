@@ -1,16 +1,21 @@
 package com.mio.ai.framework.zagent.tools;
 
 import com.mio.ai.framework.zagent.task.BackgroundTasks;
+import com.mio.ai.framework.zagent.task.DetachedBash;
 
 import static com.mio.ai.framework.zagent.tools.ToolDescriptions.TASK_OUTPUT;
 
 /**
  * TaskOutput 工具（zcode handlers/task-output.ts 的对位移植）：
  * 阻塞/非阻塞查询后台任务，输出超长保尾部并注明全文位置。
+ * <p>脱离式 bash 任务经沙箱探针轮询（进程在沙箱侧，后端重启后仍可查询收尾）；
+ * 进程内任务沿用内存状态轮询。
  */
 final class TaskOutputTool {
 
     private static final int MAX_OUTPUT_LENGTH = 32_000;
+    /** 沙箱侧单次探针等待秒数（阻塞轮询时减少 SSH 往返） */
+    private static final int DETACHED_WAIT_SECONDS = 20;
 
     private TaskOutputTool() {
     }
@@ -41,11 +46,17 @@ final class TaskOutputTool {
         if (block && "running".equals(task.status)) {
             long deadline = System.currentTimeMillis() + timeout;
             while ("running".equals(task.status) && System.currentTimeMillis() < deadline) {
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
+                if (task.detached && ctx.fs != null) {
+                    DetachedBash.ProbeResult probe = DetachedBash.probe(ctx.fs, task, DETACHED_WAIT_SECONDS);
+                    if (probe != null) {
+                        ctx.tasks.refreshFromProbe(ctx.fs, task, probe);
+                    }
+                    if (!"running".equals(task.status)) {
+                        break;
+                    }
+                    sleepQuietly(1000);
+                } else {
+                    sleepQuietly(100);
                 }
             }
         }
@@ -66,5 +77,13 @@ final class TaskOutputTool {
         }
         sb.append("<output>\n").append(output).append("\n</output>");
         return sb.toString();
+    }
+
+    private static void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

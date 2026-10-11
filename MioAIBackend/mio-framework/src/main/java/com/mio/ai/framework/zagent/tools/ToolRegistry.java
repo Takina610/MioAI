@@ -2,6 +2,7 @@ package com.mio.ai.framework.zagent.tools;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mio.ai.framework.zagent.hooks.AgentHooks;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.DefaultToolDefinition;
@@ -43,9 +44,16 @@ public final class ToolRegistry {
     private final Map<String, ToolEntry> entries = new LinkedHashMap<>();
     private final ToolContext context;
     private final ExecutorService executor;
+    private final AgentHooks hooks;
 
     public ToolRegistry(ToolContext context) {
+        this(context, null);
+    }
+
+    public ToolRegistry(ToolContext context, AgentHooks hooks) {
         this.context = context;
+        this.hooks = hooks == null ? new AgentHooks() {
+        } : hooks;
         this.executor = Executors.newFixedThreadPool(4, runnable -> {
             Thread thread = new Thread(runnable, "zagent-tool");
             thread.setDaemon(true);
@@ -114,7 +122,7 @@ public final class ToolRegistry {
         return result.content();
     }
 
-    /** 统一执行入口：解析、超时、失败信封（zcode executor/errors.ts 语义） */
+    /** 统一执行入口：解析、钩子门禁、超时、失败信封（zcode executor/errors.ts 语义） */
     public Executed execute(PendingCall call) {
         long startedAt = System.currentTimeMillis();
         ToolEntry entry = entries.get(call.name());
@@ -132,6 +140,15 @@ public final class ToolRegistry {
                     "<tool_use_error>Invalid JSON in tool arguments: " + e.getMessage() + "</tool_use_error>",
                     true, System.currentTimeMillis() - startedAt);
         }
+        AgentHooks.ToolCall hookCall = new AgentHooks.ToolCall(call.id(), call.name(), call.arguments());
+        AgentHooks.Decision decision = hooks.beforeToolCall(hookCall, context);
+        if (decision != null && decision.blocked()) {
+            Executed blocked = new Executed(call.name(),
+                    "<tool_use_error>Tool call blocked: " + decision.reason() + "</tool_use_error>",
+                    true, System.currentTimeMillis() - startedAt);
+            hooks.afterToolCall(hookCall, blocked, context);
+            return blocked;
+        }
         try {
             Future<ToolResult> future = executor.submit(() -> entry.handler().execute(input, context));
             ToolResult result;
@@ -141,28 +158,39 @@ public final class ToolRegistry {
                         : future.get();
             } catch (TimeoutException timeout) {
                 future.cancel(true);
-                return new Executed(call.name(),
+                Executed timedOut = new Executed(call.name(),
                         "<tool_use_error>Tool execution exceeded timeout of " + entry.timeoutMs()
                                 + "ms</tool_use_error>",
                         true, System.currentTimeMillis() - startedAt);
+                hooks.afterToolCall(hookCall, timedOut, context);
+                return timedOut;
             } catch (java.util.concurrent.ExecutionException execution) {
                 Throwable cause = execution.getCause() == null ? execution : execution.getCause();
+                Executed failed;
                 if (cause instanceof ToolUseFailure failure) {
-                    return new Executed(call.name(), failure.toModelContent(), true,
+                    failed = new Executed(call.name(), failure.toModelContent(), true,
                             System.currentTimeMillis() - startedAt);
+                } else {
+                    log.warn("工具执行异常 {}: {}", call.name(), cause.getMessage());
+                    failed = new Executed(call.name(),
+                            "<tool_use_error>" + call.name() + " failed: " + cause.getMessage() + "</tool_use_error>",
+                            true, System.currentTimeMillis() - startedAt);
                 }
-                log.warn("工具执行异常 {}: {}", call.name(), cause.getMessage());
-                return new Executed(call.name(),
-                        "<tool_use_error>" + call.name() + " failed: " + cause.getMessage() + "</tool_use_error>",
-                        true, System.currentTimeMillis() - startedAt);
+                hooks.afterToolCall(hookCall, failed, context);
+                return failed;
             }
             String content = result.content() == null ? "" : result.content();
-            return new Executed(call.name(), content, false,
+            Executed executed = new Executed(call.name(), content, false,
                     System.currentTimeMillis() - startedAt, result.media());
+            hooks.afterToolCall(hookCall, executed, context);
+            return executed;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return new Executed(call.name(), "<tool_use_error>Tool execution was interrupted</tool_use_error>",
+            Executed interrupted = new Executed(call.name(),
+                    "<tool_use_error>Tool execution was interrupted</tool_use_error>",
                     true, System.currentTimeMillis() - startedAt);
+            hooks.afterToolCall(hookCall, interrupted, context);
+            return interrupted;
         }
     }
 
