@@ -13,7 +13,10 @@ import com.mio.ai.framework.zagent.subagent.SubagentLauncher;
 import com.mio.ai.framework.zagent.tools.SandboxFs;
 import com.mio.ai.framework.zagent.tools.ToolRegistry;
 import com.mio.ai.framework.zagent.tools.ToolsetFactory;
+import com.mio.ai.resource.mapper.log.AgentUsageLogMapper;
+import com.mio.ai.resource.model.entity.AgentUsageLog;
 import com.mio.ai.resource.model.entity.Skill;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
@@ -38,6 +41,7 @@ public class ContextUsageService {
     private final BotResourceService botResourceService;
     private final AgentMessageService agentMessageService;
     private final ChatHistoryRepository chatHistoryRepository;
+    private final AgentUsageLogMapper agentUsageLogMapper;
 
     /** 引擎使用的模型名（与 yml 的 chat.model 一致，环境提示段按此渲染） */
     @Value("${spring.ai.openai.chat.model:}")
@@ -50,11 +54,13 @@ public class ContextUsageService {
     public ContextUsageService(ToolsetFactory toolsetFactory,
                                BotResourceService botResourceService,
                                AgentMessageService agentMessageService,
-                               ChatHistoryRepository chatHistoryRepository) {
+                               ChatHistoryRepository chatHistoryRepository,
+                               AgentUsageLogMapper agentUsageLogMapper) {
         this.toolsetFactory = toolsetFactory;
         this.botResourceService = botResourceService;
         this.agentMessageService = agentMessageService;
         this.chatHistoryRepository = chatHistoryRepository;
+        this.agentUsageLogMapper = agentUsageLogMapper;
     }
 
     /**
@@ -117,7 +123,40 @@ public class ContextUsageService {
         result.put("usedTokens", messagesTokens + systemToolsTokens + mcpTokens
                 + systemPromptTokens + skillsTokens + otherTokens);
         result.put("categories", categories);
+        result.put("cacheRate", cacheRate(chatId));
         return result;
+    }
+
+    /**
+     * 平均缓存命中率：会话累计 缓存读取/输入 token（zcode 同口径的加权平均，非逐次平均）。
+     * 会话无带缓存明细的用量记录时返回 null（前端隐藏该行）。
+     */
+    private Double cacheRate(String chatId) {
+        Long conversationId = parseConversationId(chatId);
+        if (conversationId == null) {
+            return null;
+        }
+        QueryWrapper<AgentUsageLog> query = new QueryWrapper<>();
+        query.select("COALESCE(SUM(input_tokens), 0) AS input_sum",
+                        "COALESCE(SUM(cached_tokens), 0) AS cached_sum")
+                .eq("conversation_id", conversationId)
+                .isNotNull("cached_tokens");
+        List<Map<String, Object>> rows = agentUsageLogMapper.selectMaps(query);
+        if (rows == null || rows.isEmpty()) {
+            return null;
+        }
+        long inputSum = ((Number) rows.get(0).getOrDefault("input_sum", 0)).longValue();
+        long cachedSum = ((Number) rows.get(0).getOrDefault("cached_sum", 0)).longValue();
+        return inputSum > 0 ? cachedSum / (double) inputSum : null;
+    }
+
+    /** 会话 id 为数字型时转 conversation_id（临时/游客会话无用量记录，回 null） */
+    private Long parseConversationId(String chatId) {
+        try {
+            return Long.valueOf(chatId);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /** 登录用户的会话归属校验：查得到会话且不属于本人即拒绝（token 数也只对自己的会话开放） */
@@ -178,7 +217,8 @@ public class ContextUsageService {
             }
 
             @Override
-            public void stepFinished(int step, long inputTokens, long outputTokens,
+            public void stepFinished(int step, long inputTokens, long outputTokens, long cachedInputTokens,
+                                     boolean cachedInputKnown,
                                      List<ConversationEntry.ToolCallInput> toolCalls) {
             }
 

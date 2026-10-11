@@ -165,7 +165,8 @@ public final class Subagents implements SubagentLauncher {
         }
 
         @Override
-        public void stepFinished(int step, long inputTokens, long outputTokens,
+        public void stepFinished(int step, long inputTokens, long outputTokens, long cachedInputTokens,
+                                 boolean cachedInputKnown,
                                  List<com.mio.ai.framework.zagent.history.ConversationEntry.ToolCallInput> toolCalls) {
             // 子代理用量并入 usage 块汇报，不逐步上抛
         }

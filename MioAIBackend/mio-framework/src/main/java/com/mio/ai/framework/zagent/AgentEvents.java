@@ -31,9 +31,9 @@ public interface AgentEvents {
     /** 瞬态失败将自动重试（本轮尚无任何输出时无感重发） */
     void retryScheduled(int attempt, int maxAttempts, String reason);
 
-    /** 一步模型请求完成（累计用量与该步工具调用，日志钩子） */
-    void stepFinished(int step, long inputTokens, long outputTokens,
-                      List<ConversationEntry.ToolCallInput> toolCalls);
+    /** 一步模型请求完成（累计用量与该步工具调用，日志钩子；cachedInputKnown=false 表示上游未回传缓存明细） */
+    void stepFinished(int step, long inputTokens, long outputTokens, long cachedInputTokens,
+                      boolean cachedInputKnown, List<ConversationEntry.ToolCallInput> toolCalls);
 
     /** 上下文已压缩（summary 供落库边界与提示） */
     void compacted(String summary);

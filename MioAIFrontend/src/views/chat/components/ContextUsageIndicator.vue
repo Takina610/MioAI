@@ -1,6 +1,6 @@
 <template>
-  <a-popover v-model:open="open" trigger="click" placement="topRight" :mouse-enter-delay="0.2">
-    <button type="button" class="ctx-ring-btn" title="上下文容量">
+  <a-popover trigger="hover" placement="topRight" :mouse-enter-delay="0.25" :mouse-leave-delay="0.15">
+    <button type="button" class="ctx-ring-btn">
       <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true">
         <circle cx="10" cy="10" r="8" fill="none" stroke="#e2dfd6" stroke-width="2.5" />
         <circle
@@ -32,21 +32,24 @@
             <span class="ctx-row-value">{{ row.percent }}</span>
           </div>
         </div>
+        <!-- 缓存命中率（zcode 同款尾行）：会话无缓存明细时隐藏 -->
+        <div v-if="cacheRate !== null && cacheRate !== undefined" class="ctx-panel-cache">
+          <span class="ctx-row-label">平均缓存命中率</span>
+          <span class="ctx-row-value">{{ (cacheRate * 100).toFixed(1) }}%</span>
+        </div>
       </div>
     </template>
   </a-popover>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import type { ContextUsageData } from '@/types'
 
 const props = defineProps<{
   /** 会话上下文容量估算（无会话/拉取失败为 null，指示器随之隐藏） */
   data: ContextUsageData | null
 }>()
-
-const open = ref(false)
 
 /** 环形进度周长（r=8） */
 const CIRCUMFERENCE = 2 * Math.PI * 8
@@ -75,6 +78,8 @@ const ringColor = computed(
 
 const barPercent = computed(() => Math.round(clampedRatio.value * 1000) / 10)
 
+const cacheRate = computed(() => props.data?.cacheRate ?? null)
+
 const rows = computed(() => {
   const data = props.data
   if (!data) return []
@@ -83,7 +88,7 @@ const rows = computed(() => {
   return values.map(v => ({
     key: v.key,
     label: v.label,
-    percent: v.tokens === 0 ? '0%' : `${((v.tokens / data.windowTokens) * 100).toFixed(1)}%`,
+    percent: fmtShare(v.tokens / (data.windowTokens || 1)),
     // 点色随占窗口比例渐隐：占比越大越实，零占用灰显
     color:
       v.tokens === 0
@@ -98,6 +103,13 @@ const ratioLabel = computed(() => {
 })
 
 const percentLabel = computed(() => `${(ratio.value * 100).toFixed(1)}%`)
+
+/** 行占比格式（zcode 同款自适应精度）：≥10% 取整数，<10% 保留 1 位小数 */
+function fmtShare(share: number): string {
+  if (share <= 0) return '0%'
+  const p = share * 100
+  return p >= 10 ? `${Math.round(p)}%` : `${p.toFixed(1)}%`
+}
 
 /** token 万/亿缩写（与上下文容量面板口径一致） */
 function fmtTokens(n: number): string {
@@ -115,6 +127,7 @@ function fmtTokens(n: number): string {
   justify-content: center;
   width: 30px;
   height: 30px;
+  margin-right: 8px;
   padding: 0;
   border: none;
   border-radius: 10px;
@@ -189,18 +202,11 @@ function fmtTokens(n: number): string {
     gap: 8px;
   }
 
-  .ctx-panel-row {
+  .ctx-panel-row,
+  .ctx-panel-cache {
     display: flex;
     align-items: center;
-    gap: 8px;
     font-size: 12.5px;
-
-    .ctx-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
 
     .ctx-row-label {
       color: #4a4842;
@@ -212,6 +218,24 @@ function fmtTokens(n: number): string {
       font-weight: 500;
       font-variant-numeric: tabular-nums;
     }
+  }
+
+  .ctx-panel-cache {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #eeeadf;
+
+    .ctx-row-value {
+      font-weight: 600;
+    }
+  }
+
+  .ctx-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-right: 8px;
   }
 }
 </style>

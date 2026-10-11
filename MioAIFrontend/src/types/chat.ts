@@ -169,4 +169,6 @@ export interface ContextUsageData {
     /** 用户环境附件（AGENTS.md 等）+ 跨会话记忆索引 */
     other: number
   }
+  /** 平均缓存命中率（0-1；会话无缓存明细用量时为 null，面板隐藏该行） */
+  cacheRate?: number | null
 }

@@ -430,6 +430,7 @@ public class MioBot {
         private final ConversationState state;
         private long lastLoggedInput;
         private long lastLoggedOutput;
+        private long lastLoggedCached;
 
         private BotAgentEvents(ConversationState state) {
             this.state = state;
@@ -481,11 +482,14 @@ public class MioBot {
         }
 
         @Override
-        public void stepFinished(int step, long inputTokens, long outputTokens,
+        public void stepFinished(int step, long inputTokens, long outputTokens, long cachedInputTokens,
+                                 boolean cachedInputKnown,
                                  List<com.mio.ai.framework.zagent.history.ConversationEntry.ToolCallInput> toolCalls) {
-            logUsageDelta(inputTokens - lastLoggedInput, outputTokens - lastLoggedOutput);
+            logUsageDelta(inputTokens - lastLoggedInput, outputTokens - lastLoggedOutput,
+                    cachedInputKnown ? cachedInputTokens - lastLoggedCached : null);
             lastLoggedInput = inputTokens;
             lastLoggedOutput = outputTokens;
+            lastLoggedCached = cachedInputTokens;
             // 每步增量落库：崩溃/被杀时刷新页面能看到已流出的部分过程
             channel.flushAssistantWip();
         }
@@ -506,10 +510,10 @@ public class MioBot {
             channel.questionAnswered(id, answers);
         }
 
-        private void logUsageDelta(long inputDelta, long outputDelta) {
+        private void logUsageDelta(long inputDelta, long outputDelta, Long cachedDelta) {
             // 游客不记用量：agent_usage_log.user_id NOT NULL，游客 userId=null 插入必失败
             if (agentUsageLogService == null || userId == null
-                    || (inputDelta <= 0 && outputDelta <= 0)) {
+                    || (inputDelta <= 0 && outputDelta <= 0 && (cachedDelta == null || cachedDelta <= 0))) {
                 return;
             }
             AgentUsageLog usageLog = new AgentUsageLog();
@@ -520,6 +524,9 @@ public class MioBot {
             usageLog.setCreateTime(new Date());
             usageLog.setInputTokens((int) Math.max(0, inputDelta));
             usageLog.setOutputTokens((int) Math.max(0, outputDelta));
+            // 上游未回传缓存明细时保持 NULL（命中率按未知处理，不误报 0）
+            usageLog.setCachedTokens(cachedDelta == null ? null
+                    : (int) Math.min(Integer.MAX_VALUE, Math.max(0, cachedDelta)));
             agentUsageLogService.logUsage(usageLog);
         }
     }

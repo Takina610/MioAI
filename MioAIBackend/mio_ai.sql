@@ -117,6 +117,7 @@ CREATE TABLE `agent_usage_log`  (
   `conversation_id` bigint NULL DEFAULT NULL COMMENT '会话ID',
   `input_tokens` int NULL DEFAULT 0 COMMENT '输入token数',
   `output_tokens` int NULL DEFAULT 0 COMMENT '输出token数',
+  `cached_tokens` int NULL DEFAULT NULL COMMENT '缓存读取token数',
   `cost` decimal(10, 6) NULL DEFAULT 0.000000 COMMENT '成本',
   `response_time` int NULL DEFAULT NULL COMMENT '响应时间(毫秒)',
   `status` tinyint NULL DEFAULT 1 COMMENT '状态:0-失败,1-成功',

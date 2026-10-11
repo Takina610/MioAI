@@ -45,6 +45,11 @@ public class AgentUsageLog implements Serializable {
     private Integer outputTokens;
 
     /**
+     * 缓存读取Token数（上游提示词缓存命中；网关无明细时为 NULL）
+     */
+    private Integer cachedTokens;
+
+    /**
      * 费用
      */
     private BigDecimal cost;

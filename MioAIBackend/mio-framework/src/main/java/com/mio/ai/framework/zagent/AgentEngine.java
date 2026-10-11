@@ -56,6 +56,9 @@ public final class AgentEngine {
     private ToolScheduler scheduler;
     private long inputTokens;
     private long outputTokens;
+    private long cachedInputTokens;
+    /** 上游是否回传过缓存明细（不回传的模型命中率按未知处理，而非误报 0） */
+    private boolean cachedInputKnown;
     private int todosVersionSeen = -1;
     private int consecutiveReactiveCompacts;
 
@@ -96,6 +99,16 @@ public final class AgentEngine {
 
     public long outputTokens() {
         return outputTokens;
+    }
+
+    /** 上游缓存命中的累计输入 token（网关不回传缓存明细时为 0） */
+    public long cachedInputTokens() {
+        return cachedInputTokens;
+    }
+
+    /** 上游是否回传过缓存明细（累计口径：任一步有明细即已知） */
+    public boolean cachedInputKnown() {
+        return cachedInputKnown;
     }
 
     /**
@@ -155,7 +168,8 @@ public final class AgentEngine {
             }
 
             accumulateUsage(result.usage());
-            events.stepFinished(step, inputTokens, outputTokens, result.toolCalls());
+            events.stepFinished(step, inputTokens, outputTokens, cachedInputTokens,
+                    cachedInputKnown, result.toolCalls());
             state.add(ConversationEntry.assistant(result.text() == null ? "" : result.text(),
                     result.toolCalls()));
 
@@ -219,6 +233,12 @@ public final class AgentEngine {
         }
         if (usage.getCompletionTokens() != null) {
             outputTokens += usage.getCompletionTokens();
+        }
+        // 缓存命中明细（OpenAI 通道取 prompt_tokens_details.cached_tokens；无明细的渠道为 null）
+        Long cached = usage.getCacheReadInputTokens();
+        if (cached != null) {
+            cachedInputTokens += cached;
+            cachedInputKnown = true;
         }
     }
 
