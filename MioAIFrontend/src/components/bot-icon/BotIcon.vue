@@ -38,28 +38,27 @@ const NS = 'http://www.w3.org/2000/svg'
 const gradId = `mio-bot-fill-${Math.random().toString(36).slice(2, 9)}`
 
 onMounted(() => {
-  char = new GrokCharacter(svgRef.value!, {
-    shape: GROK_GEO.shapes[props.shape] ? props.shape : 'blob',
-    color: 'black',
-    state: props.state,
-    sizePx: props.size,
-    followPointer: props.follow,
-    live: props.live,
-    eyeColor: props.eyeColor,
-    loginWrap: true
-  })
-  applyFill(props.fill)
-
+  build()
   watch(
     () => props.shape,
     v => {
-      if (v && GROK_GEO.shapes[v] && v !== char.shapeName) char.setShape(v)
+      if (v && GROK_GEO.shapes[v]) {
+        if (props.live) {
+          if (v !== char.shapeName) char.setShape(v)
+        } else {
+          // 静态模式没有动画循环推动形变弹簧，形体变化直接重建实例
+          build()
+        }
+      }
     }
   )
   watch(
     () => props.state,
     v => {
-      if (v && v !== char.state) char.setState(v)
+      if (v && v !== char.state) {
+        if (props.live) char.setState(v)
+        else build()
+      }
     }
   )
   watch(
@@ -74,6 +73,22 @@ onMounted(() => {
     v => char.setFollowPointer(!!v)
   )
 })
+
+/** 创建角色实例：静态模式在形体/状态变化时整体重建 */
+function build(): void {
+  char?.destroy()
+  char = new GrokCharacter(svgRef.value!, {
+    shape: GROK_GEO.shapes[props.shape] ? props.shape : 'blob',
+    color: 'black',
+    state: props.state,
+    sizePx: props.size,
+    followPointer: props.follow,
+    live: props.live,
+    eyeColor: props.eyeColor,
+    loginWrap: true
+  })
+  applyFill(props.fill)
+}
 
 onBeforeUnmount(() => {
   char?.destroy()

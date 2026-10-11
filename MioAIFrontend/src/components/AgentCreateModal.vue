@@ -8,6 +8,7 @@
     :mask-closable="false"
     width="620px"
     :footer="null"
+    wrap-class-name="agent-create-modal"
   >
     <div class="creator">
       <div class="creator-preview">
@@ -26,7 +27,7 @@
 
       <div class="form-section">
         <h3 class="section-title">名称</h3>
-        <a-input v-model:value="formData.name" :maxlength="100" placeholder="给智能体起个名字" />
+        <a-input v-model:value="formData.name" :maxlength="100" placeholder="给智能体起个名字，留空则用「未命名智能体」" />
       </div>
       <div class="form-section">
         <h3 class="section-title">描述</h3>
@@ -38,7 +39,7 @@
           type="primary"
           size="large"
           class="start-btn"
-          :disabled="!formData.name.trim() || submitLoading"
+          :disabled="submitLoading"
           :loading="submitLoading"
           @click="handleCreate"
         >
@@ -239,13 +240,15 @@ async function handleCancel(): Promise<void> {
   emit('update:visible', false)
 }
 
-/** 创建成功：转一圈撒花后关闭，由父级跳转编辑页 */
+/** 创建成功：转一圈撒花后关闭，由父级跳转编辑页。名称留空时用默认名 */
+const DEFAULT_NAME = '未命名智能体'
+
 async function handleCreate(): Promise<void> {
-  if (!formData.name.trim() || submitLoading.value) return
+  if (submitLoading.value) return
   try {
     submitLoading.value = true
     const agentId = await addAgent({
-      name: formData.name.trim(),
+      name: formData.name.trim() || DEFAULT_NAME,
       description: formData.description.trim() || undefined,
       icon: serializeBotIcon(config.value)
     } as AgentAddRequest)
@@ -344,7 +347,7 @@ onBeforeUnmount(() => {
   .creator-footer {
     display: flex;
     justify-content: center;
-    padding-top: 20px;
+    padding-top: 34px;
 
     .start-btn {
       min-width: 200px;

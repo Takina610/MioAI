@@ -2,15 +2,7 @@
   <aside class="sidebar" :class="{ collapsed: isCollapsed }">
     <div class="sidebar-top">
       <div class="logo-section" v-show="!isCollapsed">
-        <BotIcon
-          v-if="agentIconConfig"
-          :shape="agentIconConfig.shape"
-          :fill="agentIconConfig.fill"
-          :size="32"
-          :live="false"
-          eye-color="#f5f3ec"
-        />
-        <img v-else :src="agentInfo?.avatar || '/logo.png'" alt="Avatar" class="agent-avatar" />
+        <img :src="agentInfo?.avatar || '/logo.png'" alt="Avatar" class="agent-avatar" />
         <span class="agent-name">{{ agentInfo?.name || 'MioBot' }}</span>
       </div>
       <a-button
@@ -114,14 +106,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useUserStore } from '@/store/user'
 import type { Agent, ChatSession } from '@/types'
 import ChatSessionList from './ChatSessionList.vue'
-import BotIcon from '@/components/bot-icon/BotIcon.vue'
-import { DEFAULT_BOT_ICON, parseBotIcon } from '@/components/bot-icon/types'
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -133,7 +123,7 @@ import {
   FormOutlined
 } from '@ant-design/icons-vue'
 
-const props = defineProps<{
+defineProps<{
   agentInfo: Agent | null
   chatList: ChatSession[]
   currentChatId: string
@@ -141,11 +131,6 @@ const props = defineProps<{
   /** 正在流式执行中的会话 ID（列表项显示加载动画） */
   streamingChatIds?: string[]
 }>()
-
-/** 左上角标识：icon 配置优先；无配置且有头像则用头像图；都没有用默认机器人 */
-const agentIconConfig = computed(
-  () => parseBotIcon(props.agentInfo?.icon) ?? (props.agentInfo?.avatar ? null : DEFAULT_BOT_ICON)
-)
 
 const emit = defineEmits<{
   (e: 'select', conversationId: string): void
