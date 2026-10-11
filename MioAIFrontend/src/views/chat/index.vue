@@ -82,6 +82,7 @@
           :render-cards="renderCards"
           :leaving-keys="leavingKeys"
           :ref-setter="setCardRef"
+          :context-usage="contextUsage"
           @add-files="handleAddFiles"
           @remove-pending="handleRemovePending"
           @send="handleSend"
@@ -144,7 +145,7 @@ import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getAgentById } from '@/api/agent'
 import { useUserStore } from '@/store/user'
-import type { Agent, AttachmentItem, ChatMessage, MessageBlock, PendingAttachment, SubagentPanelTarget } from '@/types'
+import type { Agent, AttachmentItem, ChatMessage, ContextUsageData, MessageBlock, PendingAttachment, SubagentPanelTarget } from '@/types'
 import { isImageName } from './attachmentUtils'
 import AuthModal from '@/components/AuthModal.vue'
 import BotPet from '@/components/bot-icon/BotPet.vue'
@@ -163,7 +164,7 @@ import { useChatStream } from './composables/useChatStream'
 import { useBotMood } from './composables/useBotMood'
 import { usePendingCardAnimations } from './composables/usePendingCardAnimations'
 import { buildSubagentTranscript } from './subagentTranscript'
-import { truncateConversation, getReasoningEfforts, uploadAttachment, deleteAttachment, getActiveChats } from '@/api/chat'
+import { truncateConversation, getReasoningEfforts, getContextUsage, uploadAttachment, deleteAttachment, getActiveChats } from '@/api/chat'
 import { getBotMessages } from '@/api/botMessages'
 
 const route = useRoute()
@@ -325,6 +326,27 @@ const activePlan = computed(() => {
     }
   }
   return null
+})
+
+// ---------- 上下文容量指示器：会话切换/智能体切换/轮次收尾时重估 ----------
+const contextUsage = ref<ContextUsageData | null>(null)
+
+async function refreshContextUsage(): Promise<void> {
+  const chatId = currentChatId.value
+  if (!chatId) {
+    contextUsage.value = null
+    return
+  }
+  try {
+    contextUsage.value = await getContextUsage(chatId, agentId.value)
+  } catch {
+    // 非关键指标：失败静默，指示器维持现状
+  }
+}
+
+watch([currentChatId, agentId], () => refreshContextUsage())
+watch(isLoading, (now, was) => {
+  if (was && !now) refreshContextUsage()
 })
 
 // ---------- 左下角常驻机器人（情绪随会话执行情况实时切换） ----------

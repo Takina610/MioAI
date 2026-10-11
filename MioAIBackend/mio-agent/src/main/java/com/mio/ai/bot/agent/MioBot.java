@@ -404,6 +404,12 @@ public class MioBot {
 
     /** 冷启动水合：agent_message 展示行 → 请求历史 + 任务清单（游客/无记录时空历史） */
     private ConversationHydrator.Hydrated hydrate() {
+        return hydrateConversation(agentMessageService, chatId, userId);
+    }
+
+    /** 会话历史水合（轮次与上下文容量估算共用）：游客/无记录/回读失败均回空历史 */
+    public static ConversationHydrator.Hydrated hydrateConversation(
+            AgentMessageService agentMessageService, String chatId, Long userId) {
         if (userId == null || agentMessageService == null) {
             return new ConversationHydrator.Hydrated(List.of(), List.of());
         }

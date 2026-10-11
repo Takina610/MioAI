@@ -5,6 +5,7 @@ import com.mio.ai.resource.model.entity.Skill;
 import com.mio.ai.common.utils.JacksonUtil;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,14 +39,9 @@ public final class SkillRuntime {
         if (skills == null || skills.isEmpty() || fs == null) {
             return null;
         }
-        StringBuilder section = new StringBuilder();
-        section.append("# Skills\n\n")
-                .append("以下技能已安装到沙箱工作区。当任务与某技能相关时，先完整读取其 SKILL.md，再严格按其中的说明执行；")
-                .append("技能目录内的脚本/参考文件按 SKILL.md 的指示使用：\n\n");
-
-        int injected = 0;
+        List<Skill> injected = new ArrayList<>();
         for (Skill skill : skills) {
-            if (injected >= MAX_INJECTED_SKILLS) {
+            if (injected.size() >= MAX_INJECTED_SKILLS) {
                 log.warn("绑定技能超过 {} 个，仅物化前 {} 个", MAX_INJECTED_SKILLS, MAX_INJECTED_SKILLS);
                 break;
             }
@@ -63,6 +59,31 @@ public final class SkillRuntime {
                 log.warn("技能物化失败，跳过: skillId={}, {}", skill.getId(), e.getMessage());
                 continue;
             }
+            injected.add(skill);
+        }
+        return renderSection(injected);
+    }
+
+    /**
+     * 技能清单注入段（纯渲染，无副作用）：供沙箱物化与上下文容量估算共用。
+     *
+     * @return 注入段；清单为空返回 null
+     */
+    public static String renderSection(List<Skill> skills) {
+        if (skills == null || skills.isEmpty()) {
+            return null;
+        }
+        StringBuilder section = new StringBuilder();
+        section.append("# Skills\n\n")
+                .append("以下技能已安装到沙箱工作区。当任务与某技能相关时，先完整读取其 SKILL.md，再严格按其中的说明执行；")
+                .append("技能目录内的脚本/参考文件按 SKILL.md 的指示使用：\n\n");
+
+        int injected = 0;
+        for (Skill skill : skills) {
+            if (injected >= MAX_INJECTED_SKILLS) {
+                break;
+            }
+            String dir = SKILLS_ROOT + "/" + skill.getId();
             String description = skill.getDescription() == null ? "" : skill.getDescription().strip();
             if (description.length() > MAX_DESCRIPTION_LENGTH) {
                 description = description.substring(0, MAX_DESCRIPTION_LENGTH) + "…";

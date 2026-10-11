@@ -100,6 +100,12 @@ public final class ConversationEntry {
         return cjkChars + otherChars / 4;
     }
 
+    /** 任意文本的近似 token 估算（与条目同口径：CJK 1 token/字，其余 /4），供上下文容量估算复用 */
+    public static long estimateText(String text) {
+        long[] counted = countChars(text);
+        return counted[0] + counted[1] / 4;
+    }
+
     private static long[] countChars(String text) {
         if (text == null || text.isEmpty()) {
             return new long[]{0, 0};

@@ -86,28 +86,31 @@
             </a-dropdown>
           </div>
 
-          <button v-if="cancelable" type="button" class="cancel-btn" @mousedown.prevent @click="emit('cancel')">取消</button>
-          <button
-            v-if="cancelable"
-            type="button"
-            class="send-pill"
-            :disabled="!value.trim() || loading"
-            @click="emit('send')"
-          >
-            {{ loading ? '发送中…' : '发送' }}
-          </button>
-          <!-- 主输入：生成中变停止按钮（点击中断当前轮次）；空闲为发送 -->
-          <a-tooltip v-if="!cancelable" :title="loading ? '停止' : ''">
-            <a-button
-              type="primary"
-              class="send-btn"
-              :disabled="!loading && !value.trim()"
-              @click="loading ? emit('stop') : emit('send')"
+          <div class="toolbar-right">
+            <ContextUsageIndicator v-if="!embedded && contextUsage" :data="contextUsage" />
+            <button v-if="cancelable" type="button" class="cancel-btn" @mousedown.prevent @click="emit('cancel')">取消</button>
+            <button
+              v-if="cancelable"
+              type="button"
+              class="send-pill"
+              :disabled="!value.trim() || loading"
+              @click="emit('send')"
             >
-              <span v-if="loading" class="stop-square" />
-              <ArrowUpOutlined v-else />
-            </a-button>
-          </a-tooltip>
+              {{ loading ? '发送中…' : '发送' }}
+            </button>
+            <!-- 主输入：生成中变停止按钮（点击中断当前轮次）；空闲为发送 -->
+            <a-tooltip v-if="!cancelable" :title="loading ? '停止' : ''">
+              <a-button
+                type="primary"
+                class="send-btn"
+                :disabled="!loading && !value.trim()"
+                @click="loading ? emit('stop') : emit('send')"
+              >
+                <span v-if="loading" class="stop-square" />
+                <ArrowUpOutlined v-else />
+              </a-button>
+            </a-tooltip>
+          </div>
         </div>
       </div>
     </div>
@@ -121,8 +124,9 @@ import { ArrowUpOutlined, DownOutlined, PlusOutlined } from '@ant-design/icons-v
 import BrainIcon from '@/components/BrainIcon.vue'
 import AttachmentCard from './AttachmentCard.vue'
 import BotIcon from '@/components/bot-icon/BotIcon.vue'
+import ContextUsageIndicator from './ContextUsageIndicator.vue'
 import { DEFAULT_BOT_ICON, parseBotIcon } from '@/components/bot-icon/types'
-import type { PendingAttachment } from '@/types'
+import type { ContextUsageData, PendingAttachment } from '@/types'
 
 /** 思考档位全量标签（实际渲染哪些档由后端按模型能力返回） */
 const EFFORT_LABELS: Record<string, string> = {
@@ -156,6 +160,8 @@ const props = defineProps<{
   leavingKeys?: Set<string>
   /** v-for 动态 ref 登记器（父级动画组合式需要元素引用驱动 GSAP） */
   refSetter?: (key: string) => (el: unknown) => void
+  /** 会话上下文容量估算（null/缺省隐藏指示器） */
+  contextUsage?: ContextUsageData | null
   /** 嵌入模式（消息编辑复用）：去外层留白/居中/欢迎区，直接以输入框原貌嵌入 */
   embedded?: boolean
   /** 显示取消按钮（编辑模式用） */
@@ -413,7 +419,7 @@ function onFileChange(event: Event): void {
         }
       }
 
-      // zcode 式工具栏：左附件+思考等级 / 右发送（圆角方形）
+      // zcode 式工具栏：左附件+思考等级 / 右上下文容量+发送（圆角方形）
       .input-toolbar {
         display: flex;
         align-items: center;
@@ -422,6 +428,12 @@ function onFileChange(event: Event): void {
         user-select: none;
 
         .toolbar-left {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .toolbar-right {
           display: flex;
           align-items: center;
           gap: 4px;
@@ -483,9 +495,8 @@ function onFileChange(event: Event): void {
         }
       }
 
-      // 取消按钮（编辑模式）：靠右与发送成组
+      // 取消按钮（编辑模式）：与发送成组靠右
       .cancel-btn {
-        margin-left: auto;
         margin-right: 8px;
         height: 30px;
         padding: 0 14px;

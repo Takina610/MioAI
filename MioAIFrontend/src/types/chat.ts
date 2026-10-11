@@ -148,3 +148,25 @@ export interface SubagentPanelTarget {
   version: number
   blockKey: string
 }
+
+/** 上下文容量估算：后端干跑装配管线的近似 token 分项（知识库上下文随消息生成，不含在内） */
+export interface ContextUsageData {
+  /** 模型上下文窗口（token） */
+  windowTokens: number
+  /** 下一请求的近似总占用 */
+  usedTokens: number
+  categories: {
+    /** 会话历史（含工具结果与提醒） */
+    messages: number
+    /** 内置工具 schema */
+    systemTools: number
+    /** MCP 工具 schema */
+    mcpTools: number
+    /** 系统提示词（身份+环境+动态段） */
+    systemPrompt: number
+    /** 技能清单注入段 */
+    skills: number
+    /** 用户环境附件（AGENTS.md 等）+ 跨会话记忆索引 */
+    other: number
+  }
+}

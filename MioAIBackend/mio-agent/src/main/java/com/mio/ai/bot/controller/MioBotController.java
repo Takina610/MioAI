@@ -85,6 +85,10 @@ public class MioBotController {
     @Autowired
     private com.mio.ai.bot.service.ChatFileService chatFileService;
 
+    /** 上下文容量估算（干跑一次水合+装配管线，按类别汇总近似 token） */
+    @Autowired
+    private com.mio.ai.bot.service.ContextUsageService contextUsageService;
+
     /** 沙箱文件传输：附件直落沙箱 + 产出收集 */
     @Autowired
     private com.mio.ai.framework.sandbox.SandboxFileTransfer fileTransfer;
@@ -144,6 +148,26 @@ public class MioBotController {
     @GetMapping("/bot/efforts")
     public BaseResponse<Map<String, Object>> efforts() {
         return ResultUtils.success(Map.of("efforts", modelEffortCapabilities.supportedEfforts(engineModelName)));
+    }
+
+    /**
+     * 会话上下文容量估算：与真实轮次同源的水合/上下文构建/工具注册做一次干跑，
+     * 返回窗口大小与按类别（消息/系统工具/MCP 工具/系统提示词/技能/其他）的近似 token 占用。
+     */
+    @GetMapping("/bot/context-usage")
+    public BaseResponse<Map<String, Object>> contextUsage(@RequestParam @NotBlank String chatId,
+                                                          @RequestParam(required = false) Long agentId,
+                                                          jakarta.servlet.http.HttpServletRequest httpRequest) {
+        String token = httpRequest.getHeader("token");
+        Long userId = StrUtil.isBlank(token) ? null : redisComponent.getUserId(token);
+        long resolvedAgentId = agentId != null ? agentId : MioBot.AGENT_ID;
+        String customSystemPrompt = null;
+        if (resolvedAgentId != MioBot.AGENT_ID) {
+            Agent agent = accessGuardService.checkAgentUsable(resolvedAgentId, userId);
+            customSystemPrompt = agent.getSystemPrompt();
+        }
+        return ResultUtils.success(
+                contextUsageService.estimate(chatId, userId, resolvedAgentId, customSystemPrompt));
     }
 
     @GetMapping("/bot/chat")

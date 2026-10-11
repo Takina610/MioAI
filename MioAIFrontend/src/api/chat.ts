@@ -1,5 +1,5 @@
 import axios, { type AxiosProgressEvent } from 'axios'
-import type { AttachmentItem, ChatMessageRequest } from '@/types'
+import type { AttachmentItem, ChatMessageRequest, ContextUsageData } from '@/types'
 import request from '@/utils/request'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
@@ -41,6 +41,14 @@ export const connectSSE = (
  * 失败静默（前端有兜底档位，不该弹全局错误） */
 export const getReasoningEfforts = async (): Promise<{ efforts: string[] }> => {
   return request.get('/bot/efforts', { skipErrorMessage: true } as never)
+}
+
+/** 会话上下文容量估算（窗口大小 + 按类别近似 token）；失败静默（非关键指标） */
+export const getContextUsage = async (chatId: string, agentId: number): Promise<ContextUsageData> => {
+  return request.get<ContextUsageData>('/bot/context-usage', {
+    params: { chatId, agentId },
+    skipErrorMessage: true
+  } as never)
 }
 
 /**
