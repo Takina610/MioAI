@@ -39,7 +39,7 @@
       <!-- 固定高度滚动区 + 上下渐隐遮罩：结果增减不改变弹窗高度（避免整体跳动闪烁），
            内容滚出边界时柔和消隐而非硬切 -->
       <div class="palette-body-wrap">
-        <div class="palette-body" ref="bodyRef">
+        <div class="palette-body" :class="{ updating: searchLoading }" ref="bodyRef">
           <div v-for="section in sections" :key="section.key" class="palette-section">
             <div class="palette-section-title">{{ section.title }}</div>
             <div
@@ -468,6 +468,12 @@ watch([keyword, activeTab], () => {
     scrollbar-gutter: stable;
     scrollbar-width: thin;
     scrollbar-color: #d2cfc5 transparent;
+    // 搜索加载中整体压暗：结果替换发生在亮度过渡内，消除"闪一下"的突兀感
+    transition: opacity 0.16s ease;
+
+    &.updating {
+      opacity: 0.55;
+    }
 
     &::-webkit-scrollbar {
       width: 6px;
@@ -502,6 +508,8 @@ watch([keyword, activeTab], () => {
     cursor: pointer;
     color: #3d3b35;
     font-size: 14px;
+    // 新挂载的结果行柔和淡入（key 相同的行复用不重播，替换瞬间不再整块闪变）
+    animation: palette-row-in 0.18s ease both;
 
     &:hover,
     &.active {
@@ -547,6 +555,19 @@ watch([keyword, activeTab], () => {
     padding: 8px 10px 12px;
     font-size: 13px;
     color: #8c8a82;
+    animation: palette-row-in 0.18s ease both;
+  }
+
+  @keyframes palette-row-in {
+    from {
+      opacity: 0;
+      transform: translateY(3px);
+    }
+
+    to {
+      opacity: 1;
+      transform: none;
+    }
   }
 
   // 搜索加载骨架：条形占位 + 扫光

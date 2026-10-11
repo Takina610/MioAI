@@ -181,14 +181,23 @@ defineExpose({ checkListFilled, scrollToTop })
 .sidebar {
   @include floating-sidebar-shell(304px);
 
-  // peek 悬浮唤出：面板滑出过程中顶行内容保持隐藏（动画 backwards 填充延迟期），
-  // 面板就位后再在按钮右侧淡入，避免 logo 与按钮在滑动中交叠产生割裂感
+  // peek 悬浮唤出：logo 以左缘为锚原地放大出现（延迟期由 backwards 保持隐藏），
+  // 收回/收起态原地缩小消失；缩进量与收缩按钮错开（按钮 28~64px），互不压叠
   &.peek .sidebar-top {
-    padding-left: 56px;
+    padding-left: 64px;
 
     .agent-avatar,
     .agent-name {
-      animation: peek-logo-in 0.2s ease 0.26s backwards;
+      animation: peek-logo-in 0.22s ease 0.24s backwards;
+    }
+  }
+
+  // 收起且未 peek（面板藏在屏幕外）：logo 处于缩小态，peek 收回时经 transition 缩小消失
+  &.collapsed:not(.peek) .sidebar-top {
+    .agent-avatar,
+    .agent-name {
+      opacity: 0;
+      transform: scale(0.6);
     }
   }
 
@@ -200,6 +209,13 @@ defineExpose({ checkListFilled, scrollToTop })
     gap: 12px;
     padding: 0 16px;
     border-bottom: 1px solid #e8e6dc;
+    transition: padding-left 0.28s cubic-bezier(0.32, 0.72, 0.35, 1);
+
+    .agent-avatar,
+    .agent-name {
+      transform-origin: left center;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+    }
 
     .agent-avatar {
       width: 32px;
@@ -382,7 +398,7 @@ defineExpose({ checkListFilled, scrollToTop })
 @keyframes peek-logo-in {
   from {
     opacity: 0;
-    transform: translateX(-6px);
+    transform: scale(0.6);
   }
 
   to {

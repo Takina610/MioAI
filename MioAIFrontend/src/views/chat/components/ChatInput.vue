@@ -64,7 +64,12 @@
                 <PlusOutlined />
               </button>
             </a-tooltip>
-            <a-dropdown v-if="!cancelable" :trigger="['click']" placement="topLeft">
+            <a-dropdown
+              v-if="!cancelable"
+              :trigger="['click']"
+              placement="topLeft"
+              :overlay-style="{ userSelect: 'none' }"
+            >
               <div class="effort-selector" @click.prevent>
                 <BrainIcon :size="14" class="effort-icon" :class="{ dimmed: effort === 'none' }" />
                 <span class="effort-label">{{ effortLabel }}</span>
@@ -390,6 +395,7 @@ function onFileChange(event: Event): void {
         align-items: center;
         justify-content: space-between;
         padding: 6px 10px 10px 12px;
+        user-select: none;
 
         .toolbar-left {
           display: flex;
