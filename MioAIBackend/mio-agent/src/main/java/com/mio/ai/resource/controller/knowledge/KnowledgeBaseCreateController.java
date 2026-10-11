@@ -70,6 +70,16 @@ public class KnowledgeBaseCreateController {
     }
 
     /**
+     * 查询当前用户仍在途的向量化任务（有 status 0/1 文档的知识库），
+     * 页面刷新/重开后由前端调用并自动恢复到向量化进度界面
+     */
+    @GetMapping("/active")
+    public BaseResponse<List<Map<String, Object>>> listActiveVectorizations(HttpServletRequest request) {
+        Long userId = redisComponent.getUserId(request.getHeader("token"));
+        return ResultUtils.success(knowledgeBaseCreateService.listActiveVectorizations(userId));
+    }
+
+    /**
      * 取消创建并清理资源
      * @param kbId 知识库ID
      * @param request HTTP请求

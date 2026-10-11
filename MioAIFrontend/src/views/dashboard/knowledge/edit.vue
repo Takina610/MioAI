@@ -361,6 +361,7 @@ async function handleDocRevectorize(record: Document): Promise<void> {
 }
 
 const vectorizing = ref(false)
+const reconnNotified = ref(false)
 let eventSource: EventSource | null = null
 const hasRetryableDocs = computed(() =>
   documentList.value.some((d) => d.status === 1 || d.status === 3)
@@ -370,6 +371,7 @@ function closeVectorizeStream(): void {
   eventSource?.close()
   eventSource = null
   vectorizing.value = false
+  reconnNotified.value = false
 }
 
 function handleRevectorize(force: boolean): void {
@@ -377,9 +379,11 @@ function handleRevectorize(force: boolean): void {
     return
   }
   vectorizing.value = true
+  reconnNotified.value = false
   const token = localStorage.getItem('token') || ''
   eventSource = vectorizeKnowledgeFiles(kbId.value, token, force)
   eventSource.onmessage = (event) => {
+    reconnNotified.value = false
     try {
       const payload = JSON.parse(event.data)
       if (payload.type === 'done') {
@@ -399,9 +403,12 @@ function handleRevectorize(force: boolean): void {
     }
   }
   eventSource.onerror = () => {
-    message.error('连接中断')
-    closeVectorizeStream()
-    refresh()
+    // 网络波动：EventSource 自动重连，后端任务继续在跑并以观察者模式接管；
+    // 不关闭连接，等待终态事件
+    if (!reconnNotified.value) {
+      reconnNotified.value = true
+      message.info('网络波动，正在自动重连向量化进度...')
+    }
   }
 }
 

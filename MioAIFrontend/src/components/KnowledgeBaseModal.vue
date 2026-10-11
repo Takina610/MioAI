@@ -5,6 +5,7 @@
     :footer="null"
     :closable="false"
     :mask-closable="false"
+    :keyboard="false"
     :destroyOnClose="true"
     class="kb-create-modal"
   >
@@ -12,7 +13,8 @@
       <div class="header-left">
         <h3>{{ skipFirstStep ? '上传文档' : '创建知识库' }}</h3>
       </div>
-      <a-button type="text" class="close-btn" @click="handleCancel">
+      <!-- 向量化进行中禁止关闭，防止误触中断/取消流程 -->
+      <a-button v-if="!vectorizing" type="text" class="close-btn" @click="handleCancel">
         <CloseOutlined />
       </a-button>
     </div>
@@ -220,13 +222,16 @@
         </div>
 
         <div class="step-actions">
-          <a-button v-if="!vectorizing" @click="handleCancelCreation">{{ skipFirstStep ? '关闭' : '取消' }}</a-button>
-          <a-button v-if="vectorizeComplete && !vectorizeError" type="primary" @click="handleFinish">
-            完成
-          </a-button>
-          <a-button v-if="vectorizeError" type="primary" @click="retryVectorize">
-            重试
-          </a-button>
+          <!-- 向量化进行中不提供任何关闭入口；失败后关闭=保留知识库，可稍后重新向量化 -->
+          <template v-if="!vectorizing">
+            <a-button v-if="vectorizeError" @click="handleCancel">关闭</a-button>
+            <a-button v-if="vectorizeComplete && !vectorizeError" type="primary" @click="handleFinish">
+              完成
+            </a-button>
+            <a-button v-if="vectorizeError" type="primary" @click="retryVectorize">
+              重试
+            </a-button>
+          </template>
         </div>
       </div>
     </div>
@@ -234,7 +239,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, onUnmounted, computed } from 'vue'
+import { ref, reactive, watch, onUnmounted, computed, nextTick } from 'vue'
 import { message, Upload } from 'ant-design-vue'
 import type { FormInstance, Rule } from 'ant-design-vue/es/form'
 import {
@@ -252,11 +257,14 @@ interface Props {
   visible: boolean
   kbId?: number
   skipFirstStep?: boolean
+  /** 打开后直接进入向量化步骤并连接进度（用于页面刷新后的任务恢复） */
+  resumeVectorize?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   kbId: undefined,
-  skipFirstStep: false
+  skipFirstStep: false,
+  resumeVectorize: false
 })
 
 const emit = defineEmits<{
@@ -270,6 +278,7 @@ const uploading = ref(false)
 const vectorizing = ref(false)
 const vectorizeComplete = ref(false)
 const vectorizeError = ref(false)
+const reconnecting = ref(false)
 
 const vectorizeProgress = ref(0)
 const currentStep = ref(0)
@@ -352,7 +361,13 @@ watch(() => props.visible, (newVal) => {
     resetState()
   } else if (props.skipFirstStep && props.kbId) {
     kbId.value = props.kbId
-    currentStep.value = 1
+    if (props.resumeVectorize) {
+      // 恢复在途向量化：直接进入第三步接管进度
+      currentStep.value = 2
+      nextTick(() => startVectorization())
+    } else {
+      currentStep.value = 1
+    }
   }
 })
 
@@ -363,15 +378,13 @@ function handleCancel(): void {
     eventSource.close()
     eventSource = null
   }
-  
-  // 如果有知识库ID，且不是编辑模式，或者正在处理中，都需要取消创建
-  if (kbId.value) {
-    // 正在向量化或上传中，或者不是跳过第一步模式（新建模式），都需要清理
-    if (vectorizing.value || uploading.value || !skipFirstStep.value) {
-      cancelKnowledgeCreation(kbId.value).catch(() => {})
-    }
+
+  // 只有"新建流程的前两步"离开才会级联删除已创建的库与已上传文件；
+  // 补传模式（skipFirstStep）永远不删库；第三步失败后关闭=保留知识库待重试
+  if (kbId.value && !skipFirstStep.value && currentStep.value < 2) {
+    cancelKnowledgeCreation(kbId.value).catch(() => {})
   }
-  
+
   resetState()
   emit('update:visible', false)
 }
@@ -383,6 +396,7 @@ function resetState(): void {
   vectorizing.value = false
   vectorizeComplete.value = false
   vectorizeError.value = false
+  reconnecting.value = false
   kbId.value = null
   fileList.value = []
   uploadedFiles.value = []
@@ -525,6 +539,7 @@ function startVectorization(): void {
   vectorizing.value = true
   vectorizeComplete.value = false
   vectorizeError.value = false
+  reconnecting.value = false
   errorMsg.value = ''
   vectorizeStatusTitle.value = '准备向量化'
   vectorizeStatusMessage.value = '向量化处理可能需要较长时间，请耐心等待...'
@@ -533,6 +548,7 @@ function startVectorization(): void {
   eventSource = vectorizeKnowledgeFiles(kbId.value, token)
 
   eventSource.onmessage = (event: MessageEvent) => {
+    reconnecting.value = false
     try {
       const data = JSON.parse(event.data)
       handleVectorizeEvent(data)
@@ -542,16 +558,16 @@ function startVectorization(): void {
   }
 
   eventSource.onerror = () => {
-    if (vectorizeComplete.value) {
+    // 收到过终态事件后连接被服务端关闭属正常收尾；否则是网络波动——
+    // EventSource 会自动重连，后端任务继续在跑，重连后以观察者模式接管进度
+    if (vectorizeComplete.value || vectorizeError.value) {
       eventSource?.close()
       eventSource = null
       return
     }
-    vectorizing.value = false
-    vectorizeError.value = true
-    errorMsg.value = '连接中断，请重试'
-    eventSource?.close()
-    eventSource = null
+    reconnecting.value = true
+    vectorizeStatusTitle.value = '连接中断'
+    vectorizeStatusMessage.value = '网络波动，正在自动重连，向量化仍在后台进行...'
   }
 }
 
@@ -638,6 +654,10 @@ function handleVectorizeEvent(data: any): void {
 }
 
 function retryVectorize(): void {
+  if (eventSource) {
+    eventSource.close()
+    eventSource = null
+  }
   vectorizeError.value = false
   errorMsg.value = ''
   startVectorization()
@@ -647,26 +667,6 @@ function handleFinish(): void {
   emit('update:visible', false)
   emit('success')
   resetState()
-}
-
-async function handleCancelCreation(): Promise<void> {
-  // 关闭 SSE 连接
-  if (eventSource) {
-    eventSource.close()
-    eventSource = null
-  }
-  
-  // 取消创建并清理
-  if (kbId.value && !skipFirstStep) {
-    try {
-      await cancelKnowledgeCreation(kbId.value)
-    } catch (e) {
-      console.error('取消创建失败', e)
-    }
-  }
-  
-  resetState()
-  emit('update:visible', false)
 }
 
 function formatFileSize(bytes: number): string {

@@ -5,6 +5,7 @@ import com.knuddels.jtokkit.api.Encoding;
 import com.knuddels.jtokkit.api.EncodingRegistry;
 import com.knuddels.jtokkit.api.EncodingType;
 import com.knuddels.jtokkit.api.IntArrayList;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.transformer.splitter.TextSplitter;
 import org.springframework.util.Assert;
 
@@ -14,14 +15,22 @@ import java.util.List;
 /**
  * @author: Takina
  * @date: 2026/3/29 10:48
- * @description: 自定义文本分割器
+ * @description: token 级滑动窗口分割器
+ * <p>切块在句末标点处对齐（避免句子被拦腰切断），相邻块保留 chunkOverlap 个 token 的重叠；
+ * 剩余量不足重叠数时并入当前块，绝不产生内容重复的碎块。
  */
+@Slf4j
 public class CustomTokenTextSplitter extends TextSplitter {
     private static final int DEFAULT_CHUNK_SIZE = 800;
 
     private static final int DEFAULT_CHUNK_OVERLAP = 100;
 
-    private static final int MIN_CHUNK_SIZE_CHARS = 350;
+    /**
+     * 句末对齐的最小字符数，随 chunkSize 等比缩放（800 → 320），避免小分块下永远对不上标点
+     */
+    private static final double MIN_CHUNK_SIZE_CHARS_RATIO = 0.4;
+
+    private static final int MIN_CHUNK_SIZE_CHARS_FLOOR = 50;
 
     private static final int MIN_CHUNK_LENGTH_TO_EMBED = 5;
 
@@ -52,12 +61,12 @@ public class CustomTokenTextSplitter extends TextSplitter {
     private final boolean keepSeparator;
 
     public CustomTokenTextSplitter() {
-        this(DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP, MIN_CHUNK_SIZE_CHARS, MIN_CHUNK_LENGTH_TO_EMBED,
+        this(DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP, minCharsFor(DEFAULT_CHUNK_SIZE), MIN_CHUNK_LENGTH_TO_EMBED,
                 MAX_NUM_CHUNKS, KEEP_SEPARATOR);
     }
 
     public CustomTokenTextSplitter(boolean keepSeparator) {
-        this(DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP, MIN_CHUNK_SIZE_CHARS, MIN_CHUNK_LENGTH_TO_EMBED,
+        this(DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP, minCharsFor(DEFAULT_CHUNK_SIZE), MIN_CHUNK_LENGTH_TO_EMBED,
                 MAX_NUM_CHUNKS, keepSeparator);
     }
 
@@ -70,6 +79,10 @@ public class CustomTokenTextSplitter extends TextSplitter {
         this.minChunkLengthToEmbed = minChunkLengthToEmbed;
         this.maxNumChunks = maxNumChunks;
         this.keepSeparator = keepSeparator;
+    }
+
+    private static int minCharsFor(int chunkSize) {
+        return Math.max(MIN_CHUNK_SIZE_CHARS_FLOOR, (int) (chunkSize * MIN_CHUNK_SIZE_CHARS_RATIO));
     }
 
     public static Builder builder() {
@@ -89,6 +102,7 @@ public class CustomTokenTextSplitter extends TextSplitter {
         List<Integer> tokens = getEncodedTokens(text);
         List<String> chunks = new ArrayList<>();
         int num_chunks = 0;
+        boolean truncated = false;
         while (!tokens.isEmpty() && num_chunks < this.maxNumChunks) {
             int take = Math.min(chunkSize, tokens.size());
             // 剩余量不超过重叠数时并入当前块，避免下一轮为尾巴再造一个几乎全重复的小块
@@ -114,8 +128,10 @@ public class CustomTokenTextSplitter extends TextSplitter {
                         chunkText.lastIndexOf('\n')))))));
 
             if (lastPunctuation != -1 && lastPunctuation > this.minChunkSizeChars) {
-                // Truncate the chunk text at the punctuation mark
-                chunkText = chunkText.substring(0, lastPunctuation + 1);
+                // 句末对齐；但截断点过浅（不足本块的 30%）时保留整块，避免产生信息量极低的碎块
+                if (lastPunctuation >= chunkText.length() * 0.3) {
+                    chunkText = chunkText.substring(0, lastPunctuation + 1);
+                }
             }
 
             String chunkTextToAppend = (this.keepSeparator) ? chunkText.trim()
@@ -137,12 +153,21 @@ public class CustomTokenTextSplitter extends TextSplitter {
             num_chunks++;
         }
 
+        if (!tokens.isEmpty() && num_chunks >= this.maxNumChunks) {
+            // 达到块数上限仍有剩余：内容将被丢弃，必须留痕而不是静默吞掉
+            truncated = true;
+        }
+
         // Handle the remaining tokens
         if (!tokens.isEmpty()) {
             String remaining_text = decodeTokens(tokens).replace(System.lineSeparator(), " ").trim();
             if (remaining_text.length() > this.minChunkLengthToEmbed) {
                 chunks.add(remaining_text);
             }
+        }
+
+        if (truncated) {
+            log.warn("文本超出最大分块数 {}，超出部分被丢弃（已产出 {} 块）", this.maxNumChunks, num_chunks);
         }
 
         return chunks;
@@ -166,7 +191,7 @@ public class CustomTokenTextSplitter extends TextSplitter {
 
         private int chunkOverlap = DEFAULT_CHUNK_OVERLAP;
 
-        private int minChunkSizeChars = MIN_CHUNK_SIZE_CHARS;
+        private int minChunkSizeChars = -1;
 
         private int minChunkLengthToEmbed = MIN_CHUNK_LENGTH_TO_EMBED;
 
@@ -208,7 +233,10 @@ public class CustomTokenTextSplitter extends TextSplitter {
         }
 
         public CustomTokenTextSplitter build() {
-            return new CustomTokenTextSplitter(this.chunkSize, this.chunkOverlap, this.minChunkSizeChars,
+            // 未显式指定时按 chunkSize 等比缩放，保证小分块也能在句末对齐
+            int effectiveMinChars = this.minChunkSizeChars > 0
+                    ? this.minChunkSizeChars : minCharsFor(this.chunkSize);
+            return new CustomTokenTextSplitter(this.chunkSize, this.chunkOverlap, effectiveMinChars,
                     this.minChunkLengthToEmbed, this.maxNumChunks, this.keepSeparator);
         }
 

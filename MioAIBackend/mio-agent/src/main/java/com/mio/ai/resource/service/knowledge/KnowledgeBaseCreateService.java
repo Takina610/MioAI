@@ -37,6 +37,11 @@ public interface KnowledgeBaseCreateService {
     void vectorizeFiles(Long kbId, Long userId, SseEmitter emitter, boolean force);
 
     /**
+     * 当前用户仍在途的向量化任务（存在 status 0/1 的文档），供页面刷新后自动恢复进度
+     */
+    List<Map<String, Object>> listActiveVectorizations(Long userId);
+
+    /**
      * 取消创建并清理资源
      * @param kbId 知识库ID
      * @param userId 用户ID

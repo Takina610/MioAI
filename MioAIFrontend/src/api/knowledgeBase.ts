@@ -82,6 +82,23 @@ export function cancelKnowledgeCreation(kbId: number): Promise<boolean> {
   })
 }
 
+export interface ActiveVectorization {
+  kbId: number
+  kbName: string
+  pendingDocs: number
+  running: boolean
+}
+
+/**
+ * 当前用户仍在途的向量化任务（有 status 0/1 的文档），页面刷新后据此自动恢复进度
+ */
+export function listActiveVectorizations(): Promise<ActiveVectorization[]> {
+  return request({
+    url: '/knowledge-bases/create/active',
+    method: 'get'
+  })
+}
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
 export function vectorizeKnowledgeFiles(kbId: number, token: string, force = false): EventSource {

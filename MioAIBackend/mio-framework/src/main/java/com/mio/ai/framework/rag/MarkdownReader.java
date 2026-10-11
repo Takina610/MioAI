@@ -24,7 +24,8 @@ public class MarkdownReader {
         try {
             MarkdownDocumentReaderConfig config = MarkdownDocumentReaderConfig.builder()
                     .withHorizontalRuleCreateDocument(true)
-                    .withIncludeCodeBlock(false)
+                    // 代码块是技术文档的核心内容，丢弃会导致向量化后的知识库答不出实现细节
+                    .withIncludeCodeBlock(true)
                     .withIncludeBlockquote(false)
                     .build();
             MarkdownDocumentReader reader = new MarkdownDocumentReader(resource, config);

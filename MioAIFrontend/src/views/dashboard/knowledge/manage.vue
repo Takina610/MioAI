@@ -51,6 +51,15 @@
           v-model:visible="createModalVisible"
           @success="fetchKnowledgeBases"
         />
+
+        <!-- 刷新/重开页面后的向量化任务恢复：跳过前两步直接接管进度 -->
+        <KnowledgeBaseModal
+          v-model:visible="resumeModalVisible"
+          :kb-id="resumeKbId ?? undefined"
+          skip-first-step
+          resume-vectorize
+          @success="fetchKnowledgeBases"
+        />
       </template>
     </div>
   </div>
@@ -61,7 +70,12 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import { useUserStore } from '@/store/user'
-import { queryKnowledgeBases, deleteKnowledgeBase } from '@/api/knowledgeBase'
+import {
+  queryKnowledgeBases,
+  deleteKnowledgeBase,
+  listActiveVectorizations,
+  type ActiveVectorization
+} from '@/api/knowledgeBase'
 import { formatDate } from '@/utils/format'
 import type { KnowledgeBase, PageResponse } from '@/types'
 import {
@@ -83,6 +97,9 @@ const router = useRouter()
 const loading = ref(false)
 const createModalVisible = ref(false)
 const knowledgeList = ref<KnowledgeBase[]>([])
+/** 有在途向量化任务的知识库：进入页面时自动弹出到向量化进度（第三步） */
+const resumeKbId = ref<number | null>(null)
+const resumeModalVisible = ref(false)
 
 async function fetchKnowledgeBases(): Promise<void> {
   if (!userStore.isLoggedIn) return
@@ -120,8 +137,23 @@ function goToSimilaritySearch(kbId: number): void {
   router.push(`/dashboard/knowledge/similaritySearch/${kbId}`)
 }
 
+async function resumeActiveVectorization(): Promise<void> {
+  if (!userStore.isLoggedIn) return
+  try {
+    const actives: ActiveVectorization[] = await listActiveVectorizations()
+    if (actives && actives.length > 0) {
+      resumeKbId.value = actives[0].kbId
+      resumeModalVisible.value = true
+      message.info(`「${actives[0].kbName}」的向量化仍在进行，已自动恢复进度`)
+    }
+  } catch (e) {
+    console.error(e)
+  }
+}
+
 onMounted(() => {
   fetchKnowledgeBases()
+  resumeActiveVectorization()
 })
 </script>
 
