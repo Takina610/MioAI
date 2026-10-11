@@ -36,25 +36,38 @@
         </button>
       </div>
 
-      <div class="palette-body" ref="bodyRef">
-        <div v-for="section in sections" :key="section.key" class="palette-section">
-          <div class="palette-section-title">{{ section.title }}</div>
-          <div
-            v-for="row in section.rows"
-            :key="row.key"
-            class="palette-row"
-            :class="{ active: row.index === activeIndex }"
-            :data-index="row.index"
-            @click="row.activate()"
-            @mouseenter="activeIndex = row.index"
-          >
-            <img v-if="row.avatar" :src="row.avatar" alt="" class="row-avatar" />
-            <component v-else :is="row.icon" class="row-icon" />
-            <span class="row-title">{{ row.title }}</span>
-            <EnterOutlined class="row-enter" />
+      <!-- 固定高度滚动区 + 上下渐隐遮罩：结果增减不改变弹窗高度（避免整体跳动闪烁），
+           内容滚出边界时柔和消隐而非硬切 -->
+      <div class="palette-body-wrap">
+        <div class="palette-body" ref="bodyRef">
+          <div v-for="section in sections" :key="section.key" class="palette-section">
+            <div class="palette-section-title">{{ section.title }}</div>
+            <div
+              v-for="row in section.rows"
+              :key="row.key"
+              class="palette-row"
+              :class="{ active: row.index === activeIndex }"
+              :data-index="row.index"
+              @click="row.activate()"
+              @mouseenter="activeIndex = row.index"
+            >
+              <img v-if="row.avatar" :src="row.avatar" alt="" class="row-avatar" />
+              <component v-else :is="row.icon" class="row-icon" />
+              <span class="row-title">{{ row.title }}</span>
+              <EnterOutlined class="row-enter" />
+            </div>
+            <!-- 加载骨架屏：搜索进行中该分组暂无结果时占位，结果到达后整体替换不掉高度 -->
+            <template v-if="searchLoading && !section.rows.length && section.key !== 'actions'">
+              <div v-for="i in 3" :key="'skel-' + section.key + i" class="palette-skel">
+                <span class="skel-icon" />
+                <span class="skel-bar" />
+              </div>
+            </template>
+            <div v-if="section.empty" class="palette-empty">{{ section.empty }}</div>
           </div>
-          <div v-if="section.empty" class="palette-empty">{{ section.empty }}</div>
         </div>
+        <div class="body-fade top" aria-hidden="true"></div>
+        <div class="body-fade bottom" aria-hidden="true"></div>
       </div>
 
       <div class="palette-footer">
@@ -398,7 +411,7 @@ watch([keyword, activeTab], () => {
   .palette-tabs {
     display: flex;
     gap: 6px;
-    padding: 0 20px 12px;
+    padding: 0 20px 4px;
 
     .palette-tab {
       padding: 5px 14px;
@@ -423,11 +436,36 @@ watch([keyword, activeTab], () => {
     }
   }
 
+  // 固定高度：结果出现/消失只影响内部滚动，不改弹窗整体高度（高度变化会让居中弹窗整体跳动）
+  .palette-body-wrap {
+    position: relative;
+
+    .body-fade {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 22px;
+      pointer-events: none;
+      z-index: 1;
+
+      &.top {
+        top: 0;
+        background: linear-gradient(to bottom, #faf9f5 30%, rgba(250, 249, 245, 0));
+      }
+
+      &.bottom {
+        bottom: 0;
+        background: linear-gradient(to top, #faf9f5 30%, rgba(250, 249, 245, 0));
+      }
+    }
+  }
+
   .palette-body {
-    max-height: 400px;
-    min-height: 200px;
+    height: 400px;
     overflow-y: auto;
     padding: 4px 12px 12px;
+    // 滚动条出现/消失不挤动内容宽度
+    scrollbar-gutter: stable;
     scrollbar-width: thin;
     scrollbar-color: #d2cfc5 transparent;
 
@@ -509,6 +547,38 @@ watch([keyword, activeTab], () => {
     padding: 8px 10px 12px;
     font-size: 13px;
     color: #8c8a82;
+  }
+
+  // 搜索加载骨架：条形占位 + 扫光
+  .palette-skel {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 10px;
+
+    .skel-icon {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+      border-radius: 5px;
+      background: linear-gradient(90deg, #eceade 25%, #f6f4ec 50%, #eceade 75%);
+      background-size: 200% 100%;
+      animation: skel-sweep 1.1s linear infinite;
+    }
+
+    .skel-bar {
+      height: 12px;
+      flex: 1;
+      border-radius: 6px;
+      background: linear-gradient(90deg, #eceade 25%, #f6f4ec 50%, #eceade 75%);
+      background-size: 200% 100%;
+      animation: skel-sweep 1.1s linear infinite;
+    }
+  }
+
+  @keyframes skel-sweep {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
   }
 
   .palette-footer {

@@ -807,14 +807,14 @@ function handleSwitchVersion(messageId: string, version: number): void {
   messagesApi.setChatMessages(chatId, updated)
 }
 
-/** 全局快捷键：Ctrl/Cmd+K 打开会话搜索（与侧边栏搜索入口提示一致）；Ctrl/Cmd+Shift+O 新对话 */
+/** 全局快捷键：Ctrl/Cmd+K 新对话（保持原快捷键不变）；Ctrl/Cmd+P 打开会话搜索（与侧边栏搜索入口提示一致） */
 function handleKeyboardShortcut(e: KeyboardEvent): void {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-    e.preventDefault()
-    searchModalVisible.value = true
-  } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'o') {
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'k') {
     e.preventDefault()
     createNewChat()
+  } else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'p') {
+    e.preventDefault()
+    searchModalVisible.value = true
   }
 }
 
@@ -854,8 +854,8 @@ onBeforeUnmount(() => {
   flex-direction: column;
   overflow: hidden;
   background: $bg-ivory;
-  // 侧边栏展开时给悬浮胶囊让位（304 = 280 胶囊宽 + 24 出血），收起时收回出血位
-  margin: 12px 12px 12px 316px;
+  // 侧边栏展开时给悬浮胶囊让位（300 = 12 出血 + 280 胶囊 + 8 间隙），收起时收回出血位
+  margin: 12px 12px 12px 300px;
   border: 1px solid $border-warm-subtle;
   border-radius: 18px;
   transition: margin-left 0.28s cubic-bezier(0.32, 0.72, 0.35, 1);
@@ -883,6 +883,9 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid #e8e6dc;
 
   .sidebar-toggle {
+    // 高于侧边栏胶囊（z-60）：peek 滑出时按钮保持可点，避免面板盖住按钮后被困在收起态
+    position: relative;
+    z-index: 70;
     display: flex;
     align-items: center;
     justify-content: center;

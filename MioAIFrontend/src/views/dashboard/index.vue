@@ -70,8 +70,8 @@ function handleAuthSuccess(): void {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  // 侧边栏展开时给悬浮胶囊让位（244 = 220 胶囊宽 + 24 出血），收起时收回出血位
-  margin: 12px 12px 12px 256px;
+  // 侧边栏展开时给悬浮胶囊让位（240 = 12 出血 + 220 胶囊 + 8 间隙），收起时收回出血位
+  margin: 12px 12px 12px 240px;
   background: $bg-ivory;
   border: 1px solid $border-warm-subtle;
   border-radius: 18px;

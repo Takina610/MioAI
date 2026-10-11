@@ -76,6 +76,9 @@ const adminEntries = [
   }
 
   .sidebar-toggle {
+    // 高于侧边栏胶囊（z-60）：peek 滑出时按钮保持可点，避免面板盖住按钮后被困在收起态
+    position: relative;
+    z-index: 70;
     display: flex;
     align-items: center;
     justify-content: center;

@@ -1,5 +1,7 @@
 <template>
   <div class="chat-center-area" :class="{ 'has-messages': hasMessages, embedded }">
+    <!-- 消息列表底边渐隐：贴在输入区上缘，消息滚出列表边界时柔和消隐而非硬切 -->
+    <div v-if="hasMessages && !embedded" class="list-fade-overlay" aria-hidden="true"></div>
     <div class="welcome-section" v-if="!hasMessages && !loading">
       <BotIcon
         v-if="agentIconConfig"
@@ -235,6 +237,7 @@ function onFileChange(event: Event): void {
 
 <style lang="scss" scoped>
 .chat-center-area {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -283,6 +286,18 @@ function onFileChange(event: Event): void {
     .welcome-section {
       display: none;
     }
+  }
+
+  // 消息列表底边渐隐：悬在输入区上缘（负 top 压在列表底边之上），越靠近输入框越实
+  .list-fade-overlay {
+    position: absolute;
+    top: -34px;
+    left: 0;
+    right: 0;
+    height: 34px;
+    z-index: 2;
+    pointer-events: none;
+    background: linear-gradient(to bottom, rgba(250, 249, 245, 0) 0%, #faf9f5 82%);
   }
 
   .welcome-section {

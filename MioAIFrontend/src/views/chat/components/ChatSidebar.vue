@@ -14,19 +14,23 @@
 
       <div class="sidebar-content">
         <div class="sidebar-actions">
-          <!-- 搜索入口：胶囊输入框样式，点击打开命令面板（Ctrl+K） -->
+          <!-- 搜索入口：胶囊输入框样式（图2），点击打开命令面板（Ctrl+P） -->
           <button class="search-entry" @click="emit('search')">
             <SearchOutlined class="btn-icon" />
             <span class="btn-text">搜索</span>
             <span class="shortcut-hint">
               <span class="key-box">Ctrl</span>
-              <span class="key-box">K</span>
+              <span class="key-box">P</span>
             </span>
           </button>
 
           <a-button class="new-chat-btn" @click="emit('new-chat')">
             <FormOutlined />
             <span class="btn-text">新对话</span>
+            <span class="shortcut-hint">
+              <span class="key-box">Ctrl</span>
+              <span class="key-box">K</span>
+            </span>
           </a-button>
 
           <a-button class="app-square-btn" @click="goDashboard">
@@ -50,7 +54,7 @@
 
       <div class="sidebar-footer">
         <template v-if="userStore.isLoggedIn">
-          <a-dropdown :trigger="['click']" placement="topLeft">
+          <a-dropdown :trigger="['click']" placement="topLeft" :open="userMenuOpen" @open-change="(v: boolean) => (userMenuOpen = v)">
             <div class="user-info">
               <a-avatar :size="40" :src="userStore.userAvatar">
                 {{ userStore.userName?.charAt(0)?.toUpperCase() }}
@@ -90,7 +94,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useUserStore } from '@/store/user'
@@ -106,7 +110,7 @@ import {
   FormOutlined
 } from '@ant-design/icons-vue'
 
-defineProps<{
+const props = defineProps<{
   agentInfo: Agent | null
   chatList: ChatSession[]
   currentChatId: string
@@ -134,6 +138,15 @@ const router = useRouter()
 const userStore = useUserStore()
 
 const sessionListRef = ref<InstanceType<typeof ChatSessionList> | null>(null)
+
+// 面板收起（含 peek 收回）时同步关闭内部浮层：下拉框挂在 body 上，不会随面板 transform 消失
+const userMenuOpen = ref(false)
+watch(() => props.collapsed && !props.peeking, hidden => {
+  if (hidden) {
+    userMenuOpen.value = false
+    sessionListRef.value?.closeMenus()
+  }
+})
 
 function checkListFilled(): void {
   sessionListRef.value?.checkListFilled()
@@ -167,6 +180,17 @@ defineExpose({ checkListFilled, scrollToTop })
 <style lang="scss" scoped>
 .sidebar {
   @include floating-sidebar-shell(304px);
+
+  // peek 悬浮唤出：面板滑出过程中顶行内容保持隐藏（动画 backwards 填充延迟期），
+  // 面板就位后再在按钮右侧淡入，避免 logo 与按钮在滑动中交叠产生割裂感
+  &.peek .sidebar-top {
+    padding-left: 56px;
+
+    .agent-avatar,
+    .agent-name {
+      animation: peek-logo-in 0.2s ease 0.26s backwards;
+    }
+  }
 
   .sidebar-top {
     height: 64px;
@@ -352,6 +376,18 @@ defineExpose({ checkListFilled, scrollToTop })
         border-color: darken($primary-color, 10%);
       }
     }
+  }
+}
+
+@keyframes peek-logo-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 </style>

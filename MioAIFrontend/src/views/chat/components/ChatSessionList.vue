@@ -25,20 +25,24 @@
           </div>
           <div class="chat-item-time">{{ formatTime(chat.updateTime) }}</div>
         </div>
-        <a-dropdown :trigger="['click']">
+        <a-dropdown
+          :trigger="['click']"
+          :open="openMenuKey === chat.id"
+          @open-change="(v: boolean) => (openMenuKey = v ? chat.id : '')"
+        >
           <a-button type="text" size="small" class="chat-item-more" @click.stop>
             <MoreOutlined />
           </a-button>
-          <template #overlay>
-            <a-menu>
-              <a-menu-item key="share" @click="emit('share', chat.id)">
-                <ShareAltOutlined /> 分享对话
-              </a-menu-item>
-              <a-menu-item key="delete" class="delete-menu-item" @click="emit('delete', chat.id)">
-                <DeleteOutlined /> 删除对话
-              </a-menu-item>
-            </a-menu>
-          </template>
+            <template #overlay>
+              <a-menu>
+                <a-menu-item key="share" @click="openMenuKey = ''; emit('share', chat.id)">
+                  <ShareAltOutlined /> 分享对话
+                </a-menu-item>
+                <a-menu-item key="delete" class="delete-menu-item" @click="openMenuKey = ''; emit('delete', chat.id)">
+                  <DeleteOutlined /> 删除对话
+                </a-menu-item>
+              </a-menu>
+            </template>
         </a-dropdown>
       </div>
       <div v-if="chatListLoading && chatList.length > 0" class="chat-list-loading">
@@ -75,6 +79,13 @@ const emit = defineEmits<{
 
 const chatListRef = ref<HTMLElement | null>(null)
 
+/** 受控的行内"…"菜单（单开）：面板收起时由父级调 closeMenus 收掉挂在 body 上的浮层 */
+const openMenuKey = ref('')
+
+function closeMenus(): void {
+  openMenuKey.value = ''
+}
+
 function handleChatListScroll(event: Event): void {
   const target = event.target as HTMLElement
   const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight
@@ -108,7 +119,7 @@ function formatTime(date: Date | string): string {
   return d.toLocaleDateString()
 }
 
-defineExpose({ checkListFilled, scrollToTop })
+defineExpose({ checkListFilled, scrollToTop, closeMenus })
 </script>
 
 <style lang="scss" scoped>

@@ -34,7 +34,7 @@
 
       <div class="sidebar-footer">
         <template v-if="userStore.isLoggedIn">
-          <a-dropdown :trigger="['click']" placement="topLeft">
+          <a-dropdown :trigger="['click']" placement="topLeft" :open="userMenuOpen" @open-change="(v: boolean) => (userMenuOpen = v)">
             <div class="user-info">
               <a-avatar :size="40" :src="userStore.userAvatar">
                 {{ userStore.userName?.charAt(0)?.toUpperCase() }}
@@ -72,6 +72,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useUserStore } from '@/store/user'
@@ -82,7 +83,7 @@ import {
   LogoutOutlined
 } from '@ant-design/icons-vue'
 
-defineProps<{
+const props = defineProps<{
   /** 收起态：整体滑出屏幕，Header 收缩按钮悬浮时临时滑出（peek） */
   collapsed: boolean
   peeking: boolean
@@ -98,6 +99,14 @@ const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 const { menuGroups, currentKey, navigateTo } = useDashboardMenu()
+
+// 面板收起（含 peek 收回）时关闭挂在 body 上的用户菜单浮层
+const userMenuOpen = ref(false)
+watch(() => props.collapsed && !props.peeking, hidden => {
+  if (hidden) {
+    userMenuOpen.value = false
+  }
+})
 
 /** 退出登录后，受保护页面需要回退到对应的公开列表页 */
 const logoutRouteMap: Record<string, string> = {
@@ -127,6 +136,16 @@ async function handleLogout(): Promise<void> {
 <style lang="scss" scoped>
 .sidebar {
   @include floating-sidebar-shell(244px);
+
+  // peek 悬浮唤出：面板滑出过程中顶行内容保持隐藏，面板就位后再在按钮右侧淡入，
+  // 避免 logo 与 Header 收缩按钮在滑动中交叠产生割裂感
+  &.peek .sidebar-top {
+    padding-left: 72px;
+
+    .logo-link {
+      animation: peek-logo-in 0.2s ease 0.26s backwards;
+    }
+  }
 
   .sidebar-top {
     height: 64px;
@@ -245,6 +264,18 @@ async function handleLogout(): Promise<void> {
         }
       }
     }
+  }
+}
+
+@keyframes peek-logo-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 </style>
