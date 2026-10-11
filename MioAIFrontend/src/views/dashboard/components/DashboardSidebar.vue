@@ -137,8 +137,8 @@ async function handleLogout(): Promise<void> {
 .sidebar {
   @include floating-sidebar-shell(244px);
 
-  // peek 悬浮唤出：logo 以左缘为锚原地放大出现（延迟期由 backwards 保持隐藏），
-  // 收回/收起态原地缩小消失；缩进量与 Header 收缩按钮错开，互不压叠
+  // peek 悬浮唤出：logo 从中心向四周放大出现（延迟期由 backwards 保持隐藏）；
+  // 缩进量与 Header 收缩按钮错开，互不压叠
   &.peek .sidebar-top {
     padding-left: 72px;
 
@@ -147,11 +147,10 @@ async function handleLogout(): Promise<void> {
     }
   }
 
-  // 收起且未 peek（面板藏在屏幕外）：logo 处于缩小态，peek 收回时经 transition 缩小消失
+  // 收起且未 peek（面板收回中）：logo 原地缩小消失的确定性动画（both 保持末态）
   &.collapsed:not(.peek) .sidebar-top {
     .logo-link {
-      opacity: 0;
-      transform: scale(0.6);
+      animation: peek-logo-out 0.2s ease both;
     }
   }
 
@@ -166,6 +165,7 @@ async function handleLogout(): Promise<void> {
 
     .logo-link {
       transform-origin: center;
+      // 覆盖 peek↔展开切换（无动画参与的方向）：0→1 平滑浮现
       transition: opacity 0.22s ease, transform 0.22s ease;
     }
 
@@ -290,6 +290,18 @@ async function handleLogout(): Promise<void> {
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+@keyframes peek-logo-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.5);
   }
 }
 </style>

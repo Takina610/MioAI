@@ -56,9 +56,9 @@
               <span class="row-title">{{ row.title }}</span>
               <EnterOutlined class="row-enter" />
             </div>
-            <!-- 加载骨架屏：搜索进行中该分组暂无结果时占位，结果到达后整体替换不掉高度 -->
+            <!-- 加载骨架屏：每个分组一条占位（扫光），结果到达后替换 -->
             <template v-if="searchLoading && !section.rows.length && section.key !== 'actions'">
-              <div v-for="i in 3" :key="'skel-' + section.key + i" class="palette-skel">
+              <div class="palette-skel">
                 <span class="skel-icon" />
                 <span class="skel-bar" />
               </div>
