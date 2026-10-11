@@ -31,4 +31,14 @@ public class KnowledgeBaseAddRequest implements Serializable {
     @Size(max = 2000, message = "知识库描述长度不能超过2000")
     @XssClean(mode = "rich")
     private String description;
+
+    /**
+     * 分块大小（token），空则走全局默认
+     */
+    private Integer chunkSize;
+
+    /**
+     * 相邻分块重叠（token），空则走全局默认
+     */
+    private Integer chunkOverlap;
 }

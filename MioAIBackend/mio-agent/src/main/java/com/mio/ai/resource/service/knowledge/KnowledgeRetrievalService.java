@@ -1,6 +1,8 @@
 package com.mio.ai.resource.service.knowledge;
 
 import com.mio.ai.framework.rag.KnowledgeRetrievalResult;
+import com.mio.ai.framework.rag.RetrievalConfig;
+import com.mio.ai.framework.rag.RetrievalOutcome;
 
 import java.util.Collection;
 import java.util.List;
@@ -24,6 +26,11 @@ public interface KnowledgeRetrievalService {
     List<KnowledgeRetrievalResult> retrieveForAgent(Long agentId, String query);
 
     /**
+     * 同 {@link #retrieveForAgent}，但返回实际生效的检索参数（供日志/展示）
+     */
+    RetrievalOutcome retrieveForAgentDetailed(Long agentId, String query);
+
+    /**
      * 在全部公共知识库中检索（MioBot 的默认检索范围）
      *
      * @param query 用户查询
@@ -32,14 +39,19 @@ public interface KnowledgeRetrievalService {
     List<KnowledgeRetrievalResult> retrieveForPublic(String query);
 
     /**
-     * 在指定知识库集合内检索（用于命中测试等场景，调用方需自行完成权限校验）
-     *
-     * @param kbIds     允许检索的知识库ID集合
-     * @param query     查询内容
-     * @param topK      返回数量上限
-     * @param threshold 相似度阈值
-     * @param rerank    是否启用重排
+     * 同 {@link #retrieveForPublic}，但返回实际生效的检索参数（供日志/展示）
+     */
+    RetrievalOutcome retrieveForPublicDetailed(String query);
+
+    /**
+     * 在指定知识库集合内检索（用于命中测试等场景，调用方需自行完成权限校验）。
+     * 兼容旧签名：纯向量检索
      */
     List<KnowledgeRetrievalResult> retrieve(Collection<Long> kbIds, String query,
                                             Integer topK, Double threshold, boolean rerank);
+
+    /**
+     * 在指定知识库集合内按完整配置检索（混合检索/重排数量等），调用方需自行完成权限校验
+     */
+    RetrievalOutcome retrieveDetailed(Collection<Long> kbIds, String query, RetrievalConfig config);
 }

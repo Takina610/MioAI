@@ -142,6 +142,11 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
 
     @Override
     public void vectorizeFiles(Long kbId, Long userId, SseEmitter emitter) {
+        vectorizeFiles(kbId, userId, emitter, false);
+    }
+
+    @Override
+    public void vectorizeFiles(Long kbId, Long userId, SseEmitter emitter, boolean force) {
         KnowledgeBase kb = knowledgeBaseService.getById(kbId);
         if (kb == null || !kb.getUserId().equals(userId)) {
             try {
@@ -154,11 +159,19 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
             return;
         }
 
+        // 全量重建：所有文档（含已完成）重置为待处理，按知识库当前分块配置重新向量化
+        if (force) {
+            documentMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<Document>()
+                    .eq("kb_id", kbId).eq("is_deleted", 0).set("status", 0));
+            log.info("全量重建向量化: kbId={}, chunkSize={}, chunkOverlap={}",
+                    kbId, kb.getChunkSize(), kb.getChunkOverlap());
+        }
+
         executorService.submit(() -> {
             try {
                 // 清除中断标志
                 cancellationFlags.remove(kbId);
-                
+
                 List<Document> documents = documentMapper.selectList(
                     new QueryWrapper<Document>()
                         .eq("kb_id", kbId)
@@ -225,11 +238,14 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
                                         continue;
                                     }
 
-                                    CustomTokenTextSplitter splitter = CustomTokenTextSplitter.builder()
-                                            .withChunkSize(chunkSize)
-                                            .build();
+                                    // 分块配置以知识库级设置优先，未设置时回退全局默认
+                                    CustomTokenTextSplitter.Builder splitterBuilder = CustomTokenTextSplitter.builder()
+                                            .withChunkSize(kb.getChunkSize() != null ? kb.getChunkSize() : chunkSize);
+                                    if (kb.getChunkOverlap() != null) {
+                                        splitterBuilder.withChunkOverlap(kb.getChunkOverlap());
+                                    }
                                     List<org.springframework.ai.document.Document> splitDocuments =
-                                            splitter.apply(aiDocuments);
+                                            splitterBuilder.build().apply(aiDocuments);
 
                                     int chunkIndex = 0;
                                     List<org.springframework.ai.document.Document> documentsWithId = new ArrayList<>();

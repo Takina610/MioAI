@@ -45,4 +45,10 @@ public interface DocumentService extends IService<Document> {
      * 供知识库整体删除复用，权限由调用方保证
      */
     boolean deleteDocumentsByKbIdCascade(Long kbId);
+
+    /**
+     * 单文档重新向量化前置：校验所有者后将状态重置为待处理，
+     * 后续由 vectorize SSE 流水线重新解析入库
+     */
+    boolean resetForRevectorize(Long id, Long userId);
 }

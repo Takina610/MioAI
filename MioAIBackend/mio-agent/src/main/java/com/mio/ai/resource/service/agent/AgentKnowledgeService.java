@@ -2,7 +2,9 @@ package com.mio.ai.resource.service.agent;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.mio.ai.resource.model.dto.agentknowledge.AgentKnowledgeAddRequest;
+import com.mio.ai.resource.model.dto.agentknowledge.AgentKnowledgeUpdateRequest;
 import com.mio.ai.resource.model.entity.AgentKnowledge;
+import com.mio.ai.resource.model.vo.knowledge.AgentKnowledgeBindingVO;
 
 import java.util.List;
 
@@ -42,4 +44,14 @@ public interface AgentKnowledgeService extends IService<AgentKnowledge> {
      * 根据智能体ID删除所有关联
      */
     boolean deleteByAgentId(Long agentId);
+
+    /**
+     * 智能体的全部知识库绑定（含禁用与解析后的检索配置），供绑定管理界面
+     */
+    List<AgentKnowledgeBindingVO> getBindingDetailsByAgentId(Long agentId);
+
+    /**
+     * 更新绑定的检索配置与启用开关
+     */
+    boolean updateAgentKnowledge(Long id, AgentKnowledgeUpdateRequest request);
 }

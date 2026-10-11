@@ -24,6 +24,8 @@ public class VectorStoreConfig implements DisposableBean {
 
     private HikariDataSource vectorDataSource;
 
+    private volatile org.springframework.jdbc.core.JdbcTemplate vectorJdbcTemplate;
+
     @Bean
     public PgVectorStore vectorStore(EmbeddingModel embeddingModel,
                                      @Value("${mio.ai.vector.jdbc-url:jdbc:postgresql://localhost:5432/mio_ai_vec}") String jdbcUrl,
@@ -38,6 +40,7 @@ public class VectorStoreConfig implements DisposableBean {
         ds.setMaximumPoolSize(5);
         ds.setPoolName("mio-ai-vector");
         this.vectorDataSource = ds;
+        this.vectorJdbcTemplate = new JdbcTemplate(ds);
 
         // 启动时自动建扩展/表/HNSW 索引（CREATE EXTENSION 需要超级用户账号）。
         // idType 必须用 TEXT：向量 ID 是 doc_{docId}_{chunkIndex} 字符串，
@@ -47,6 +50,22 @@ public class VectorStoreConfig implements DisposableBean {
                 .idType(PgVectorStore.PgIdType.TEXT)
                 .initializeSchema(true)
                 .build();
+    }
+
+    /**
+     * pgvector 直连查询（关键词召回 / 切片枚举）。延迟取 JdbcTemplate，
+     * 避免与 vectorStore Bean 的创建顺序耦合；不注册 JdbcTemplate Bean，
+     * 防止 Spring Boot 的 JdbcTemplate 自动配置退避影响 MySQL 侧
+     */
+    @Bean
+    public com.mio.ai.framework.rag.KnowledgeChunkQueryClient knowledgeChunkQueryClient() {
+        return new com.mio.ai.framework.rag.KnowledgeChunkQueryClient(() -> {
+            org.springframework.jdbc.core.JdbcTemplate template = this.vectorJdbcTemplate;
+            if (template == null) {
+                throw new IllegalStateException("向量库数据源尚未初始化");
+            }
+            return template;
+        });
     }
 
     @Override

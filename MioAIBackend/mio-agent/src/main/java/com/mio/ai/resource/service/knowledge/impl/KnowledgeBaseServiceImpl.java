@@ -54,6 +54,7 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
         kb.setStatus(KnowledgeBaseStatusEnum.ACTIVE.getCode());
         kb.setDocumentCount(0);
         kb.setStorageSize(0L);
+        normalizeChunkConfig(kb);
         this.save(kb);
         return kb.getId();
     }
@@ -71,6 +72,7 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限修改该知识库");
         }
         BeanUtil.copyProperties(request, kb);
+        normalizeChunkConfig(kb);
         kb.setUpdateTime(new Date());
         return this.updateById(kb);
     }
@@ -144,6 +146,25 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
         Page<KnowledgeBaseVO> voPage = new Page<>(kbPage.getCurrent(), kbPage.getSize(), kbPage.getTotal());
         voPage.setRecords(kbPage.getRecords().stream().map(this::convertToVO).toList());
         return voPage;
+    }
+
+    /**
+     * 分块参数边界钳制：chunkSize 限制在 [MIN_CHUNK_SIZE, MAX_CHUNK_SIZE]，
+     * chunkOverlap 不超过 chunkSize 的一半（重叠过半会导致内容大量重复）
+     */
+    public static final int MIN_CHUNK_SIZE = 200;
+    public static final int MAX_CHUNK_SIZE = 2048;
+    public static final int MAX_CHUNK_OVERLAP = 500;
+
+    private void normalizeChunkConfig(KnowledgeBase kb) {
+        if (kb.getChunkSize() != null) {
+            kb.setChunkSize(Math.max(MIN_CHUNK_SIZE, Math.min(MAX_CHUNK_SIZE, kb.getChunkSize())));
+        }
+        if (kb.getChunkOverlap() != null) {
+            int half = (kb.getChunkSize() != null ? kb.getChunkSize() : 800) / 2;
+            int cap = Math.min(MAX_CHUNK_OVERLAP, half);
+            kb.setChunkOverlap(Math.max(0, Math.min(cap, kb.getChunkOverlap())));
+        }
     }
 
     private KnowledgeBaseVO convertToVO(KnowledgeBase kb) {

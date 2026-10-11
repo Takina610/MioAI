@@ -4,7 +4,9 @@ import com.mio.ai.common.common.BaseResponse;
 import com.mio.ai.user.utils.RedisComponent;
 import com.mio.ai.common.utils.ResultUtils;
 import com.mio.ai.resource.model.dto.agentknowledge.AgentKnowledgeAddRequest;
+import com.mio.ai.resource.model.dto.agentknowledge.AgentKnowledgeUpdateRequest;
 import com.mio.ai.resource.model.entity.AgentKnowledge;
+import com.mio.ai.resource.model.vo.knowledge.AgentKnowledgeBindingVO;
 import com.mio.ai.resource.service.agent.AgentKnowledgeService;
 import com.mio.ai.resource.service.security.AccessGuardService;
 import jakarta.annotation.Resource;
@@ -81,5 +83,33 @@ public class AgentKnowledgeController {
         accessGuardService.checkAgentOwner(agentId, userId);
         List<Long> kbIds = agentKnowledgeService.getKbIdsByAgentId(agentId);
         return ResultUtils.success(kbIds);
+    }
+
+    /**
+     * 查询智能体的全部知识库绑定详情（含检索配置）：仅所有者可查
+     */
+    @GetMapping("/agent/{agentId}/bindings")
+    public BaseResponse<List<AgentKnowledgeBindingVO>> getBindings(@PathVariable Long agentId,
+                                                                   HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        accessGuardService.checkAgentOwner(agentId, userId);
+        return ResultUtils.success(agentKnowledgeService.getBindingDetailsByAgentId(agentId));
+    }
+
+    /**
+     * 更新绑定的检索配置（topK/阈值/方式/重排）与启用开关：仅智能体所有者
+     */
+    @PutMapping("/{id}")
+    @CacheEvict(value = "agents", allEntries = true)
+    public BaseResponse<Boolean> updateAgentKnowledge(@PathVariable Long id,
+                                                      @RequestBody AgentKnowledgeUpdateRequest request,
+                                                      HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        AgentKnowledge binding = agentKnowledgeService.getById(id);
+        if (binding == null) {
+            return ResultUtils.success(false);
+        }
+        accessGuardService.checkAgentOwner(binding.getAgentId(), userId);
+        return ResultUtils.success(agentKnowledgeService.updateAgentKnowledge(id, request));
     }
 }

@@ -44,6 +44,16 @@ public class KnowledgeBase implements Serializable {
     private Integer isPublic;
 
     /**
+     * 分块大小（token），向量化时生效；为空走全局默认
+     */
+    private Integer chunkSize;
+
+    /**
+     * 相邻分块重叠（token），避免语义被切断；为空走全局默认
+     */
+    private Integer chunkOverlap;
+
+    /**
      * 文档数量
      */
     private Integer documentCount;

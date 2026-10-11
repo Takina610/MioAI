@@ -241,6 +241,8 @@ CREATE TABLE `knowledge_base`  (
   `description` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '知识库描述',
   `status` tinyint NULL DEFAULT 1 COMMENT '状态:0-构建中,1-就绪,2-失败',
   `is_public` int NULL DEFAULT 0 COMMENT '是否公开（0-私有 1-公开）',
+  `chunk_size` int NULL DEFAULT 800 COMMENT '分块大小(token)，向量化时生效',
+  `chunk_overlap` int NULL DEFAULT 100 COMMENT '相邻分块重叠(token)，避免语义切断',
   `document_count` int NULL DEFAULT 0 COMMENT '文档数量',
   `storage_size` bigint NULL DEFAULT 0 COMMENT '存储大小(字节)',
   `is_deleted` tinyint NULL DEFAULT 0 COMMENT '是否删除:0-未删除,1-已删除',

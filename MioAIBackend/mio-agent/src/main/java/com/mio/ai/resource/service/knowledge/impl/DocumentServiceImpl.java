@@ -197,6 +197,23 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
         return true;
     }
 
+    @Override
+    public boolean resetForRevectorize(Long id, Long userId) {
+        if (id == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "文档ID不能为空");
+        }
+        Document document = this.getById(id);
+        if (document == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "文档不存在");
+        }
+        KnowledgeBase kb = knowledgeBaseService.getById(document.getKbId());
+        if (kb == null || !kb.getUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限重新解析该文档");
+        }
+        document.setStatus(DocumentStatusEnum.PENDING.getCode());
+        return this.updateById(document);
+    }
+
     private DocumentVO convertToVO(Document document) {
         DocumentVO vo = new DocumentVO();
         BeanUtil.copyProperties(document, vo);

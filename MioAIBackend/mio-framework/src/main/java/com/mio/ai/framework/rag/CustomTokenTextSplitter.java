@@ -19,6 +19,8 @@ import java.util.List;
 public class CustomTokenTextSplitter extends TextSplitter {
     private static final int DEFAULT_CHUNK_SIZE = 800;
 
+    private static final int DEFAULT_CHUNK_OVERLAP = 100;
+
     private static final int MIN_CHUNK_SIZE_CHARS = 350;
 
     private static final int MIN_CHUNK_LENGTH_TO_EMBED = 5;
@@ -34,6 +36,10 @@ public class CustomTokenTextSplitter extends TextSplitter {
     // The target size of each text chunk in tokens
     private final int chunkSize;
 
+    // Number of tokens the previous chunk overlaps into the next one, so that
+    // sentences cut at the boundary stay retrievable from both sides
+    private final int chunkOverlap;
+
     // The minimum size of each text chunk in characters
     private final int minChunkSizeChars;
 
@@ -46,16 +52,20 @@ public class CustomTokenTextSplitter extends TextSplitter {
     private final boolean keepSeparator;
 
     public CustomTokenTextSplitter() {
-        this(DEFAULT_CHUNK_SIZE, MIN_CHUNK_SIZE_CHARS, MIN_CHUNK_LENGTH_TO_EMBED, MAX_NUM_CHUNKS, KEEP_SEPARATOR);
+        this(DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP, MIN_CHUNK_SIZE_CHARS, MIN_CHUNK_LENGTH_TO_EMBED,
+                MAX_NUM_CHUNKS, KEEP_SEPARATOR);
     }
 
     public CustomTokenTextSplitter(boolean keepSeparator) {
-        this(DEFAULT_CHUNK_SIZE, MIN_CHUNK_SIZE_CHARS, MIN_CHUNK_LENGTH_TO_EMBED, MAX_NUM_CHUNKS, keepSeparator);
+        this(DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP, MIN_CHUNK_SIZE_CHARS, MIN_CHUNK_LENGTH_TO_EMBED,
+                MAX_NUM_CHUNKS, keepSeparator);
     }
 
-    public CustomTokenTextSplitter(int chunkSize, int minChunkSizeChars, int minChunkLengthToEmbed, int maxNumChunks,
-                                   boolean keepSeparator) {
+    public CustomTokenTextSplitter(int chunkSize, int chunkOverlap, int minChunkSizeChars,
+                                   int minChunkLengthToEmbed, int maxNumChunks, boolean keepSeparator) {
         this.chunkSize = chunkSize;
+        // 重叠不能超过块大小的一半，否则相邻块内容大量重复且可能无法推进
+        this.chunkOverlap = Math.max(0, Math.min(chunkOverlap, chunkSize / 2));
         this.minChunkSizeChars = minChunkSizeChars;
         this.minChunkLengthToEmbed = minChunkLengthToEmbed;
         this.maxNumChunks = maxNumChunks;
@@ -80,7 +90,12 @@ public class CustomTokenTextSplitter extends TextSplitter {
         List<String> chunks = new ArrayList<>();
         int num_chunks = 0;
         while (!tokens.isEmpty() && num_chunks < this.maxNumChunks) {
-            List<Integer> chunk = tokens.subList(0, Math.min(chunkSize, tokens.size()));
+            int take = Math.min(chunkSize, tokens.size());
+            // 剩余量不超过重叠数时并入当前块，避免下一轮为尾巴再造一个几乎全重复的小块
+            if (take < tokens.size() && tokens.size() - take <= this.chunkOverlap) {
+                take = tokens.size();
+            }
+            List<Integer> chunk = tokens.subList(0, take);
             String chunkText = decodeTokens(chunk);
 
             // Skip the chunk if it is empty or whitespace
@@ -109,8 +124,15 @@ public class CustomTokenTextSplitter extends TextSplitter {
                 chunks.add(chunkTextToAppend);
             }
 
-            // Remove the tokens corresponding to the chunk text from the remaining tokens
-            tokens = tokens.subList(getEncodedTokens(chunkText).size(), tokens.size());
+            // Advance past the consumed tokens, keeping chunkOverlap tokens as the head of the next chunk
+            int consumed = getEncodedTokens(chunkText).size();
+            if (consumed >= tokens.size()) {
+                // 全部消费：直接 break 会让循环外的"剩余 token"块把整段再追加一遍
+                tokens = tokens.subList(tokens.size(), tokens.size());
+            } else {
+                int advance = Math.max(1, consumed - this.chunkOverlap);
+                tokens = tokens.subList(advance, tokens.size());
+            }
 
             num_chunks++;
         }
@@ -142,6 +164,8 @@ public class CustomTokenTextSplitter extends TextSplitter {
 
         private int chunkSize = DEFAULT_CHUNK_SIZE;
 
+        private int chunkOverlap = DEFAULT_CHUNK_OVERLAP;
+
         private int minChunkSizeChars = MIN_CHUNK_SIZE_CHARS;
 
         private int minChunkLengthToEmbed = MIN_CHUNK_LENGTH_TO_EMBED;
@@ -155,6 +179,11 @@ public class CustomTokenTextSplitter extends TextSplitter {
 
         public Builder withChunkSize(int chunkSize) {
             this.chunkSize = chunkSize;
+            return this;
+        }
+
+        public Builder withChunkOverlap(int chunkOverlap) {
+            this.chunkOverlap = chunkOverlap;
             return this;
         }
 
@@ -179,8 +208,8 @@ public class CustomTokenTextSplitter extends TextSplitter {
         }
 
         public CustomTokenTextSplitter build() {
-            return new CustomTokenTextSplitter(this.chunkSize, this.minChunkSizeChars, this.minChunkLengthToEmbed,
-                    this.maxNumChunks, this.keepSeparator);
+            return new CustomTokenTextSplitter(this.chunkSize, this.chunkOverlap, this.minChunkSizeChars,
+                    this.minChunkLengthToEmbed, this.maxNumChunks, this.keepSeparator);
         }
 
     }

@@ -61,6 +61,16 @@ public class KnowledgeBaseVO implements Serializable {
     private Integer isPublic;
 
     /**
+     * 分块大小（token）
+     */
+    private Integer chunkSize;
+
+    /**
+     * 相邻分块重叠（token）
+     */
+    private Integer chunkOverlap;
+
+    /**
      * 创建时间
      */
     private Date createTime;

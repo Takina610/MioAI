@@ -31,6 +31,12 @@ public interface KnowledgeBaseCreateService {
     void vectorizeFiles(Long kbId, Long userId, SseEmitter emitter);
 
     /**
+     * 向量化处理文件
+     * @param force true 时重置该知识库全部文档（含已完成）并按知识库当前分块配置重新向量化
+     */
+    void vectorizeFiles(Long kbId, Long userId, SseEmitter emitter, boolean force);
+
+    /**
      * 取消创建并清理资源
      * @param kbId 知识库ID
      * @param userId 用户ID

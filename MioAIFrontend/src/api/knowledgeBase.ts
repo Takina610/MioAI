@@ -84,8 +84,8 @@ export function cancelKnowledgeCreation(kbId: number): Promise<boolean> {
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
-export function vectorizeKnowledgeFiles(kbId: number, token: string): EventSource {
-  const url = `${BASE_URL}/knowledge-bases/create/vectorize/${kbId}?token=${encodeURIComponent(token)}`
+export function vectorizeKnowledgeFiles(kbId: number, token: string, force = false): EventSource {
+  const url = `${BASE_URL}/knowledge-bases/create/vectorize/${kbId}?token=${encodeURIComponent(token)}${force ? '&force=true' : ''}`
   return new EventSource(url)
 }
 
@@ -132,18 +132,56 @@ export interface SimilarityResult {
   text: string
   score: number
   fileName: string
+  docId?: number
+  chunkIndex?: number
+  matchType?: 'vector' | 'keyword' | 'rerank' | string
   metadata?: Record<string, unknown>
 }
 
-export function similaritySearch(
-  content: string,
-  threshold: number,
-  topK: number,
+export interface SimilaritySearchRequest {
+  query: string
   kbId?: number
-): Promise<SimilarityResult[]> {
+  topK?: number
+  threshold?: number
+  method?: 'vector' | 'hybrid'
+  enableRerank?: boolean
+}
+
+/**
+ * 命中测试（POST body 版）：支持长查询与完整检索配置（混合检索/重排）
+ */
+export function similaritySearchV2(data: SimilaritySearchRequest): Promise<SimilarityResult[]> {
   return request({
-    url: `/documents/similaritySearch/${encodeURIComponent(content)}/${threshold}/${topK}`,
-    method: 'get',
-    params: kbId ? { kbId } : undefined
+    url: '/documents/similaritySearch',
+    method: 'post',
+    data
+  })
+}
+
+export interface DocumentChunk {
+  chunkId: string
+  chunkIndex: number
+  content: string
+  length: number
+  fileName: string
+}
+
+/**
+ * 查看文档解析出的全部分块（切片）
+ */
+export function getDocumentChunks(id: number): Promise<DocumentChunk[]> {
+  return request({
+    url: `/documents/${id}/chunks`,
+    method: 'get'
+  })
+}
+
+/**
+ * 单文档重新解析：状态重置为待处理，随后打开 vectorize SSE 流水线执行
+ */
+export function revectorizeDocument(id: number): Promise<boolean> {
+  return request({
+    url: `/documents/${id}/revectorize`,
+    method: 'post'
   })
 }
