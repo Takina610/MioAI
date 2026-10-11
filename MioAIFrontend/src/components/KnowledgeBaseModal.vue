@@ -66,63 +66,6 @@
               </a-tooltip>
             </div>
           </a-form-item>
-
-          <a-form-item label="分块设置">
-            <div class="chunk-config">
-              <div class="preset-row">
-                <button
-                  v-for="preset in chunkPresets"
-                  :key="preset.key"
-                  type="button"
-                  class="preset-chip"
-                  :class="{ active: chunkPreset === preset.key }"
-                  @click="applyChunkPreset(preset.key)"
-                >
-                  <span class="preset-name">{{ preset.name }}</span>
-                  <span class="preset-hint">{{ preset.hint }}</span>
-                </button>
-              </div>
-              <div class="slider-row">
-                <span class="slider-label">分块大小</span>
-                <a-slider
-                  v-model:value="formData.chunkSize"
-                  class="slider-track"
-                  :min="200"
-                  :max="2048"
-                  :step="50"
-                  :tooltip-visible="false"
-                />
-                <a-input-number
-                  v-model:value="formData.chunkSize"
-                  class="slider-number"
-                  :min="200"
-                  :max="2048"
-                  :step="50"
-                  size="small"
-                />
-              </div>
-              <div class="slider-row">
-                <span class="slider-label">分块重叠</span>
-                <a-slider
-                  v-model:value="formData.chunkOverlap"
-                  class="slider-track"
-                  :min="0"
-                  :max="maxChunkOverlap"
-                  :step="10"
-                  :tooltip-visible="false"
-                />
-                <a-input-number
-                  v-model:value="formData.chunkOverlap"
-                  class="slider-number"
-                  :min="0"
-                  :max="maxChunkOverlap"
-                  :step="10"
-                  size="small"
-                />
-              </div>
-              <p class="chunk-note">单位为 token；重叠用于避免句子在块边界被切断。后续可在知识库设置中调整，重新向量化后生效。</p>
-            </div>
-          </a-form-item>
         </a-form>
 
         <div class="step-actions">
@@ -290,47 +233,7 @@ const originalFormData = reactive({
 
 const formData = reactive({
   name: '',
-  description: '',
-  chunkSize: 800,
-  chunkOverlap: 100
-})
-
-type ChunkPresetKey = 'fine' | 'balanced' | 'coarse' | 'custom'
-
-const chunkPresets: { key: Exclude<ChunkPresetKey, 'custom'>; name: string; hint: string; chunkSize: number; chunkOverlap: number }[] = [
-  { key: 'fine', name: '精细', hint: '片段短，检索更准', chunkSize: 400, chunkOverlap: 80 },
-  { key: 'balanced', name: '均衡', hint: '适合大多数文档', chunkSize: 800, chunkOverlap: 100 },
-  { key: 'coarse', name: '粗粒度', hint: '上下文更完整', chunkSize: 1200, chunkOverlap: 150 }
-]
-
-const chunkPreset = ref<ChunkPresetKey>('balanced')
-
-const maxChunkOverlap = computed(() => Math.min(500, Math.floor(formData.chunkSize / 2)))
-
-function matchChunkPreset(size: number, overlap: number): ChunkPresetKey {
-  const hit = chunkPresets.find(p => p.chunkSize === size && p.chunkOverlap === overlap)
-  return hit ? hit.key : 'custom'
-}
-
-function applyChunkPreset(key: Exclude<ChunkPresetKey, 'custom'>): void {
-  const preset = chunkPresets.find(p => p.key === key)
-  if (!preset) return
-  formData.chunkSize = preset.chunkSize
-  formData.chunkOverlap = preset.chunkOverlap
-  chunkPreset.value = key
-}
-
-watch(() => formData.chunkSize, (size) => {
-  // 重叠不能超过块大小的一半（后端同样钳制），块变小时收敛重叠
-  const cap = Math.min(500, Math.floor(size / 2))
-  if (formData.chunkOverlap > cap) {
-    formData.chunkOverlap = cap
-  }
-  chunkPreset.value = matchChunkPreset(size, formData.chunkOverlap)
-})
-
-watch(() => formData.chunkOverlap, (overlap) => {
-  chunkPreset.value = matchChunkPreset(formData.chunkSize, overlap)
+  description: ''
 })
 
 let eventSource: EventSource | null = null
@@ -399,9 +302,6 @@ function resetState(): void {
   }
   formData.name = ''
   formData.description = ''
-  formData.chunkSize = 800
-  formData.chunkOverlap = 100
-  chunkPreset.value = 'balanced'
   originalFormData.name = ''
   originalFormData.description = ''
 }
@@ -430,12 +330,7 @@ async function handleNextStep(): Promise<void> {
     }
     
     creatingKb.value = true
-    const id = await addKnowledgeBase({
-      name: formData.name,
-      description: formData.description,
-      chunkSize: formData.chunkSize,
-      chunkOverlap: formData.chunkOverlap
-    })
+    const id = await addKnowledgeBase({ name: formData.name, description: formData.description })
     kbId.value = id
     originalFormData.name = formData.name
     originalFormData.description = formData.description
@@ -737,82 +632,6 @@ onUnmounted(() => {
         .example-text {
           margin-left: 4px;
         }
-      }
-    }
-
-    .chunk-config {
-      .preset-row {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 10px;
-        margin-bottom: 14px;
-      }
-
-      .preset-chip {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 2px;
-        padding: 10px 8px;
-        border: 1px solid #ece9de;
-        border-radius: 10px;
-        background: #faf9f5;
-        cursor: pointer;
-        transition: all 0.15s ease;
-
-        &:hover {
-          border-color: rgba($primary-color, 0.5);
-        }
-
-        &.active {
-          border-color: $primary-color;
-          background: rgba($primary-color, 0.06);
-
-          .preset-name {
-            color: $primary-color;
-          }
-        }
-
-        .preset-name {
-          font-size: 13px;
-          font-weight: 600;
-          color: $text-dark;
-        }
-
-        .preset-hint {
-          font-size: 11px;
-          color: #8c8a82;
-        }
-      }
-
-      .slider-row {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 6px;
-
-        .slider-label {
-          flex-shrink: 0;
-          width: 60px;
-          font-size: 13px;
-          color: $text-secondary;
-        }
-
-        .slider-track {
-          flex: 1;
-          margin: 0;
-        }
-
-        .slider-number {
-          flex-shrink: 0;
-          width: 84px;
-        }
-      }
-
-      .chunk-note {
-        margin: 8px 0 0;
-        font-size: 12px;
-        color: #8c8a82;
       }
     }
   }

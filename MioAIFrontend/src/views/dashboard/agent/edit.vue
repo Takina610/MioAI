@@ -46,7 +46,6 @@
                       :title="`${kb.documentCount} 个文档`"
                       :items="getDocuments(kb.id, 'main')"
                     />
-                    <KbRetrievalConfig :agent-id="agentId" :kb-id="kb.id" />
                   </template>
                 </ResourceItem>
               </div>
@@ -264,7 +263,6 @@ import { countMcpTools } from '@/utils/mcpTool'
 import PageHeader from '../components/PageHeader.vue'
 import ResourceItem from './components/ResourceItem.vue'
 import ResourceExpandList from './components/ResourceExpandList.vue'
-import KbRetrievalConfig from './components/KbRetrievalConfig.vue'
 import ResourceSelectDrawer from './components/ResourceSelectDrawer.vue'
 import AgentMemorySection from './components/AgentMemorySection.vue'
 import { useAgentEdit } from './composables/useAgentEdit'
