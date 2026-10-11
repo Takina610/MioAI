@@ -139,7 +139,8 @@ final class BashTool {
         return text.substring(i);
     }
 
-    private static String jsonQuote(String text) {
+    /** JSON 字符串字面量转义（Glob 等以 formatted 注入描述常量的工具共用） */
+    static String jsonQuote(String text) {
         return "\"" + text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\"";
     }
 }

@@ -375,6 +375,21 @@ public class BotEventChannel {
         }
     }
 
+    /** 已流出的工具调用参数（按 id 查工具块；无 id/子代理镜像的调用可能为 null） */
+    String toolArgsOf(String id) {
+        if (id == null || id.isBlank()) {
+            return null;
+        }
+        for (int i = displayBlocks.size() - 1; i >= 0; i--) {
+            Map<String, Object> b = displayBlocks.get(i);
+            if ("tool".equals(b.get("type")) && id.equals(b.get("id"))) {
+                Object args = b.get("args");
+                return args == null ? null : String.valueOf(args);
+            }
+        }
+        return null;
+    }
+
     private void emit(Map<String, Object> fields) {
         SseEmitter current = emitter;
         if (current != null) {

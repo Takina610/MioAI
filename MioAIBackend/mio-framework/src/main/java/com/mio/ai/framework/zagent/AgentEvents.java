@@ -18,7 +18,12 @@ public interface AgentEvents {
     void toolArgs(String id, String delta);
 
     /** 工具执行完成（content 为完整模型可见结果，展示截断由上层决定） */
-    void toolResult(String id, String name, String content);
+    default void toolResult(String id, String name, String content) {
+        toolResult(id, name, content, false, 0);
+    }
+
+    /** 工具执行完成（含真实状态与耗时，供工具日志/可观测；error=true 时 content 为失败信封） */
+    void toolResult(String id, String name, String content, boolean error, long durationMs);
 
     /** 任务清单可能已变化（TodoWrite 后） */
     void todosChanged();

@@ -126,6 +126,11 @@ public final class AgentEngine {
 
             ModelStepRunner.StepResult result = runStepOrFallback(messages, callbacks);
 
+            // 输出被 token 上限截断且原本带工具调用（调用已作废）：强制无工具收束一次
+            if (result.truncated()) {
+                log.warn("模型步输出截断，工具调用已作废，收束作答, chatId={}, step={}", chatId, step);
+                result = rescueOrFallback(messages);
+            }
             // 模型空收尾（流被截断/工具调用幻觉后停住，只有思考没有答复）：抢救一次
             if (result.toolCalls().isEmpty() && isBlank(result.text())) {
                 log.warn("模型步无文本无工具调用，兜底收束, chatId={}, step={}", chatId, step);
@@ -250,8 +255,9 @@ public final class AgentEngine {
         for (int i = 0; i < executed.size(); i++) {
             ToolRegistry.Executed result = executed.get(i);
             String id = calls.get(i).id();
-            // content 对媒体结果已是 [Attached ...] 占位文本，展示/落库不含 base64
-            events.toolResult(id, result.toolName(), result.content());
+            // content 对媒体结果已是 [Attached ...] 占位文本，展示/落库不含 base64；
+            // error/duration 供上层记工具日志真实状态
+            events.toolResult(id, result.toolName(), result.content(), result.error(), result.durationMs());
             state.add(ConversationEntry.toolResult(id, calls.get(i).name(),
                     result.content(), result.error(), result.media()));
         }

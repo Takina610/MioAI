@@ -148,9 +148,9 @@ public final class Subagents implements SubagentLauncher {
         }
 
         @Override
-        public void toolResult(String id, String name, String content) {
+        public void toolResult(String id, String name, String content, boolean error, long durationMs) {
             toolUseCount.incrementAndGet();
-            parent.toolResult(idPrefix + id, name, content);
+            parent.toolResult(idPrefix + id, name, content, error, durationMs);
         }
 
         @Override

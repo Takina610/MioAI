@@ -33,7 +33,7 @@ final class TodoTools {
                 "status":{"type":"string","enum":["pending","in_progress","completed"],"description":"Current status of the task"},
                 "priority":{"type":"string","enum":["high","medium","low"],"description":"Priority level of the task"}},
                 "required":["content","status","priority"]},
-                "description":"The complete updated todo list. At most one item may be in_progress at a time."}}},
+                "description":"The complete updated todo list. At most one item may be in_progress at a time."}},
                 "required":["todos"]}""";
         return ToolEntry.ofMutable("TodoWrite", TODO_WRITE, schema, 10_000, TodoTools::executeWrite);
     }

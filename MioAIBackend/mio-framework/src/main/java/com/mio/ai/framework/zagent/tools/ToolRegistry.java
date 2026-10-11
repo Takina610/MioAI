@@ -54,6 +54,13 @@ public final class ToolRegistry {
     }
 
     public void register(ToolEntry entry) {
+        // schema 非法时 OpenAI 通道会静默丢掉参数 schema（模型只能猜参数），这里注册期即暴露
+        try {
+            MAPPER.readTree(entry.inputSchema);
+        } catch (Exception e) {
+            log.error("工具 schema 不是合法 JSON，该工具将以无参数 schema 状态发给模型: {} -> {}",
+                    entry.name, e.getMessage());
+        }
         entries.put(entry.name, entry);
     }
 

@@ -113,8 +113,20 @@ public class MioBotController {
     @Autowired
     private com.mio.ai.bot.config.ModelEffortCapabilities modelEffortCapabilities;
 
-    /** 正在执行中的会话：断线自动重连/双击等重复请求直接拒绝，防止同一轮任务被重复执行 */
-    private static final java.util.Set<String> ACTIVE_CHATS = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /** 正在执行中的会话：chatId → 归属标识（"u:<id>"/"guest:<ip>"），断线重连/双击去重 + 每归属并发上限 */
+    private static final java.util.concurrent.ConcurrentHashMap<String, String> ACTIVE_CHATS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 同一归属（用户/游客IP）最多同时执行的对话轮数 */
+    @org.springframework.beans.factory.annotation.Value("${mio.ai.chat.max-concurrent-per-owner:3}")
+    private int maxConcurrentPerOwner;
+
+    /** 同一归属每分钟最多发起的对话轮数 */
+    @org.springframework.beans.factory.annotation.Value("${mio.ai.chat.turns-per-minute:10}")
+    private int turnsPerMinute;
+
+    @Autowired
+    private ChatRateLimiter chatRateLimiter;
 
     /** 当前模型实际支持的思考档位（探测缓存），前端据此如实渲染档位选择器 */
     @GetMapping("/bot/efforts")
@@ -130,11 +142,22 @@ public class MioBotController {
                            @RequestParam(defaultValue = "false") boolean skipUserPersist,
                            @RequestParam(required = false) String reasoningEffort,
                            @RequestParam(required = false) Long groupSeq,
-                           @RequestParam(required = false) @Size(max = 4000) String attachments) {
+                           @RequestParam(required = false) @Size(max = 4000) String attachments,
+                           jakarta.servlet.http.HttpServletRequest httpRequest) {
         Long userId = StrUtil.isBlank(token) ? null : redisComponent.getUserId(token);
         long resolvedAgentId = agentId != null ? agentId : MioBot.AGENT_ID;
+        String ownerKey = userId != null ? "u:" + userId : "guest:" + clientIp(httpRequest);
 
-        if (!ACTIVE_CHATS.add(chatId)) {
+        // 频率窗口与并发上限：游客敞口最大，一并约束（拒绝发生在占用 chatId 之前）
+        try {
+            chatRateLimiter.checkTurn(ownerKey, turnsPerMinute);
+        } catch (BusinessException e) {
+            return emitSingleReply(e.getMessage());
+        }
+        if (countActiveByOwner(ownerKey) >= maxConcurrentPerOwner) {
+            return emitSingleReply("你当前有多个对话任务正在执行，请等待完成后再发送。");
+        }
+        if (ACTIVE_CHATS.putIfAbsent(chatId, ownerKey) != null) {
             return emitSingleReply("当前会话有正在进行的任务，请等待完成后再发送（可刷新页面查看进度）。");
         }
 
@@ -200,7 +223,7 @@ public class MioBotController {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限访问该会话");
         }
         // 执行中的会话禁止截断：截断后落库行与内存历史错位，WIP 增量刷新会把已删的轮次写回
-        if (ACTIVE_CHATS.contains(conversationId)) {
+        if (ACTIVE_CHATS.containsKey(conversationId)) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "会话正在执行中，请等待本轮完成后再编辑或重新生成");
         }
 
@@ -373,7 +396,30 @@ public class MioBotController {
      */
     @GetMapping("/bot/active/{chatId}")
     public BaseResponse<Boolean> isChatActive(@PathVariable @NotBlank String chatId) {
-        return ResultUtils.success(ACTIVE_CHATS.contains(chatId));
+        return ResultUtils.success(ACTIVE_CHATS.containsKey(chatId));
+    }
+
+    /** 同一归属正在执行的会话数（ACTIVE_CHATS 规模 = 并发轮数，遍历即可） */
+    private int countActiveByOwner(String ownerKey) {
+        int count = 0;
+        for (String owner : ACTIVE_CHATS.values()) {
+            if (owner.equals(ownerKey)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /** 游客归属标识：优先 X-Forwarded-For 首段（反代场景），否则对端地址 */
+    private String clientIp(jakarta.servlet.http.HttpServletRequest request) {
+        if (request == null) {
+            return "unknown";
+        }
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (StrUtil.isNotBlank(forwarded)) {
+            return forwarded.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 
     /** 敏感词命中的单条完整回复（answer 整段 + done） */

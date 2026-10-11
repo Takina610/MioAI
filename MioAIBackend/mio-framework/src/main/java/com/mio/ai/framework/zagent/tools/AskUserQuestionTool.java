@@ -36,7 +36,7 @@ final class AskUserQuestionTool {
                 "label":{"type":"string","description":"The display text for this option that the user will see after the key. Should be concise (1-5 words) and clearly describe the choice."},
                 "description":{"type":"string","description":"Explanation of what this option means or what will happen if chosen."},
                 "preview":{"type":"string","description":"Optional content rendered as markdown in a monospace box when this option is focused, for comparing concrete artifacts."}},
-                "required":["key","label","description"]}}}},
+                "required":["key","label","description"]}}},
                 "required":["question","header","options"]}}},
                 "required":["questions"]}""";
 return ToolEntry.ofMutable("AskUserQuestion", ASK_USER_QUESTION, schema, 0, AskUserQuestionTool::execute);

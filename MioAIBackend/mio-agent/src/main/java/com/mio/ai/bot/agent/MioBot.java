@@ -49,6 +49,9 @@ public class MioBot {
 
     private static final long HEARTBEAT_INTERVAL_SECONDS = 15;
 
+    /** 工具日志的结果预览上限（output_result 为 text 列，完整结果已在 agent_message.blocks） */
+    private static final int TOOL_RESULT_LOG_CAP = 2_000;
+
     private static final java.util.concurrent.ScheduledExecutorService HEARTBEAT_SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(runnable -> {
                 Thread thread = new Thread(runnable, "mio-bot-heartbeat");
@@ -372,8 +375,9 @@ public class MioBot {
         }
 
         @Override
-        public void toolResult(String id, String name, String content) {
+        public void toolResult(String id, String name, String content, boolean error, long durationMs) {
             channel.toolResult(id, name, content);
+            logToolCallResult(id, name, content, error, durationMs);
         }
 
         @Override
@@ -402,7 +406,6 @@ public class MioBot {
             logUsageDelta(inputTokens - lastLoggedInput, outputTokens - lastLoggedOutput);
             lastLoggedInput = inputTokens;
             lastLoggedOutput = outputTokens;
-            logToolCalls(toolCalls);
             // 每步增量落库：崩溃/被杀时刷新页面能看到已流出的部分过程
             channel.flushAssistantWip();
         }
@@ -424,7 +427,9 @@ public class MioBot {
         }
 
         private void logUsageDelta(long inputDelta, long outputDelta) {
-            if (agentUsageLogService == null || (inputDelta <= 0 && outputDelta <= 0)) {
+            // 游客不记用量：agent_usage_log.user_id NOT NULL，游客 userId=null 插入必失败
+            if (agentUsageLogService == null || userId == null
+                    || (inputDelta <= 0 && outputDelta <= 0)) {
                 return;
             }
             AgentUsageLog usageLog = new AgentUsageLog();
@@ -438,21 +443,51 @@ public class MioBot {
             agentUsageLogService.logUsage(usageLog);
         }
 
-        private void logToolCalls(List<com.mio.ai.framework.zagent.history.ConversationEntry.ToolCallInput> toolCalls) {
-            if (toolCallLogService == null || toolCalls == null) {
+        /** 工具调用日志：真实状态/耗时/结果预览（此前 status 恒 1、无耗时，无法定位失败工具） */
+        private void logToolCallResult(String id, String name, String content,
+                                       boolean error, long durationMs) {
+            if (toolCallLogService == null) {
                 return;
             }
-            for (var call : toolCalls) {
-                ToolCallLog toolCallLog = new ToolCallLog();
-                toolCallLog.setAgentId(agentId);
-                toolCallLog.setUserId(userId);
-                toolCallLog.setConversationId(parseConversationId());
-                toolCallLog.setToolId(0L);
-                toolCallLog.setName(call.name());
-                toolCallLog.setInputParams(call.arguments());
-                toolCallLog.setStatus(1);
-                toolCallLog.setCreateTime(new Date());
-                toolCallLogService.logToolCall(toolCallLog);
+            ToolCallLog toolCallLog = new ToolCallLog();
+            toolCallLog.setAgentId(agentId);
+            toolCallLog.setUserId(userId);
+            toolCallLog.setConversationId(parseConversationId());
+            toolCallLog.setToolId(0L);
+            toolCallLog.setName(name);
+            toolCallLog.setInputParams(validJsonOrNull(channel.toolArgsOf(id)));
+            toolCallLog.setStatus(resolveToolStatus(error, content));
+            toolCallLog.setExecutionTime((int) Math.min(Integer.MAX_VALUE, Math.max(0, durationMs)));
+            if (error) {
+                toolCallLog.setErrorMsg(content == null ? "" : content);
+            } else if (content != null && content.length() > TOOL_RESULT_LOG_CAP) {
+                toolCallLog.setOutputResult(content.substring(0, TOOL_RESULT_LOG_CAP)
+                        + "\n[...truncated at " + TOOL_RESULT_LOG_CAP + " chars...]");
+            } else {
+                toolCallLog.setOutputResult(content);
+            }
+            toolCallLogService.logToolCall(toolCallLog);
+        }
+
+        /** 表字典：1-成功 0-失败 2-超时（超时信封文案来自 ToolRegistry 的超时分支） */
+        private int resolveToolStatus(boolean error, String content) {
+            if (!error) {
+                return 1;
+            }
+            return content != null && content.contains("exceeded timeout") ? 2 : 0;
+        }
+
+        /** input_params 是 JSON 列：模型参数理论上恒为 JSON，畸形时退 null 保落库 */
+        private String validJsonOrNull(String args) {
+            if (args == null || args.isBlank()) {
+                return null;
+            }
+            try {
+                com.fasterxml.jackson.databind.JsonNode ignore =
+                        new com.fasterxml.jackson.databind.ObjectMapper().readTree(args);
+                return args;
+            } catch (Exception e) {
+                return null;
             }
         }
     }

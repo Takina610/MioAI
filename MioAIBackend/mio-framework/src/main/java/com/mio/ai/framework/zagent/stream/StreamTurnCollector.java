@@ -36,6 +36,8 @@ public class StreamTurnCollector {
     private final StringBuilder pendingToolCallArgs = new StringBuilder();
 
     private Usage usage;
+    /** 末尾分片的完成原因（stop / length / tool_calls…），length 触发截断工具调用作废 */
+    private String finishReason;
 
     /** 本轮是否已向外发出任何内容（重试边界哨兵：发出后瞬态失败不再重试） */
     private boolean emitted;
@@ -75,6 +77,12 @@ public class StreamTurnCollector {
             return;
         }
         AssistantMessage output = chunk.getResult().getOutput();
+
+        if (chunk.getResult().getMetadata() != null
+                && chunk.getResult().getMetadata().getFinishReason() != null
+                && !chunk.getResult().getMetadata().getFinishReason().isBlank()) {
+            this.finishReason = chunk.getResult().getMetadata().getFinishReason();
+        }
 
         Object reasoningDelta = output.getMetadata().get("reasoningContent");
         if (reasoningDelta instanceof String reasoningText && !reasoningText.isEmpty()) {
@@ -174,6 +182,11 @@ public class StreamTurnCollector {
 
     public Usage getUsage() {
         return usage;
+    }
+
+    /** 完成原因（stop/length/tool_calls…），无分片携带时为 null */
+    public String getFinishReason() {
+        return finishReason;
     }
 
     /** 已聚合完成的工具调用（历史条目形状） */

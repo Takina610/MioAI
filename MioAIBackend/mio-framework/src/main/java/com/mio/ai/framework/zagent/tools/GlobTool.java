@@ -17,11 +17,12 @@ final class GlobTool {
     }
 
     static ToolEntry entry() {
+        // 描述常量内含裸引号（"undefined"/"null"），必须经 JSON 转义再注入，否则整个 schema 非法
         String schema = """
                 {"type":"object","properties":{
                 "pattern":{"type":"string","description":"The glob pattern to match files against"},
                 "path":{"type":"string","description":%s}},
-                "required":["pattern"]}""".formatted('"' + GLOB_PATH_PARAM + '"');
+                "required":["pattern"]}""".formatted(BashTool.jsonQuote(GLOB_PATH_PARAM));
         return ToolEntry.ofReadOnly("Glob", GLOB, schema, GlobTool::execute);
     }
 

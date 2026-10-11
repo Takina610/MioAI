@@ -48,8 +48,13 @@ public final class ModelStepRunner {
         this.modelRetries = modelRetries;
     }
 
-    /** 一步模型请求的结果 */
-    public record StepResult(String text, List<ConversationEntry.ToolCallInput> toolCalls, Usage usage) {
+    /** 一步模型请求的结果（truncated=true 表示输出被 token 上限截断，工具调用已作废） */
+    public record StepResult(String text, List<ConversationEntry.ToolCallInput> toolCalls, Usage usage,
+                             boolean truncated) {
+
+        public StepResult(String text, List<ConversationEntry.ToolCallInput> toolCalls, Usage usage) {
+            this(text, toolCalls, usage, false);
+        }
     }
 
     public StepResult run(List<Message> messages, List<ToolCallback> toolCallbacks, AgentEvents events) {
@@ -63,8 +68,7 @@ public final class ModelStepRunner {
                         IDLE_TIMEOUT_RETRY_INCREMENT.multipliedBy(attempt - 1L));
                 chatModel.stream(prompt).timeout(idleTimeout).doOnNext(collector::accept).blockLast();
                 lastStepTextEmitted = collector.hasEmittedText();
-                StepResult result = new StepResult(
-                        collector.getText(), collector.getToolCallInputs(), collector.getUsage());
+                StepResult result = finishStep(collector, events);
                 // 空补全（零文本+零工具+零用量）：多半是上游静默故障，作废本轮再试一次；
                 // 已有可见输出或重试额度用尽则原样返回，由引擎的兜底收束接力
                 if (isEmptyCompletion(result) && !collector.hasEmitted()
@@ -86,13 +90,29 @@ public final class ModelStepRunner {
                 }
                 events.retryScheduled(attempt, modelRetries + 1, failure.reason());
                 try {
-                    Thread.sleep(retryDelayMs(attempt));
+                    Thread.sleep(retryDelayMs(attempt, failure.retryAfterMs()));
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                     throw error;
                 }
             }
         }
+    }
+
+    /**
+     * 收尾一步结果：输出被 token 上限截断（finishReason=length）时，半截的工具调用
+     * 参数是 best-effort 补全的 JSON，"看起来合法实则不完整"——整体作废（pi 语义），
+     * truncated 标记交给引擎做无工具收束，而不是把残缺调用送进执行器。
+     */
+    private StepResult finishStep(StreamTurnCollector collector, AgentEvents events) {
+        String text = collector.getText();
+        List<ConversationEntry.ToolCallInput> toolCalls = collector.getToolCallInputs();
+        if ("length".equalsIgnoreCase(collector.getFinishReason()) && !toolCalls.isEmpty()) {
+            log.warn("输出在工具调用中途被 token 上限截断，作废 {} 个工具调用", toolCalls.size());
+            events.answerDelta("\n\n[输出因长度限制中断，截断的工具调用已丢弃，正在收束作答]");
+            return new StepResult(text, List.of(), collector.getUsage(), true);
+        }
+        return new StepResult(text, toolCalls, collector.getUsage());
     }
 
     private static boolean isEmptyCompletion(StepResult result) {
@@ -113,8 +133,14 @@ public final class ModelStepRunner {
         return lastStepTextEmitted;
     }
 
-    /** 指数退避 + 抖动：min(60s, 2s × 2^(attempt-1))，±20% 随机化 */
-    private static long retryDelayMs(int attempt) {
+    /**
+     * 重试等待：服务端给了合理的 Retry-After 就服从（codex），否则指数退避 + 抖动
+     * min(60s, 2s × 2^(attempt-1))，±20% 随机化
+     */
+    private static long retryDelayMs(int attempt, long retryAfterMs) {
+        if (retryAfterMs > 0) {
+            return Math.round(retryAfterMs * (0.9 + ThreadLocalRandom.current().nextDouble(0.2)));
+        }
         long capped = Math.min(RETRY_MAX_DELAY_MS, RETRY_BASE_DELAY_MS << Math.min(attempt - 1, 5));
         double jitter = 0.8 + ThreadLocalRandom.current().nextDouble(0.4);
         return Math.round(capped * jitter);
