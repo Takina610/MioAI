@@ -36,6 +36,11 @@ public class AgentVO implements Serializable {
     private String avatar;
 
     /**
+     * 图标配置JSON
+     */
+    private String icon;
+
+    /**
      * 智能体类型
      */
     private Integer type;

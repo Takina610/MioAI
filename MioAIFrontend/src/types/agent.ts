@@ -9,6 +9,8 @@ export interface Agent {
   name: string
   description?: string
   avatar?: string
+  /** 图标配置 JSON（bot-icon/types.ts 的 BotIconConfig），缺失时回退 avatar */
+  icon?: string
   type: number
   typeDesc?: string
   systemPrompt?: string
@@ -31,6 +33,7 @@ export interface AgentAddRequest {
   name: string
   description?: string
   avatar?: string
+  icon?: string
   type?: number
   systemPrompt?: string
   status?: number
@@ -43,6 +46,7 @@ export interface AgentUpdateRequest {
   name?: string
   description?: string
   avatar?: string
+  icon?: string
   type?: number
   systemPrompt?: string
   status?: number

@@ -43,11 +43,21 @@
           @switch-version="handleSwitchVersion"
           @open-subagent="subagentPanelTarget = $event"
         />
+        <!-- 左下角常驻机器人：眼睛跟随指针，情绪随会话执行情况实时切换 -->
+        <BotPet
+          class="chat-pet"
+          :config="petIconConfig"
+          :mood="petMood"
+          :fx-signal="petFxSignal"
+          eye-color="#faf9f5"
+          :label="agentInfo?.name || 'MioBot'"
+        />
         <ChatInput
           v-model="inputMessage"
           v-model:effort="reasoningEffort"
           :agent-name="agentInfo?.name"
           :agent-avatar="agentInfo?.avatar"
+          :agent-icon="agentInfo?.icon"
           :has-messages="messages.length > 0"
           :loading="isLoading"
           :supported-efforts="supportedEfforts"
@@ -57,6 +67,8 @@
           @add-files="handleAddFiles"
           @remove-pending="handleRemovePending"
           @send="handleSend"
+          @input-focus="inputListening = true"
+          @input-blur="inputListening = false"
         >
           <template #above-input>
             <ChatPlanPanel :plan="activePlan" :streaming="isLoading" />
@@ -104,6 +116,9 @@ import { useUserStore } from '@/store/user'
 import type { Agent, AttachmentItem, ChatMessage, MessageBlock, PendingAttachment, SubagentPanelTarget } from '@/types'
 import { isImageName } from './attachmentUtils'
 import AuthModal from '@/components/AuthModal.vue'
+import BotPet from '@/components/bot-icon/BotPet.vue'
+import { DEFAULT_BOT_ICON, parseBotIcon } from '@/components/bot-icon/types'
+import type { BotIconConfig } from '@/components/bot-icon/types'
 import ChatSidebar from './components/ChatSidebar.vue'
 import ChatMessageList from './components/ChatMessageList.vue'
 import ChatInput from './components/ChatInput.vue'
@@ -112,6 +127,7 @@ import SubagentPanel from './components/SubagentPanel.vue'
 import { useChatSessions } from './composables/useChatSessions'
 import { useChatMessages, generateConversationId } from './composables/useChatMessages'
 import { useChatStream } from './composables/useChatStream'
+import { useBotMood } from './composables/useBotMood'
 import { usePendingCardAnimations } from './composables/usePendingCardAnimations'
 import { buildSubagentTranscript } from './subagentTranscript'
 import { truncateConversation, getReasoningEfforts, uploadAttachment, deleteAttachment } from '@/api/chat'
@@ -223,6 +239,13 @@ const currentChatTitle = computed(() => {
   const chat = chatList.value.find(c => c.id === currentChatId.value)
   return chat?.title || '新对话'
 })
+
+// ---------- 左下角常驻机器人（情绪随会话执行情况实时切换） ----------
+const inputListening = ref(false)
+const { mood: petMood, fxSignal: petFxSignal } = useBotMood(messages, isLoading, inputListening)
+const petIconConfig = computed<BotIconConfig>(
+  () => parseBotIcon(agentInfo.value?.icon) ?? DEFAULT_BOT_ICON
+)
 
 /** 当前会话最近一次任务清单（取最后一条携带 plan 的消息，随流式实时更新） */
 const activePlan = computed(() => {
@@ -765,6 +788,20 @@ onBeforeUnmount(() => {
   flex-direction: column;
   overflow: hidden;
   position: relative;
+}
+
+// 左下角常驻机器人（不与居中的输入框争位；窄屏让位隐藏）
+.chat-pet {
+  position: absolute;
+  left: 16px;
+  bottom: 20px;
+  z-index: 5;
+}
+
+@media (max-width: 900px) {
+  .chat-pet {
+    display: none;
+  }
 }
 
 // 子智能体面板外壳：宽度驱动的抽屉（0↔最终宽）。聊天区随宽度变化逐帧推移，

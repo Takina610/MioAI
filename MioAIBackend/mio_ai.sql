@@ -51,6 +51,7 @@ CREATE TABLE `agent`  (
   `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '智能体名称',
   `description` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '智能体描述',
   `avatar` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '智能体头像',
+  `icon` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '图标配置JSON（shape+fill）',
   `type` tinyint NULL DEFAULT 0 COMMENT '类型:0-系统内置超级智能体,1-自定义智能体',
   `system_prompt` text CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL COMMENT '系统提示词',
   `status` tinyint NULL DEFAULT 1 COMMENT '状态:0-草稿,1-已发布,2-禁用',
@@ -69,7 +70,7 @@ CREATE TABLE `agent`  (
 -- ----------------------------
 -- Records of agent（系统内置智能体 MioBot，id=1；用户自定义智能体由用户创建）
 -- ----------------------------
-INSERT INTO `agent` VALUES (1, NULL, 'MioBot', 'MioAI 智能助手：自主规划、调用工具、迭代执行的完整 Agent，具备联网搜索、网页抓取、文件生成、终端、任务清单等能力。', NULL, 0, NULL, 1, 1, 0, '2.0.0', 0, NOW(), NOW());
+INSERT INTO `agent` VALUES (1, NULL, 'MioBot', 'MioAI 智能助手：自主规划、调用工具、迭代执行的完整 Agent，具备联网搜索、网页抓取、文件生成、终端、任务清单等能力。', NULL, '{"shape":"blob","fill":{"kind":"palette","id":"black"}}', 0, NULL, 1, 1, 0, '2.0.0', 0, NOW(), NOW());
 
 -- ----------------------------
 -- Table structure for agent_knowledge

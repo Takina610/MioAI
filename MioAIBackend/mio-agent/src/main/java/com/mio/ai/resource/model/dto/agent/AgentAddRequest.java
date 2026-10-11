@@ -40,6 +40,12 @@ public class AgentAddRequest implements Serializable {
     private String avatar;
 
     /**
+     * 图标配置JSON
+     */
+    @Size(max = 500, message = "图标配置长度不能超过500")
+    private String icon;
+
+    /**
      * 系统提示词
      */
     @Size(max = 10000, message = "系统提示词长度不能超过10000")

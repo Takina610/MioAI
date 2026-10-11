@@ -1,7 +1,15 @@
 <template>
   <div class="chat-center-area" :class="{ 'has-messages': hasMessages, embedded }">
     <div class="welcome-section" v-if="!hasMessages && !loading">
-      <img :src="agentAvatar || '/logo.png'" alt="Agent" class="welcome-avatar" />
+      <BotIcon
+        v-if="agentIconConfig"
+        :shape="agentIconConfig.shape"
+        :fill="agentIconConfig.fill"
+        :size="86"
+        follow
+        eye-color="#faf9f5"
+      />
+      <img v-else :src="agentAvatar || '/logo.png'" alt="Agent" class="welcome-avatar" />
       <h2 class="welcome-title">我能帮什么忙吗，{{ userStore.userName }}？</h2>
     </div>
     <!-- 与输入框融合的上区（任务清单等，共享同一容器边框） -->
@@ -34,6 +42,8 @@
             :auto-size="{ minRows: 1, maxRows: 8 }"
             @pressEnter="handleEnter"
             @paste="onPaste"
+            @focus="emit('input-focus')"
+            @blur="emit('input-blur')"
             class="chat-textarea"
           />
         </div>
@@ -101,6 +111,8 @@ import { useUserStore } from '@/store/user'
 import { ArrowUpOutlined, DownOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import BrainIcon from '@/components/BrainIcon.vue'
 import AttachmentCard from './AttachmentCard.vue'
+import BotIcon from '@/components/bot-icon/BotIcon.vue'
+import { DEFAULT_BOT_ICON, parseBotIcon } from '@/components/bot-icon/types'
 import type { PendingAttachment } from '@/types'
 
 /** 思考档位全量标签（实际渲染哪些档由后端按模型能力返回） */
@@ -121,6 +133,8 @@ const props = defineProps<{
   modelValue: string
   agentName?: string
   agentAvatar?: string
+  /** agent.icon 原始 JSON（bot-icon 配置），存在时欢迎区用动态机器人图标 */
+  agentIcon?: string
   hasMessages: boolean
   loading: boolean
   /** 思考强度（后端返回的该模型支持的档位之一） */
@@ -146,9 +160,14 @@ const emit = defineEmits<{
   (e: 'cancel'): void
   (e: 'add-files', files: File[]): void
   (e: 'remove-pending', key: string): void
+  (e: 'input-focus'): void
+  (e: 'input-blur'): void
 }>()
 
 const userStore = useUserStore()
+
+/** 欢迎logo：icon 配置优先；无配置且有头像则用头像图；都没有用默认机器人 */
+const agentIconConfig = computed(() => parseBotIcon(props.agentIcon) ?? (props.agentAvatar ? null : DEFAULT_BOT_ICON))
 
 const value = computed({
   get: () => props.modelValue,

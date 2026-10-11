@@ -63,3 +63,6 @@ MioAIBackend/data/
 
 # 含已泄露(已作废)的密钥，仅本地留档，禁止跟踪
 /env.tmp
+
+# grok-icon-study 学习参考仓库（外部克隆，不入库）
+.study/

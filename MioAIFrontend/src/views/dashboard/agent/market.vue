@@ -12,7 +12,15 @@
           <div class="dash-card agent-card">
             <div class="card-header">
               <div class="card-icon-wrapper">
-                <img v-if="agent.avatar" :src="agent.avatar" alt="avatar" />
+                <BotIcon
+                  v-if="agentIcon(agent)"
+                  :shape="agentIcon(agent)!.shape"
+                  :fill="agentIcon(agent)!.fill"
+                  :size="40"
+                  :live="false"
+                  eye-color="#ffffff"
+                />
+                <img v-else-if="agent.avatar" :src="agent.avatar" alt="avatar" />
                 <RobotOutlined v-else />
               </div>
             </div>
@@ -43,6 +51,8 @@ import { RobotOutlined, UserOutlined } from '@ant-design/icons-vue'
 import { getPublicAgents } from '@/api/agent'
 import { formatDate } from '@/utils/format'
 import type { Agent, PageResponse } from '@/types'
+import BotIcon from '@/components/bot-icon/BotIcon.vue'
+import { parseBotIcon } from '@/components/bot-icon/types'
 import PageHeader from '../components/PageHeader.vue'
 
 interface AgentWithUser extends Agent {
@@ -52,6 +62,10 @@ interface AgentWithUser extends Agent {
 const router = useRouter()
 const loading = ref(false)
 const agentList = ref<AgentWithUser[]>([])
+
+function agentIcon(agent: Agent) {
+  return parseBotIcon(agent.icon)
+}
 
 async function fetchAgents(): Promise<void> {
   loading.value = true

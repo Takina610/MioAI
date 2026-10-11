@@ -45,6 +45,12 @@ public class AgentUpdateRequest implements Serializable {
     private String avatar;
 
     /**
+     * 图标配置JSON
+     */
+    @Size(max = 500, message = "图标配置长度不能超过500")
+    private String icon;
+
+    /**
      * 智能体类型
      */
     private Integer type;

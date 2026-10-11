@@ -39,6 +39,11 @@ public class Agent implements Serializable {
     private String avatar;
 
     /**
+     * 图标配置JSON（shape+fill，前端 bot-icon 渲染）
+     */
+    private String icon;
+
+    /**
      * 智能体类型（0-内置 1-自定义）
      */
     private Integer type;

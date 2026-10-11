@@ -26,6 +26,11 @@ public class AgentDetailVO implements Serializable {
 
     private String avatar;
 
+    /**
+     * 图标配置JSON
+     */
+    private String icon;
+
     private Integer type;
 
     private String typeDesc;

@@ -2,7 +2,7 @@
   <div class="dash-page">
     <PageHeader :title="`智能体管理 ${agentList.length}`">
       <template #actions>
-        <a-button v-if="userStore.isLoggedIn" type="primary" @click="createModalVisible = true">
+        <a-button v-if="userStore.isLoggedIn" type="primary" @click="router.push('/dashboard/agent/create')">
           <PlusOutlined /> 创建智能体
         </a-button>
       </template>
@@ -17,7 +17,15 @@
             <div class="dash-card agent-card" @click="goToEdit(agent.id)">
               <div class="card-header">
                 <div class="header-left">
-                  <a-avatar :size="40" :src="agent.avatar">
+                  <BotIcon
+                    v-if="agentIcon(agent)"
+                    :shape="agentIcon(agent)!.shape"
+                    :fill="agentIcon(agent)!.fill"
+                    :size="36"
+                    :live="false"
+                    eye-color="#ffffff"
+                  />
+                  <a-avatar v-else :size="40" :src="agent.avatar">
                     {{ agent.name?.charAt(0)?.toUpperCase() }}
                   </a-avatar>
                   <h3 class="card-title">{{ agent.name }}</h3>
@@ -62,12 +70,6 @@
         </div>
 
         <AgentCreateModal
-          v-model:visible="createModalVisible"
-          mode="create"
-          @success="handleCreateSuccess"
-        />
-
-        <AgentCreateModal
           v-model:visible="editModalVisible"
           mode="edit"
           :agent-id="editingAgentId"
@@ -86,6 +88,8 @@ import { useUserStore } from '@/store/user'
 import { queryAgents, deleteAgent } from '@/api/agent'
 import { formatDateTime } from '@/utils/format'
 import type { Agent, PageResponse } from '@/types'
+import BotIcon from '@/components/bot-icon/BotIcon.vue'
+import { parseBotIcon } from '@/components/bot-icon/types'
 import {
   PlusOutlined,
   MoreOutlined,
@@ -105,10 +109,13 @@ const emit = defineEmits<{
 const router = useRouter()
 const userStore = useUserStore()
 const loading = ref(false)
-const createModalVisible = ref(false)
 const editModalVisible = ref(false)
 const editingAgentId = ref<number | undefined>(undefined)
 const agentList = ref<Agent[]>([])
+
+function agentIcon(agent: Agent) {
+  return parseBotIcon(agent.icon)
+}
 
 async function fetchAgents(): Promise<void> {
   if (!userStore.isLoggedIn) return
@@ -136,12 +143,6 @@ function handleDelete(agent: Agent): void {
       fetchAgents()
     }
   })
-}
-
-function handleCreateSuccess(agentId?: number | void): void {
-  if (agentId) {
-    router.push(`/dashboard/agent/${agentId}`)
-  }
 }
 
 function handleEditSuccess(): void {
