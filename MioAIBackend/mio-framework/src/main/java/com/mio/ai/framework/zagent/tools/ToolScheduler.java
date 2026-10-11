@@ -14,16 +14,20 @@ public final class ToolScheduler {
 
     private static final int MAX_CONCURRENCY = 10;
 
+    /**
+     * 全引擎共享的并行工具池：调度器本身无状态，每轮 new 一个实例只是借池干活；
+     * 不能每轮建池——旧实现每轮/每子代理泄漏 10 个常驻线程，长跑进程线程数无限增长。
+     */
+    private static final ExecutorService POOL = Executors.newFixedThreadPool(MAX_CONCURRENCY, runnable -> {
+        Thread thread = new Thread(runnable, "zagent-tool-parallel");
+        thread.setDaemon(true);
+        return thread;
+    });
+
     private final ToolRegistry registry;
-    private final ExecutorService pool;
 
     public ToolScheduler(ToolRegistry registry) {
         this.registry = registry;
-        this.pool = Executors.newFixedThreadPool(MAX_CONCURRENCY, runnable -> {
-            Thread thread = new Thread(runnable, "zagent-tool-parallel");
-            thread.setDaemon(true);
-            return thread;
-        });
     }
 
     /** 执行一批调用，保持调用顺序返回结果 */
@@ -57,7 +61,7 @@ public final class ToolScheduler {
         List<ToolRegistry.Executed> results = new ArrayList<>(calls.size());
         List<Future<ToolRegistry.Executed>> futures = new ArrayList<>();
         for (ToolRegistry.PendingCall call : calls) {
-            futures.add(pool.submit(() -> registry.execute(call)));
+            futures.add(POOL.submit(() -> registry.execute(call)));
         }
         for (Future<ToolRegistry.Executed> future : futures) {
             try {
@@ -72,6 +76,6 @@ public final class ToolScheduler {
     }
 
     public void shutdown() {
-        pool.shutdownNow();
+        // 共享池不随实例关闭（进程级生命周期）
     }
 }

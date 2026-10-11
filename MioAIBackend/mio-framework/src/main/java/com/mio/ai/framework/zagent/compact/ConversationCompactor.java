@@ -27,17 +27,23 @@ public final class ConversationCompactor {
     private static final int MICROCOMPACT_TRIGGER_PERCENT = 60;
     private static final int MICROCOMPACT_KEEP_RECENT_ENTRIES = 10;
     private static final int MICROCOMPACT_KEEP_CHARS = 400;
+    /** 自动压缩连续失败熔断：失败后每个模型步都会再试一次（一次完整摘要调用），必须止损 */
+    private static final int MAX_CONSECUTIVE_COMPACT_FAILURES = 3;
 
     private final ChatModel chatModel;
     private final long contextWindowTokens;
+    private int consecutiveCompactFailures;
 
     public ConversationCompactor(ChatModel chatModel, long contextWindowTokens) {
         this.chatModel = chatModel;
         this.contextWindowTokens = contextWindowTokens > 0 ? contextWindowTokens : 200_000;
     }
 
-    /** zcode shouldAutoCompact：超阈值且已有 ≥2 轮助手内容 */
+    /** zcode shouldAutoCompact：超阈值且已有 ≥2 轮助手内容；连续失败熔断期内不再尝试 */
     public boolean shouldAutoCompact(ConversationState state) {
+        if (consecutiveCompactFailures >= MAX_CONSECUTIVE_COMPACT_FAILURES) {
+            return false;
+        }
         long threshold = contextWindowTokens - Math.min(32_000, OUTPUT_RESERVE_TOKENS) - BUFFER_TOKENS;
         return state.estimateTokens() > threshold && countAssistantRounds(state) >= 2;
     }
@@ -64,8 +70,11 @@ public final class ConversationCompactor {
                 new ArrayList<>(entries.subList(entries.size() - KEEP_TAIL_ENTRIES, entries.size()));
         String summary = requestSummary(toSummarize);
         if (summary == null || summary.isBlank()) {
+            consecutiveCompactFailures++;
+            log.warn("压缩摘要生成失败（连续第 {} 次）", consecutiveCompactFailures);
             return null;
         }
+        consecutiveCompactFailures = 0;
         List<ConversationEntry> replacement = new ArrayList<>();
         replacement.add(ConversationEntry.reminder("compact", summary));
         replacement.addAll(tail);

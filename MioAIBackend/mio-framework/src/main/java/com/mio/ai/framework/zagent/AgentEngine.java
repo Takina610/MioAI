@@ -57,6 +57,7 @@ public final class AgentEngine {
     private long inputTokens;
     private long outputTokens;
     private int todosVersionSeen = -1;
+    private int consecutiveReactiveCompacts;
 
     public AgentEngine(ChatModel chatModel, AgentEngineConfig config, String reasoningEffort,
                        ContextBuilder contextBuilder, ConversationState state, String chatId,
@@ -215,13 +216,22 @@ public final class AgentEngine {
         return false;
     }
 
+    /** 反应式压缩连续触发上限（zcode rapid-refill 熔断）：压缩后马上又满说明有巨型单条内容，再压无用 */
+    private static final int MAX_CONSECUTIVE_REACTIVE_COMPACTS = 3;
+
     /** 上下文超限错误的反应式压缩（zcode recoverModelStepAfterContextExceeded） */
     private ModelStepRunner.StepResult runStepWithReactiveCompact(List<Message> messages,
                                                                   List<ToolCallback> callbacks) {
         try {
-            return modelRunner.run(messages, callbacks, events);
+            ModelStepRunner.StepResult result = modelRunner.run(messages, callbacks, events);
+            consecutiveReactiveCompacts = 0;
+            return result;
         } catch (Throwable error) {
-            if (!isContextExceeded(error) || compactNow() == null) {
+            if (!isContextExceeded(error)) {
+                throw error;
+            }
+            consecutiveReactiveCompacts++;
+            if (consecutiveReactiveCompacts > MAX_CONSECUTIVE_REACTIVE_COMPACTS || compactNow() == null) {
                 throw error;
             }
             ContextBuilder.Built rebuilt = contextBuilder.build();
@@ -249,7 +259,8 @@ public final class AgentEngine {
     }
 
     private void emitTodosIfChanged() {
-        int version = System.identityHashCode(state.todos()) + state.todos().size();
+        // TodoItem 是 record，List.hashCode 按内容计算——identityHashCode 会让同尺寸更新不推送
+        int version = state.todos().hashCode();
         if (version != todosVersionSeen) {
             todosVersionSeen = version;
             events.todosChanged();
@@ -301,7 +312,13 @@ public final class AgentEngine {
                 String lower = message.toLowerCase();
                 if (lower.contains("context length") || lower.contains("context window")
                         || lower.contains("maximum context") || lower.contains("prompt is too long")
-                        || lower.contains("context_length_exceeded")) {
+                        || lower.contains("context_length_exceeded") || lower.contains("prompt too long")
+                        || lower.contains("input length exceed") || lower.contains("length exceeds")
+                        || lower.contains("input token") || lower.contains("token limit")
+                        || lower.contains("超过上限") || lower.contains("超出上限")
+                        || lower.contains("上下文长度") || lower.contains("上下文过长")
+                        || lower.contains("内容过长") || lower.contains("输入过长")
+                        || lower.contains("token超限") || lower.contains("token 超限")) {
                     return true;
                 }
             }

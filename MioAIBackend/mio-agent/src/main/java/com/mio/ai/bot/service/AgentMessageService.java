@@ -14,8 +14,14 @@ import java.util.Map;
  */
 public interface AgentMessageService {
 
-    /** 追加一条消息（seq 自动分配） */
+    /** 追加一条消息（seq 自动分配，seq 冲突时重取一次） */
     void append(AgentMessageDO message);
+
+    /** 更新一行的工作过程展示内容（assistant 轮次增量落库：崩溃/断电后过程不丢） */
+    void updateDisplay(long id, String blocksJson, String planJson);
+
+    /** 按主键删除一行（轮次正常收尾时清理增量落库的 WIP 行） */
+    void deleteById(long id);
 
     /** 按会话取出全部消息（seq 升序） */
     List<AgentMessageDO> listByConversation(String conversationId);

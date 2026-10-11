@@ -45,11 +45,27 @@ public final class BackgroundTasks {
     private final Map<String, List<String>> notifications = new ConcurrentHashMap<>();
     private final AtomicLong seq = new AtomicLong();
 
+    /** 已完成任务保留上限：TaskOutput 需要事后读取输出，但不能无限累积（静态 map 只增不删） */
+    private static final int MAX_FINISHED_TASKS = 200;
+
     public Task register(String chatId, String type, String description) {
+        evictFinished();
         String id = "b_" + seq.incrementAndGet();
         Task task = new Task(id, type, description, chatId);
         tasks.put(id, task);
         return task;
+    }
+
+    /** 已完成任务超过上限时清掉最旧的一批（运行中任务不受影响） */
+    private void evictFinished() {
+        if (tasks.size() <= MAX_FINISHED_TASKS) {
+            return;
+        }
+        tasks.values().stream()
+                .filter(task -> !"running".equals(task.status))
+                .sorted(java.util.Comparator.comparingLong(task -> task.finishedAt))
+                .limit(tasks.size() - MAX_FINISHED_TASKS)
+                .forEach(task -> tasks.remove(task.id));
     }
 
     public Optional<Task> get(String id) {

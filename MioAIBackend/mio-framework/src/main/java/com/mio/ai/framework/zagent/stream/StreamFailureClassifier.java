@@ -47,6 +47,10 @@ final class StreamFailureClassifier {
                 }
                 return Classification.fatal("http-" + code);
             }
+            if (current instanceof java.util.concurrent.TimeoutException) {
+                // 流式 idle 超时（分片间隔超限）：半开连接的典型表现，原样重发有意义
+                return new Classification(true, "stream-idle-timeout");
+            }
             if (current instanceof java.io.IOException) {
                 // 连接拒绝/重置/超时等全部网络层瞬态（okhttp 异常均继承自它）
                 return new Classification(true, "io-error:" + current.getClass().getSimpleName());

@@ -1,6 +1,7 @@
 package com.mio.ai.bot.agent;
 
 import com.mio.ai.bot.model.dto.AttachmentItem;
+import com.mio.ai.bot.model.dto.SseChunk;
 import com.mio.ai.bot.model.entity.AgentMessageDO;
 import com.mio.ai.bot.service.AgentMessageService;
 import com.mio.ai.bot.service.SkillRuntime;
@@ -31,7 +32,6 @@ import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -141,82 +141,106 @@ public class MioBot {
         SseEmitter sseEmitter = new SseEmitter(SseStreams.CHAT_TIMEOUT_MS);
         channel.bind(sseEmitter);
 
-        CompletableFuture.runAsync(() -> {
-            long startTime = System.currentTimeMillis();
-            ScheduledFuture<?> heartbeat = HEARTBEAT_SCHEDULER.scheduleAtFixedRate(
-                    channel::heartbeat, HEARTBEAT_INTERVAL_SECONDS, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
-            ToolRegistry registry = null;
-            try {
-                // MCP 装配失败项在会话开头明说，替代静默降级（瞬态提示不落库，重载后不保留）
-                if (mcpFailures != null && !mcpFailures.isEmpty()) {
-                    String joined = String.join("；", mcpFailures);
-                    channel.notice("以下 MCP 工具本轮不可用：" + (joined.length() > 300
-                            ? joined.substring(0, 300) + "..." : joined));
-                }
-                ConversationHydrator.Hydrated hydrated = hydrate();
-                ConversationState state = new ConversationState();
-                state.entries().addAll(hydrated.entries());
-                state.setTodos(hydrated.todos());
-
-                BotAgentEvents events = new BotAgentEvents(state);
-                // 技能物化到沙箱 skills/ 目录，并生成注入上下文的技能清单段（无技能/沙箱不可用时为 null）
-                SandboxFs fs = toolsetFactory.sandboxFs();
-                String skillsContext = SkillRuntime.materialize(skills, fs);
-                ToolsetFactory.RunContext runContext = new ToolsetFactory.RunContext(
-                        chatId, fs, mcpTools,
-                        com.mio.ai.framework.zagent.task.BackgroundTasks.instance());
-                ContextBuilder contextBuilder = new ContextBuilder(
-                        customSystemPrompt, knowledgeContext, skillsContext, runContext.fs(), modelName);
-                AgentEngine engine = new AgentEngine(chatModel, config, reasoningEffort, contextBuilder,
-                        state, chatId, events, runContext.tasks());
-
-                if ("/compact".equals(userPrompt.strip())) {
-                    runManualCompact(engine, hydrated);
-                } else {
-                    Subagents launcher = new Subagents(chatModel, config, reasoningEffort,
-                            toolsetFactory, runContext, events, modelName);
-                    registry = toolsetFactory.build(chatId, state, mcpTools, null, launcher, events);
-                    engine.bindTools(registry);
-
-                    boolean appendUserEntry = persistUserMessage || state.entries().isEmpty();
-                    if (persistUserMessage) {
-                        channel.setUserAttachments(attachments);
-                        channel.persistDisplay("user", userPrompt, null, userGroupSeq);
-                    }
-                    java.util.Set<String> outputsBefore = snapshotOutputs(runContext.fs());
-                    engine.runTurn(buildModelPrompt(userPrompt, runContext.fs()), appendUserEntry);
-                    collectOutputs(runContext.fs(), outputsBefore);
-                }
-
-                long durationMs = System.currentTimeMillis() - startTime;
-                channel.abortRunningTools();
-                channel.persistDisplay("assistant", null, durationMs);
-                channel.usage((int) engine.inputTokens(), (int) engine.outputTokens(), durationMs);
-                channel.done();
-                complete(sseEmitter);
-            } catch (Exception e) {
-                log.error("MioBot 执行异常, chatId={}", chatId, e);
-                channel.abortRunningTools();
-                channel.persistDisplay("assistant", null, System.currentTimeMillis() - startTime);
-                channel.error("执行出错：" + e.getMessage());
-                complete(sseEmitter);
-            } finally {
-                heartbeat.cancel(false);
-                if (registry != null) {
-                    registry.shutdown();
-                }
-                if (onFinish != null) {
-                    try {
-                        onFinish.run();
-                    } catch (Exception ignored) {
-                        // 清理回调失败不影响主流程
-                    }
-                }
-            }
-        });
+        // 专用轮次池：不占 ForkJoinPool.commonPool（阻塞任务会饿死全 JVM 的 CompletableFuture）
+        if (!TurnExecutors.execute(() -> runTurnTask(userPrompt, knowledgeContext,
+                persistUserMessage, sseEmitter))) {
+            completeWithBusy(sseEmitter);
+        }
 
         sseEmitter.onTimeout(() -> log.warn("MioBot SSE connection timeout, chatId={}", chatId));
         return sseEmitter;
+    }
+
+    private void runTurnTask(String userPrompt, String knowledgeContext, boolean persistUserMessage,
+                             SseEmitter sseEmitter) {
+        long startTime = System.currentTimeMillis();
+        ScheduledFuture<?> heartbeat = HEARTBEAT_SCHEDULER.scheduleAtFixedRate(
+                channel::heartbeat, HEARTBEAT_INTERVAL_SECONDS, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
+        ToolRegistry registry = null;
+        try {
+            // MCP 装配失败项在会话开头明说，替代静默降级（瞬态提示不落库，重载后不保留）
+            if (mcpFailures != null && !mcpFailures.isEmpty()) {
+                String joined = String.join("；", mcpFailures);
+                channel.notice("以下 MCP 工具本轮不可用：" + (joined.length() > 300
+                        ? joined.substring(0, 300) + "..." : joined));
+            }
+            ConversationHydrator.Hydrated hydrated = hydrate();
+            ConversationState state = new ConversationState();
+            state.entries().addAll(hydrated.entries());
+            state.setTodos(hydrated.todos());
+
+            BotAgentEvents events = new BotAgentEvents(state);
+            // 技能物化到沙箱 skills/ 目录，并生成注入上下文的技能清单段（无技能/沙箱不可用时为 null）
+            SandboxFs fs = toolsetFactory.sandboxFs();
+            String skillsContext = SkillRuntime.materialize(skills, fs);
+            ToolsetFactory.RunContext runContext = new ToolsetFactory.RunContext(
+                    chatId, fs, mcpTools,
+                    com.mio.ai.framework.zagent.task.BackgroundTasks.instance());
+            ContextBuilder contextBuilder = new ContextBuilder(
+                    customSystemPrompt, knowledgeContext, skillsContext, runContext.fs(), modelName);
+            AgentEngine engine = new AgentEngine(chatModel, config, reasoningEffort, contextBuilder,
+                    state, chatId, events, runContext.tasks());
+
+            if ("/compact".equals(userPrompt.strip())) {
+                runManualCompact(engine, hydrated);
+            } else {
+                Subagents launcher = new Subagents(chatModel, config, reasoningEffort,
+                        toolsetFactory, runContext, events, modelName);
+                registry = toolsetFactory.build(chatId, state, mcpTools, null, launcher, events);
+                engine.bindTools(registry);
+
+                boolean appendUserEntry = persistUserMessage || state.entries().isEmpty();
+                if (persistUserMessage) {
+                    channel.setUserAttachments(attachments);
+                    channel.persistDisplay("user", userPrompt, null, userGroupSeq);
+                }
+                // WIP 行：轮次开始即落库，此后每个模型步增量刷新（进程崩溃后过程可恢复）
+                channel.beginAssistantWip();
+                java.util.Set<String> outputsBefore = snapshotOutputs(runContext.fs());
+                engine.runTurn(buildModelPrompt(userPrompt, runContext.fs()), appendUserEntry);
+                collectOutputs(runContext.fs(), outputsBefore);
+            }
+
+            long durationMs = System.currentTimeMillis() - startTime;
+            channel.abortRunningTools();
+            boolean persisted = channel.persistDisplay("assistant", null, durationMs);
+            channel.finishAssistantWip(persisted);
+            channel.usage((int) engine.inputTokens(), (int) engine.outputTokens(), durationMs);
+            channel.done();
+            complete(sseEmitter);
+        } catch (Throwable e) {
+            log.error("MioBot 执行异常, chatId={}", chatId, e);
+            channel.abortRunningTools();
+            boolean persisted = channel.persistDisplay("assistant", null, System.currentTimeMillis() - startTime);
+            channel.finishAssistantWip(persisted);
+            channel.error("执行出错：" + e.getMessage());
+            complete(sseEmitter);
+        } finally {
+            heartbeat.cancel(false);
+            if (registry != null) {
+                registry.shutdown();
+            }
+            if (onFinish != null) {
+                try {
+                    onFinish.run();
+                } catch (Exception ignored) {
+                    // 清理回调失败不影响主流程
+                }
+            }
+        }
+    }
+
+    /** 轮次池打满：明确告知用户而非静默排队 */
+    private void completeWithBusy(SseEmitter sseEmitter) {
+        try {
+            SseStreams.sendTyped(sseEmitter, SseChunk.content("error",
+                    "系统繁忙：当前对话任务数已达上限，请稍后重试。").fields(), 1);
+            SseStreams.sendTyped(sseEmitter, SseChunk.done().fields(), 2);
+        } catch (Exception ignored) {
+            // 连接已断开
+        }
+        complete(sseEmitter);
+        log.warn("轮次线程池已满，拒绝任务, chatId={}", chatId);
     }
 
     /** /compact：手动压缩（zcode executeManualCompact 对位），完成后以简短说明收尾 */
@@ -379,6 +403,8 @@ public class MioBot {
             lastLoggedInput = inputTokens;
             lastLoggedOutput = outputTokens;
             logToolCalls(toolCalls);
+            // 每步增量落库：崩溃/被杀时刷新页面能看到已流出的部分过程
+            channel.flushAssistantWip();
         }
 
         @Override

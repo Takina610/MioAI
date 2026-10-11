@@ -19,8 +19,18 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public final class ModelStepRunner {
 
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(ModelStepRunner.class);
+
     private static final long RETRY_BASE_DELAY_MS = 2_000;
     private static final long RETRY_MAX_DELAY_MS = 60_000;
+
+    /** 流式分片间 idle 超时（zcode stream-idle-timeout 对位）：防半开连接把单步挂满整个 callTimeout */
+    private static final Duration STREAM_IDLE_TIMEOUT = Duration.ofSeconds(600);
+    /** 每次重试放宽 idle 超时，避免被同一上游的静默窗口反复打断 */
+    private static final Duration IDLE_TIMEOUT_RETRY_INCREMENT = Duration.ofSeconds(30);
+    /** 空补全重试上限（独立于主重试预算）：上游可能以 HTTP 200 返回零输出流 */
+    private static final int EMPTY_COMPLETION_MAX_RETRIES = 1;
 
     private final ChatModel chatModel;
     private final long streamTimeoutSeconds;
@@ -43,14 +53,28 @@ public final class ModelStepRunner {
     }
 
     public StepResult run(List<Message> messages, List<ToolCallback> toolCallbacks, AgentEvents events) {
+        int emptyCompletionRetries = 0;
         for (int attempt = 1; ; attempt++) {
             StreamTurnCollector collector = new StreamTurnCollector(
                     events::thinkingDelta, events::answerDelta, events::toolUse, events::toolArgs);
             try {
                 Prompt prompt = new Prompt(messages, buildOptions(toolCallbacks));
-                chatModel.stream(prompt).doOnNext(collector::accept).blockLast();
+                Duration idleTimeout = STREAM_IDLE_TIMEOUT.plus(
+                        IDLE_TIMEOUT_RETRY_INCREMENT.multipliedBy(attempt - 1L));
+                chatModel.stream(prompt).timeout(idleTimeout).doOnNext(collector::accept).blockLast();
                 lastStepTextEmitted = collector.hasEmittedText();
-                return new StepResult(collector.getText(), collector.getToolCallInputs(), collector.getUsage());
+                StepResult result = new StepResult(
+                        collector.getText(), collector.getToolCallInputs(), collector.getUsage());
+                // 空补全（零文本+零工具+零用量）：多半是上游静默故障，作废本轮再试一次；
+                // 已有可见输出或重试额度用尽则原样返回，由引擎的兜底收束接力
+                if (isEmptyCompletion(result) && !collector.hasEmitted()
+                        && emptyCompletionRetries < EMPTY_COMPLETION_MAX_RETRIES) {
+                    emptyCompletionRetries++;
+                    log.warn("模型流零输出（无文本/工具/用量），作废重试, attempt={}", attempt);
+                    attempt--;
+                    continue;
+                }
+                return result;
             } catch (Throwable error) {
                 lastStepTextEmitted = collector.hasEmittedText();
                 StreamFailureClassifier.Classification failure = StreamFailureClassifier.classify(error);
@@ -69,6 +93,19 @@ public final class ModelStepRunner {
                 }
             }
         }
+    }
+
+    private static boolean isEmptyCompletion(StepResult result) {
+        boolean noOutput = (result.text() == null || result.text().isBlank())
+                && result.toolCalls().isEmpty();
+        Usage usage = result.usage();
+        boolean noUsage = usage == null
+                || (isZero(usage.getPromptTokens()) && isZero(usage.getCompletionTokens()));
+        return noOutput && noUsage;
+    }
+
+    private static boolean isZero(Integer count) {
+        return count == null || count == 0;
     }
 
     /** 最近一步失败前是否已流出部分正文（引擎兜底收束时用于决定是否插入分段） */

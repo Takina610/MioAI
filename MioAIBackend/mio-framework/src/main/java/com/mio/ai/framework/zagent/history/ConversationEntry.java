@@ -70,26 +70,56 @@ public final class ConversationEntry {
         return new ConversationEntry(Kind.TOOL, null, null, null, toolCallId, toolName, content, error, media);
     }
 
-    /** 条目的近似 token 估算（zcode：字符数/4，工具入参计入） */
+    /**
+     * 条目的近似 token 估算（zcode：字符数/4，工具入参计入）。
+     * <p>中文感知修正：CJK 字符约 0.6~0.75 token/字（qwen/glm 系词表），按 1 token/字
+     * 高估计价；其余字符维持 /4。纯 /4 会把中文历史低估约 2 倍，导致自动压缩永不触发。
+     */
     public long estimateTokens() {
-        long chars = 0;
-        if (text != null) {
-            chars += text.length();
-        }
-        if (content != null) {
-            chars += content.length();
-        }
+        long cjkChars = 0;
+        long otherChars = 0;
+        long[] counted = countChars(text);
+        cjkChars += counted[0];
+        otherChars += counted[1];
+        counted = countChars(content);
+        cjkChars += counted[0];
+        otherChars += counted[1];
         if (toolCalls != null) {
             for (ToolCallInput call : toolCalls) {
-                chars += call.arguments() == null ? 0 : call.arguments().length();
+                counted = countChars(call.arguments());
+                cjkChars += counted[0];
+                otherChars += counted[1];
             }
         }
         if (media != null) {
             // 图片 token 按 base64 实长 × 0.125 估算（zcode READ_IMAGE_TOKEN_TO_BASE64_CHAR_RATIO）
             for (ToolMedia m : media) {
-                chars += m.base64() == null ? 0 : Math.round(m.base64().length() * 0.125) * 4;
+                otherChars += m.base64() == null ? 0 : Math.round(m.base64().length() * 0.125) * 4;
             }
         }
-        return chars / 4;
+        return cjkChars + otherChars / 4;
+    }
+
+    private static long[] countChars(String text) {
+        if (text == null || text.isEmpty()) {
+            return new long[]{0, 0};
+        }
+        long cjk = 0;
+        long other = 0;
+        for (int i = 0; i < text.length(); i++) {
+            if (isCjk(text.charAt(i))) {
+                cjk++;
+            } else {
+                other++;
+            }
+        }
+        return new long[]{cjk, other};
+    }
+
+    /** CJK 统意文字区（含扩展A/兼容/全角标点）：中文场景一个字≈一个 token */
+    private static boolean isCjk(char c) {
+        return (c >= 0x2E80 && c <= 0x9FFF)      // 部首补充 ~ CJK 统一表意文字
+                || (c >= 0xF900 && c <= 0xFAFF)   // CJK 兼容表意
+                || (c >= 0xFF00 && c <= 0xFFEF);  // 全角标点与假名
     }
 }

@@ -77,23 +77,78 @@ final class WebFetchTool {
     }
 
     private String fetch(String url) {
-        try {
-            Connection.Response response = Jsoup.connect(url)
-                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36")
-                    .timeout(TIMEOUT_MS)
-                    .maxBodySize(10 * 1024 * 1024)
-                    .ignoreContentType(true)
-                    .followRedirects(true)
-                    .execute();
-            Document document = response.parse();
+        // 重定向手动逐跳跟进：followRedirects(true) 会让私网过滤被 302 跳板绕过
+        String current = url;
+        for (int hop = 0; hop < 5; hop++) {
+            if (!isPublicHttpUrl(current)) {
+                return null;
+            }
+            Connection.Response response;
+            try {
+                response = Jsoup.connect(current)
+                        .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36")
+                        .timeout(TIMEOUT_MS)
+                        .maxBodySize(10 * 1024 * 1024)
+                        .ignoreContentType(true)
+                        .followRedirects(false)
+                        .execute();
+            } catch (Exception e) {
+                return null;
+            }
+            int status = response.statusCode();
+            if (status >= 300 && status < 400) {
+                String location = response.header("Location");
+                if (location == null || location.isBlank()) {
+                    return null;
+                }
+                try {
+                    current = new java.net.URL(new java.net.URL(current), location).toString();
+                } catch (Exception badLocation) {
+                    return null;
+                }
+                continue;
+            }
+            Document document;
+            try {
+                document = response.parse();
+            } catch (Exception parseError) {
+                return null;
+            }
             document.select("script, style, noscript, iframe, svg, form").remove();
             document.select("br").append("\\n");
             document.select("p, div, li, h1, h2, h3, h4, h5, h6, tr, blockquote, pre").prepend("\\n");
             String body = document.body() != null ? document.body().text().replace("\\n", "\n") : "";
             String title = document.title() == null ? "" : document.title();
             return "# " + title.strip() + "\n\n" + body.strip().replaceAll("\n{3,}", "\n\n");
+        }
+        return null;
+    }
+
+    /**
+     * 仅允许公网 http(s)：抓取请求由后端发出，不过滤等于把内网（模型反代/元数据服务/内网服务）
+     * 暴露给任何能驱动模型的输入（网页注入、用户提示词）。
+     */
+    private static boolean isPublicHttpUrl(String url) {
+        try {
+            java.net.URL parsed = new java.net.URL(url);
+            String protocol = parsed.getProtocol();
+            if (!"http".equals(protocol) && !"https".equals(protocol)) {
+                return false;
+            }
+            for (java.net.InetAddress address : java.net.InetAddress.getAllByName(parsed.getHost())) {
+                if (address.isLoopbackAddress() || address.isSiteLocalAddress()
+                        || address.isLinkLocalAddress() || address.isAnyLocalAddress()
+                        || address.isMulticastAddress()) {
+                    return false;
+                }
+                if (address instanceof java.net.Inet6Address
+                        && (address.getAddress()[0] & 0xFE) == 0xFC) {
+                    return false; // IPv6 unique local fc00::/7
+                }
+            }
+            return true;
         } catch (Exception e) {
-            return null;
+            return false;
         }
     }
 

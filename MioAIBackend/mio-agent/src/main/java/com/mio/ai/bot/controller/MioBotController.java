@@ -37,7 +37,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * 统一对话入口：MioBot（系统内置智能体，id=1）与用户自定义智能体共用同一套流式 Agent 引擎。
@@ -199,6 +198,10 @@ public class MioBotController {
         }
         if (conversation.getUserId() == null || !conversation.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限访问该会话");
+        }
+        // 执行中的会话禁止截断：截断后落库行与内存历史错位，WIP 增量刷新会把已删的轮次写回
+        if (ACTIVE_CHATS.contains(conversationId)) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "会话正在执行中，请等待本轮完成后再编辑或重新生成");
         }
 
         if (groupKey != null) {
@@ -376,14 +379,21 @@ public class MioBotController {
     /** 敏感词命中的单条完整回复（answer 整段 + done） */
     private SseEmitter emitSingleReply(String reply) {
         SseEmitter emitter = new SseEmitter(SseStreams.CHAT_TIMEOUT_MS);
-        CompletableFuture.runAsync(() -> {
+        if (!com.mio.ai.bot.agent.TurnExecutors.execute(() -> {
             SseStreams.sendTyped(emitter, SseChunk.delta("answer", reply).fields(), 1);
             SseStreams.sendTyped(emitter, SseChunk.done().fields(), 2);
             try {
                 emitter.complete();
             } catch (IllegalStateException ignored) {
             }
-        });
+        })) {
+            SseStreams.sendTyped(emitter, SseChunk.content("error",
+                    "系统繁忙：当前对话任务数已达上限，请稍后重试。").fields(), 1);
+            try {
+                emitter.complete();
+            } catch (IllegalStateException ignored) {
+            }
+        }
         return emitter;
     }
 }

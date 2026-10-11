@@ -48,6 +48,10 @@ public class BotEventChannel {
     // 本轮用户附件（MioBot 注入）：随 user 行持久化为展示块
     private volatile List<com.mio.ai.bot.model.dto.AttachmentItem> userAttachments;
 
+    // WIP 行（增量落库）：轮次开始即建行，每个模型步刷新 blocks，正常收尾删除。
+    // 进程崩溃/被杀时该行保留已流出的部分过程，刷新页面与下一轮水合都拿得到
+    private volatile Long wipRowId;
+
     public BotEventChannel(AgentMessageService agentMessageService,
                            String chatId, Long userId, Long agentId) {
         this.agentMessageService = agentMessageService;
@@ -245,14 +249,87 @@ public class BotEventChannel {
         }
     }
 
-    /** 展示持久化：完整 blocks/plan/duration 落 agent_message（游客不落库） */
-    public void persistDisplay(String role, String text, Long durationMs) {
-        persistDisplay(role, text, durationMs, null);
-    }
-
-    public void persistDisplay(String role, String text, Long durationMs, Long groupSeq) {
+    /** 轮次开始：创建 WIP 行（增量落库锚点）。游客不落库；失败降级为整轮末尾一次性落库 */
+    public void beginAssistantWip() {
         if (agentMessageService == null || userId == null) {
             return;
+        }
+        try {
+            AgentMessageDO row = new AgentMessageDO();
+            row.setConversationId(chatId);
+            row.setAgentId(agentId);
+            row.setUserId(userId);
+            row.setRole("assistant");
+            row.setBlocks("[]");
+            agentMessageService.append(row);
+            wipRowId = row.getId();
+        } catch (Exception e) {
+            wipRowId = null;
+            log.warn("WIP 行创建失败，本轮退化为末尾一次性落库: {}", e.getMessage());
+        }
+    }
+
+    /** 模型步结束：把已流出的展示块刷进 WIP 行（崩溃最多丢最后一个进行中的步） */
+    public void flushAssistantWip() {
+        Long rowId = wipRowId;
+        if (rowId == null) {
+            return;
+        }
+        try {
+            String planJson = displayPlan == null || displayPlan.isEmpty()
+                    ? null : JacksonUtil.writeValueAsString(displayPlan);
+            agentMessageService.updateDisplay(rowId, JacksonUtil.writeValueAsString(displayBlocks), planJson);
+        } catch (Exception first) {
+            try {
+                String planJson = displayPlan == null || displayPlan.isEmpty()
+                        ? null : JacksonUtil.writeValueAsString(displayPlan);
+                agentMessageService.updateDisplay(rowId, JacksonUtil.writeValueAsString(displayBlocks), planJson);
+            } catch (Exception second) {
+                log.warn("WIP 行刷新失败（DB 抖动？）: {}", second.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 轮次收尾：最终展示行落库成功则删除 WIP 行（保持既有 seq 语义——compact 边界行
+     * 必须排在 assistant 行之前才不会在水合时吞掉最终回复）；落库失败则保留 WIP 部分内容。
+     */
+    public void finishAssistantWip(boolean finalRowPersisted) {
+        Long rowId = wipRowId;
+        wipRowId = null;
+        if (rowId == null) {
+            return;
+        }
+        if (!finalRowPersisted) {
+            flushAssistantWipWithId(rowId);
+            return;
+        }
+        try {
+            agentMessageService.deleteById(rowId);
+        } catch (Exception e) {
+            // 残留 WIP 行只造成"部分过程 + 完整过程"重复，可容忍；不回滚已落库的完整行
+            log.warn("WIP 行清理失败（残留为部分过程行）: {}", e.getMessage());
+        }
+    }
+
+    private void flushAssistantWipWithId(long rowId) {
+        try {
+            String planJson = displayPlan == null || displayPlan.isEmpty()
+                    ? null : JacksonUtil.writeValueAsString(displayPlan);
+            agentMessageService.updateDisplay(rowId, JacksonUtil.writeValueAsString(displayBlocks), planJson);
+        } catch (Exception e) {
+            log.warn("WIP 行收尾刷新失败: {}", e.getMessage());
+        }
+    }
+
+    /** 展示持久化：完整 blocks/plan/duration 落 agent_message（游客不落库）。返回是否落库成功 */
+    public boolean persistDisplay(String role, String text, Long durationMs) {
+        return persistDisplay(role, text, durationMs, null);
+    }
+
+    public boolean persistDisplay(String role, String text, Long durationMs, Long groupSeq) {
+        if (agentMessageService == null || userId == null) {
+            return false;
         }
         closeOpenThinking();
         try {
@@ -291,8 +368,10 @@ public class BotEventChannel {
                 row.setGroupSeq(groupSeq);
             }
             agentMessageService.append(row);
+            return true;
         } catch (Exception e) {
             log.warn("展示消息落库失败: {}", e.getMessage());
+            return false;
         }
     }
 

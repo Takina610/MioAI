@@ -36,7 +36,27 @@ public class AgentMessageServiceImpl implements AgentMessageService {
         if (message.getCreateTime() == null) {
             message.setCreateTime(new Date());
         }
-        agentMessageMapper.insert(message);
+        try {
+            agentMessageMapper.insert(message);
+        } catch (org.springframework.dao.DuplicateKeyException conflict) {
+            // 并发 append 撞 uk_conv_seq（select-max+1 的固有竞态）：重取 seq 再插一次
+            message.setSeq(nextSeq(message.getConversationId()));
+            agentMessageMapper.insert(message);
+        }
+    }
+
+    @Override
+    public void updateDisplay(long id, String blocksJson, String planJson) {
+        AgentMessageDO patch = new AgentMessageDO();
+        patch.setId(id);
+        patch.setBlocks(blocksJson);
+        patch.setPlan(planJson);
+        agentMessageMapper.updateById(patch);
+    }
+
+    @Override
+    public void deleteById(long id) {
+        agentMessageMapper.deleteById(id);
     }
 
     @Override
