@@ -240,13 +240,6 @@ const currentChatTitle = computed(() => {
   return chat?.title || '新对话'
 })
 
-// ---------- 左下角常驻机器人（情绪随会话执行情况实时切换） ----------
-const inputListening = ref(false)
-const { mood: petMood, fxSignal: petFxSignal } = useBotMood(messages, isLoading, inputListening)
-const petIconConfig = computed<BotIconConfig>(
-  () => parseBotIcon(agentInfo.value?.icon) ?? DEFAULT_BOT_ICON
-)
-
 /** 当前会话最近一次任务清单（取最后一条携带 plan 的消息，随流式实时更新） */
 const activePlan = computed(() => {
   for (let i = messages.value.length - 1; i >= 0; i--) {
@@ -257,6 +250,16 @@ const activePlan = computed(() => {
   }
   return null
 })
+
+// ---------- 左下角常驻机器人（情绪随会话执行情况实时切换） ----------
+const inputListening = ref(false)
+const uploadingCount = computed(() => pendingAttachments.value.filter(p => p.status === 'uploading').length)
+const { mood: petMood, fxSignal: petFxSignal } = useBotMood(
+  messages, isLoading, inputListening, inputMessage, uploadingCount, activePlan
+)
+const petIconConfig = computed<BotIconConfig>(
+  () => parseBotIcon(agentInfo.value?.icon) ?? DEFAULT_BOT_ICON
+)
 
 // ---------- 子智能体只读面板 ----------
 // 打开键持久指向某条消息的某个 Agent 块；内容随消息块流实时重建（流式期间面板同步更新）

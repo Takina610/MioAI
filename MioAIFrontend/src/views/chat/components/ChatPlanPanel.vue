@@ -21,7 +21,7 @@
         <div class="plan-steps">
           <div v-for="step in plan" :key="step.index" class="plan-step" :class="step.status">
             <span class="step-mark">
-              <RoseFourLoader v-if="step.status === 'in_progress'" :size="13" />
+              <RoseFourLoader v-if="step.status === 'in_progress'" :size="16" />
               <CheckOutlined v-else-if="step.status === 'done'" />
               <CloseOutlined v-else-if="step.status === 'failed'" />
               <span v-else class="step-dot"></span>

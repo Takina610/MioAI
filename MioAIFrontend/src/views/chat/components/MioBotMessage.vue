@@ -131,7 +131,7 @@
 
     <!-- 流式尾部加载动画 -->
     <div v-if="isLoading" class="stream-tail">
-      <RoseFourLoader :size="20" />
+      <RoseFourLoader :size="36" />
     </div>
 
     <div v-if="interrupted" class="stream-interrupted">连接中断，本条回答可能不完整</div>

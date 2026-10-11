@@ -29,7 +29,7 @@
             <div class="chat-item-title">
               <RoseFourLoader
                 v-if="streamingChatIds?.includes(chat.id)"
-                :size="12"
+                :size="14"
                 class="chat-item-spinner"
               />
               <span class="chat-item-title-text">{{ chat.title }}</span>

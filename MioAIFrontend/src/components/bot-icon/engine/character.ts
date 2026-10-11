@@ -114,6 +114,9 @@ export class GrokCharacter {
       this.pxAt = 0;
       this.partScale = 1;
       this.celebrateAt = -1;
+      // celebrate 状态下的周期性 spinWild（9 连转）可由宿主关闭，
+      // 聊天宠物回合完成的庆祝只需要一次干净的 spinTurn，避免连续打好几次转
+      this.celebrateWild = opts.celebrateWild ?? true;
       this.extras = { turn: null, Kr: 0, yi: 0, ki: 0, Yr: 0, Zr: 0, wi: 0, hop: 0 };
 
       this._build();
@@ -583,7 +586,7 @@ export class GrokCharacter {
 
       this._stepOverlay(now);
 
-      if (this.celebrateAt > 0 && now >= this.celebrateAt && !this.trick && !this.spinTurn) {
+      if (this.celebrateWild && this.celebrateAt > 0 && now >= this.celebrateAt && !this.trick && !this.spinTurn) {
         this.trick = TR.startTrick("spinWild", this.reduceMotion);
         this.celebrateAt = now + 6200;
       }

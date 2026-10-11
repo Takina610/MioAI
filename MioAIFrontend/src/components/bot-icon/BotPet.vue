@@ -7,6 +7,7 @@
       :state="displayMood"
       :size="size"
       follow
+      :celebrate-wild="false"
       :eye-color="eyeColor"
     />
     <span v-if="moodTip" class="bot-pet-tip">{{ moodTip }}</span>
@@ -48,14 +49,25 @@ const petStyle = computed(() => ({ width: `${props.size + 24}px`, height: `${pro
 /** 状态语义提示（仅用户能理解当前在干嘛时才显示） */
 const MOOD_TIPS: Record<string, string> = {
   listening: '在听…',
+  dictating: '记录中…',
+  uploading: '上传中…',
+  sending: '发送中…',
   thinking: '思考中…',
-  searching: '搜索中…',
+  humming: '哼歌等待…',
+  radar: '搜索中…',
   working: '处理中…',
+  progress: '推进中…',
   writing: '编写中…',
   loading: '加载中…',
-  celebrate: '搞定！',
-  alerting: '出错了',
   curious: '等你回答',
+  confused: '有点懵…',
+  celebrate: '搞定！',
+  proud: '全部完成！',
+  laughing: '哈哈哈',
+  surprised: '哇！',
+  angry: '生气了！',
+  sad: '有点失落…',
+  bored: '好无聊…',
   drowsy: '有点困…',
   sleeping: '呼呼…'
 }

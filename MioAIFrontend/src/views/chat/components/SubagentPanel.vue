@@ -31,7 +31,7 @@
 
       <!-- 流式尾部动画 / 收尾信息 -->
       <div v-if="transcript.running" class="panel-tail">
-        <RoseFourLoader :size="14" />
+        <RoseFourLoader :size="18" />
       </div>
       <div v-else-if="usageText" class="panel-usage">{{ usageText }}</div>
     </div>
