@@ -27,7 +27,7 @@
         >
           <div class="chat-item-content">
             <div class="chat-item-title">
-              <ZcodeSpinner
+              <RoseFourLoader
                 v-if="streamingChatIds?.includes(chat.id)"
                 :size="12"
                 class="chat-item-spinner"
@@ -63,7 +63,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { ChatSession } from '@/types'
-import ZcodeSpinner from '@/components/ZcodeSpinner.vue'
+import RoseFourLoader from '@/components/RoseFourLoader.vue'
 import {
   MessageOutlined,
   MoreOutlined,

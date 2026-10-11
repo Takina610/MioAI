@@ -21,7 +21,7 @@
         <div class="plan-steps">
           <div v-for="step in plan" :key="step.index" class="plan-step" :class="step.status">
             <span class="step-mark">
-              <ZcodeSpinner v-if="step.status === 'in_progress'" :size="13" />
+              <RoseFourLoader v-if="step.status === 'in_progress'" :size="13" />
               <CheckOutlined v-else-if="step.status === 'done'" />
               <CloseOutlined v-else-if="step.status === 'failed'" />
               <span v-else class="step-dot"></span>
@@ -42,7 +42,7 @@ import {
   CloseOutlined,
   DownOutlined
 } from '@ant-design/icons-vue'
-import ZcodeSpinner from '@/components/ZcodeSpinner.vue'
+import RoseFourLoader from '@/components/RoseFourLoader.vue'
 import CollapseTransition from '@/components/CollapseTransition.vue'
 import type { PlanStep } from '@/types'
 

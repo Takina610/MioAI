@@ -131,7 +131,7 @@
 
     <!-- 流式尾部加载动画 -->
     <div v-if="isLoading" class="stream-tail">
-      <ZcodeSpinner :size="14" />
+      <RoseFourLoader :size="20" />
     </div>
 
     <div v-if="interrupted" class="stream-interrupted">连接中断，本条回答可能不完整</div>
@@ -145,7 +145,7 @@ import {
   CheckCircleOutlined
 } from '@ant-design/icons-vue'
 import MarkdownView from '@/components/MarkdownView.vue'
-import ZcodeSpinner from '@/components/ZcodeSpinner.vue'
+import RoseFourLoader from '@/components/RoseFourLoader.vue'
 import CollapseTransition from '@/components/CollapseTransition.vue'
 import BrainIcon from '@/components/BrainIcon.vue'
 import AttachmentCards from './AttachmentCards.vue'

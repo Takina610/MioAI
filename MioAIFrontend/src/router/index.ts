@@ -40,6 +40,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '分享对话', requiresAuth: false }
   },
   {
+    path: '/dev/bot-icon',
+    name: 'BotIconPlayground',
+    component: () => import('@/views/dev/BotIconPlayground.vue'),
+    meta: { title: '机器人图标调试台', requiresAuth: false }
+  },
+  {
     path: '/dashboard',
     name: 'Dashboard',
     component: () => import('@/views/dashboard/index.vue'),

@@ -31,7 +31,7 @@
 
       <!-- 流式尾部动画 / 收尾信息 -->
       <div v-if="transcript.running" class="panel-tail">
-        <ZcodeSpinner :size="14" />
+        <RoseFourLoader :size="14" />
       </div>
       <div v-else-if="usageText" class="panel-usage">{{ usageText }}</div>
     </div>
@@ -42,7 +42,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { CloseOutlined } from '@ant-design/icons-vue'
 import MarkdownView from '@/components/MarkdownView.vue'
-import ZcodeSpinner from '@/components/ZcodeSpinner.vue'
+import RoseFourLoader from '@/components/RoseFourLoader.vue'
 import ToolRow from './ToolRow.vue'
 import { formatDuration } from '../toolDisplay'
 import type { SubagentTranscript } from '../subagentTranscript'
