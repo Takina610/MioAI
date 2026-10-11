@@ -252,6 +252,9 @@ const activePlan = computed(() => {
 })
 
 // ---------- 左下角常驻机器人（情绪随会话执行情况实时切换） ----------
+// 待上传附件：选中文件即开始上传到沙箱（卡片带实时进度环）。
+// 必须在 useBotMood 之前声明：uploading 信号在 watch 注册期就会被求值，放后面会 TDZ
+const pendingAttachments = ref<PendingAttachment[]>([])
 const inputListening = ref(false)
 const uploadingCount = computed(() => pendingAttachments.value.filter(p => p.status === 'uploading').length)
 const { mood: petMood, fxSignal: petFxSignal } = useBotMood(
@@ -388,8 +391,6 @@ function handleSend(): void {
   inputMessage.value = ''
 }
 
-/** 待上传附件：选中文件即开始上传到沙箱（卡片带实时进度环） */
-const pendingAttachments = ref<PendingAttachment[]>([])
 
 /**
  * 未落会话转正：'' 新会话产生首个附件时生成正式会话 id，

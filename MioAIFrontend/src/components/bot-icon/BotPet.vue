@@ -7,7 +7,6 @@
       :state="displayMood"
       :size="size"
       follow
-      :celebrate-wild="false"
       :eye-color="eyeColor"
     />
     <span v-if="moodTip" class="bot-pet-tip">{{ moodTip }}</span>

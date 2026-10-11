@@ -29,10 +29,8 @@ const props = withDefaults(
     eyeColor?: string
     /** true = 引擎自播 onboarding 情绪循环（图标预览演示用）；false = 外部完全驱动 state */
     moodCycle?: boolean
-    /** celebrate 状态是否周期性 spinWild（9 连转）；宠物场景关掉只保留单次转圈 */
-    celebrateWild?: boolean
   }>(),
-  { state: 'idle', size: 64, follow: false, live: true, eyeColor: '#f3efe6', moodCycle: false, celebrateWild: true }
+  { state: 'idle', size: 64, follow: false, live: true, eyeColor: '#f3efe6', moodCycle: false }
 )
 
 const svgRef = ref<SVGSVGElement | null>(null)
@@ -92,7 +90,6 @@ function build(): void {
     // 引擎默认 onboarding 模式会每 1.2s 强制覆盖外部状态自演情绪循环，
     // 聊天宠物等外部驱动场景必须用 manual 模式才能与状态提示一致
     mode: props.moodCycle ? 'onboarding' : 'manual',
-    celebrateWild: props.celebrateWild,
     loginWrap: true
   })
   applyFill(props.fill)

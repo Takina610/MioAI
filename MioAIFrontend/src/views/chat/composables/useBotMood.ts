@@ -7,7 +7,7 @@ import type { ChatMessage, MessageBlock, PlanStep } from '@/types'
  * 完整映射（按优先级）：
  * - 附件上传中 ……………………………… uploading（入坞）
  * - 发送瞬间 ………………………………… sending（纸飞机）；用户消息带致谢 → happy
- * - 等首个响应超 8 秒 ……………………… humming（哼歌等待）
+ * - sending 持续到回复首字出现（避免首字前出现"思考中"的空档）
  * - 提问待回答 ……………………………… curious（凑近等你说）
  * - 瞬态重试中（retryNotice）……………… confused（疑惑挠头）
  * - 搜索类工具运行 ………………………… radar（雷达扫描）
@@ -25,6 +25,8 @@ import type { ChatMessage, MessageBlock, PlanStep } from '@/types'
  * - 闲置递进：1.5 分钟 bored（无聊）→ 3 分钟 drowsy（犯困）→ 6 分钟 sleeping（入睡）
  * - 切换会话 ………………………………… waking（伸懒腰醒来）
  * - 输入框聚焦 ……………………………… listening（在听）；聚焦且有字 → dictating（记录中）
+ *
+ * 所有输入（输入内容/上传数/重试/清单）都进 signature，任一变化立即重估情绪。
  */
 export function useBotMood(
   messages: Ref<ChatMessage[]>,
@@ -42,7 +44,6 @@ export function useBotMood(
   let holdMood = ''
   let holdTimer: number | undefined
   let wasLoading = false
-  let busyStartedAt = 0
   /** 本页活跃时钟：会话切换/新消息/流式都会刷新；犯困按它计时 */
   let lastActiveAt = Date.now()
 
@@ -60,7 +61,23 @@ export function useBotMood(
     return undefined
   })
 
-  /** 流式签名：块数量/最后块类型/状态变化都会变化（深层 push 由 setChatMessages/块数组变更触发） */
+  const uploading = computed(() => (pendingUploads?.value ?? 0) > 0)
+  const inputHasText = computed(() => !!inputText?.value?.trim())
+  const planInProgress = computed(() => {
+    const steps = plan?.value
+    return !!steps?.some(s => s.status === 'in_progress')
+  })
+  const planAllDone = computed(() => {
+    const steps = plan?.value
+    return !!steps?.length && steps.every(s => s.status === 'done')
+  })
+
+  /** 回复是否已出现首字（content 或任一内容块存在） */
+  function hasFirstToken(la: ChatMessage | undefined): boolean {
+    return !!(la && (la.content?.trim() || (la.blocks?.length ?? 0) > 0))
+  }
+
+  /** 流式签名：任一输入变化都会触发情绪重估 */
   const signature = computed(() => {
     const la = lastAssistant.value
     const blocks = la?.blocks ?? []
@@ -70,22 +87,14 @@ export function useBotMood(
       la?.id ?? '',
       blocks.length,
       last ? `${last.type}:${'status' in last ? last.status : ''}` : '',
-      isLoading.value,
-      listening.value,
+      isLoading.value ? 1 : 0,
+      listening.value ? 1 : 0,
+      inputHasText.value ? 1 : 0,
+      uploading.value ? 1 : 0,
       la?.interrupted ? 1 : 0,
       la?.retryNotice ? 1 : 0,
       planInProgress.value ? 1 : 0
     ].join('|')
-  })
-
-  const planInProgress = computed(() => {
-    const steps = plan?.value
-    return !!steps?.some(s => s.status === 'in_progress')
-  })
-
-  const planAllDone = computed(() => {
-    const steps = plan?.value
-    return !!steps?.length && steps.every(s => s.status === 'done')
   })
 
   function toolMood(tool: string): string {
@@ -106,7 +115,7 @@ export function useBotMood(
 
   function evaluate(): void {
     if (Date.now() < holdUntil) return
-    if ((pendingUploads?.value ?? 0) > 0) {
+    if (uploading.value) {
       mood.value = 'uploading'
       return
     }
@@ -116,7 +125,7 @@ export function useBotMood(
     }
     if (listening.value) {
       lastActiveAt = Date.now()
-      mood.value = inputText?.value?.trim() ? 'dictating' : 'listening'
+      mood.value = inputHasText.value ? 'dictating' : 'listening'
       return
     }
     // 闲置递进只看本页闲置时长：打开旧会话不会立刻"睡着"
@@ -140,10 +149,8 @@ export function useBotMood(
     if (last?.type === 'question') return last.status === 'pending' ? 'curious' : 'working'
     if (last?.type === 'tool') return last.status === 'running' ? toolMood(last.tool) : 'thinking'
     if (planInProgress.value) return 'progress'
-    if (!la) {
-      // 首个响应迟迟未到：哼歌等待
-      return Date.now() - busyStartedAt > 8000 ? 'humming' : 'thinking'
-    }
+    // 首字出现前恒为发送中
+    if (!hasFirstToken(la)) return 'sending'
     if (last?.type === 'thinking') return 'thinking'
     if (last?.type === 'attachments') return 'loading'
     return 'writing'
@@ -171,13 +178,12 @@ export function useBotMood(
     const busy = isLoading.value
     if (busy && !wasLoading) {
       lastActiveAt = Date.now()
-      busyStartedAt = Date.now()
-      // 用户致谢 → 开心一下；其余纸飞机送出
+      // 用户致谢 → 开心一下；其余进入发送中（持续到首字出现）
       const said = lastUser.value?.content ?? ''
       if (/谢谢|辛苦|厉害|太棒|好棒|真棒|666/.test(said)) {
         hold('happy', 2400)
       } else {
-        hold('sending', 1200)
+        hold('sending', 600)
       }
     } else if (!busy && wasLoading) {
       lastActiveAt = Date.now()
