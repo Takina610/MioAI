@@ -408,6 +408,24 @@ public class MioBotController {
     }
 
     /**
+     * 当前归属正在执行的会话 id 列表：侧边栏执行动画的数据源。
+     * 会话执行状态在后端（ACTIVE_CHATS），刷新/切页后前端内存态清空——
+     * 侧边栏据此轮询补齐，执行动画跨刷新保持，不再依赖"点开会话触发接管"才出现。
+     */
+    @GetMapping("/bot/active-chats")
+    public BaseResponse<List<String>> activeChats(jakarta.servlet.http.HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        String ownerKey = userId != null ? "u:" + userId : "guest:" + clientIp(httpRequest);
+        List<String> ids = new ArrayList<>();
+        for (Map.Entry<String, String> entry : ACTIVE_CHATS.entrySet()) {
+            if (entry.getValue().equals(ownerKey)) {
+                ids.add(entry.getKey());
+            }
+        }
+        return ResultUtils.success(ids);
+    }
+
+    /**
      * 用户中断正在执行的会话轮次：校验归属后置停止标记并打断轮次线程，
      * 引擎在当前模型流/工具执行后停下，已流出的部分过程落库并回 stopped 事件。
      * 会话不在执行时幂等返回成功（前端收尾已由 done/error 事件完成）。

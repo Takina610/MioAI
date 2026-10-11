@@ -17,8 +17,43 @@ function escapeHtml(s: string): string {
  *  tasklists 渲染 - [ ] 任务列表复选框；katex delimiters:all 同时支持 $…$ 与 \(…\)/\[…\] 定界符 */
 /** 代码块统一外壳：header 显示语言 + 复制按钮（复制由 MarkdownView 事件委托处理） */
 function codeBlockWrap(lang: string, inner: string): string {
-  const langLabel = lang ? escapeHtml(lang) : '代码'
+  const langLabel = lang ? escapeHtml(lang) : escapeHtml('文本')
   return `<div class="md-code-wrap"><div class="md-code-header"><span class="md-code-lang">${langLabel}</span><span class="md-copy-btn">复制</span></div>${inner}</div>`
+}
+
+/** 无语言标注围栏的自动探测：常见语言子集 + 采纳阈值。
+ *  实测多行真实代码 relevance ≥ 4~12，单行命令被 hljs 误判成 sql 之类只有 ≤3——
+ *  阈值挡掉垃圾结果，shell 单行命令由下方命令词启发兜底 */
+const AUTO_LANG_SUBSET = [
+  'bash', 'shell', 'java', 'python', 'javascript', 'typescript', 'json', 'yaml',
+  'sql', 'dockerfile', 'go', 'rust', 'c', 'cpp', 'xml', 'ini', 'toml', 'http', 'css'
+]
+const AUTO_LANG_MIN_RELEVANCE = 4
+
+/** 常见 CLI 命令词：模型输出裸围栏包 shell 命令时最常见，hljs 对单行命令探测不出来 */
+const SHELL_COMMANDS = new Set([
+  'docker', 'docker-compose', 'git', 'npm', 'pnpm', 'yarn', 'bun', 'node', 'npx',
+  'curl', 'wget', 'sudo', 'apt', 'apt-get', 'yum', 'dnf', 'brew',
+  'kubectl', 'helm', 'mvn', 'gradle', 'java', 'javac', 'jar',
+  'python', 'python3', 'pip', 'pip3', 'node', 'deno', 'go', 'cargo', 'dotnet',
+  'mysql', 'psql', 'pg_ctl', 'redis-cli', 'mongosh',
+  'ssh', 'scp', 'sftp', 'tar', 'zip', 'unzip', 'gzip', 'gunzip',
+  'chmod', 'chown', 'systemctl', 'service', 'journalctl', 'mount',
+  'grep', 'sed', 'awk', 'cat', 'ls', 'cd', 'mkdir', 'rmdir', 'rm', 'cp', 'mv',
+  'touch', 'ln', 'find', 'xargs', 'echo', 'export', 'source', 'env', 'which',
+  'make', 'cmake', 'gcc', 'g++', 'javac', 'ffmpeg', 'nginx', 'systemctl',
+  'ping', 'ip', 'ifconfig', 'netstat', 'ss', 'tcpdump', 'nohup', 'setsid',
+  'tail', 'head', 'less', 'wc', 'sort', 'uniq', 'tee', 'date', 'sleep',
+  'useradd', 'usermod', 'passwd', 'kill', 'pkill', 'ps', 'top', 'htop', 'free', 'df', 'du'
+])
+
+/** 裸围栏内容是否像 shell 命令：无 CJK、行数有限、首个有效行以 CLI 命令词开头（容忍 $ 提示符前缀） */
+function looksLikeShell(code: string): boolean {
+  if (/[\u4e00-\u9fff]/.test(code)) return false
+  const lines = code.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))
+  if (lines.length === 0 || lines.length > 12) return false
+  const first = lines[0].replace(/^[$❯>]\s*/, '').split(/\s+/)[0]
+  return SHELL_COMMANDS.has(first)
 }
 
 export const markdown = new MarkdownIt({
@@ -36,18 +71,47 @@ markdown.renderer.rules.fence = (tokens, idx) => {
   const token = tokens[idx]
   const info = (token.info || '').trim().split(/\s+/)[0] || ''
   const code = token.content
-  let inner: string
-  if (info && hljs.getLanguage(info)) {
+  let lang = info.toLowerCase()
+  let highlighted: string | null = null
+  if (lang && hljs.getLanguage(lang)) {
     try {
-      inner = `<pre class="md-code"><code class="hljs language-${info}">${hljs.highlight(code, { language: info, ignoreIllegals: true }).value}</code></pre>`
+      highlighted = hljs.highlight(code, { language: lang, ignoreIllegals: true }).value
     } catch {
-      inner = `<pre class="md-code"><code>${escapeHtml(code)}</code></pre>`
+      highlighted = null
     }
-  } else {
-    const langClass = info ? ` class="language-${escapeHtml(info)}"` : ''
-    inner = `<pre class="md-code"><code${langClass}>${escapeHtml(code)}</code></pre>`
   }
-  return codeBlockWrap(info, inner) + '\n'
+  if (highlighted === null) {
+    // 未标注语言（模型常发裸 ```）：shell 命令启发 → 常见语言自动探测，都落空按纯文本展示。
+    // info 存在但 hljs 不认识（如 mermaid）：保留原标签，不参与探测
+    if (!lang) {
+      if (looksLikeShell(code)) {
+        lang = 'bash'
+      }
+      if (lang && hljs.getLanguage(lang)) {
+        try {
+          highlighted = hljs.highlight(code, { language: lang, ignoreIllegals: true }).value
+        } catch {
+          highlighted = null
+        }
+      }
+      if (highlighted === null) {
+        try {
+          const auto = hljs.highlightAuto(code, AUTO_LANG_SUBSET)
+          if (auto.relevance >= AUTO_LANG_MIN_RELEVANCE && auto.language) {
+            lang = auto.language
+            highlighted = auto.value
+          }
+        } catch {
+          // 探测失败：按纯文本展示
+        }
+      }
+    }
+  }
+  const label = lang || (highlighted ? '' : '文本')
+  const codeHtml = highlighted !== null
+    ? `<pre class="md-code"><code class="hljs language-${escapeHtml(lang)}">${highlighted}</code></pre>`
+    : `<pre class="md-code"><code>${escapeHtml(code)}</code></pre>`
+  return codeBlockWrap(label, codeHtml) + '\n'
 }
 
 // 聊天内的外部链接（CDN 等）与同源文件代理链接（/api/file/...，PDF 等）

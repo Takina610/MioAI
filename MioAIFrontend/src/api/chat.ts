@@ -141,6 +141,12 @@ export const isChatActive = async (chatId: string): Promise<boolean> => {
   return Boolean(result)
 }
 
+/** 当前归属正在执行的会话 id 列表（侧边栏执行动画数据源，跨刷新/切页保持） */
+export const getActiveChats = async (): Promise<string[]> => {
+  const result = await request.get<string[]>('/bot/active-chats', { skipErrorMessage: true } as never)
+  return Array.isArray(result) ? result : []
+}
+
 /** 中断正在执行的会话轮次：后端置停止标记并打断引擎，已流出的部分过程落库后回 stopped 事件 */
 export const stopChat = async (chatId: string): Promise<boolean> => {
   const result = await request.post<boolean>('/bot/stop', null, {

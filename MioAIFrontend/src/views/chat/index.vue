@@ -131,7 +131,7 @@ import { useChatStream } from './composables/useChatStream'
 import { useBotMood } from './composables/useBotMood'
 import { usePendingCardAnimations } from './composables/usePendingCardAnimations'
 import { buildSubagentTranscript } from './subagentTranscript'
-import { truncateConversation, getReasoningEfforts, uploadAttachment, deleteAttachment } from '@/api/chat'
+import { truncateConversation, getReasoningEfforts, uploadAttachment, deleteAttachment, getActiveChats } from '@/api/chat'
 import { getBotMessages } from '@/api/botMessages'
 
 const route = useRoute()
@@ -231,8 +231,32 @@ const streamApi = useChatStream({
 })
 const { sendMessage, prepareChatId, cleanup: cleanupStream, stopTurn } = streamApi
 
-/** 正在流式执行中的会话（侧边栏显示加载动画，切走也能看出进度在跑） */
-const streamingChatIds = computed(() => [...messagesApi.chatLoadingMap.value.keys()])
+// 正在执行中的会话（侧边栏执行动画）：执行状态在后端，轮询补齐——
+// 刷新/切页后前端内存态（chatLoadingMap）清空，动画不再依赖"点开会话触发接管"才出现
+const backendStreamingIds = ref<Set<string>>(new Set())
+async function refreshBackendStreaming(): Promise<void> {
+  if (!userStore.isLoggedIn) return
+  try {
+    backendStreamingIds.value = new Set(await getActiveChats())
+  } catch {
+    // 后端暂不可达：保留现有状态，下个周期再试
+  }
+}
+const streamingChatIds = computed(() => {
+  const ids = new Set(backendStreamingIds.value)
+  for (const chatId of messagesApi.chatLoadingMap.value.keys()) {
+    ids.add(chatId)
+  }
+  return [...ids]
+})
+let streamingPollTimer: number | undefined
+onMounted(() => {
+  refreshBackendStreaming()
+  streamingPollTimer = window.setInterval(refreshBackendStreaming, 10_000)
+})
+watch(() => userStore.isLoggedIn, (loggedIn) => {
+  if (loggedIn) refreshBackendStreaming()
+})
 
 const { currentChatId, messages, isLoading, switchChat, loadMessages } = messagesApi
 
@@ -747,6 +771,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyboardShortcut)
+  if (streamingPollTimer !== undefined) {
+    window.clearInterval(streamingPollTimer)
+    streamingPollTimer = undefined
+  }
 })
 
 // 组件销毁前关闭流式连接
