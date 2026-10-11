@@ -189,6 +189,27 @@ CREATE TABLE `agent_message_version`  (
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '消息历史版本归档(<n/n> 版本组)' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
+-- Table structure for chat_file（会话文件登记：uploads/outputs 暂存文件的持久台账）
+-- ----------------------------
+DROP TABLE IF EXISTS `chat_file`;
+CREATE TABLE `chat_file`  (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `conversation_id` varchar(64) NOT NULL COMMENT '会话ID',
+  `user_id` bigint NULL DEFAULT NULL COMMENT '用户ID（游客为空）',
+  `agent_id` bigint NULL DEFAULT NULL COMMENT '智能体ID（产出文件归属，上传时未知为空）',
+  `kind` tinyint NOT NULL DEFAULT 1 COMMENT '来源:1-用户上传(uploads/<chatId>/),2-Agent产出(outputs/<chatId>/)',
+  `file_name` varchar(255) NULL DEFAULT NULL COMMENT '原始文件名',
+  `path` varchar(512) NOT NULL COMMENT '沙箱工作区内相对路径',
+  `file_size` bigint NULL DEFAULT NULL COMMENT '文件大小(字节)',
+  `status` tinyint NOT NULL DEFAULT 1 COMMENT '状态:1-正常,2-待删除(排队与重试期间；兜底扫描据此重入队)',
+  `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`) USING BTREE,
+  INDEX `idx_conversation_id`(`conversation_id` ASC) USING BTREE,
+  INDEX `idx_status`(`status` ASC) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '会话文件登记(沙箱暂存文件台账)' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
 -- Table structure for document
 -- ----------------------------
 DROP TABLE IF EXISTS `document`;

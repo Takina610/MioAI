@@ -45,10 +45,17 @@ public class AttachmentController {
     @Resource
     private com.mio.ai.bot.service.AttachmentDeleteQueue deleteQueue;
 
+    @Resource
+    private com.mio.ai.bot.service.ChatFileService chatFileService;
+
+    @Resource
+    private com.mio.ai.user.utils.RedisComponent redisComponent;
+
     /** 上传附件：返回 {path, name, size}，发送消息时随 attachments 参数带给 /bot/chat */
     @PostMapping("/bot/attachment")
     public BaseResponse<Map<String, Object>> upload(@RequestParam("file") MultipartFile file,
-                                                    @RequestParam("chatId") @NotBlank @Size(max = 64) String chatId) {
+                                                    @RequestParam("chatId") @NotBlank @Size(max = 64) String chatId,
+                                                    jakarta.servlet.http.HttpServletRequest request) {
         if (!fileTransfer.available()) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "沙箱未启用，暂不支持上传附件");
         }
@@ -61,6 +68,14 @@ public class AttachmentController {
         String originalName = StrUtil.blankToDefault(file.getOriginalFilename(), "file");
         try {
             String path = fileTransfer.upload(chatId, originalName, file.getInputStream());
+            try {
+                // 台账登记：会话删除按它清理；失败不阻断上传（目录级删除按目录清理兜底）
+                Long userId = resolveUserId(request);
+                chatFileService.register(chatId, userId, null,
+                        com.mio.ai.bot.service.ChatFileService.KIND_UPLOAD, path, originalName, file.getSize());
+            } catch (Exception e) {
+                log.warn("附件登记失败（文件已上传，删除会话时按目录清理）: path={}, err={}", path, e.getMessage());
+            }
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("path", path);
             data.put("name", originalName);
@@ -74,20 +89,27 @@ public class AttachmentController {
         }
     }
 
-    /** 删除刚上传的附件（输入卡片点 X）：入可靠队列异步删除，接口即时返回 */
+    /** 删除刚上传的附件（输入卡片点 X）：台账置待删 + 入可靠队列异步删除，接口即时返回 */
     @org.springframework.web.bind.annotation.DeleteMapping("/bot/attachment")
     public BaseResponse<Boolean> delete(@RequestParam @NotBlank String path) {
         if (!fileTransfer.available()) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "沙箱未启用");
         }
-        if (!com.mio.ai.bot.model.dto.AttachmentItem.isStagedPath(path)) {
+        String trimmed = path.trim();
+        if (!com.mio.ai.bot.model.dto.AttachmentItem.isStagedPath(trimmed)) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "文件不存在");
         }
         try {
-            deleteQueue.enqueue(path.trim());
+            // 台账先置待删：入队失败也留下了持久凭证，兜底扫描会重入队
+            chatFileService.markPendingByPath(trimmed);
         } catch (Exception e) {
-            // 入队失败不阻断前端：文件由 VPS 清理 cron 兜底删除
-            log.warn("附件删除入队失败, path={}: {}", path, e.getMessage());
+            log.warn("附件台账置待删失败, path={}: {}", trimmed, e.getMessage());
+        }
+        try {
+            deleteQueue.enqueue(trimmed);
+        } catch (Exception e) {
+            // 入队失败不阻断前端：待删台账行由兜底扫描重入队
+            log.warn("附件删除入队失败, path={}: {}", trimmed, e.getMessage());
         }
         return ResultUtils.success(true);
     }
@@ -116,5 +138,14 @@ public class AttachmentController {
                 .header(HttpHeaders.CACHE_CONTROL, "no-store")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(out.toByteArray());
+    }
+
+    /** 尽力解析上传者（游客可上传，未登录返回 null） */
+    private Long resolveUserId(jakarta.servlet.http.HttpServletRequest request) {
+        try {
+            return redisComponent.getUserId(request.getHeader("token"));
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

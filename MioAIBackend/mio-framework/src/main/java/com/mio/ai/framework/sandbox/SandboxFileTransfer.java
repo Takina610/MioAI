@@ -118,6 +118,24 @@ public class SandboxFileTransfer {
         });
     }
 
+    /**
+     * 删除会话的两个暂存目录（uploads/&lt;chatId&gt;/ 与 outputs/&lt;chatId&gt;/，删除会话时调用）。
+     * 目录不存在视作已删除（`; true` 保证退出码恒 0，仅 SSH 级失败会返回 null 退出码）。
+     * chatId 经 {@link #safeDir} 净化，无注入面。
+     */
+    public void deleteChatDirs(String chatId) {
+        SandboxSession session = sessionProvider.getIfAvailable();
+        if (session == null) {
+            throw new IllegalStateException("沙箱未启用，文件传输不可用");
+        }
+        String safe = safeDir(chatId);
+        SandboxSession.ExecResult result = session.exec(
+                "rm -rf " + UPLOADS_ROOT + "/" + safe + " " + OUTPUTS_ROOT + "/" + safe + "; true", null);
+        if (result.exitCode() == null || result.exitCode() != 0) {
+            throw new IllegalStateException("会话文件目录删除失败: " + result.output());
+        }
+    }
+
     /** 清理超过 keepDays 的暂存文件（uploads/outputs 全量，定时任务调用） */
     public void cleanupOld(int keepDays) {
         SandboxSession session = sessionProvider.getIfAvailable();

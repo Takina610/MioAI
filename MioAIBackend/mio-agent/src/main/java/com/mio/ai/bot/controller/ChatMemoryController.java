@@ -26,6 +26,9 @@ import java.util.List;
 @RestController
 public class ChatMemoryController {
 
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(ChatMemoryController.class);
+
     @Autowired
     ChatHistoryRepository chatHistoryRepository;
 
@@ -37,6 +40,12 @@ public class ChatMemoryController {
 
     @Autowired
     com.mio.ai.bot.service.AgentMessageService agentMessageService;
+
+    @Autowired
+    com.mio.ai.bot.service.ChatFileService chatFileService;
+
+    @Autowired
+    com.mio.ai.bot.service.AttachmentDeleteQueue attachmentDeleteQueue;
 
 
     /**
@@ -70,7 +79,9 @@ public class ChatMemoryController {
     }
 
     /**
-     * 删除会话（仅会话所有者可删）
+     * 删除会话（仅会话所有者可删）：清会话行、对话记忆、消息流水与版本归档；
+     * 沙箱暂存文件（uploads/outputs 的 &lt;chatId&gt; 目录）按 chat_file 台账异步清理。
+     * 工具调用日志等审计数据持久保留，不随会话删除。
      * @param chatId
      * @return
      */
@@ -79,12 +90,24 @@ public class ChatMemoryController {
     public BaseResponse<?> deleteChat(@PathVariable String chatId, HttpServletRequest request){
         Long userId = redisComponent.getUserId(request.getHeader("token"));
         checkChatOwner(chatId, userId);
+        // 执行中的会话禁止删除：与截断同一规则——删后落库行会把已删数据写回
+        if (MioBotController.hasActiveTurn(chatId)) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "会话正在执行中，请等待本轮完成后再删除");
+        }
         try {
             chatHistoryRepository.clearByChatId(chatId);
             chatMemory.clear(chatId);
             agentMessageService.deleteByConversation(chatId);
+            // 台账先置待删（持久凭证），再入队删沙箱目录；入队失败由兜底扫描重入队
+            chatFileService.markPendingByConversation(chatId);
         } catch (Exception e){
             return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
+        }
+        try {
+            attachmentDeleteQueue.enqueueChatDir(chatId);
+        } catch (Exception e){
+            // 不影响删除结果：待删台账行已在，兜底扫描会重入队
+            log.warn("会话文件删除入队失败（兜底扫描会重试）, chatId={}: {}", chatId, e.getMessage());
         }
         return ResultUtils.success(true);
     }

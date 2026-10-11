@@ -145,7 +145,10 @@ export function useChatSessions(options: {
       deleteModalVisible.value = false
     } catch (e) {
       console.error(e)
-      message.error('删除失败')
+      // 业务错误（如"会话正在执行中"）已由请求拦截器弹出后端消息，这里只兜网络类错误
+      if ((e as Error & { code?: number }).code === undefined) {
+        message.error('删除失败')
+      }
     } finally {
       deleteLoading.value = false
       pendingDeleteChatId.value = ''

@@ -64,6 +64,7 @@ public class MioBot {
     private final AgentUsageLogService agentUsageLogService;
     private final ToolCallLogService toolCallLogService;
     private final AgentMessageService agentMessageService;
+    private final com.mio.ai.bot.service.ChatFileService chatFileService;
     private final SandboxFileTransfer fileTransfer;
 
     private final String chatId;
@@ -109,6 +110,7 @@ public class MioBot {
                   AgentUsageLogService agentUsageLogService,
                   ToolCallLogService toolCallLogService,
                   AgentMessageService agentMessageService,
+                  com.mio.ai.bot.service.ChatFileService chatFileService,
                   String chatId,
                   Long userId,
                   Long agentId,
@@ -125,6 +127,7 @@ public class MioBot {
         this.agentUsageLogService = agentUsageLogService;
         this.toolCallLogService = toolCallLogService;
         this.agentMessageService = agentMessageService;
+        this.chatFileService = chatFileService;
         this.chatId = chatId;
         this.userId = userId;
         this.agentId = agentId != null ? agentId : AGENT_ID;
@@ -382,6 +385,10 @@ public class MioBot {
             List<Map<String, Object>> produced = fileTransfer.listNew(outputsDir(), before);
             if (!produced.isEmpty()) {
                 channel.attachments(produced);
+                if (chatFileService != null) {
+                    // 台账登记产出文件：会话删除时按台账清目录（登记失败不影响交付）
+                    chatFileService.registerOutputs(chatId, userId, agentId, produced);
+                }
             }
         } catch (Exception e) {
             log.warn("产出文件收集失败, chatId={}: {}", chatId, e.getMessage());

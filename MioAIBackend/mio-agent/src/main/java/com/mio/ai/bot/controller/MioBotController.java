@@ -82,6 +82,9 @@ public class MioBotController {
     @Autowired
     private AgentMessageService agentMessageService;
 
+    @Autowired
+    private com.mio.ai.bot.service.ChatFileService chatFileService;
+
     /** 沙箱文件传输：附件直落沙箱 + 产出收集 */
     @Autowired
     private com.mio.ai.framework.sandbox.SandboxFileTransfer fileTransfer;
@@ -120,6 +123,11 @@ public class MioBotController {
     /** 正在执行的轮次实例：chatId → MioBot（用户中断 /bot/stop 据此定位引擎并打断） */
     private static final java.util.concurrent.ConcurrentHashMap<String, MioBot> ACTIVE_TURNS =
             new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 会话是否有轮次执行中（删除会话等破坏性操作据此拒绝，与截断同一规则） */
+    public static boolean hasActiveTurn(String chatId) {
+        return ACTIVE_CHATS.containsKey(chatId);
+    }
 
     /** 同一归属（用户/游客IP）最多同时执行的对话轮数 */
     @org.springframework.beans.factory.annotation.Value("${mio.ai.chat.max-concurrent-per-owner:3}")
@@ -196,7 +204,7 @@ public class MioBotController {
         var engineConfig = new com.mio.ai.framework.zagent.AgentEngineConfig(
                 agentMaxSteps, agentStreamTimeoutSeconds, agentModelRetries, agentContextWindowTokens);
         MioBot mioBot = new MioBot(chatModel, toolsetFactory, List.of(mcp.callbacks()), skills,
-                agentUsageLogService, toolCallLogService, agentMessageService,
+                agentUsageLogService, toolCallLogService, agentMessageService, chatFileService,
                 chatId, userId, resolvedAgentId, customSystemPrompt, engineModelName, effort, engineConfig,
                 fileTransfer, com.mio.ai.bot.model.dto.AttachmentItem.parseList(attachments));
         // 编辑重发：新 user 行沿用被编辑轮次的组锚（版本组持久化）
