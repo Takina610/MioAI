@@ -19,6 +19,7 @@
           :state="previewState"
           :size="92"
           follow
+          mood-cycle
           eye-color="#ffffff"
         />
       </div>

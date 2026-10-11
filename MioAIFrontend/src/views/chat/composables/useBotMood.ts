@@ -4,7 +4,8 @@ import type { ChatMessage, MessageBlock } from '@/types'
 /**
  * 会话执行情况 → 机器人情绪（39 态引擎状态机的运行时映射）。
  * 流式期间按最后一个内容块判别（思考/搜索/工具/编写/提问），
- * 回合完成转一圈撒花（fxSignal），持续空闲则犯困入睡。
+ * 回合完成转一圈撒花（fxSignal），切换会话伸个懒腰，
+ * 在本页持续闲置才犯困入睡（与消息本身的年龄无关）。
  */
 export function useBotMood(
   messages: Ref<ChatMessage[]>,
@@ -19,6 +20,8 @@ export function useBotMood(
   let holdMood = ''
   let holdTimer: number | undefined
   let wasLoading = false
+  /** 本页活跃时钟：会话切换/新消息/流式都会刷新；犯困按它计时 */
+  let lastActiveAt = Date.now()
 
   const lastAssistant = computed<ChatMessage | undefined>(() => {
     for (let i = messages.value.length - 1; i >= 0; i--) {
@@ -69,19 +72,19 @@ export function useBotMood(
       mood.value = deriveBusyMood(la, last)
       return
     }
-    const la = lastAssistant.value
-    if (!la) {
-      mood.value = listening.value ? 'listening' : 'idle'
+    if (listening.value) {
+      lastActiveAt = Date.now()
+      mood.value = 'listening'
       return
     }
-    const created = la.createTime ? new Date(la.createTime).getTime() : 0
-    const age = Date.now() - (Number.isFinite(created) && created > 0 ? created : 0)
-    if (age > 6 * 60_000) {
+    // 闲置犯困只看本页闲置时长：打开旧会话不会立刻"睡着"
+    const idleFor = Date.now() - lastActiveAt
+    if (idleFor > 6 * 60_000) {
       mood.value = 'sleeping'
-    } else if (age > 2.5 * 60_000) {
+    } else if (idleFor > 2.5 * 60_000) {
       mood.value = 'drowsy'
     } else {
-      mood.value = listening.value ? 'listening' : 'idle'
+      mood.value = 'idle'
     }
   }
 
@@ -94,13 +97,23 @@ export function useBotMood(
     return 'writing'
   }
 
+  // 会话切换/历史加载 = messages 整表替换：伸个懒腰醒来，闲置时钟归零。
+  // 流式追加新消息行（首条 id 不变）与版本切换不算切换，避免回合中途被打断
+  watch(messages, (next, prev) => {
+    if ((next?.[0]?.id ?? '') === (prev?.[0]?.id ?? '')) return
+    lastActiveAt = Date.now()
+    hold('waking', 1400)
+  })
+
   watch(signature, () => {
     const busy = isLoading.value
     if (busy && !wasLoading) {
       // 刚发出消息：纸飞机送出一小段，再交回流式判别
+      lastActiveAt = Date.now()
       hold('sending', 1200)
     } else if (!busy && wasLoading) {
       // 回合结束：成功转圈撒花，中断/失败惊叫
+      lastActiveAt = Date.now()
       const la = lastAssistant.value
       if (la?.interrupted) {
         hold('alerting', 3600)
@@ -108,12 +121,14 @@ export function useBotMood(
         fxSignal.value++
         hold('celebrate', 3200)
       }
+    } else if (busy) {
+      lastActiveAt = Date.now()
     }
     wasLoading = busy
     evaluate()
   })
 
-  // 空闲犯困/入睡的时间推移不依赖签名变化，低频自检即可
+  // 闲置犯困/入睡的时间推移不依赖签名变化，低频自检即可
   const idleTick = window.setInterval(() => {
     if (!isLoading.value && Date.now() >= holdUntil) evaluate()
   }, 30_000)

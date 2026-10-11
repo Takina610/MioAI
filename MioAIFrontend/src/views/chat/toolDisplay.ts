@@ -13,7 +13,13 @@ import {
   GlobalOutlined,
   FileAddOutlined,
   FileSearchOutlined,
-  RobotOutlined
+  RobotOutlined,
+  LinkOutlined,
+  PictureOutlined,
+  DownloadOutlined,
+  QuestionCircleOutlined,
+  ProfileOutlined,
+  StopOutlined
 } from '@ant-design/icons-vue'
 
 export type ToolBlock = Extract<MessageBlock, { type: 'tool' }>
@@ -66,17 +72,42 @@ export function toolVerb(block: ToolBlock): string {
   return block.status === 'running' ? '执行中' : '已执行'
 }
 
+// 引擎注册名是 zcode 风格 PascalCase（Bash/Read/WebSearch…），登记齐全才不会全部落成
+// 同一个扳手兜底图标；大小写变体都收，防旧数据/改名漏配
 const TOOL_ICONS: Record<string, Component> = markRaw({
-  managePlan: OrderedListOutlined,
+  // 终端/命令
+  Bash: CodeOutlined,
+  executeTerminalCommand: CodeOutlined,
   runCommand: CodeOutlined,
+  // 文件读写
+  Read: FileTextOutlined,
   readFile: FileTextOutlined,
+  Write: FileAddOutlined,
   writeFile: FileAddOutlined,
+  Edit: EditOutlined,
   editFile: EditOutlined,
+  // 检索
+  Glob: FileSearchOutlined,
   glob: FileSearchOutlined,
+  Grep: SearchOutlined,
   grep: SearchOutlined,
+  // 网络：搜索=网页（地球），抓取=链接，阅读=开卷
+  WebSearch: GlobalOutlined,
   searchWeb: GlobalOutlined,
-  fetchUrl: ReadOutlined,
+  WebFetch: LinkOutlined,
+  fetchUrl: LinkOutlined,
+  scrapeWebPage: ReadOutlined,
+  // 多媒体与产出
+  searchImage: PictureOutlined,
+  downloadResource: DownloadOutlined,
   generatePDF: FilePdfOutlined,
+  // 任务与交互
+  managePlan: OrderedListOutlined,
+  TodoWrite: OrderedListOutlined,
+  TodoRead: OrderedListOutlined,
+  AskUserQuestion: QuestionCircleOutlined,
+  TaskOutput: ProfileOutlined,
+  TaskStop: StopOutlined,
   // 子智能体行用机器人图标（zcode 同款语义），不用通用工具扳手
   Agent: RobotOutlined
 })
