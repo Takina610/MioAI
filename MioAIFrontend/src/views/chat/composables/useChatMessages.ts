@@ -172,7 +172,9 @@ export function useChatMessages(options: {
             takeover = false
           }
         }
-        if (takeover) {
+        // await 期间可能已有并发的 loadMessages 完成接管（loading 置位）：
+        // 复查一次，防止双重接管开出两条续播流把内容写两遍
+        if (takeover && !chatLoadingMap.value.get(conversationId)) {
           const base = last.role === 'assistant'
             ? loadedMessages.slice(0, -1)
             : loadedMessages

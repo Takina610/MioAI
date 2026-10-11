@@ -63,6 +63,11 @@ export function useChatStream(options: {
   let currentStreamChatId = ''
   let streamWatchdogTimer: ReturnType<typeof setTimeout> | null = null
 
+  /** 恢复中的会话（重连回放/恢复轮询全程占位）：loadMessages 并发触发时防止重复接管开双流 */
+  const recoveringChatIds = new Set<string>()
+  /** 恢复流的清理回调（关闭回放连接/停表）：组件卸载时统一执行 */
+  const recoveryCleanups = new Set<() => void>()
+
   /** 事件驱动的静默看门狗：每收到任何事件重挂；超时仍未收到才触发异常收尾 */
   function rearmStreamWatchdog(chatId: string, onStall: () => void): void {
     if (streamWatchdogTimer) {
@@ -338,8 +343,9 @@ export function useChatStream(options: {
       if (!parsed) {
         return
       }
-      // 服务端明确不可回放（回合已结束/缓冲停用）：不再重连，交给 onerror 走落库还原
-      if (parsed.type === 'replay_unavailable') {
+      // 服务端明确不可回放（回合已结束/缓冲停用）或本连接已被更新的接管顶掉：
+      // 不再重连，交给 onerror 走落库还原
+      if (parsed.type === 'replay_unavailable' || parsed.type === 'superseded') {
         reconnectAttempts = 0
         return
       }
@@ -671,7 +677,8 @@ export function useChatStream(options: {
     chatId: string,
     aiMessageIndex: number,
     onGiveUp: () => void,
-    onRecovered: (row: BotMessageRow) => void
+    onRecovered: (row: BotMessageRow) => void,
+    onStopped?: () => void
   ): void {
     const startTime = Date.now()
     let lastActiveProbe = 0
@@ -680,6 +687,7 @@ export function useChatStream(options: {
       // 加载状态被其他路径复位（如用户切走/删除）则停止
       if (!messagesApi.chatLoadingMap.value.get(chatId)) {
         clearInterval(timer)
+        onStopped?.()
         return
       }
       const elapsed = Date.now() - startTime
@@ -738,19 +746,32 @@ export function useChatStream(options: {
     if (pendingIndex < 0 || msgs[pendingIndex].role !== 'assistant' || msgs[pendingIndex].content) {
       return
     }
+    // 防重入：loadMessages 会被并发调用两次（selectChat 手动 + 路由 watch），
+    // 两次都通过上面的占位 guard 就会开两条回放流同时 patch 同一消息——内容整份翻倍
+    if (recoveringChatIds.has(chatId)) {
+      return
+    }
+    recoveringChatIds.add(chatId)
+    const releaseRecovery = (): void => {
+      recoveringChatIds.delete(chatId)
+      recoveryCleanups.delete(cleanupRecovery)
+    }
     messagesApi.setLoading(chatId, true)
 
     const token: string = localStorage.getItem('token') || ''
     const onRecoveredRow = (row: BotMessageRow): void => {
+      releaseRecovery()
       patchMessage(chatId, pendingIndex, (msg) => recoveredRowPatch(row, msg))
       messagesApi.setLoading(chatId, false)
     }
     const fallbackToPolling = (): void => {
+      // 防重入位继续持有到轮询结束：轮询期间的重复接管同样会写出重复内容
       startRecoveryPolling(chatId, pendingIndex, () => {
         // 始终无结果：标记中断（刷新仍可从历史恢复）
+        releaseRecovery()
         patchMessage(chatId, pendingIndex, (msg) => ({ ...msg, interrupted: true }))
         messagesApi.setLoading(chatId, false)
-      }, onRecoveredRow)
+      }, onRecoveredRow, releaseRecovery)
     }
 
     // 重连回放续播（服务端缓冲了本轮事件）：优先于轮询——能看到实时过程而非干等结果
@@ -765,30 +786,41 @@ export function useChatStream(options: {
         stallTimer = null
       }
     }
+    const closeReplayEs = (): void => {
+      if (replayEs) {
+        replayEs.close()
+        replayEs = null
+      }
+    }
+    // 卸载/清理：关流停表并释放防重入位（组件重建后允许重新接管）
+    const cleanupRecovery = (): void => {
+      clearStallTimer()
+      closeReplayEs()
+      recoveringChatIds.delete(chatId)
+    }
+    recoveryCleanups.add(cleanupRecovery)
     // 回放流也有 15s 心跳喂狗；静默超时视为断流，走重连/回退
     const rearmStallTimer = (): void => {
       clearStallTimer()
       stallTimer = setTimeout(() => {
-        if (!messagesApi.chatLoadingMap.value.get(chatId)) return
-        if (replayEs) {
-          replayEs.close()
-          replayEs = null
+        if (!messagesApi.chatLoadingMap.value.get(chatId)) {
+          releaseRecovery()
+          return
         }
+        closeReplayEs()
         if (attempts > 0) {
           attempts--
           connect()
         } else {
+          releaseRecovery()
           fallbackToPolling()
         }
       }, STREAM_WATCHDOG_TIMEOUT_MS)
     }
 
     const finishReplay = (): void => {
-      clearStallTimer()
-      if (replayEs) {
-        replayEs.close()
-        replayEs = null
-      }
+      cleanupRecovery()
+      releaseRecovery()
       messagesApi.setLoading(chatId, false)
     }
 
@@ -804,8 +836,9 @@ export function useChatStream(options: {
           parsed = null
         }
         if (!parsed) return
-        if (parsed.type === 'replay_unavailable') {
-          // 回合已结束/缓冲停用：服务端随即关流，onerror 里回退轮询
+        if (parsed.type === 'replay_unavailable' || parsed.type === 'superseded') {
+          // 回合已结束/缓冲停用/连接被更新的接管顶掉：服务端随即关流，
+          // onerror 里回退恢复轮询（被顶掉时轮询由持有直播的那个端负责收尾）
           attempts = 0
           return
         }
@@ -824,17 +857,18 @@ export function useChatStream(options: {
         }
       }
       replayEs.onerror = () => {
-        if (replayEs) {
-          replayEs.close()
-          replayEs = null
-        }
+        closeReplayEs()
         clearStallTimer()
         // 已被其他路径收尾（如停止后 done 已应用）则不再接续
-        if (!messagesApi.chatLoadingMap.value.get(chatId)) return
+        if (!messagesApi.chatLoadingMap.value.get(chatId)) {
+          releaseRecovery()
+          return
+        }
         if (attempts > 0) {
           attempts--
           connect()
         } else {
+          releaseRecovery()
           fallbackToPolling()
         }
       }
@@ -845,6 +879,15 @@ export function useChatStream(options: {
   /** 组件卸载前关闭所有流式连接 */
   function cleanup(): void {
     disarmStreamWatchdog()
+    for (const fn of recoveryCleanups) {
+      try {
+        fn()
+      } catch (ignored) {
+        // 清理回调失败不影响其余清理
+      }
+    }
+    recoveryCleanups.clear()
+    recoveringChatIds.clear()
     if (eventSource) {
       eventSource.close()
       eventSource = null

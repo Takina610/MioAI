@@ -21,6 +21,8 @@ import java.util.Map;
  *  done        结束标记        {}
  *  stopped     用户主动中断     {}（部分过程已落库，前端状态行显示"已停止"）
  *  error       错误            {content}
+ *  replay_unavailable 重连回放不可用 {content}（回合不在执行/缓冲停用，前端回退落库还原）
+ *  superseded  连接被顶掉      {content}（新接管请求已替换本连接，前端放弃本流走还原）
  *
  * tool_use / tool_args / tool_result 携带同一 id 配对（端点未返回 id 时回退按顺序配对）。
  */

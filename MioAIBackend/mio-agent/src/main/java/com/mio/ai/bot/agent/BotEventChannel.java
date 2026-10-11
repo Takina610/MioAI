@@ -438,8 +438,11 @@ public class BotEventChannel {
     /**
      * 断线重连接管（Claude/ChatGPT 式重连回放）：先把缓冲中 seq &gt; lastSeenSeq 的事件
      * 补送给新连接，再把后续直播切换过去。与 emit 同锁，回放与新事件之间无缝隙。
+     * 被顶掉的旧连接立即回一条 superseded 并关闭——旧端不再空耗，也不会在
+     * stall 后重连把 emitter 抢回去（多端/重复接管时 emitter 抖动）。
      */
     public void attachReplay(SseEmitter newEmitter, long lastSeenSeq) {
+        SseEmitter superseded;
         synchronized (emitLock) {
             if (!replayDisabled) {
                 for (BufferedEvent event : replayBuffer) {
@@ -448,7 +451,18 @@ public class BotEventChannel {
                     }
                 }
             }
+            superseded = emitter;
             emitter = newEmitter;
+        }
+        if (superseded != null && superseded != newEmitter) {
+            // 不入缓冲不占 seq：纯单连接信令，接收端据此放弃本流
+            SseStreams.sendTyped(superseded, SseChunk.content("superseded",
+                    "连接已被新的接管请求替换").fields());
+            try {
+                superseded.complete();
+            } catch (IllegalStateException ignored) {
+                // 连接已被容器关闭
+            }
         }
     }
 
