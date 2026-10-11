@@ -9,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.multipart.MultipartException;
 
 import java.util.stream.Collectors;
 
@@ -43,6 +44,15 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.joining("; "));
         log.error("参数校验失败, e: {}", msg);
         return ResultUtils.error(ErrorCode.PARAMS_ERROR, msg);
+    }
+
+    /**
+     * 文件上传请求缺少 multipart 表单（多为前端 Content-Type 被覆盖），给明确提示而非系统错误
+     */
+    @ExceptionHandler
+    public BaseResponse<?> exceptionHandler(MultipartException e) {
+        log.error("multipart 请求解析失败, e: {}", e.getMessage());
+        return ResultUtils.error(ErrorCode.PARAMS_ERROR, "文件上传请求格式错误，请重新选择文件后上传");
     }
 
     @ExceptionHandler

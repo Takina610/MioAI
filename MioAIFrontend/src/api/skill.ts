@@ -31,6 +31,8 @@ export function installSkillZip(file: File): Promise<SkillZipInstallResult> {
     url: '/skills/zip',
     method: 'post',
     data: formData,
+    // 实例默认 Content-Type 是 application/json，会把 FormData 盖成 JSON 头导致后端判定非 multipart
+    headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 120000
   })
 }
