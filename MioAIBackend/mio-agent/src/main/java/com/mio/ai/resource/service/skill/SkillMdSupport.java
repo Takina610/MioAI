@@ -61,15 +61,14 @@ public final class SkillMdSupport {
 
     /**
      * 解析 SKILL.md frontmatter（--- 包裹区块），key 统一小写，只保留文本值。
-     * 值可能是带引号或跨行文本，逐行切片并合并缩进续行；解析失败静默返回空映射。
+     * 支持带引号值、YAML 块标量（| >）与多行折叠；解析失败静默返回空映射，由调用方用目录名兜底。
      */
     public static Map<String, String> parseFrontmatter(String content) {
         Map<String, String> result = new java.util.LinkedHashMap<>();
         if (content == null) {
             return result;
         }
-        String normalized = content.stripLeading();
-        normalized = normalized.replace("﻿", "");
+        String normalized = content.stripLeading().replace("\uFEFF", "");
         String[] lines = normalized.split("\n", -1);
         if (lines.length < 2 || !"---".equals(lines[0].trim())) {
             return result;
@@ -86,9 +85,13 @@ public final class SkillMdSupport {
             if (colon > 0 && !Character.isWhitespace(line.charAt(0))) {
                 flush(result, currentKey, currentValue);
                 currentKey = trimmed.substring(0, colon).trim().toLowerCase(Locale.ROOT);
-                currentValue.append(trimmed.substring(colon + 1).trim());
+                String rawValue = trimmed.substring(colon + 1).trim();
+                // 块标量指示符（| > 及其修饰）不是值本身，实际内容是后续缩进行
+                if (!rawValue.matches("[|>][+-]?")) {
+                    currentValue.append(rawValue);
+                }
             } else if (currentKey != null && !trimmed.isEmpty()) {
-                // 多行值（YAML 折叠语法）：追加并以空格连接
+                // 多行值：追加并以空格连接（description 是单行字段，折叠即可）
                 currentValue.append(' ').append(trimmed);
             }
         }
@@ -124,12 +127,22 @@ public final class SkillMdSupport {
     }
 
     /**
+     * 截断到数据库列长：超长直接入库会以数据溢出异常的形式变成"系统错误"
+     */
+    public static String truncate(String value, int max) {
+        if (value == null || value.length() <= max) {
+            return value;
+        }
+        return value.substring(0, max);
+    }
+
+    /**
      * 仓库内 SKILL.md 的跳转链接（blob 页）
      */
     public static String buildDocUrl(String owner, String repo, String branch, String skillPath) {
         String pathInRepo = (skillPath == null || skillPath.isEmpty())
                 ? "SKILL.md"
                 : skillPath + "/SKILL.md";
-        return "https://github.com/" + owner + "/" + repo + "/blob/" + branch + "/" + pathInRepo;
+        return truncate("https://github.com/" + owner + "/" + repo + "/blob/" + branch + "/" + pathInRepo, 500);
     }
 }

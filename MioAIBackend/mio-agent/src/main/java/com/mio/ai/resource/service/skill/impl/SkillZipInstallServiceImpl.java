@@ -18,6 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -27,6 +28,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipException;
 import java.util.zip.ZipInputStream;
 
 /**
@@ -91,7 +93,7 @@ public class SkillZipInstallServiceImpl implements SkillZipInstallService {
 
             Skill skill = new Skill();
             skill.setUserId(userId);
-            skill.setName(name);
+            skill.setName(SkillMdSupport.truncate(name, 100));
             skill.setDescription(SkillMdSupport.descriptionOf(frontmatter, 500));
             skill.setContent(new String(markerBytes, StandardCharsets.UTF_8));
             skill.setFiles(skillDir.files().isEmpty() ? null : JacksonUtil.writeValueAsString(toFileList(skillDir.files())));
@@ -105,11 +107,32 @@ public class SkillZipInstallServiceImpl implements SkillZipInstallService {
         return vo;
     }
 
-    /** 读取 zip 条目：路径归一化 + zip-slip 校验 + 数量/大小上限；只保留技能相关文件 */
+    /**
+     * 读取 zip 条目。文件名编码优先按 UTF-8；Windows 中文系统压缩的 zip 文件名是 GBK
+     * 且不带 UTF-8 标志位，强解会抛 MALFORMED，此时用 GB18030 重读一次
+     */
     private Map<String, byte[]> readEntries(MultipartFile file) {
+        try {
+            return readEntries(file, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            try {
+                return readEntries(file, Charset.forName("GB18030"));
+            } catch (IOException io) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, "读取 zip 文件失败: " + io.getMessage());
+            } catch (IllegalArgumentException e2) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, "无法读取压缩包内的文件名，zip 文件可能已损坏");
+            }
+        } catch (ZipException e) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "压缩包无法解析：可能已加密、已损坏或不是标准 zip 格式");
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "读取 zip 文件失败: " + e.getMessage());
+        }
+    }
+
+    private Map<String, byte[]> readEntries(MultipartFile file, Charset charset) throws IOException {
         Map<String, byte[]> entries = new TreeMap<>();
         try (InputStream in = file.getInputStream();
-             ZipInputStream zip = new ZipInputStream(in, StandardCharsets.UTF_8)) {
+             ZipInputStream zip = new ZipInputStream(in, charset)) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
                 if (entry.isDirectory()) {
@@ -132,8 +155,6 @@ public class SkillZipInstallServiceImpl implements SkillZipInstallService {
                 }
                 entries.put(path, bytes);
             }
-        } catch (IOException e) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "读取 zip 文件失败: " + e.getMessage());
         }
         return entries;
     }

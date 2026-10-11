@@ -172,15 +172,15 @@ public class SkillGithubImportServiceImpl implements SkillGithubImportService {
         String name = frontmatter.getOrDefault("name", baseName(skillDir));
         Skill skill = new Skill();
         skill.setUserId(userId);
-        skill.setName(name);
+        skill.setName(SkillMdSupport.truncate(name, 100));
         skill.setDescription(SkillMdSupport.descriptionOf(frontmatter, 500));
         skill.setRepoOwner(owner);
         skill.setRepoName(repo);
         skill.setRepoBranch(branch);
         skill.setSkillPath(skillDir);
         skill.setDocUrl(SkillMdSupport.buildDocUrl(owner, repo, branch, skillDir));
-        skill.setSourceUrl("https://github.com/" + owner + "/" + repo
-                + "/tree/" + branch + (skillDir.isEmpty() ? "" : "/" + skillDir));
+        skill.setSourceUrl(SkillMdSupport.truncate("https://github.com/" + owner + "/" + repo
+                + "/tree/" + branch + (skillDir.isEmpty() ? "" : "/" + skillDir), 500));
         skill.setStatus(SkillStatusEnum.ACTIVE.getCode());
         skill.setInstalled(0);
         skillMapper.insert(skill);
@@ -245,7 +245,8 @@ public class SkillGithubImportServiceImpl implements SkillGithubImportService {
         skill.setRepoBranch(branch);
         skill.setDocUrl(SkillMdSupport.buildDocUrl(owner, repo, branch, skillDir));
         // frontmatter 可能比登记时更新，一并刷新展示信息
-        skill.setName(frontmatter.getOrDefault("name", StrUtil.blankToDefault(skill.getName(), baseName(skillDir))));
+        skill.setName(SkillMdSupport.truncate(
+                frontmatter.getOrDefault("name", StrUtil.blankToDefault(skill.getName(), baseName(skillDir))), 100));
         skill.setDescription(SkillMdSupport.descriptionOf(frontmatter, 500));
     }
 
@@ -282,8 +283,8 @@ public class SkillGithubImportServiceImpl implements SkillGithubImportService {
             exist.setRepoName(repo);
             exist.setRepoBranch(branch);
             exist.setSkillPath(skillDir);
-            exist.setSourceUrl("https://github.com/" + owner + "/" + repo
-                    + "/tree/" + branch + (skillDir.isEmpty() ? "" : "/" + skillDir));
+            exist.setSourceUrl(SkillMdSupport.truncate("https://github.com/" + owner + "/" + repo
+                    + "/tree/" + branch + (skillDir.isEmpty() ? "" : "/" + skillDir), 500));
             exist.setStatus(SkillStatusEnum.ACTIVE.getCode());
         }
         fetchContent(exist);

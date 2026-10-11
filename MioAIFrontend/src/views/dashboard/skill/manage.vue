@@ -382,6 +382,12 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .skill-card {
+  cursor: pointer;
+
+  &:hover .card-footer {
+    opacity: 0;
+  }
+
   .card-stats {
     display: flex;
     align-items: center;
