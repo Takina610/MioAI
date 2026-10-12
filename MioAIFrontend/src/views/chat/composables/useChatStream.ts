@@ -532,7 +532,7 @@ export function useChatStream(options: {
       case 'retry': {
         const attempt = Number(parsed.attempt) || 1
         const maxAttempts = Number(parsed.maxAttempts) || attempt
-        return { ...msg, retryNotice: `网络波动，正在重试（${attempt}/${maxAttempts}）` }
+        return { ...msg, retryNotice: `正在重试（${attempt}/${maxAttempts}）` }
       }
       case 'notice':
         // 瞬态系统提示（如 MCP 工具本轮装配失败）：不落历史，刷新后不保留

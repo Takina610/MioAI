@@ -1,10 +1,9 @@
 <template>
   <div class="mio-bot-message">
-    <!-- 状态行：进行中显示已工作时长（瞬态重试/MCP失败时附提示）；用户中断显示"已停止"
+    <!-- 状态行：进行中显示已工作时长（MCP装配失败附提示）；用户中断显示"已停止"
          （工作过程保持可见，无折叠入口）；完成后显示总结行并可展开工作过程 -->
     <div v-if="isLoading" class="status-line running">
       <span>已工作 {{ elapsedText }}</span>
-      <span v-if="retryNotice" class="retry-notice">{{ retryNotice }}</span>
       <span v-if="mcpNotice" class="retry-notice">{{ mcpNotice }}</span>
     </div>
     <div v-else-if="stopped" class="status-line stopped">
@@ -116,6 +115,9 @@
         </template>
       </div>
     </CollapseTransition>
+
+    <!-- 重试提示：一条特殊消息行，出现在内容即将继续的位置（重试发生在尚无输出时，紧贴着即将流出的正文） -->
+    <div v-if="isLoading && retryNotice" class="retry-line">{{ retryNotice }}</div>
 
     <!-- 最终回答（最后一个过程块之后的文本；无过程块时渲染全部文本） -->
     <MarkdownView
@@ -532,6 +534,20 @@ function durationSuffix(block: ThinkingBlock): string {
       font-size: 13px;
     }
   }
+}
+
+// 重试提示（消息体内、内容即将继续的位置）：瞬态，不落历史
+.retry-line {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  margin: 2px 0 8px;
+  padding: 1px 8px;
+  border-radius: 8px;
+  background: #fff7e6;
+  color: #d48806;
+  font-size: 12px;
+  user-select: none;
 }
 
 .process-list {

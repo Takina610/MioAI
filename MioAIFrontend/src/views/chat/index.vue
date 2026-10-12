@@ -328,8 +328,11 @@ const activePlan = computed(() => {
   return null
 })
 
-// ---------- 上下文容量指示器：会话切换/智能体切换/轮次收尾时重估 ----------
+// ---------- 上下文容量指示器：会话/智能体切换、轮次收尾刷新；轮次进行中每 5s 跟随步进 ----------
+// 轮次内 agent_message 的 WIP 行随每个模型步增量落库，干跑估算随之增长，轮询即可近似实时
 const contextUsage = ref<ContextUsageData | null>(null)
+let usageReqSeq = 0
+let usagePollTimer: number | undefined
 
 async function refreshContextUsage(): Promise<void> {
   const chatId = currentChatId.value
@@ -337,17 +340,36 @@ async function refreshContextUsage(): Promise<void> {
     contextUsage.value = null
     return
   }
+  const seq = ++usageReqSeq
   try {
-    contextUsage.value = await getContextUsage(chatId, agentId.value)
+    const data = await getContextUsage(chatId, agentId.value)
+    // 只应用最新一次请求：轮询重叠/切换会话时丢弃过期响应
+    if (seq === usageReqSeq && currentChatId.value === chatId) {
+      contextUsage.value = data
+    }
   } catch {
     // 非关键指标：失败静默，指示器维持现状
   }
 }
 
+function stopUsagePolling(): void {
+  if (usagePollTimer) {
+    window.clearInterval(usagePollTimer)
+    usagePollTimer = undefined
+  }
+}
+
 watch([currentChatId, agentId], () => refreshContextUsage())
 watch(isLoading, (now, was) => {
-  if (was && !now) refreshContextUsage()
+  if (now) {
+    stopUsagePolling()
+    usagePollTimer = window.setInterval(refreshContextUsage, 5000)
+  } else {
+    stopUsagePolling()
+    if (was) refreshContextUsage()
+  }
 })
+onUnmounted(stopUsagePolling)
 
 // ---------- 左下角常驻机器人（情绪随会话执行情况实时切换） ----------
 // 待上传附件：选中文件即开始上传到沙箱（卡片带实时进度环）。

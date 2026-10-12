@@ -33,7 +33,7 @@ spring:
       api-key: ${MODEL_API_KEY:mio-local-o2a-key-2026}
       base-url: ${MODEL_BASE_URL:http://127.0.0.1:8090/v1}
       chat:
-        model: ${MODEL_CHAT_MODEL:fledge-alpha-free}
+        model: ${MODEL_CHAT_MODEL:step-5-preview-free}
       embedding:
         # 42x 网关（OpenAI 兼容 /v1/embeddings），mistral-embed 输出 1024 维
         api-key: ${EMBED-APIKEY:${EMBED_APIKEY:your-embed-api-key}}
