@@ -30,6 +30,9 @@
               <span v-else class="stat-item">社区分享</span>
               <span class="stat-item author" :title="skill.userName || ''">{{ skill.userName || '匿名' }}</span>
             </div>
+            <div class="card-footer">
+              <span class="update-time">更新于 {{ formatDate(skill.updateTime || skill.createTime) }}</span>
+            </div>
             <div class="card-actions" @click.stop>
               <a-button v-if="skill.repoOwner" class="action-btn" @click="openExternal(docUrlOf(skill))">
                 查看
@@ -43,9 +46,6 @@
                 安装
               </a-button>
               <a-button v-else class="action-btn" disabled>已拥有</a-button>
-            </div>
-            <div class="card-footer">
-              <span class="update-time">更新于 {{ formatDate(skill.updateTime || skill.createTime) }}</span>
             </div>
           </div>
         </a-col>

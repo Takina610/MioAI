@@ -97,6 +97,9 @@
                   </span>
                   <a-tag v-if="skill.status === 0" color="red" class="vis-tag">已禁用</a-tag>
                 </div>
+                <div class="card-footer">
+                  <span class="update-time">更新于 {{ formatDate(skill.updateTime || skill.createTime) }}</span>
+                </div>
                 <div class="card-actions" @click.stop>
                   <a-button
                     v-if="skill.docUrl"
@@ -123,9 +126,6 @@
                     卸载
                   </a-button>
                   <a-button class="action-btn danger-btn" @click="confirmDelete(skill)">删除</a-button>
-                </div>
-                <div class="card-footer">
-                  <span class="update-time">更新于 {{ formatDate(skill.updateTime || skill.createTime) }}</span>
                 </div>
               </div>
             </a-col>

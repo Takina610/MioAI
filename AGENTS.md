@@ -29,7 +29,7 @@ git push origin        # 等价于 git push origin master:main
 
 - 长任务（向量化、批量解析等 SSE/轮询任务）必须同时满足：实时进度反馈（进度条+当前处理项，SSE progress 事件不能丢弃）、路由离开确认（告知任务后台继续+如何恢复）、`beforeunload` 关页守卫。只给按钮转圈不算反馈。
 - 控件限制优先于文字说明：能用 maxlength/minmax/disabled 表达的规则不写成文字。
-- 列表卡片操作用 hover 浮现（`.dash-card .card-actions` 公共样式：绝对定位 + hover 显现 + footer 淡出），对齐智能体、MCP、技能、知识库列表；不要改成常显覆盖（用户 2026-10-12 拍板）。
+- 列表卡片操作用 hover 浮现（`.dash-card .card-actions` 公共样式：绝对定位 + hover 显现 + footer 淡出），对齐智能体、MCP、技能、知识库列表；不要改成常显覆盖（用户 2026-10-12 拍板）。DOM 顺序必须是 **card-footer 在前、card-actions 在后（最后一个子元素）**——footer 排在 actions 之后会拦截浮动按钮的命中（技能页实测按钮点击失效），后加卡片内容时注意保持该顺序。
 
 ### 视觉
 
