@@ -32,6 +32,10 @@ public class BotEventChannel {
     private static final String INTERRUPTED_TOOL_RESULT =
             "<tool_use_error>Interrupted before completion</tool_use_error>";
 
+    /** 沙箱技能路径：skills/&lt;skillId&gt;/（SkillRuntime.materialize 的落盘约定） */
+    private static final java.util.regex.Pattern SKILL_PATH_PATTERN =
+            java.util.regex.Pattern.compile("skills/(\\d+)/");
+
     private final AgentMessageService agentMessageService;
     private final String chatId;
     private final Long userId;
@@ -65,6 +69,9 @@ public class BotEventChannel {
     // MCP 工具描述表（MioBot 注入）：tool_use 块附带描述，前端工具行展示名称与描述
     private volatile Map<String, String> mcpToolDesc = Map.of();
 
+    // 技能名表（skillId → 名称，MioBot 注入）：工具读取 skills/<id>/ 文件时在工具行标注来源技能
+    private volatile Map<String, String> skillNames = Map.of();
+
     // WIP 行（增量落库）：轮次开始即建行，每个模型步刷新 blocks，正常收尾删除。
     // 进程崩溃/被杀时该行保留已流出的部分过程，刷新页面与下一轮水合都拿得到
     private volatile Long wipRowId;
@@ -89,6 +96,11 @@ public class BotEventChannel {
     /** MCP 工具描述表（注册名 → 描述，MioBot 构造时注入）：tool_use 行据此展示工具描述 */
     public void setMcpToolDesc(Map<String, String> mcpToolDesc) {
         this.mcpToolDesc = mcpToolDesc == null ? Map.of() : mcpToolDesc;
+    }
+
+    /** 技能名表（skillId → 名称，MioBot 构造时注入）：工具行据此标注技能来源 */
+    public void setSkillNames(Map<String, String> skillNames) {
+        this.skillNames = skillNames == null ? Map.of() : skillNames;
     }
 
     /** Agent 产出文件：追加附件展示块并推送事件（前端渲染为可下载附件） */
@@ -172,11 +184,11 @@ public class BotEventChannel {
             full = full.substring(0, TOOL_RESULT_PERSIST_CAP)
                     + "\n[...result truncated at " + TOOL_RESULT_PERSIST_CAP + " chars...]";
         }
-        completeDisplayTool(id, tool, full);
+        String skill = completeDisplayTool(id, tool, full);
         int previewCap = "Agent".equals(tool) ? TOOL_RESULT_PERSIST_CAP : TOOL_RESULT_PREVIEW_LENGTH;
         String preview = full.length() > previewCap
                 ? full.substring(0, previewCap) + "…" : full;
-        emit(SseChunk.toolResult(id, tool, preview).fields());
+        emit(SseChunk.toolResult(id, tool, preview, skill).fields());
     }
 
     /**
@@ -215,16 +227,55 @@ public class BotEventChannel {
         emit(SseChunk.kbContext(groups).fields());
     }
 
-    /** 技能装配摘要：追加 skill 展示块并推送事件（落库，单行不展开） */
-    public void skillContext(List<Map<String, Object>> skills) {
-        if (skills == null || skills.isEmpty()) {
+    /**
+     * 知识库引用行（回合收尾调用）：检索是逐轮自动注入的，但摘要行只在回答实际引用了知识库文件时出现——
+     * 按回答文本中出现的文件名过滤分组；引用行插到展示块最前（前端固定置顶渲染）。
+     * 相关度分数无法可靠区分"真相关"与"弱相似噪声"（实测闲聊也能命中 0.7+），引用行为是更诚实的"使用"信号。
+     */
+    public void emitKbCitations(List<Map<String, Object>> groups) {
+        if (groups == null || groups.isEmpty()) {
+            return;
+        }
+        StringBuilder answer = new StringBuilder();
+        for (Map<String, Object> b : displayBlocks) {
+            if ("text".equals(b.get("type")) && b.get("text") != null) {
+                answer.append(b.get("text"));
+            }
+        }
+        if (answer.isEmpty()) {
+            return;
+        }
+        List<Map<String, Object>> cited = new ArrayList<>();
+        for (Map<String, Object> group : groups) {
+            Object rawHits = group.get("hits");
+            if (!(rawHits instanceof List<?> hits) || hits.isEmpty()) {
+                continue;
+            }
+            List<Map<String, Object>> used = new ArrayList<>();
+            for (Object raw : hits) {
+                if (!(raw instanceof Map<?, ?> hit)) {
+                    continue;
+                }
+                Object fileName = ((Map<String, Object>) hit).get("fileName");
+                if (fileName != null && !String.valueOf(fileName).isBlank()
+                        && answer.indexOf(String.valueOf(fileName)) >= 0) {
+                    used.add((Map<String, Object>) hit);
+                }
+            }
+            if (!used.isEmpty()) {
+                Map<String, Object> citedGroup = new LinkedHashMap<>(group);
+                citedGroup.put("hits", used);
+                cited.add(citedGroup);
+            }
+        }
+        if (cited.isEmpty()) {
             return;
         }
         Map<String, Object> block = new LinkedHashMap<>();
-        block.put("type", "skill");
-        block.put("skills", skills);
-        displayBlocks.add(block);
-        emit(SseChunk.skillContext(skills).fields());
+        block.put("type", "kb");
+        block.put("groups", cited);
+        displayBlocks.add(0, block);
+        emit(SseChunk.kbContext(cited).fields());
     }
 
     /** 向用户提问：追加问答展示块并推送事件（答题走 /bot/answer） */
@@ -507,7 +558,8 @@ public class BotEventChannel {
         return replayDisabled;
     }
 
-    private void completeDisplayTool(String id, String tool, String result) {
+    /** 配对收尾工具块；块参数涉及沙箱 skills/&lt;id&gt;/ 文件时标注来源技能（返回技能名，无则 null） */
+    private String completeDisplayTool(String id, String tool, String result) {
         for (int i = displayBlocks.size() - 1; i >= 0; i--) {
             Map<String, Object> b = displayBlocks.get(i);
             if (!"tool".equals(b.get("type")) || !"running".equals(b.get("status"))) {
@@ -518,7 +570,7 @@ public class BotEventChannel {
             if (idMatch || nameMatch) {
                 b.put("status", "done");
                 b.put("result", result);
-                return;
+                return markSkillUsage(b);
             }
         }
         // 没有配对的调用块（异常兜底）：补一个已完成块保证结果不丢
@@ -528,6 +580,33 @@ public class BotEventChannel {
         block.put("result", result);
         block.put("status", "done");
         displayBlocks.add(block);
+        return null;
+    }
+
+    /**
+     * 技能使用检测：技能经系统提示清单按需暴露，模型用 Read/Bash 触达 skills/&lt;id&gt;/ 下的文件即视为使用该技能，
+     * 工具行标注 skill 名（不做会话开头的"加载技能"行——是否用技能由模型按需决定）
+     */
+    private String markSkillUsage(Map<String, Object> block) {
+        if (skillNames.isEmpty()) {
+            return null;
+        }
+        String tool = String.valueOf(block.get("tool"));
+        boolean pathAware = "Read".equals(tool) || "readFile".equals(tool)
+                || "Bash".equals(tool) || "executeTerminalCommand".equals(tool) || "runCommand".equals(tool);
+        if (!pathAware) {
+            return null;
+        }
+        String args = String.valueOf(block.get("args"));
+        java.util.regex.Matcher matcher = SKILL_PATH_PATTERN.matcher(args);
+        while (matcher.find()) {
+            String name = skillNames.get(matcher.group(1));
+            if (name != null && !name.isBlank()) {
+                block.put("skill", name);
+                return name;
+            }
+        }
+        return null;
     }
 
     /** 展示块文本增量：合并同类末块（与前端渲染逻辑同构） */

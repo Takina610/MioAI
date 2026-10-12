@@ -95,9 +95,8 @@ public class MioBot {
     /** 本轮 MCP 装配失败摘要（控制器注入）：非空时会话开头发瞬态系统提示 */
     private volatile List<String> mcpFailures;
 
-    /** 本轮资源装配摘要（控制器注入）：轮次开头作为持久化摘要行下发给前端 */
+    /** 本轮知识库检索命中摘要（控制器注入）：回答实际引用时在收尾落引用行 */
     private volatile List<Map<String, Object>> kbGroups;
-    private volatile List<Map<String, Object>> skillSummaries;
 
     public void setUserGroupSeq(Long userGroupSeq) {
         this.userGroupSeq = userGroupSeq;
@@ -109,10 +108,6 @@ public class MioBot {
 
     public void setKbGroups(List<Map<String, Object>> kbGroups) {
         this.kbGroups = kbGroups;
-    }
-
-    public void setSkillSummaries(List<Map<String, Object>> skillSummaries) {
-        this.skillSummaries = skillSummaries;
     }
 
     public MioBot(ChatModel chatModel,
@@ -161,6 +156,12 @@ public class MioBot {
             }
         }
         this.channel.setMcpToolDesc(mcpToolDesc);
+        // 技能名表：工具读取 skills/<id>/ 文件时在工具行标注来源技能（技能是否使用由模型按需决定）
+        Map<String, String> skillNames = new LinkedHashMap<>();
+        for (Skill skill : this.skills) {
+            skillNames.put(String.valueOf(skill.getId()), skill.getName());
+        }
+        this.channel.setSkillNames(skillNames);
     }
 
     /**
@@ -235,13 +236,6 @@ public class MioBot {
                 }
                 // WIP 行：轮次开始即落库，此后每个模型步增量刷新（进程崩溃后过程可恢复）
                 channel.beginAssistantWip();
-                // 资源摘要行（持久化）：知识库检索逐轮呈现；技能会话首轮单行呈现。
-                // MCP 不发摘要行——是否用工具由模型按需决定，真实调用走 tool_use 行（对齐 Bash/WebSearch）
-                boolean sessionStart = hydrated.entries().isEmpty();
-                channel.kbContext(kbGroups);
-                if (sessionStart) {
-                    channel.skillContext(skillSummaries);
-                }
                 // 轮次开始前刷新脱离式后台任务：沙箱侧已完结的补状态并入队 task-notification
                 runContext.tasks().refreshDetached(chatId, runContext.fs());
                 java.util.Set<String> outputsBefore = snapshotOutputs(runContext.fs());
@@ -251,6 +245,8 @@ public class MioBot {
 
             long durationMs = System.currentTimeMillis() - startTime;
             channel.abortRunningTools();
+            // 知识库引用行：回答实际引用了检索片段才出现（引用驱动的"使用"信号，弱相似噪声不显示）
+            channel.emitKbCitations(kbGroups);
             boolean persisted = channel.persistDisplay("assistant", null, durationMs);
             channel.finishAssistantWip(persisted);
             channel.usage((int) engine.inputTokens(), (int) engine.outputTokens(), durationMs);

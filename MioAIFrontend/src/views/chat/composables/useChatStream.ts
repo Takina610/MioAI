@@ -608,6 +608,7 @@ export function useChatStream(options: {
       return [...blocks, {
         type: 'tool',
         tool,
+        skill: parsed.skill ? String(parsed.skill) : undefined,
         result: parsed.content !== undefined ? String(parsed.content) : undefined,
         status: 'done'
       }]
@@ -617,7 +618,8 @@ export function useChatStream(options: {
       return {
         ...b,
         status: 'done',
-        result: parsed.content !== undefined ? String(parsed.content) : b.result
+        result: parsed.content !== undefined ? String(parsed.content) : b.result,
+        skill: parsed.skill ? String(parsed.skill) : b.skill
       }
     })
   }

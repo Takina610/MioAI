@@ -233,10 +233,9 @@ public class MioBotController {
                 fileTransfer, com.mio.ai.bot.model.dto.AttachmentItem.parseList(attachments));
         // 编辑重发：新 user 行沿用被编辑轮次的组锚（版本组持久化）
         mioBot.setUserGroupSeq(groupSeq);
-        // 资源装配摘要（持久化到会话摘要行）：检索命中片段、技能清单；MCP 调用走工具行不经摘要
+        // 知识库命中摘要：回答实际引用时在收尾落引用行；MCP/技能由模型按需使用，走工具行标注
         mioBot.setMcpFailures(mcp.failures());
         mioBot.setKbGroups(knowledge.groups());
-        mioBot.setSkillSummaries(botResourceService.skillSummaries(skills));
         // 任务真正结束（含异常）时解除会话占用与轮次登记
         mioBot.setOnFinish(() -> {
             ACTIVE_CHATS.remove(chatId);

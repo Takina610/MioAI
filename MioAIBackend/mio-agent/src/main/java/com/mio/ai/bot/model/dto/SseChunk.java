@@ -16,8 +16,7 @@ import java.util.Map;
  *  plan        任务清单快照     {steps:[{index,description,status}]}
  *  heartbeat   保活心跳        {}（长工具执行期间维持连接，前端忽略内容仅重挂看门狗）
  *  retry       瞬态失败自动重试 {attempt, maxAttempts, reason}（本轮尚无任何输出时无感重发，前端提示后自行恢复）
- *  kb_context  知识库检索摘要   {groups:[{kbId, kbName, hits:[{fileName, snippet, score}]}]}（随 blocks 落库，可展开看命中片段）
- *  skill_context 技能装配摘要   {skills:[{name, description}]}（随 blocks 落库，会话首轮单行展示；MCP 工具是否调用由模型按需决定，调用时走 tool_use 行）
+ *  kb_context  知识库引用摘要   {groups:[{kbId, kbName, hits:[{fileName, snippet, score}]}]}（回合收尾按回答实际引用的文件过滤后落库，可展开看片段）
  *  notice      系统提示         {content}（瞬态不落库，如 MCP 工具本轮装配失败）
  *  usage       用量尾块        {inputTokens, outputTokens, durationMs}
  *  done        结束标记        {}
@@ -67,11 +66,17 @@ public record SseChunk(Map<String, Object> fields) {
     }
 
     public static SseChunk toolResult(String id, String tool, String content) {
+        return toolResult(id, tool, content, null);
+    }
+
+    /** 技能使用标记（skill 可空）：工具读取了沙箱 skills/&lt;id&gt;/ 下的文件时，前端在工具行标注来源技能 */
+    public static SseChunk toolResult(String id, String tool, String content, String skill) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("type", "tool_result");
         putIfNotBlank(map, "id", id);
         map.put("tool", tool);
         map.put("content", content);
+        putIfNotBlank(map, "skill", skill);
         return new SseChunk(map);
     }
 
@@ -95,19 +100,11 @@ public record SseChunk(Map<String, Object> fields) {
         return content("notice", content);
     }
 
-    /** 知识库检索摘要（落库）：本轮实际注入的检索命中，按知识库分组（hits 已截断为可读摘要） */
+    /** 知识库引用摘要（落库）：回答实际引用的检索命中，按知识库分组（hits 已截断为可读摘要） */
     public static SseChunk kbContext(List<Map<String, Object>> groups) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("type", "kb_context");
         map.put("groups", groups);
-        return new SseChunk(map);
-    }
-
-    /** 技能装配摘要（落库）：本轮物化进沙箱的技能清单 */
-    public static SseChunk skillContext(List<Map<String, Object>> skills) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("type", "skill_context");
-        map.put("skills", skills);
         return new SseChunk(map);
     }
 

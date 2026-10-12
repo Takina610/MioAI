@@ -11,7 +11,7 @@
       <span>已停止</span>
     </div>
     <div
-      v-else-if="processBlocks.length"
+      v-else-if="hasProcessArea"
       class="status-line done"
       @click="processExpanded = !processExpanded"
     >
@@ -27,7 +27,13 @@
       :open="isLoading || stopped || processExpanded || holdProcessOpen"
       :seam-gap="PROCESS_SEAM_GAP"
     >
-      <div v-if="processBlocks.length" class="process-list">
+      <div v-if="hasProcessArea" class="process-list">
+        <!-- 知识库引用行：回合收尾按回答实际引用生成，固定置顶（与块序无关） -->
+        <ResourceRow
+          v-for="(kbBlock, ki) in kbBlocks"
+          :key="`kb-${ki}`"
+          :block="kbBlock"
+        />
         <template v-for="item in processBlocks" :key="item.index">
           <!-- 文本块（过程中的叙述） -->
           <MarkdownView
@@ -113,9 +119,9 @@
             @open="openSubagent(item.block, item.index)"
           />
 
-          <!-- 资源摘要行：知识库命中 / MCP 装配（可展开），技能清单（单行） -->
+          <!-- 旧数据兼容：MCP 装配摘要/技能清单行（新回合不再产生，置顶的 kb 行在上方渲染） -->
           <ResourceRow
-            v-else-if="item.block.type === 'kb' || item.block.type === 'mcp' || item.block.type === 'skill'"
+            v-else-if="item.block.type === 'mcp' || item.block.type === 'skill'"
             :block="item.block"
           />
         </template>
@@ -268,11 +274,12 @@ onUnmounted(() => {
 /** 过程块 = 最后一个非文本块及其之前的全部（叙述/思考/工具），携带原 blocks 下标
  *  （思考块活跃判定与子代理面板定位键都按原下标）；其后的是最终回答。
  *  附件块不属过程：单独渲染在正文下方。子代理镜像工具行不进主消息流——
- *  它们归属右侧的子代理只读面板（子代理完成后其 Agent 行可点击查看） */
+ *  它们归属右侧的子代理只读面板（子代理完成后其 Agent 行可点击查看）。
+ *  知识库引用行同样是上下文行：固定置顶渲染，不参与"过程/正文"边界判定 */
 const lastNonTextIndex = computed(() => {
   for (let i = props.blocks.length - 1; i >= 0; i--) {
     const type = props.blocks[i].type
-    if (type !== 'text' && type !== 'attachments') return i
+    if (type !== 'text' && type !== 'attachments' && type !== 'kb') return i
   }
   return -1
 })
@@ -282,11 +289,18 @@ const processBlocks = computed(() => {
   const out: Array<{ block: MessageBlock; index: number }> = []
   for (let i = 0; i <= lastNonTextIndex.value; i++) {
     const block = props.blocks[i]
-    if (block.type === 'attachments' || isMirroredToolBlock(block)) continue
+    if (block.type === 'attachments' || block.type === 'kb' || isMirroredToolBlock(block)) continue
     out.push({ block, index: i })
   }
   return out
 })
+
+/** 知识库引用行（后端收尾按回答引用生成；旧数据在块首/块尾都兼容） */
+const kbBlocks = computed(() =>
+  props.blocks.filter((b): b is Extract<MessageBlock, { type: 'kb' }> => b.type === 'kb')
+)
+
+const hasProcessArea = computed(() => processBlocks.value.length > 0 || kbBlocks.value.length > 0)
 
 const outputAttachments = computed<AttachmentDisplay[]>(() =>
   messageAttachmentDisplays(

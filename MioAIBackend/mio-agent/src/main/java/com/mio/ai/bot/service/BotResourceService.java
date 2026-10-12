@@ -117,18 +117,6 @@ public class BotResourceService {
         }
     }
 
-    /** 技能清单摘要（会话摘要行展示用） */
-    public List<Map<String, Object>> skillSummaries(List<Skill> skills) {
-        List<Map<String, Object>> items = new ArrayList<>();
-        for (Skill skill : skills) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("name", skill.getName());
-            item.put("description", summaryText(skill.getDescription()));
-            items.add(item);
-        }
-        return items;
-    }
-
     /**
      * 检索并拼装可注入系统提示词的上下文，同时产出按库分组的命中摘要；落 rag_retrieval_log
      */

@@ -11,6 +11,8 @@ export interface ToolEvent {
   tool: string
   /** MCP 工具的描述（后端 tool_use 附带；内置工具无此字段） */
   desc?: string
+  /** 来源技能名（工具读取了沙箱 skills/<id>/ 文件时由后端标注） */
+  skill?: string
   args?: string
   status: 'running' | 'done'
   result?: string
