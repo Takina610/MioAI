@@ -17,8 +17,7 @@ import java.util.Map;
  *  heartbeat   保活心跳        {}（长工具执行期间维持连接，前端忽略内容仅重挂看门狗）
  *  retry       瞬态失败自动重试 {attempt, maxAttempts, reason}（本轮尚无任何输出时无感重发，前端提示后自行恢复）
  *  kb_context  知识库检索摘要   {groups:[{kbId, kbName, hits:[{fileName, snippet, score}]}]}（随 blocks 落库，可展开看命中片段）
- *  mcp_context MCP 装配摘要     {servers:[{id, name, description, tools:[{name, description}]}], failures:[...]}（落库，可展开看工具清单）
- *  skill_context 技能装配摘要   {skills:[{name, description}]}（落库，单行不展开）
+ *  skill_context 技能装配摘要   {skills:[{name, description}]}（随 blocks 落库，会话首轮单行展示；MCP 工具是否调用由模型按需决定，调用时走 tool_use 行）
  *  notice      系统提示         {content}（瞬态不落库，如 MCP 工具本轮装配失败）
  *  usage       用量尾块        {inputTokens, outputTokens, durationMs}
  *  done        结束标记        {}
@@ -46,10 +45,16 @@ public record SseChunk(Map<String, Object> fields) {
     }
 
     public static SseChunk toolUse(String id, String tool) {
+        return toolUse(id, tool, null);
+    }
+
+    /** MCP 工具调用附带描述（desc 可空）：前端在工具行上展示名称与描述，对齐内置工具行语义 */
+    public static SseChunk toolUse(String id, String tool, String desc) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("type", "tool_use");
         putIfNotBlank(map, "id", id);
         map.put("tool", tool);
+        putIfNotBlank(map, "desc", desc);
         return new SseChunk(map);
     }
 
@@ -95,15 +100,6 @@ public record SseChunk(Map<String, Object> fields) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("type", "kb_context");
         map.put("groups", groups);
-        return new SseChunk(map);
-    }
-
-    /** MCP 装配摘要（落库）：本轮注册的服务与工具清单 + 连接失败项 */
-    public static SseChunk mcpContext(List<Map<String, Object>> servers, List<String> failures) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("type", "mcp_context");
-        map.put("servers", servers);
-        map.put("failures", failures == null ? List.of() : failures);
         return new SseChunk(map);
     }
 

@@ -9,6 +9,8 @@ export interface ToolEvent {
   /** 与 tool_result 配对的调用 id（端点未返回时为空，按顺序兜底配对） */
   id?: string
   tool: string
+  /** MCP 工具的描述（后端 tool_use 附带；内置工具无此字段） */
+  desc?: string
   args?: string
   status: 'running' | 'done'
   result?: string

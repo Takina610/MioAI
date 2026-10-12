@@ -11,11 +11,9 @@ import com.mio.ai.resource.service.knowledge.KnowledgeBaseService;
 import com.mio.ai.resource.service.knowledge.KnowledgeRetrievalService;
 import com.mio.ai.resource.service.log.RagRetrievalLogService;
 import com.mio.ai.resource.service.mcp.McpClientManagerService;
-import com.mio.ai.resource.service.mcp.impl.McpClientManagerServiceImpl;
 import com.mio.ai.resource.service.skill.SkillService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.ToolCallback;
-import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -68,12 +66,10 @@ public class BotResourceService {
 
     /**
      * MCP 装配结果：可用回调 + 逐工具失败摘要（空摘要 = 全部可用）
-     * + 服务摘要（真实注册的工具名/描述，按服务分组，供会话摘要行展示）
      */
-    public record McpAssembly(ToolCallback[] callbacks, List<String> failures,
-                              List<Map<String, Object>> servers) {
+    public record McpAssembly(ToolCallback[] callbacks, List<String> failures) {
         public static McpAssembly empty() {
-            return new McpAssembly(new ToolCallback[0], List.of(), List.of());
+            return new McpAssembly(new ToolCallback[0], List.of());
         }
     }
 
@@ -98,44 +94,11 @@ public class BotResourceService {
                 result = mcpClientManagerService.initMcpToolsDetailed(
                         mcpClientManagerService.getAgentMcpTools(agentId));
             }
-            return new McpAssembly(result.callbacks(), result.failures(),
-                    buildServerSummaries(result.callbacks(), result.tools()));
+            return new McpAssembly(result.callbacks(), result.failures());
         } catch (Exception e) {
             log.error("装配 MCP 工具失败，本轮仅使用内置工具, agentId={}", agentId, e);
             return McpAssembly.empty();
         }
-    }
-
-    /**
-     * 按真实注册的回调统计每个服务的工具清单（回答"本轮实际注册了什么"，而非静态 toolInfo）
-     */
-    private List<Map<String, Object>> buildServerSummaries(ToolCallback[] callbacks, List<com.mio.ai.resource.model.entity.McpTool> tools) {
-        Map<String, List<Map<String, Object>>> toolsBySegment = new LinkedHashMap<>();
-        for (ToolCallback callback : callbacks) {
-            ToolDefinition definition = callback.getToolDefinition();
-            // 前缀 mcp__<segment>__<tool>（zcode 同款命名）；tool 名本身不含 __，第三段取余即工具名
-            String[] parts = definition.name().split("__", 3);
-            if (parts.length < 3) {
-                continue;
-            }
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("name", parts[2]);
-            item.put("description", summaryText(definition.description()));
-            toolsBySegment.computeIfAbsent(parts[1], k -> new ArrayList<>()).add(item);
-        }
-        List<Map<String, Object>> servers = new ArrayList<>();
-        for (com.mio.ai.resource.model.entity.McpTool tool : tools) {
-            String segment = McpClientManagerServiceImpl.sanitizeSegment(
-                    McpClientManagerServiceImpl.firstServerKey(tool.getConfig(), tool.getName()));
-            List<Map<String, Object>> serverTools = toolsBySegment.getOrDefault(segment, List.of());
-            Map<String, Object> server = new LinkedHashMap<>();
-            server.put("id", tool.getId());
-            server.put("name", tool.getName());
-            server.put("description", summaryText(tool.getDescription()));
-            server.put("tools", serverTools);
-            servers.add(server);
-        }
-        return servers;
     }
 
     /**

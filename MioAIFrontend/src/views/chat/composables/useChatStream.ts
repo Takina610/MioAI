@@ -460,6 +460,7 @@ export function useChatStream(options: {
           type: 'tool',
           id: parsed.id ? String(parsed.id) : undefined,
           tool: String(parsed.tool ?? ''),
+          desc: parsed.desc ? String(parsed.desc) : undefined,
           args: '',
           status: 'running'
         })

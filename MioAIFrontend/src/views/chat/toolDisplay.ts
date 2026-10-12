@@ -10,6 +10,7 @@ import {
   EditOutlined,
   CodeOutlined,
   ToolOutlined,
+  ClusterOutlined,
   GlobalOutlined,
   FileAddOutlined,
   FileSearchOutlined,
@@ -28,6 +29,19 @@ export interface SourceChip {
   title: string
   url: string
   host: string
+}
+
+// ---------- MCP 工具（mcp__<server>__<tool> 注册名，zcode 同款前缀） ----------
+export interface McpToolName {
+  server: string
+  short: string
+}
+
+/** 解析 MCP 工具注册名；兼容单/双下划线分隔（历史数据两种都有），非 MCP 工具返回 null */
+export function parseMcpToolName(tool: string): McpToolName | null {
+  const match = tool.match(/^mcp[_]+([^_]+)[_]+(.+)$/)
+  if (!match) return null
+  return { server: match[1], short: match[2] }
 }
 
 // ---------- 工具语义化展示（主消息流与子代理面板共用） ----------
@@ -66,9 +80,12 @@ const TOOL_VERBS: Record<string, [string, string]> = {
 
 /** 工具行动词：运行中→进行式（扫光），完成→过去式；Agent 行恒为「子智能体」（zcode GUI 同款） */
 export function toolVerb(block: ToolBlock): string {
+  if (parseMcpToolName(block.tool)) {
+    return block.status === 'running' ? '正在调用' : '已调用'
+  }
   const pair = TOOL_VERBS[block.tool]
   if (pair) return block.status === 'running' ? pair[0] : pair[1]
-  // 未登记工具（自定义 MCP 等）走 zcode 通用状态词
+  // 未登记工具走 zcode 通用状态词
   return block.status === 'running' ? '执行中' : '已执行'
 }
 
@@ -109,10 +126,12 @@ const TOOL_ICONS: Record<string, Component> = markRaw({
   TaskOutput: ProfileOutlined,
   TaskStop: StopOutlined,
   // 子智能体行用机器人图标（zcode 同款语义），不用通用工具扳手
-  Agent: RobotOutlined
+  Agent: RobotOutlined,
+  // MCP 工具按注册名前缀整体识别（见 toolIcon），不逐个登记
 })
 
 export function toolIcon(tool: string): Component {
+  if (parseMcpToolName(tool)) return ClusterOutlined
   return TOOL_ICONS[tool] ?? ToolOutlined
 }
 
@@ -135,6 +154,12 @@ export function hostOf(url?: string): string {
 
 /** 工具行元信息：从参数提取人话摘要，不暴露原始 JSON */
 export function toolMeta(block: ToolBlock): string {
+  // MCP 工具：服务端工具名 + 描述（desc 由后端 tool_use 附带）；服务来源已在标签中展示
+  const mcp = parseMcpToolName(block.tool)
+  if (mcp) {
+    const desc = block.desc?.trim()
+    return desc ? `${mcp.short} · ${desc}` : mcp.short
+  }
   const a = parseArgs(block)
   switch (block.tool) {
     case 'managePlan': {

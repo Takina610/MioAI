@@ -62,6 +62,9 @@ public class BotEventChannel {
     // 本轮用户附件（MioBot 注入）：随 user 行持久化为展示块
     private volatile List<com.mio.ai.bot.model.dto.AttachmentItem> userAttachments;
 
+    // MCP 工具描述表（MioBot 注入）：tool_use 块附带描述，前端工具行展示名称与描述
+    private volatile Map<String, String> mcpToolDesc = Map.of();
+
     // WIP 行（增量落库）：轮次开始即建行，每个模型步刷新 blocks，正常收尾删除。
     // 进程崩溃/被杀时该行保留已流出的部分过程，刷新页面与下一轮水合都拿得到
     private volatile Long wipRowId;
@@ -81,6 +84,11 @@ public class BotEventChannel {
     /** 本轮用户附件（run 开始时注入，user 行落库时转展示块） */
     public void setUserAttachments(List<com.mio.ai.bot.model.dto.AttachmentItem> items) {
         this.userAttachments = items;
+    }
+
+    /** MCP 工具描述表（注册名 → 描述，MioBot 构造时注入）：tool_use 行据此展示工具描述 */
+    public void setMcpToolDesc(Map<String, String> mcpToolDesc) {
+        this.mcpToolDesc = mcpToolDesc == null ? Map.of() : mcpToolDesc;
     }
 
     /** Agent 产出文件：追加附件展示块并推送事件（前端渲染为可下载附件） */
@@ -116,10 +124,14 @@ public class BotEventChannel {
             block.put("id", id);
         }
         block.put("tool", tool);
+        String desc = mcpToolDesc.get(tool);
+        if (desc != null && !desc.isBlank()) {
+            block.put("desc", desc);
+        }
         block.put("args", "");
         block.put("status", "running");
         displayBlocks.add(block);
-        emit(SseChunk.toolUse(id, tool).fields());
+        emit(SseChunk.toolUse(id, tool, desc).fields());
     }
 
     public void toolArgs(String id, String delta) {
@@ -201,22 +213,6 @@ public class BotEventChannel {
         block.put("groups", groups);
         displayBlocks.add(block);
         emit(SseChunk.kbContext(groups).fields());
-    }
-
-    /** MCP 装配摘要：追加 mcp 展示块并推送事件（落库；服务/工具清单 + 连接失败项） */
-    public void mcpContext(List<Map<String, Object>> servers, List<String> failures) {
-        boolean hasServers = servers != null && !servers.isEmpty();
-        boolean hasFailures = failures != null && !failures.isEmpty();
-        if (!hasServers && !hasFailures) {
-            return;
-        }
-        Map<String, Object> block = new LinkedHashMap<>();
-        block.put("type", "mcp");
-        block.put("servers", hasServers ? servers : List.of());
-        block.put("failures", hasFailures ? failures : List.of());
-        displayBlocks.add(block);
-        emit(SseChunk.mcpContext(hasServers ? servers : List.of(),
-                hasFailures ? failures : List.of()).fields());
     }
 
     /** 技能装配摘要：追加 skill 展示块并推送事件（落库，单行不展开） */

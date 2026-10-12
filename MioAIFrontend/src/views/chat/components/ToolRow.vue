@@ -5,9 +5,10 @@
         <component :is="toolIcon(block.tool)" class="tool-icon" />
       </span>
       <span class="tool-verb" :class="{ running: block.status === 'running' }">{{ toolVerb(block) }}</span>
-      <!-- Agent 行带 zcode GUI 同款类型标签：子智能体 subagent · 描述 -->
+      <!-- Agent 行带 zcode GUI 同款类型标签：子智能体 subagent · 描述；MCP 行带来源服务标签 -->
       <span v-if="isAgent" class="agent-tag">subagent</span>
-      <span v-if="meta" class="tool-meta">{{ meta }}</span>
+      <span v-else-if="mcpServer" class="agent-tag">mcp · {{ mcpServer }}</span>
+      <span v-if="meta" class="tool-meta" :title="mcpServer ? meta : undefined">{{ meta }}</span>
       <CaretRightOutlined
         v-if="block.result && !isAgent && !typing"
         :rotate="expanded ? 90 : 0"
@@ -41,7 +42,7 @@
 import { computed, ref } from 'vue'
 import { CaretRightOutlined, GlobalOutlined } from '@ant-design/icons-vue'
 import CollapseTransition from '@/components/CollapseTransition.vue'
-import { sourceChips, toolIcon, toolMeta, toolVerb, type ToolBlock } from '../toolDisplay'
+import { parseMcpToolName, sourceChips, toolIcon, toolMeta, toolVerb, type ToolBlock } from '../toolDisplay'
 
 /**
  * 工具语义行（zcode 约定：图标恒静态，运行态由动词文案扫光表达）：
@@ -64,6 +65,7 @@ const emit = defineEmits<{
 const expanded = ref(false)
 
 const isAgent = computed(() => props.block.tool === 'Agent')
+const mcpServer = computed(() => parseMcpToolName(props.block.tool)?.server ?? '')
 const meta = computed(() => toolMeta(props.block))
 const chips = computed(() => sourceChips(props.block))
 const typing = computed(() => !!props.streaming && props.block.status === 'running')

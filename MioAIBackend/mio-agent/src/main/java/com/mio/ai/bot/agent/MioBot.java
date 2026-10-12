@@ -92,11 +92,10 @@ public class MioBot {
     /** 编辑重发场景：本轮 user 行的版本组锚（沿用被编辑轮次的组） */
     private volatile Long userGroupSeq;
 
-    /** 本轮 MCP 装配失败摘要（控制器注入）：随 MCP 摘要行展示 */
+    /** 本轮 MCP 装配失败摘要（控制器注入）：非空时会话开头发瞬态系统提示 */
     private volatile List<String> mcpFailures;
 
     /** 本轮资源装配摘要（控制器注入）：轮次开头作为持久化摘要行下发给前端 */
-    private volatile List<Map<String, Object>> mcpServers;
     private volatile List<Map<String, Object>> kbGroups;
     private volatile List<Map<String, Object>> skillSummaries;
 
@@ -106,10 +105,6 @@ public class MioBot {
 
     public void setMcpFailures(List<String> mcpFailures) {
         this.mcpFailures = mcpFailures;
-    }
-
-    public void setMcpServers(List<Map<String, Object>> mcpServers) {
-        this.mcpServers = mcpServers;
     }
 
     public void setKbGroups(List<Map<String, Object>> kbGroups) {
@@ -155,6 +150,17 @@ public class MioBot {
         this.attachments = attachments == null ? List.of() : attachments;
         this.fileTransfer = fileTransfer;
         this.channel = new BotEventChannel(agentMessageService, chatId, userId, agentId);
+        // MCP 工具描述表：tool_use 行附带工具描述（前端展示名称与描述，对齐内置工具行）
+        Map<String, String> mcpToolDesc = new LinkedHashMap<>();
+        for (ToolCallback callback : this.mcpTools) {
+            try {
+                mcpToolDesc.put(callback.getToolDefinition().name(),
+                        callback.getToolDefinition().description());
+            } catch (Exception ignored) {
+                // 单个回调定义异常不阻断装配
+            }
+        }
+        this.channel.setMcpToolDesc(mcpToolDesc);
     }
 
     /**
@@ -186,6 +192,12 @@ public class MioBot {
                 channel::heartbeat, HEARTBEAT_INTERVAL_SECONDS, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
         ToolRegistry registry = null;
         try {
+            // MCP 装配失败项在会话开头明说（瞬态提示不落库，重载后不保留）
+            if (mcpFailures != null && !mcpFailures.isEmpty()) {
+                String joined = String.join("；", mcpFailures);
+                channel.notice("以下 MCP 工具本轮不可用：" + (joined.length() > 300
+                        ? joined.substring(0, 300) + "..." : joined));
+            }
             ConversationHydrator.Hydrated hydrated = hydrate();
             ConversationState state = new ConversationState();
             state.entries().addAll(hydrated.entries());
@@ -223,13 +235,10 @@ public class MioBot {
                 }
                 // WIP 行：轮次开始即落库，此后每个模型步增量刷新（进程崩溃后过程可恢复）
                 channel.beginAssistantWip();
-                // 资源摘要行：知识库检索逐轮呈现；MCP/技能是会话级装配，仅首轮（或 MCP 装配失败）呈现——
-                // 逐轮重复会被误读为"每轮都在调用全部工具"。是否调用由模型按需决定，实际调用见工具行
+                // 资源摘要行（持久化）：知识库检索逐轮呈现；技能会话首轮单行呈现。
+                // MCP 不发摘要行——是否用工具由模型按需决定，真实调用走 tool_use 行（对齐 Bash/WebSearch）
                 boolean sessionStart = hydrated.entries().isEmpty();
                 channel.kbContext(kbGroups);
-                if (sessionStart || (mcpFailures != null && !mcpFailures.isEmpty())) {
-                    channel.mcpContext(mcpServers, mcpFailures);
-                }
                 if (sessionStart) {
                     channel.skillContext(skillSummaries);
                 }

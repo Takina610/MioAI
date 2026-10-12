@@ -189,8 +189,7 @@ public class McpClientManagerServiceImpl implements McpClientManagerService {
             }
         }
 
-        return new McpInitResult(allCallbacks.toArray(new ToolCallback[0]), List.copyOf(failures),
-                List.copyOf(mcpTools));
+        return new McpInitResult(allCallbacks.toArray(new ToolCallback[0]), List.copyOf(failures));
     }
 
     /** 失败原因摘要：取首行、截断，供会话内提示（完整堆栈只在日志） */
