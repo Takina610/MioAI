@@ -395,14 +395,14 @@ export function useChatStream(options: {
     rearmStreamWatchdog(chatId, () => handleStreamError(new Event('stream-watchdog')))
   }
 
-  /** 重连成功（内容恢复流动）：活动重试行转入历史——保留静态行标记该轮经历过重连，动画取消 */
+  /** 重连成功（内容恢复流动）：活动重连块定格为静态记录（保留在原时间位置，动画取消） */
   function flushRetry(msg: ChatMessage): ChatMessage {
-    if (!msg.retryNotice) return msg
-    return {
-      ...msg,
-      retryHistory: [...(msg.retryHistory ?? []), msg.retryNotice],
-      retryNotice: undefined
-    }
+    const blocks = msg.blocks ?? []
+    const last = blocks[blocks.length - 1]
+    if (!last || last.type !== 'retry' || !last.active) return msg
+    const copy = [...blocks]
+    copy[copy.length - 1] = { ...last, active: false }
+    return { ...msg, blocks: copy, retryNotice: undefined }
   }
 
   /** 文本增量：content 累积 + 合并进同类末块（块序即显示序）；重试提示随之转入历史 */
@@ -493,8 +493,14 @@ export function useChatStream(options: {
         return { ...msg, blocks }
       }
       case 'tool_result': {
+        // 技能读取：后端把该工具块升级为技能行（zcode 式「技能 <名>」，展开看 SKILL.md 内容）
+        const skill = parsed.skill ? String(parsed.skill) : ''
+        if (skill) {
+          const blocks = replaceToolWithSkill(msg.blocks ?? [], parsed, skill, String(parsed.skillContent ?? ''))
+          return flushRetry({ ...msg, blocks })
+        }
         const blocks = matchToolResult(msg.blocks ?? [], parsed)
-        return { ...msg, blocks }
+        return flushRetry({ ...msg, blocks })
       }
       case 'question': {
         const blocks = [...closeOpenThinking(msg.blocks)]
@@ -563,8 +569,17 @@ export function useChatStream(options: {
       case 'retry': {
         const attempt = Number(parsed.attempt) || 1
         const maxAttempts = Number(parsed.maxAttempts) || attempt
-        // 同一次重连过程原地更新计数（zcode 式单行 n/m）；内容恢复时整行才归档为静态
-        return { ...msg, retryNotice: `重新连接中... ${attempt}/${maxAttempts}` }
+        const label = `重新连接中... ${attempt}/${maxAttempts}`
+        const blocks = [...(msg.blocks ?? [])]
+        const last = blocks[blocks.length - 1]
+        // 同一次重连过程原地更新计数（zcode 式单行 n/m）；新 episode 追加新块，随时间出现在原位置
+        if (last && last.type === 'retry' && last.active) {
+          blocks[blocks.length - 1] = { ...last, label }
+        } else {
+          blocks.push({ type: 'retry', label, active: true })
+        }
+        // retryNotice 双写：宠物情绪引擎（useBotMood）据此显示疑惑态
+        return { ...msg, retryNotice: label, blocks }
       }
       case 'notice':
         // 瞬态系统提示（如 MCP 工具本轮装配失败）：不落历史，刷新后不保留
@@ -584,9 +599,39 @@ export function useChatStream(options: {
     }
   }
 
-  /** tool_result 配对：优先按 id，其次按同名工具中最后一个 running，最后按最后一个 running */
-  function matchToolResult(blocks: MessageBlock[], parsed: Record<string, any>): MessageBlock[] {
+  /** 技能读取升级：把配对的 Read 工具块替换为技能行（zcode 式一行「技能 <名>」，内容 = SKILL.md 全文） */
+  function replaceToolWithSkill(
+    blocks: MessageBlock[],
+    parsed: Record<string, any>,
+    skill: string,
+    content: string
+  ): MessageBlock[] {
     type ToolBlock = Extract<MessageBlock, { type: 'tool' }>
+    const id = parsed.id ? String(parsed.id) : ''
+    const tool = String(parsed.tool ?? '')
+    const toolBlocks = blocks
+      .map((b, i) => ({ b, i }))
+      .filter((x): x is { b: ToolBlock; i: number } => x.b.type === 'tool')
+    let targetIndex = -1
+    if (id) {
+      const byId = toolBlocks.find(x => x.b.id === id)
+      if (byId) targetIndex = byId.i
+    }
+    if (targetIndex === -1) {
+      const running = toolBlocks.filter(x => x.b.status === 'running')
+      const byName = running.filter(x => x.b.tool === tool)
+      const picked = byName.length > 0 ? byName[byName.length - 1] : running[running.length - 1]
+      if (picked) targetIndex = picked.i
+    }
+    const skillBlock: MessageBlock = { type: 'skill_use', name: skill, content }
+    if (targetIndex === -1) {
+      return [...blocks, skillBlock]
+    }
+    return blocks.map((b, i) => (i === targetIndex ? skillBlock : b))
+  }
+
+  /** tool_result 配对：优先按 id，其次按同名工具中最后一个 running，最后按最后一个 running */
+  function matchToolResult(blocks: MessageBlock[], parsed: Record<string, any>): MessageBlock[] {    type ToolBlock = Extract<MessageBlock, { type: 'tool' }>
     const id = parsed.id ? String(parsed.id) : ''
     const tool = String(parsed.tool ?? '')
     const toolBlocks = blocks
@@ -608,7 +653,6 @@ export function useChatStream(options: {
       return [...blocks, {
         type: 'tool',
         tool,
-        skill: parsed.skill ? String(parsed.skill) : undefined,
         result: parsed.content !== undefined ? String(parsed.content) : undefined,
         status: 'done'
       }]
@@ -618,8 +662,7 @@ export function useChatStream(options: {
       return {
         ...b,
         status: 'done',
-        result: parsed.content !== undefined ? String(parsed.content) : b.result,
-        skill: parsed.skill ? String(parsed.skill) : b.skill
+        result: parsed.content !== undefined ? String(parsed.content) : b.result
       }
     })
   }

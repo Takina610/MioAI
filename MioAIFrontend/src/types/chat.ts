@@ -11,8 +11,6 @@ export interface ToolEvent {
   tool: string
   /** MCP 工具的描述（后端 tool_use 附带；内置工具无此字段） */
   desc?: string
-  /** 来源技能名（工具读取了沙箱 skills/<id>/ 文件时由后端标注） */
-  skill?: string
   args?: string
   status: 'running' | 'done'
   result?: string
@@ -114,6 +112,18 @@ export type MessageBlock =
       skills: SkillContextItem[]
     }
   | {
+      /** 技能使用行（zcode 式）：模型读取了沙箱技能文件，一行「技能 <名>」，展开看 SKILL.md 内容 */
+      type: 'skill_use'
+      name: string
+      content: string
+    }
+  | {
+      /** 模型流瞬断重连记录（仅前端存活态，不持久化）：同一episode原地更新 n/m，内容恢复后定格 */
+      type: 'retry'
+      label: string
+      active?: boolean
+    }
+  | {
       /** 用户主动中断标记（持久化行尾；加载历史时转为消息 stopped 态，不参与渲染） */
       type: 'stopped'
     }
@@ -177,10 +187,8 @@ export interface ChatMessage {
   interrupted?: boolean
   /** 用户主动中断（状态行显示"已停止"，保留工作过程但无折叠入口） */
   stopped?: boolean
-  /** 瞬态失败自动重试中的提示（后端 retry 事件；内容恢复即转入 retryHistory） */
+  /** 瞬态失败自动重试中的提示（与 blocks 内 retry 行双写，宠物情绪引擎据此显示疑惑态） */
   retryNotice?: string
-  /** 本轮已完成的重新连接记录（zcode 式：重连成功后保留静态行，标记该轮经历过重连） */
-  retryHistory?: string[]
   /** 本轮 MCP 工具装配失败提示（瞬态，不随历史持久化） */
   mcpNotice?: string
   /** 本消息的历史版本（旧→新，不含当前正文）：编辑/重新生成时旧回复存档于此 */

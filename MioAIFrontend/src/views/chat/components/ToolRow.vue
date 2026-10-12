@@ -5,10 +5,9 @@
         <component :is="toolIcon(block.tool)" class="tool-icon" />
       </span>
       <span class="tool-verb" :class="{ running: block.status === 'running' }">{{ toolVerb(block) }}</span>
-      <!-- Agent 行带 zcode GUI 同款类型标签：子智能体 subagent · 描述；MCP/技能行带来源标签 -->
+      <!-- Agent 行带 zcode GUI 同款类型标签：子智能体 subagent · 描述；MCP 行带来源服务标签 -->
       <span v-if="isAgent" class="agent-tag">subagent</span>
       <span v-else-if="mcpServer" class="agent-tag">mcp · {{ mcpServer }}</span>
-      <span v-else-if="block.skill" class="agent-tag">skill · {{ block.skill }}</span>
       <span v-if="meta" class="tool-meta" :title="mcpServer ? meta : undefined">{{ meta }}</span>
       <CaretRightOutlined
         v-if="block.result && !isAgent && !typing"

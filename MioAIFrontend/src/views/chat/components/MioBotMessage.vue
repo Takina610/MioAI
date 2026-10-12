@@ -119,6 +119,19 @@
             @open="openSubagent(item.block, item.index)"
           />
 
+          <!-- 技能行（zcode 式）：模型按需读取技能文件，展开看 SKILL.md 内容 -->
+          <SkillRow
+            v-else-if="item.block.type === 'skill_use'"
+            :block="item.block"
+          />
+
+          <!-- 重连记录行：随时间出现在原位置；进行中带扫光，内容恢复后定格为静态 -->
+          <div
+            v-else-if="item.block.type === 'retry'"
+            class="retry-line"
+            :class="{ active: item.block.active }"
+          >{{ item.block.label }}</div>
+
           <!-- 旧数据兼容：MCP 装配摘要/技能清单行（新回合不再产生，置顶的 kb 行在上方渲染） -->
           <ResourceRow
             v-else-if="item.block.type === 'mcp' || item.block.type === 'skill'"
@@ -128,10 +141,10 @@
       </div>
     </CollapseTransition>
 
-    <!-- 重新连接行（zcode 式）：进行中带工具行同款扫光；完成后保留为静态行，标记该轮经历过重连 -->
+    <!-- 正文流式期间出现的重连行：渲染在过程区与正文之间（内容停在何处，重连就出现在何处） -->
     <div
-      v-for="(line, ri) in retryLines"
-      :key="`retry-${ri}`"
+      v-for="(line, ri) in trailingRetryBlocks"
+      :key="`retry-trailing-${ri}`"
       class="retry-line"
       :class="{ active: line.active }"
     >{{ line.label }}</div>
@@ -179,6 +192,7 @@ import BrainIcon from '@/components/BrainIcon.vue'
 import AttachmentCards from './AttachmentCards.vue'
 import ToolRow from './ToolRow.vue'
 import ResourceRow from './ResourceRow.vue'
+import SkillRow from './SkillRow.vue'
 import { messageAttachmentDisplays } from '../attachmentUtils'
 import { answerQuestion } from '@/api/chat'
 import { formatDuration, type ToolBlock } from '../toolDisplay'
@@ -200,10 +214,6 @@ interface Props {
   interrupted?: boolean
   /** 用户主动中断（状态行显示"已停止"，工作过程保持可见且无折叠入口） */
   stopped?: boolean
-  /** 瞬态失败自动重试提示（后端 retry 事件；内容恢复即转入 retryHistory） */
-  retryNotice?: string
-  /** 本轮已完成的重新连接记录（重连成功后保留静态行） */
-  retryHistory?: string[]
   /** 本轮 MCP 工具装配失败提示（后端 notice 事件，瞬态不落历史） */
   mcpNotice?: string
   /** 所属会话 id（提交问答答案用） */
@@ -275,11 +285,13 @@ onUnmounted(() => {
  *  （思考块活跃判定与子代理面板定位键都按原下标）；其后的是最终回答。
  *  附件块不属过程：单独渲染在正文下方。子代理镜像工具行不进主消息流——
  *  它们归属右侧的子代理只读面板（子代理完成后其 Agent 行可点击查看）。
- *  知识库引用行同样是上下文行：固定置顶渲染，不参与"过程/正文"边界判定 */
+ *  知识库引用行同样是上下文行：固定置顶渲染。重连行是状态行：不参与"过程/正文"
+ *  边界判定（出现在正文流式期间的重连不能把正文劈成两段），过程区内的按原位置
+ *  内联渲染，正文期间的出现为尾随行（渲染在过程区与正文之间） */
 const lastNonTextIndex = computed(() => {
   for (let i = props.blocks.length - 1; i >= 0; i--) {
     const type = props.blocks[i].type
-    if (type !== 'text' && type !== 'attachments' && type !== 'kb') return i
+    if (type !== 'text' && type !== 'attachments' && type !== 'kb' && type !== 'retry') return i
   }
   return -1
 })
@@ -295,12 +307,26 @@ const processBlocks = computed(() => {
   return out
 })
 
+/** 正文流式期间出现的重连行（位于过程边界之后）：渲染在过程区与正文之间 */
+const trailingRetryBlocks = computed(() => {
+  const start = lastNonTextIndex.value + 1
+  if (start <= 0) {
+    // 无过程内容时：重连行从块首就可能出现（首个模型请求即失败）
+    return props.blocks.filter((b): b is Extract<MessageBlock, { type: 'retry' }> => b.type === 'retry')
+  }
+  return props.blocks
+    .slice(start)
+    .filter((b): b is Extract<MessageBlock, { type: 'retry' }> => b.type === 'retry')
+})
+
 /** 知识库引用行（后端收尾按回答引用生成；旧数据在块首/块尾都兼容） */
 const kbBlocks = computed(() =>
   props.blocks.filter((b): b is Extract<MessageBlock, { type: 'kb' }> => b.type === 'kb')
 )
 
-const hasProcessArea = computed(() => processBlocks.value.length > 0 || kbBlocks.value.length > 0)
+const hasProcessArea = computed(() =>
+  processBlocks.value.length > 0 || kbBlocks.value.length > 0 || trailingRetryBlocks.value.length > 0
+)
 
 const outputAttachments = computed<AttachmentDisplay[]>(() =>
   messageAttachmentDisplays(
@@ -317,15 +343,6 @@ const finalText = computed(() => {
     ? props.blocks.slice(lastNonTextIndex.value + 1)
     : props.blocks
   return tail.filter(b => b.type === 'text').map(b => b.text).join('')
-})
-
-/** 重新连接行：已完成的归档（静态）+ 进行中的活动行（扫光） */
-const retryLines = computed(() => {
-  const lines = (props.retryHistory ?? []).map(label => ({ label, active: false }))
-  if (props.isLoading && props.retryNotice) {
-    lines.push({ label: props.retryNotice, active: true })
-  }
-  return lines
 })
 
 // ---------- 问答块（AskUserQuestion）的草稿与提交 ----------

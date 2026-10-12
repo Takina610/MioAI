@@ -66,17 +66,18 @@ public record SseChunk(Map<String, Object> fields) {
     }
 
     public static SseChunk toolResult(String id, String tool, String content) {
-        return toolResult(id, tool, content, null);
+        return toolResult(id, tool, content, null, null);
     }
 
-    /** 技能使用标记（skill 可空）：工具读取了沙箱 skills/&lt;id&gt;/ 下的文件时，前端在工具行标注来源技能 */
-    public static SseChunk toolResult(String id, String tool, String content, String skill) {
+    /** 技能使用标记（skill 可空）：模型 Read 了沙箱 skills/&lt;id&gt;/ 文件时，前端把该工具行升级为技能行（skillContent=SKILL.md 全文） */
+    public static SseChunk toolResult(String id, String tool, String content, String skill, String skillContent) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("type", "tool_result");
         putIfNotBlank(map, "id", id);
         map.put("tool", tool);
         map.put("content", content);
         putIfNotBlank(map, "skill", skill);
+        putIfNotBlank(map, "skillContent", skillContent);
         return new SseChunk(map);
     }
 

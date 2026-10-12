@@ -188,7 +188,9 @@ public class BotEventChannel {
         int previewCap = "Agent".equals(tool) ? TOOL_RESULT_PERSIST_CAP : TOOL_RESULT_PREVIEW_LENGTH;
         String preview = full.length() > previewCap
                 ? full.substring(0, previewCap) + "…" : full;
-        emit(SseChunk.toolResult(id, tool, preview, skill).fields());
+        // 技能读取：内容随事件全文下发（SKILL.md 都很小），前端把 Read 行升级为技能行
+        emit(SseChunk.toolResult(id, tool, preview, skill,
+                skill != null ? full : null).fields());
     }
 
     /**
@@ -558,7 +560,7 @@ public class BotEventChannel {
         return replayDisabled;
     }
 
-    /** 配对收尾工具块；块参数涉及沙箱 skills/&lt;id&gt;/ 文件时标注来源技能（返回技能名，无则 null） */
+    /** 配对收尾工具块；Read 命中沙箱 skills/&lt;id&gt;/SKILL.md 时把该块升级为技能行（返回技能名，无则 null） */
     private String completeDisplayTool(String id, String tool, String result) {
         for (int i = displayBlocks.size() - 1; i >= 0; i--) {
             Map<String, Object> b = displayBlocks.get(i);
@@ -570,7 +572,7 @@ public class BotEventChannel {
             if (idMatch || nameMatch) {
                 b.put("status", "done");
                 b.put("result", result);
-                return markSkillUsage(b);
+                return upgradeToSkillRow(b, result);
             }
         }
         // 没有配对的调用块（异常兜底）：补一个已完成块保证结果不丢
@@ -584,17 +586,16 @@ public class BotEventChannel {
     }
 
     /**
-     * 技能使用检测：技能经系统提示清单按需暴露，模型用 Read/Bash 触达 skills/&lt;id&gt;/ 下的文件即视为使用该技能，
-     * 工具行标注 skill 名（不做会话开头的"加载技能"行——是否用技能由模型按需决定）
+     * 技能使用检测（zcode 语义）：技能经系统提示清单按需暴露，模型用 Read 读 skills/&lt;id&gt;/ 下的文件
+     * 即为使用该技能——把该 Read 工具行升级为「技能 &lt;名&gt;」行（展开看 SKILL.md 内容），
+     * 是否用技能由模型按需决定，不做会话开头的"加载技能"行
      */
-    private String markSkillUsage(Map<String, Object> block) {
+    private String upgradeToSkillRow(Map<String, Object> block, String content) {
         if (skillNames.isEmpty()) {
             return null;
         }
         String tool = String.valueOf(block.get("tool"));
-        boolean pathAware = "Read".equals(tool) || "readFile".equals(tool)
-                || "Bash".equals(tool) || "executeTerminalCommand".equals(tool) || "runCommand".equals(tool);
-        if (!pathAware) {
+        if (!"Read".equals(tool) && !"readFile".equals(tool)) {
             return null;
         }
         String args = String.valueOf(block.get("args"));
@@ -602,7 +603,10 @@ public class BotEventChannel {
         while (matcher.find()) {
             String name = skillNames.get(matcher.group(1));
             if (name != null && !name.isBlank()) {
-                block.put("skill", name);
+                block.clear();
+                block.put("type", "skill_use");
+                block.put("name", name);
+                block.put("content", content);
                 return name;
             }
         }
