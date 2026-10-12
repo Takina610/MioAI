@@ -18,43 +18,41 @@
     <div class="dash-page-content">
       <a-spin :spinning="loading">
         <div class="edit-layout">
-          <div class="edit-main">
-            <div class="dash-section docs-section">
-              <div class="docs-header">
-                <h3 class="section-title">
-                  文档
-                  <span v-if="pagination.total" class="doc-count">{{ pagination.total }}</span>
-                </h3>
-                <div class="docs-actions">
-                  <a-button
-                    v-if="hasRetryableDocs"
-                    :loading="vectorizing"
-                    size="small"
-                    @click="handleRevectorize(false)"
-                  >
-                    <ReloadOutlined /> 重新向量化
-                  </a-button>
-                  <a-button type="primary" size="small" @click="uploadModalVisible = true">
-                    <PlusOutlined /> 上传文档
-                  </a-button>
-                </div>
+          <div class="dash-section docs-section">
+            <div class="docs-header">
+              <h3 class="section-title">
+                文档
+                <span v-if="pagination.total" class="doc-count">{{ pagination.total }}</span>
+              </h3>
+              <div class="docs-actions">
+                <a-button
+                  v-if="hasRetryableDocs"
+                  :loading="vectorizing"
+                  size="small"
+                  @click="handleRevectorize(false)"
+                >
+                  <ReloadOutlined /> 重新向量化
+                </a-button>
+                <a-button type="primary" size="small" @click="uploadModalVisible = true">
+                  <PlusOutlined /> 上传文档
+                </a-button>
               </div>
-
-              <DocumentTable
-                :documents="documentList"
-                :loading="docLoading"
-                :pagination="pagination"
-                show-actions
-                @change="handleTableChange"
-                @preview="handlePreview"
-                @chunks="handleViewChunks"
-                @revectorize="handleDocRevectorize"
-                @delete="handleDeleteDocument"
-              />
             </div>
+
+            <DocumentTable
+              :documents="documentList"
+              :loading="docLoading"
+              :pagination="pagination"
+              show-actions
+              @change="handleTableChange"
+              @preview="handlePreview"
+              @chunks="handleViewChunks"
+              @revectorize="handleDocRevectorize"
+              @delete="handleDeleteDocument"
+            />
           </div>
 
-          <aside class="edit-side">
+          <div class="settings-grid">
             <KnowledgeInfoForm
               v-model:name="formData.name"
               v-model:description="formData.description"
@@ -137,7 +135,7 @@
                 </a-button>
               </a-popconfirm>
             </div>
-          </aside>
+          </div>
         </div>
       </a-spin>
     </div>
@@ -445,23 +443,15 @@ onMounted(() => {
 <style lang="scss" scoped>
 .edit-layout {
   display: flex;
-  gap: 20px;
-  align-items: flex-start;
-}
-
-.edit-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.edit-side {
-  width: 380px;
-  flex-shrink: 0;
-  position: sticky;
-  top: 24px;
-  display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 20px;
+  align-items: start;
 }
 
 .docs-section {
@@ -580,17 +570,6 @@ onMounted(() => {
   .rebuild-btn {
     margin-top: 8px;
     border-radius: 10px;
-  }
-}
-
-@media (max-width: 1100px) {
-  .edit-layout {
-    flex-direction: column;
-  }
-
-  .edit-side {
-    width: 100%;
-    position: static;
   }
 }
 </style>
