@@ -6,6 +6,9 @@ import type {
   AgentAddRequest,
   AgentUpdateRequest,
   AgentQueryRequest,
+  AgentUserConfig,
+  AgentUserConfigRequest,
+  AgentVersion,
   PageResponse
 } from '@/types'
 
@@ -62,10 +65,55 @@ export function getPublicAgents(params?: { current?: number; size?: number }): P
   })
 }
 
-export function publishAgent(agentId: number, data: AgentUpdateRequest): Promise<boolean> {
+export function publishAgent(agentId: number, data: AgentUpdateRequest): Promise<string> {
   return request({
     url: `/agents/${agentId}/publish`,
     method: 'post',
     data
+  })
+}
+
+export function getAgentVersions(agentId: number): Promise<AgentVersion[]> {
+  return request({
+    url: `/agents/${agentId}/versions`,
+    method: 'get'
+  })
+}
+
+export function rollbackAgentVersion(agentId: number, versionId: number): Promise<string> {
+  return request({
+    url: `/agents/${agentId}/versions/${versionId}/rollback`,
+    method: 'post'
+  })
+}
+
+/** 从广场模板复制为我的草稿智能体，返回新智能体ID */
+export function forkAgent(templateId: number): Promise<number> {
+  return request({
+    url: `/agents/${templateId}/fork`,
+    method: 'post'
+  })
+}
+
+export function getMyAgentConfig(agentId: number): Promise<AgentUserConfig | null> {
+  return request({
+    url: `/agents/${agentId}/my-config`,
+    method: 'get'
+  })
+}
+
+export function saveMyAgentConfig(agentId: number, data: AgentUserConfigRequest): Promise<AgentUserConfig> {
+  return request({
+    url: `/agents/${agentId}/my-config`,
+    method: 'put',
+    data
+  })
+}
+
+/** 恢复内置默认：删除当前用户的个性化配置 */
+export function resetMyAgentConfig(agentId: number): Promise<boolean> {
+  return request({
+    url: `/agents/${agentId}/my-config`,
+    method: 'delete'
   })
 }

@@ -22,6 +22,7 @@
         </span>
       </template>
       <template #actions>
+        <span v-if="agentDetail?.version" class="version-badge">{{ agentDetail.version }}</span>
         <div class="public-switch">
           <span class="switch-label">公开</span>
           <a-switch
@@ -29,7 +30,7 @@
             @change="(checked: any) => (formData.isPublic = checked ? 1 : 0)"
           />
         </div>
-        <a-button type="primary" :loading="publishLoading" @click="handlePublish">
+        <a-button type="primary" :loading="publishLoading" @click="onPublish">
           <SendOutlined /> 发布
         </a-button>
       </template>
@@ -45,6 +46,15 @@
             :auto-size="{ minRows: 8, maxRows: 20 }"
             :maxlength="995904"
             show-count
+          />
+        </div>
+
+        <div class="dash-section settings-section">
+          <h3 class="section-title">对话设置</h3>
+          <AgentConversationSettings
+            v-model:opening-message="formData.openingMessage"
+            v-model:opening-questions="formData.openingQuestions"
+            v-model:temperature="formData.temperature"
           />
         </div>
 
@@ -139,6 +149,11 @@
 
         <div class="dash-section memory-card">
           <AgentMemorySection :agent-id="agentId" />
+        </div>
+
+        <div class="dash-section versions-section">
+          <h3 class="section-title">版本历史</h3>
+          <AgentVersionHistory :agent-id="agentId" @rolled-back="onRolledBack" />
         </div>
       </div>
     </div>
@@ -262,6 +277,7 @@ import {
   ThunderboltOutlined
 } from '@ant-design/icons-vue'
 import AgentCreateModal from '@/components/AgentCreateModal.vue'
+import AgentConversationSettings from '@/components/AgentConversationSettings.vue'
 import BotIcon from '@/components/bot-icon/BotIcon.vue'
 import { parseBotIcon } from '@/components/bot-icon/types'
 import { countMcpTools } from '@/utils/mcpTool'
@@ -271,6 +287,7 @@ import ResourceExpandList from './components/ResourceExpandList.vue'
 import KbRetrievalConfig from './components/KbRetrievalConfig.vue'
 import ResourceSelectDrawer from './components/ResourceSelectDrawer.vue'
 import AgentMemorySection from './components/AgentMemorySection.vue'
+import AgentVersionHistory from './components/AgentVersionHistory.vue'
 import { useAgentEdit } from './composables/useAgentEdit'
 import { useAgentResources } from './composables/useAgentResources'
 
@@ -334,6 +351,18 @@ function handleEditSuccess(): void {
   editModalVisible.value = false
   fetchAgentDetail()
 }
+
+async function onPublish(): Promise<void> {
+  const { version } = await handlePublish()
+  if (version) {
+    router.push('/dashboard/agent')
+  }
+}
+
+/** 回滚后以服务端配置为准重拉详情（版本徽标/表单同步），避免自动保存用旧表单覆盖 */
+async function onRolledBack(): Promise<void> {
+  await fetchAgentDetail()
+}
 </script>
 
 <style lang="scss" scoped>
@@ -363,6 +392,18 @@ function handleEditSuccess(): void {
     font-size: 13px;
     color: #5f5d55;
   }
+}
+
+.version-badge {
+  padding: 2px 10px;
+  margin-right: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: $primary-color;
+  background: rgba(42, 161, 169, 0.1);
+  border-radius: 10px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
 }
 
 // 纵向流：提示词全宽 → 三资源卡自适应并排 → 记忆全宽（无联动内容不分栏）

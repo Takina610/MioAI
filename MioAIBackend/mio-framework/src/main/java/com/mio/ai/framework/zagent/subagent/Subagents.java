@@ -34,17 +34,19 @@ public final class Subagents implements SubagentLauncher {
     private final ChatModel chatModel;
     private final AgentEngineConfig config;
     private final String reasoningEffort;
+    private final Double temperature;
     private final ToolsetFactory toolsetFactory;
     private final ToolsetFactory.RunContext runContext;
     private final AgentEvents parentEvents;
     private final String modelName;
 
     public Subagents(ChatModel chatModel, AgentEngineConfig config, String reasoningEffort,
-                     ToolsetFactory toolsetFactory, ToolsetFactory.RunContext runContext,
-                     AgentEvents parentEvents, String modelName) {
+                     Double temperature, ToolsetFactory toolsetFactory,
+                     ToolsetFactory.RunContext runContext, AgentEvents parentEvents, String modelName) {
         this.chatModel = chatModel;
         this.config = config;
         this.reasoningEffort = reasoningEffort;
+        this.temperature = temperature;
         this.toolsetFactory = toolsetFactory;
         this.runContext = runContext;
         this.parentEvents = parentEvents;
@@ -82,8 +84,9 @@ public final class Subagents implements SubagentLauncher {
         ConversationState childState = new ConversationState();
         ContextBuilder childContext = new ContextBuilder(
                 buildChildSystemPrompt(profile), null, runContext.fs(), modelName);
-        AgentEngine child = new AgentEngine(chatModel, config, reasoningEffort, childContext,
-                childState, runContext.chatId() + "/" + agentId, childEvents, runContext.tasks());
+        AgentEngine child = new AgentEngine(chatModel, config, reasoningEffort, temperature,
+                childContext, childState, runContext.chatId() + "/" + agentId, childEvents,
+                runContext.tasks());
         ToolRegistry childRegistry = toolsetFactory.build(runContext.chatId(), childState,
                 runContext.mcpTools(), profile.tools(), null, null, runContext.hooks());
         child.bindTools(childRegistry);

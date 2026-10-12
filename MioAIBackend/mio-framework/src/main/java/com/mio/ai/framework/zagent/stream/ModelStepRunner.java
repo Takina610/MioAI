@@ -36,6 +36,8 @@ public final class ModelStepRunner {
     private final ChatModel chatModel;
     private final long streamTimeoutSeconds;
     private final String reasoningEffort;
+    /** 智能体级采样温度（null=跟随模型默认） */
+    private final Double temperature;
     private final int modelRetries;
 
     /** 最近一步是否已流出部分正文（兜底收束时判断是否需要先分段） */
@@ -49,10 +51,11 @@ public final class ModelStepRunner {
     }
 
     public ModelStepRunner(ChatModel chatModel, long streamTimeoutSeconds, String reasoningEffort,
-                           int modelRetries) {
+                           Double temperature, int modelRetries) {
         this.chatModel = chatModel;
         this.streamTimeoutSeconds = streamTimeoutSeconds;
         this.reasoningEffort = reasoningEffort;
+        this.temperature = temperature;
         this.modelRetries = modelRetries;
     }
 
@@ -178,6 +181,9 @@ public final class ModelStepRunner {
         builder.timeout(Duration.ofSeconds(streamTimeoutSeconds));
         if (reasoningEffort != null && !reasoningEffort.isBlank()) {
             builder.reasoningEffort(reasoningEffort);
+        }
+        if (temperature != null) {
+            builder.temperature(temperature);
         }
         return builder.build();
     }

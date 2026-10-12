@@ -54,6 +54,21 @@ public class Agent implements Serializable {
     private String systemPrompt;
 
     /**
+     * 开场白（新会话首屏展示）
+     */
+    private String openingMessage;
+
+    /**
+     * 推荐问题JSON数组
+     */
+    private String openingQuestions;
+
+    /**
+     * 采样温度（NULL=引擎默认）
+     */
+    private Double temperature;
+
+    /**
      * 状态（0-草稿 1-已发布 2-已禁用）
      */
     private Integer status;

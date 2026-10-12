@@ -3,6 +3,7 @@
     <ChatSidebar
       ref="sidebarRef"
       :agent-info="agentInfo"
+      :can-personalize="userStore.isLoggedIn && agentInfo?.type === 0"
       :chat-list="chatList"
       :current-chat-id="currentChatId"
       :chat-list-loading="chatListLoading"
@@ -18,6 +19,7 @@
       @delete="requestDelete"
       @load-more="loadSessions(true)"
       @login="authModalVisible = true"
+      @personalize="personalizeVisible = true"
     />
 
     <div class="main-container">
@@ -43,6 +45,11 @@
       </div>
 
       <div class="chat-container">
+        <ChatWelcome
+          v-if="!isLoading && !historyLoading && messages.length === 0"
+          :agent="agentInfo"
+          @ask="sendQuestion"
+        />
         <ChatMessageList
           ref="messageListRef"
           :messages="messages"
@@ -110,6 +117,13 @@
 
     <AuthModal v-model:visible="authModalVisible" @success="handleAuthSuccess" />
 
+    <!-- MioBot 个性化设置（内置智能体按用户独立配置）：保存后重拉详情让开场白/图标即时生效 -->
+    <AgentPersonalizeModal
+      v-model:visible="personalizeVisible"
+      :agent="agentInfo"
+      @saved="loadAgentInfo"
+    />
+
     <!-- 会话搜索命令面板（Ctrl+K）：会话/智能体检索 + 新建会话等快捷操作 -->
     <ChatSearchModal
       v-model:visible="searchModalVisible"
@@ -143,7 +157,7 @@
 import { ref, computed, onMounted, onUnmounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getAgentById } from '@/api/agent'
+import { getAgentDetail } from '@/api/agent'
 import { useUserStore } from '@/store/user'
 import type { Agent, AttachmentItem, ChatMessage, ContextUsageData, MessageBlock, PendingAttachment, SubagentPanelTarget } from '@/types'
 import { isImageName } from './attachmentUtils'
@@ -154,9 +168,11 @@ import type { BotIconConfig } from '@/components/bot-icon/types'
 import ChatSidebar from './components/ChatSidebar.vue'
 import ChatMessageList from './components/ChatMessageList.vue'
 import ChatInput from './components/ChatInput.vue'
+import ChatWelcome from './components/ChatWelcome.vue'
 import ChatPlanPanel from './components/ChatPlanPanel.vue'
 import ChatSearchModal from './components/ChatSearchModal.vue'
 import SubagentPanel from './components/SubagentPanel.vue'
+import AgentPersonalizeModal from '@/components/AgentPersonalizeModal.vue'
 import { useFloatingSidebar } from '@/composables/useFloatingSidebar'
 import { useChatSessions } from './composables/useChatSessions'
 import { useChatMessages, generateConversationId } from './composables/useChatMessages'
@@ -174,6 +190,7 @@ const userStore = useUserStore()
 const agentId = ref<number>(0)
 const agentInfo = ref<Agent | null>(null)
 const authModalVisible = ref<boolean>(false)
+const personalizeVisible = ref<boolean>(false)
 const inputMessage = ref<string>('')
 
 // 思考等级：本地记忆，随每次发送透传给模型；档位列表按当前模型能力动态拉取
@@ -312,6 +329,17 @@ watch(() => userStore.isLoggedIn, (loggedIn) => {
 
 const { currentChatId, messages, isLoading, switchChat, loadMessages } = messagesApi
 
+// 历史消息加载中：开场白欢迎页据此避免在切入已有会话时闪现
+const historyLoading = ref(false)
+async function loadMessagesTracked(conversationId: string): Promise<void> {
+  historyLoading.value = true
+  try {
+    await loadMessages(conversationId)
+  } finally {
+    historyLoading.value = false
+  }
+}
+
 const currentChatTitle = computed(() => {
   const chat = chatList.value.find(c => c.id === currentChatId.value)
   return chat?.title || '新对话'
@@ -432,7 +460,7 @@ watch(
   (conversationId) => {
     if (conversationId && typeof conversationId === 'string') {
       switchChat(conversationId)
-      loadMessages(conversationId)
+      loadMessagesTracked(conversationId)
     } else {
       switchChat('')
     }
@@ -446,14 +474,15 @@ watch(
   () => userStore.isLoggedIn,
   (loggedIn) => {
     if (loggedIn && currentChatId.value && !messages.value.length) {
-      loadMessages(currentChatId.value)
+      loadMessagesTracked(currentChatId.value)
     }
   }
 )
 
 async function loadAgentInfo(): Promise<void> {
   try {
-    agentInfo.value = await getAgentById(agentId.value)
+    // detail 接口（不缓存）对内置智能体按当前用户合并个性化覆盖（开场白/图标/温度）
+    agentInfo.value = await getAgentDetail(agentId.value)
     if (userStore.isLoggedIn) {
       loadSessions()
     }
@@ -483,7 +512,13 @@ function selectChat(conversationId: string): void {
   sidebarClosePeek()
   switchChat(conversationId)
   router.push(`/chat/${agentId.value}/${conversationId}`)
-  loadMessages(conversationId)
+  loadMessagesTracked(conversationId)
+}
+
+/** 推荐问题点击直接发送 */
+function sendQuestion(question: string): void {
+  inputMessage.value = question
+  handleSend()
 }
 
 function handleSend(): void {

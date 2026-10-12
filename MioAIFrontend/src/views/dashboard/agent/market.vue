@@ -33,9 +33,19 @@
               <span class="time">{{ formatDate(agent.createTime) }}</span>
             </div>
             <div class="card-actions static">
-              <a-button class="chat-btn" type="primary" size="small" @click="startChat(agent)">
-                开始对话
-              </a-button>
+              <div class="action-row">
+                <a-button class="chat-btn" type="primary" size="small" @click="startChat(agent)">
+                  开始对话
+                </a-button>
+                <a-button
+                  class="template-btn"
+                  size="small"
+                  :loading="forkingId === agent.id"
+                  @click="useTemplate(agent)"
+                >
+                  使用该模板
+                </a-button>
+              </div>
             </div>
           </div>
         </a-col>
@@ -47,10 +57,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { message } from 'ant-design-vue'
 import { RobotOutlined, UserOutlined } from '@ant-design/icons-vue'
-import { getPublicAgents } from '@/api/agent'
+import { getPublicAgents, forkAgent } from '@/api/agent'
 import { formatDate } from '@/utils/format'
 import type { Agent, PageResponse } from '@/types'
+import { useUserStore } from '@/store/user'
 import BotIcon from '@/components/bot-icon/BotIcon.vue'
 import { parseBotIcon } from '@/components/bot-icon/types'
 import PageHeader from '../components/PageHeader.vue'
@@ -59,8 +71,14 @@ interface AgentWithUser extends Agent {
   userName?: string
 }
 
+const emit = defineEmits<{
+  (e: 'login-required'): void
+}>()
+
 const router = useRouter()
+const userStore = useUserStore()
 const loading = ref(false)
+const forkingId = ref<number | null>(null)
 const agentList = ref<AgentWithUser[]>([])
 
 function agentIcon(agent: Agent) {
@@ -81,6 +99,26 @@ async function fetchAgents(): Promise<void> {
 
 function startChat(agent: AgentWithUser): void {
   router.push(`/chat/${agent.id}`)
+}
+
+/** 使用该模板：复制一份为我的草稿智能体，跳转编辑页微调 */
+async function useTemplate(agent: AgentWithUser): Promise<void> {
+  if (!userStore.isLoggedIn) {
+    emit('login-required')
+    return
+  }
+  if (forkingId.value) return
+  try {
+    forkingId.value = agent.id
+    const newId = await forkAgent(agent.id)
+    message.success('已创建副本，可微调后发布')
+    router.push(`/dashboard/agent/${newId}`)
+  } catch (e) {
+    console.error(e)
+    message.error('复制模板失败')
+  } finally {
+    forkingId.value = null
+  }
 }
 
 onMounted(() => {
@@ -136,13 +174,26 @@ onMounted(() => {
       margin-top: auto;
     }
 
+    .action-row {
+      display: flex;
+      gap: 8px;
+    }
+
     .chat-btn {
-      width: 100%;
+      flex: 1;
       height: 35px;
       border-radius: 18px;
       font-size: 14px;
       font-weight: 600;
       color: #fff;
+    }
+
+    .template-btn {
+      flex: 1;
+      height: 35px;
+      border-radius: 18px;
+      font-size: 14px;
+      font-weight: 600;
     }
   }
 }

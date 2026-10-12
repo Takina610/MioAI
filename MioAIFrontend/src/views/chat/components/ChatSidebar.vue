@@ -10,6 +10,14 @@
       <div class="sidebar-top">
         <img :src="agentInfo?.avatar || '/logo.png'" alt="Avatar" class="agent-avatar" />
         <span class="agent-name">{{ agentInfo?.name || 'MioBot' }}</span>
+        <button
+          v-if="canPersonalize"
+          class="personalize-btn"
+          title="个性化设置"
+          @click="emit('personalize')"
+        >
+          <SettingOutlined />
+        </button>
       </div>
 
       <div class="sidebar-content">
@@ -117,6 +125,8 @@ const props = defineProps<{
   chatListLoading: boolean
   /** 正在流式执行中的会话 ID（列表项显示加载动画） */
   streamingChatIds?: string[]
+  /** 内置智能体且已登录：显示个性化设置入口 */
+  canPersonalize?: boolean
   /** 收起态：整体滑出屏幕，悬浮收缩按钮时临时滑出（peek） */
   collapsed: boolean
   peeking: boolean
@@ -132,6 +142,7 @@ const emit = defineEmits<{
   (e: 'delete', conversationId: string): void
   (e: 'load-more'): void
   (e: 'login'): void
+  (e: 'personalize'): void
 }>()
 
 const router = useRouter()
@@ -232,6 +243,28 @@ defineExpose({ checkListFilled, scrollToTop })
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    .personalize-btn {
+      margin-left: auto;
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: #8c8a82;
+      cursor: pointer;
+      font-size: 14px;
+      transition: color 0.2s, background 0.2s;
+
+      &:hover {
+        color: $primary-color;
+        background: rgba(42, 161, 169, 0.08);
+      }
     }
   }
 

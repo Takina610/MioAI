@@ -18,6 +18,10 @@ export function useAgentEdit(agentId: number) {
     description: '',
     avatar: '',
     systemPrompt: '',
+    openingMessage: '',
+    openingQuestions: [] as string[],
+    // null = 跟随引擎默认；提交时转换为 -1 哨兵（后端 update 忽略 null，-1 才是显式清除）
+    temperature: null as number | null,
     isPublic: 0
   })
 
@@ -30,6 +34,9 @@ export function useAgentEdit(agentId: number) {
       formData.description = res.description || ''
       formData.avatar = res.avatar || ''
       formData.systemPrompt = res.systemPrompt || ''
+      formData.openingMessage = res.openingMessage || ''
+      formData.openingQuestions = [...(res.openingQuestions || [])]
+      formData.temperature = res.temperature ?? null
       formData.isPublic = res.isPublic ?? 0
     } catch (e) {
       console.error(e)
@@ -46,19 +53,23 @@ export function useAgentEdit(agentId: number) {
       description: formData.description,
       avatar: formData.avatar,
       systemPrompt: formData.systemPrompt,
+      openingMessage: formData.openingMessage,
+      openingQuestions: formData.openingQuestions,
+      temperature: formData.temperature ?? -1,
       isPublic: formData.isPublic
     }
   }
 
-  async function handlePublish(): Promise<void> {
+  async function handlePublish(): Promise<{ version?: string }> {
     try {
       publishLoading.value = true
-      await publishAgent(agentId, buildUpdateRequest())
-      message.success('发布成功')
-      router.push('/dashboard/agent')
+      const version = await publishAgent(agentId, buildUpdateRequest())
+      message.success(`已发布 ${version || ''}`)
+      return { version }
     } catch (e) {
       console.error(e)
       message.error('发布失败')
+      return {}
     } finally {
       publishLoading.value = false
     }

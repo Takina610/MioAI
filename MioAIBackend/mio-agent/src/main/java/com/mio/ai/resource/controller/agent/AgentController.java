@@ -9,9 +9,15 @@ import com.mio.ai.common.utils.ResultUtils;
 import com.mio.ai.resource.model.dto.agent.AgentAddRequest;
 import com.mio.ai.resource.model.dto.agent.AgentQueryRequest;
 import com.mio.ai.resource.model.dto.agent.AgentUpdateRequest;
+import com.mio.ai.resource.model.dto.agent.AgentUserConfigRequest;
 import com.mio.ai.resource.model.vo.agent.AgentDetailVO;
+import com.mio.ai.resource.model.vo.agent.AgentUserConfigVO;
 import com.mio.ai.resource.model.vo.agent.AgentVO;
+import com.mio.ai.resource.model.vo.agent.AgentVersionVO;
+import com.mio.ai.resource.model.entity.Agent;
 import com.mio.ai.resource.service.agent.AgentService;
+import com.mio.ai.resource.service.agent.AgentUserConfigService;
+import com.mio.ai.resource.service.security.AccessGuardService;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -20,6 +26,8 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 
 /**
@@ -35,6 +43,9 @@ public class AgentController {
 
     @Resource
     private AgentService agentService;
+
+    @Resource
+    private AgentUserConfigService agentUserConfigService;
 
     @Resource
     private RedisComponent redisComponent;
@@ -103,12 +114,94 @@ public class AgentController {
 
     @PostMapping("/{agentId:\\d+}/publish")
     @CacheEvict(value = "agents", allEntries = true)
-    public BaseResponse<Boolean> publishAgent(
+    public BaseResponse<String> publishAgent(
             @PathVariable Long agentId,
             @Valid @RequestBody AgentUpdateRequest request,
             HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
-        agentService.publishAgent(agentId, request, userId);
-        return ResultUtils.success(true);
+        String version = agentService.publishAgent(agentId, request, userId);
+        return ResultUtils.success(version);
+    }
+
+    // ---------- 版本历史与回滚 ----------
+
+    @GetMapping("/{agentId:\\d+}/versions")
+    public BaseResponse<List<AgentVersionVO>> listVersions(
+            @PathVariable Long agentId, HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        return ResultUtils.success(agentService.listVersions(agentId, userId));
+    }
+
+    @PostMapping("/{agentId:\\d+}/versions/{versionId:\\d+}/rollback")
+    @CacheEvict(value = "agents", allEntries = true)
+    public BaseResponse<String> rollbackVersion(
+            @PathVariable Long agentId, @PathVariable Long versionId, HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        String version = agentService.rollbackToVersion(agentId, versionId, userId);
+        return ResultUtils.success(version);
+    }
+
+    // ---------- 广场模板复制 ----------
+
+    @PostMapping("/{templateId:\\d+}/fork")
+    public BaseResponse<Long> forkAgent(
+            @PathVariable Long templateId, HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        // 模板须当前用户可读（本人所有，或公开且已发布）
+        accessGuardService.checkAgentReadable(templateId, userId);
+        return ResultUtils.success(agentService.forkAgent(templateId, userId));
+    }
+
+    // ---------- 内置智能体的用户级个性化配置（MioBot 每人一套独立配置） ----------
+
+    @GetMapping("/{agentId:\\d+}/my-config")
+    public BaseResponse<AgentUserConfigVO> getMyConfig(
+            @PathVariable Long agentId, HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        requireBuiltinAgent(agentId);
+        com.mio.ai.resource.model.entity.AgentUserConfig config =
+                agentUserConfigService.getOverride(userId, agentId);
+        if (config == null) {
+            return ResultUtils.success(null);
+        }
+        AgentUserConfigVO vo = new AgentUserConfigVO();
+        vo.setAgentId(config.getAgentId());
+        vo.setSystemPrompt(config.getSystemPrompt());
+        vo.setOpeningMessage(config.getOpeningMessage());
+        vo.setOpeningQuestions(com.mio.ai.resource.service.agent.impl.AgentUserConfigServiceImpl
+                .parseQuestions(config.getOpeningQuestions()));
+        vo.setTemperature(config.getTemperature());
+        vo.setIcon(config.getIcon());
+        return ResultUtils.success(vo);
+    }
+
+    @PutMapping("/{agentId:\\d+}/my-config")
+    public BaseResponse<AgentUserConfigVO> saveMyConfig(
+            @PathVariable Long agentId,
+            @Valid @RequestBody AgentUserConfigRequest request,
+            HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        requireBuiltinAgent(agentId);
+        return ResultUtils.success(agentUserConfigService.saveConfig(agentId, request, userId));
+    }
+
+    @DeleteMapping("/{agentId:\\d+}/my-config")
+    @CacheEvict(value = "agents", allEntries = true)
+    public BaseResponse<Boolean> resetMyConfig(
+            @PathVariable Long agentId, HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        requireBuiltinAgent(agentId);
+        return ResultUtils.success(agentUserConfigService.resetConfig(agentId, userId));
+    }
+
+    /** 个性化配置仅对内置智能体（user_id 为空，如 MioBot）开放 */
+    private void requireBuiltinAgent(Long agentId) {
+        Agent agent = agentService.getById(agentId);
+        if (agent == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "智能体不存在");
+        }
+        if (agent.getUserId() != null) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "仅内置智能体支持个性化设置");
+        }
     }
 }
