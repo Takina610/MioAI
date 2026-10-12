@@ -40,6 +40,22 @@ public class DocumentCleanupService {
     private KnowledgeBaseService knowledgeBaseService;
 
     /**
+     * 删除整个知识库的全部向量分块：一次按 metadata.kbId 过滤删除，
+     * 替代级联删除时逐文档 N 次 DELETE
+     */
+    public void deleteVectorsByKbId(Long kbId) {
+        if (kbId == null) {
+            return;
+        }
+        try {
+            vectorStore.delete(new FilterExpressionBuilder().eq("kbId", kbId).build());
+            log.info("删除向量数据成功: kbId={}", kbId);
+        } catch (Exception e) {
+            log.warn("删除向量数据失败: kbId={}, {}", kbId, e.getMessage());
+        }
+    }
+
+    /**
      * 删除单个文档的全部向量分块
      */
     public void deleteVectorsByDocId(Long docId) {

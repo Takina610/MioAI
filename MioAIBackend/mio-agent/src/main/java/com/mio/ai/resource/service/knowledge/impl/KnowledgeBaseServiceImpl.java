@@ -18,6 +18,7 @@ import com.mio.ai.resource.model.enums.KnowledgeBaseStatusEnum;
 import com.mio.ai.resource.model.vo.knowledge.KnowledgeBaseVO;
 import com.mio.ai.resource.service.knowledge.DocumentService;
 import com.mio.ai.resource.service.knowledge.KnowledgeBaseService;
+import com.mio.ai.resource.service.knowledge.VectorizeTaskState;
 import com.mio.ai.user.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -42,6 +43,9 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
 
     @Autowired
     UserService userService;
+
+    @Autowired
+    VectorizeTaskState vectorizeTaskState;
 
     @Override
     public Long addKnowledgeBase(KnowledgeBaseAddRequest request, Long userId) {
@@ -99,12 +103,17 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "知识库ID不能为空");
         }
 
+        // 先置向量化中断标志：防在途任务在向量清完后又写入孤儿分块
+        // （任务收尾会按 kbId 再兜底清一遍并消费标志）
+        vectorizeTaskState.requestCancel(id);
+
         // 级联清理文档关联资源（向量数据、R2 文件、文档记录）
         documentService.deleteDocumentsByKbIdCascade(id);
 
         // 删除智能体与该知识库的关联记录
         agentKnowledgeMapper.delete(new LambdaQueryWrapper<AgentKnowledge>().eq(AgentKnowledge::getKbId, id));
 
+        vectorizeTaskState.removeSnapshot(id);
         return this.removeById(id);
     }
 

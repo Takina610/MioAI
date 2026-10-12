@@ -24,10 +24,23 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
 public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> implements DocumentService {
+
+    /**
+     * R2 对象删除专用小线程池（守护线程）：级联删除时并行清对象存储
+     */
+    private static final ExecutorService R2_CLEAN_POOL = Executors.newFixedThreadPool(4, r -> {
+        Thread t = new Thread(r, "kb-r2-clean");
+        t.setDaemon(true);
+        return t;
+    });
 
     @Resource
     @Lazy
@@ -88,25 +101,12 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
     }
 
     /**
-     * 文档删除公共路径：R2 文件 -> 向量分块 -> 记录 -> 知识库统计
+     * 文档删除公共路径：关联资源（向量 -> R2 文件 -> 记录）+ 知识库统计
      */
     private boolean deleteDocumentInternal(Document document) {
-        if (document.getFilePath() != null && !document.getFilePath().isEmpty()) {
-            try {
-                r2Util.deleteFile(document.getFilePath());
-            } catch (Exception e) {
-                log.warn("删除R2文件失败: {}", document.getFilePath(), e);
-            }
-        }
-
-        // 向量清理按 metadata.docId 过滤删除，与文档状态无关（半途失败的文档也可能有残留分块）
-        documentCleanupService.deleteVectorsByDocId(document.getId());
-
-        boolean removed = this.removeById(document.getId());
-
+        documentCleanupService.deleteDocumentAssets(document);
         documentCleanupService.updateKnowledgeBaseStats(document.getKbId());
-
-        return removed;
+        return true;
     }
 
     @Override
@@ -189,10 +189,40 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
         }
         List<Document> documents = this.list(
                 new LambdaQueryWrapper<Document>().eq(Document::getKbId, kbId));
-
-        for (Document document : documents) {
-            deleteDocumentInternal(document);
+        if (documents.isEmpty()) {
+            return true;
         }
+
+        // 向量按 kbId 一次清完，替代逐文档 N 次 DELETE
+        documentCleanupService.deleteVectorsByKbId(kbId);
+
+        // R2 文件并行删：网络往返是级联删除的主要耗时；单文件失败只记日志不阻断
+        // （对象存储删除幂等，残留对象不影响业务正确性，只占用存储）
+        CountDownLatch latch = new CountDownLatch((int) documents.stream()
+                .filter(d -> StringUtils.isNotBlank(d.getFilePath())).count());
+        for (Document document : documents) {
+            if (StringUtils.isBlank(document.getFilePath())) {
+                continue;
+            }
+            R2_CLEAN_POOL.submit(() -> {
+                try {
+                    r2Util.deleteFile(document.getFilePath());
+                } catch (Exception e) {
+                    log.warn("删除R2文件失败: {}", document.getFilePath(), e);
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+        try {
+            latch.await(5, TimeUnit.MINUTES);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        // 记录批量删除 + 统计只刷一次（逐文档刷是 O(N) 次全量统计查询）
+        this.removeByIds(documents.stream().map(Document::getId).toList());
+        documentCleanupService.updateKnowledgeBaseStats(kbId);
 
         return true;
     }

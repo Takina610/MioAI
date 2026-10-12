@@ -10,7 +10,6 @@ import com.mio.ai.common.utils.ResultUtils;import com.mio.ai.bot.model.entity.Ch
 import com.mio.ai.bot.repository.ChatHistoryRepository;
 import com.mio.ai.user.model.vo.LoginUserVO;
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -33,19 +32,10 @@ public class ChatMemoryController {
     ChatHistoryRepository chatHistoryRepository;
 
     @Autowired
-    private ChatMemory chatMemory;
-
-    @Autowired
     RedisComponent redisComponent;
 
     @Autowired
-    com.mio.ai.bot.service.AgentMessageService agentMessageService;
-
-    @Autowired
-    com.mio.ai.bot.service.ChatFileService chatFileService;
-
-    @Autowired
-    com.mio.ai.bot.service.AttachmentDeleteQueue attachmentDeleteQueue;
+    com.mio.ai.bot.service.ChatCascadeDeleteService chatCascadeDeleteService;
 
 
     /**
@@ -97,19 +87,9 @@ public class ChatMemoryController {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "会话正在执行中，请等待本轮完成后再删除");
         }
         try {
-            chatHistoryRepository.clearByChatId(chatId);
-            chatMemory.clear(chatId);
-            agentMessageService.deleteByConversation(chatId);
-            // 台账先置待删（持久凭证），再入队删沙箱目录；入队失败由兜底扫描重入队
-            chatFileService.markPendingByConversation(chatId);
+            chatCascadeDeleteService.deleteConversationCompletely(chatId);
         } catch (Exception e){
             return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
-        }
-        try {
-            attachmentDeleteQueue.enqueueChatDir(chatId);
-        } catch (Exception e){
-            // 不影响删除结果：待删台账行已在，兜底扫描会重入队
-            log.warn("会话文件删除入队失败（兜底扫描会重试）, chatId={}: {}", chatId, e.getMessage());
         }
         return ResultUtils.success(true);
     }

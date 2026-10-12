@@ -25,6 +25,7 @@ import com.mio.ai.user.mapper.UserMapper;
 import com.mio.ai.user.model.entity.User;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
 
@@ -106,6 +107,7 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public boolean deleteMcpTool(Long id, Long userId) {
         if (id == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "工具ID不能为空");
@@ -117,10 +119,16 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
         if (!mcpTool.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限删除该工具");
         }
-        // 删除智能体与该 MCP 的关联记录，并关闭其缓存客户端
+        // 绑定删除与本体删除同一事务，避免删一半留下引用悬空
         agentMcpMapper.delete(new LambdaQueryWrapper<AgentMcp>().eq(AgentMcp::getMcpId, id));
-        mcpClientManagerService.evictClient(id);
-        return this.removeById(id);
+        boolean removed = this.removeById(id);
+        // 关闭缓存客户端（外部资源操作，失败不影响已提交的删除）
+        try {
+            mcpClientManagerService.evictClient(id);
+        } catch (Exception e) {
+            // 客户端失活由下次装配自然重建，这里只记日志
+        }
+        return removed;
     }
 
     @Override

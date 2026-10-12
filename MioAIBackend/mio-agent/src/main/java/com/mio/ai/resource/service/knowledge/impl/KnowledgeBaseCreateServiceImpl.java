@@ -16,6 +16,8 @@ import com.mio.ai.framework.rag.TxtReader;
 import com.mio.ai.resource.service.knowledge.DocumentCleanupService;
 import com.mio.ai.resource.service.knowledge.KnowledgeBaseCreateService;
 import com.mio.ai.resource.service.knowledge.KnowledgeBaseService;
+import com.mio.ai.resource.service.knowledge.VectorizeTaskState;
+import com.mio.ai.resource.service.knowledge.VectorizeTaskState.VectorizeProgress;
 import com.mio.ai.framework.rag.CustomTokenTextSplitter;
 import com.mio.ai.framework.rag.KeywordEnricher;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +33,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -43,10 +44,10 @@ import java.util.stream.IntStream;
  * @author: Takina
  * @date: 2026/4/5
  * @description: 知识库创建服务实现
- * <p>向量化任务模型：任务由第一个 SSE 连接触发，之后只跑一份（runningKbIds 防重入）；
- * 实时进度写入 progressMap 快照，任何时刻新开的 SSE 连接（刷新页面/网络波动重连/换设备）
- * 都以观察者身份从快照接管进度，与 Agent 会话的重连回放同构。服务重启后快照丢失，
- * 此时重连会走正常启动路径并幂等处理（只处理 status 0/1/3 的文档）。
+ * <p>速度模型：嵌入走 42x 网关 5 RPM 限额（EmbeddingThrottle 全局串行发放），
+ * RPM 是硬上限，提速只能靠减少请求数——单次嵌入请求尽量打满
+ * （embed-batch-size 与分块大小的乘积控制在分批策略 token 上限内）；
+ * 文件级并发（file-concurrency）只用于让解析/下载与嵌入等待重叠，不产生额外 API 压力。
  */
 @Slf4j
 @Service
@@ -77,11 +78,28 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
     @Autowired
     private KeywordEnricher keywordEnricher;
 
+    @Autowired
+    private VectorizeTaskState taskState;
+
     /**
      * 分块大小（token），可通过 mio.ai.rag.chunk-size 调整，用于 RAG 分块消融实验（400/800/1200）
      */
     @Value("${mio.ai.rag.chunk-size:800}")
     private int chunkSize;
+
+    /**
+     * 单次嵌入请求携带的分块数：42x key 限 5 RPM，每次请求多带分块是唯一提速杠杆。
+     * 默认 8 ≈ 8×800=6400 token，在分批策略 8191 token 上限内恰好一次请求发完
+     */
+    @Value("${mio.ai.rag.embed-batch-size:8}")
+    private int embedBatchSize;
+
+    /**
+     * 文件级并发数：解析（S3 下载/PDF 解析）与嵌入节流等待重叠，
+     * 不突破嵌入 RPM 上限，调大只影响吞吐不增加限流风险
+     */
+    @Value("${mio.ai.rag.file-concurrency:4}")
+    private int fileConcurrency;
 
     /**
      * 入库前用对话模型为分块提取关键词写入 metadata（当前检索不消费该字段），默认关闭
@@ -108,35 +126,6 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
     TikaReader tikaReader;
 
     private final ExecutorService executorService = Executors.newCachedThreadPool();
-
-    // 存储正在进行的向量化任务的中断标志
-    private final Map<Long, Boolean> cancellationFlags = new java.util.concurrent.ConcurrentHashMap<>();
-
-    /**
-     * 正在执行向量化任务的知识库集合：同一 KB 的任务全局只跑一份，
-     * 后续 SSE 连接一律进入观察者模式
-     */
-    private final Set<Long> runningKbIds = ConcurrentHashMap.newKeySet();
-
-    /**
-     * 向量化进度快照（KB 维度）：任务线程写，所有 SSE 连接（发起者 + 观察者）读
-     */
-    private final Map<Long, VectorizeProgress> progressMap = new ConcurrentHashMap<>();
-
-    /**
-     * 向量化进度快照。done 为终态标志；failed/cancelled 细分终态类型
-     */
-    public static class VectorizeProgress {
-        volatile int total;
-        final AtomicInteger current = new AtomicInteger();
-        final AtomicInteger failedCount = new AtomicInteger();
-        volatile String message = "";
-        volatile String fileName;
-        volatile boolean done;
-        volatile boolean failed;
-        volatile boolean cancelled;
-        volatile String errorMessage;
-    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -204,7 +193,7 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
         }
 
         // 防重入：任务已在跑时本次连接只做观察者（无论 force——全量重建也不允许与进行中的任务并发）
-        if (!runningKbIds.add(kbId)) {
+        if (!taskState.tryAcquire(kbId)) {
             log.info("向量化任务进行中，SSE 连接转为观察者模式: kbId={}", kbId);
             observeProgress(kbId, emitter);
             return;
@@ -226,10 +215,10 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
      */
     private void runVectorizeTask(Long kbId, KnowledgeBase kb, SseEmitter emitter) {
         VectorizeProgress progress = new VectorizeProgress();
-        progressMap.put(kbId, progress);
+        taskState.putSnapshot(kbId, progress);
         try {
-            // 清除中断标志
-            cancellationFlags.remove(kbId);
+            // 清掉上次删除/取消留下的陈旧标志（此时无任务在跑，新任务正常启动）
+            taskState.consumeCancellation(kbId);
 
             List<Document> documents = documentMapper.selectList(
                 new QueryWrapper<Document>()
@@ -245,8 +234,7 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
                 return;
             }
 
-            // 分批次处理，每批处理2个文件
-            int batchSize = 2;
+            int batchSize = Math.max(1, fileConcurrency);
             int batchCount = (int) Math.ceil((double) total / batchSize);
 
             List<List<Document>> batches = IntStream.range(0, batchCount)
@@ -255,7 +243,7 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
                             Math.min((i + 1) * batchSize, total))))
                     .collect(Collectors.toList());
 
-            log.info("共 {} 个文件，分为 {} 批次并发处理", total, batchCount);
+            log.info("共 {} 个文件，{} 路并发处理，单次嵌入 {} 块", total, batchCount, embedBatchSize);
 
             AtomicInteger completed = new AtomicInteger(0);
             AtomicInteger failedCount = new AtomicInteger(0);
@@ -268,7 +256,7 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
                     try {
                         for (Document doc : batch) {
                             // 检查是否被中断
-                            if (Boolean.TRUE.equals(cancellationFlags.get(kbId))) {
+                            if (taskState.isCancelled(kbId)) {
                                 log.info("向量化任务被中断: kbId={}", kbId);
                                 return;
                             }
@@ -329,20 +317,18 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
                                     }
                                 }
 
-                                // 分批添加到向量存储，每批最多5个文档
-                                int embeddingBatchSize = 5;
-                                for (int i = 0; i < enrichedDocuments.size(); i += embeddingBatchSize) {
+                                for (int i = 0; i < enrichedDocuments.size(); i += embedBatchSize) {
                                     // 检查是否被中断
-                                    if (Boolean.TRUE.equals(cancellationFlags.get(kbId))) {
+                                    if (taskState.isCancelled(kbId)) {
                                         log.info("向量化任务被中断: kbId={}", kbId);
                                         return;
                                     }
 
-                                    int end = Math.min(i + embeddingBatchSize, enrichedDocuments.size());
+                                    int end = Math.min(i + embedBatchSize, enrichedDocuments.size());
                                     List<org.springframework.ai.document.Document> embeddingBatch =
                                             enrichedDocuments.subList(i, end);
                                     addEmbeddingBatchWithRetry(embeddingBatch);
-                                    log.info("向量化批次完成: {}/{}", Math.min(i + embeddingBatchSize, enrichedDocuments.size()), enrichedDocuments.size());
+                                    log.info("向量化批次完成: {}/{}", end, enrichedDocuments.size());
                                 }
 
                                 doc.setStatus(2);
@@ -368,11 +354,13 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
                 });
             }
 
-            // 等待所有批次完成
-            countDownLatch.await(30, java.util.concurrent.TimeUnit.MINUTES);
+            // 等待所有批次完成：嵌入请求受全局 RPM 节流，大库耗时与分块数成正比，
+            // 设超时会在任务仍在跑时误报完成并放开重入，故不设上限
+            // （内部所有 IO 均有各自超时，取消标志可随时停掉整个任务）
+            countDownLatch.await();
 
             // 检查是否被中断
-            if (Boolean.TRUE.equals(cancellationFlags.get(kbId))) {
+            if (taskState.isCancelled(kbId)) {
                 log.info("向量化任务已取消: kbId={}", kbId);
                 progress.cancelled = true;
                 progress.done = true;
@@ -404,7 +392,13 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
             sendRawEvent(emitter, "{\"type\":\"error\",\"data\":{\"message\":\"" + progress.errorMessage + "\"}}");
         } finally {
             progress.done = true;
-            runningKbIds.remove(kbId);
+            // 取消/删除竞态兜底：文件线程的取消检查与向量写入之间存在窗口
+            // （一次嵌入请求最长可达数十秒），此处按 kbId 再清一遍，保证不留孤儿向量
+            if (taskState.consumeCancellation(kbId)) {
+                progress.cancelled = true;
+                documentCleanupService.deleteVectorsByKbId(kbId);
+            }
+            taskState.release(kbId);
         }
     }
 
@@ -413,7 +407,7 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
      * 服务重启导致快照丢失时直接发 done（前端会拉取到真实的文档状态）
      */
     private void observeProgress(Long kbId, SseEmitter emitter) {
-        VectorizeProgress progress = progressMap.get(kbId);
+        VectorizeProgress progress = taskState.snapshot(kbId);
         if (progress == null) {
             // 快照不存在（服务重启/历史任务）：发 done 让前端刷新文档状态即可
             sendRawEvent(emitter, buildDoneEvent(0, 0, 0));
@@ -513,23 +507,22 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void cancelCreation(Long kbId, Long userId) {
-        // 设置中断标志
-        cancellationFlags.put(kbId, true);
+        // 置中断标志：文件线程在下一个检查点停止；标志由任务收尾清除并兜底清一遍向量
+        taskState.requestCancel(kbId);
         log.info("设置向量化中断标志: kbId={}", kbId);
 
         KnowledgeBase kb = knowledgeBaseService.getById(kbId);
         if (kb == null || !kb.getUserId().equals(userId)) {
+            taskState.removeSnapshot(kbId);
             return;
         }
 
-        // 删除知识库及其所有数据
+        // 删除知识库及其所有数据（不走外层事务：级联含 R2/向量等外部 IO，逐项自身原子）
         knowledgeBaseService.deleteKnowledgeBaseCascade(kbId);
 
-        // 清除中断标志与进度快照
-        cancellationFlags.remove(kbId);
-        progressMap.remove(kbId);
+        // 清除进度快照（取消标志由任务收尾消费清除）
+        taskState.removeSnapshot(kbId);
     }
 
     @Override
@@ -563,7 +556,7 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
             item.put("kbId", rowKbId);
             item.put("kbName", kb != null ? kb.getName() : "");
             item.put("pendingDocs", Integer.parseInt(String.valueOf(row.getOrDefault("pending_count", "0"))));
-            item.put("running", runningKbIds.contains(rowKbId));
+            item.put("running", taskState.isRunning(rowKbId));
             return item;
         }).toList();
     }
