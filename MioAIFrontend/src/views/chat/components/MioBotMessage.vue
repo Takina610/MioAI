@@ -375,22 +375,26 @@ const uiRendering = computed(() =>
 /** 最终回答 = 全部 ui 块（按原序，永不进过程区）+ 过程边界之后的 text 块：
  *  相邻 text 块合并成一段 Markdown，ui 块保持独立位置（流式期 render_ui 落在两段文本
  *  之间时正文自然分段）。边界后仍可能出现 thinking（模型收尾前的短思考）——
- *  它不再把已落位的 ui 块打回过程区 */
+ *  它不再把已落位的 ui 块打回过程区。actions（后续操作按钮）固定沉底：
+ *  按钮是"预测用户下一步"的组件，放在整条回答末尾才符合直觉 */
 type AnswerSegment = { kind: 'text'; text: string } | { kind: 'ui'; block: Extract<MessageBlock, { type: 'ui' }> }
 const answerSegments = computed<AnswerSegment[]>(() => {
   const boundary = lastNonTextIndex.value
   const segments: AnswerSegment[] = []
+  const trailingActions: AnswerSegment[] = []
   for (let i = 0; i < props.blocks.length; i++) {
     const block = props.blocks[i]
     if (block.type === 'ui') {
-      segments.push({ kind: 'ui', block })
+      const seg: AnswerSegment = { kind: 'ui', block }
+      if (block.kind === 'actions') trailingActions.push(seg)
+      else segments.push(seg)
     } else if (block.type === 'text' && i > boundary && block.text) {
       const last = segments[segments.length - 1]
       if (last && last.kind === 'text') last.text += block.text
       else segments.push({ kind: 'text', text: block.text })
     }
   }
-  return segments
+  return [...segments, ...trailingActions]
 })
 
 // ---------- 问答块（AskUserQuestion）的草稿与提交 ----------

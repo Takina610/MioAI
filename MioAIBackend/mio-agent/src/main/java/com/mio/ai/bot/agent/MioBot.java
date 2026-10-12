@@ -399,8 +399,7 @@ public class MioBot {
                     + "introduction; a chart + stat cards for data; phase cards + tasks for a plan; advice "
                     + "cards for recommendations), and keep Markdown prose only for the lead-in and "
                     + "interpretation. One call carrying 2-4 blocks is usually enough — render each piece of "
-                    + "content once and do not repeat it in later calls. Skip the blocks only if the answer is "
-                    + "genuinely one or two sentences.\n</system-reminder>";
+                    + "content once and do not repeat it in later calls.\n</system-reminder>";
         }
         return prompt;
     }
