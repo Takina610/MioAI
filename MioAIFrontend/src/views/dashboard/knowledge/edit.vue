@@ -123,14 +123,24 @@
                 />
               </div>
 
+              <div v-if="vectorizing" class="vectorize-live">
+                <div class="vl-head">
+                  <span class="vl-file">{{ vectorProgress.fileName || '向量化中' }}</span>
+                  <span class="vl-count">{{ vectorProgress.current }}/{{ vectorProgress.total }}</span>
+                </div>
+                <div class="vl-track">
+                  <i class="vl-fill" :style="{ width: `${vectorPercent}%` }" />
+                </div>
+              </div>
               <a-popconfirm
+                v-else
                 title="将按当前分块设置重建全部文档，耗时较长，确定继续？"
                 ok-text="重建"
                 cancel-text="取消"
                 :disabled="chunkDirty"
                 @confirm="handleRevectorize(true)"
               >
-                <a-button danger block :disabled="chunkDirty" :loading="vectorizing" class="rebuild-btn">
+                <a-button danger block :disabled="chunkDirty" class="rebuild-btn">
                   <ReloadOutlined /> 按当前设置全量重建
                 </a-button>
               </a-popconfirm>
@@ -164,8 +174,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onBeforeUnmount, computed, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
+import { message, Modal } from 'ant-design-vue'
 import { useUserStore } from '@/store/user'
 import {
   getKnowledgeBaseById,
@@ -381,16 +391,26 @@ async function handleDocRevectorize(record: Document): Promise<void> {
 
 const vectorizing = ref(false)
 const reconnNotified = ref(false)
+const vectorProgress = reactive({ current: 0, total: 0, fileName: '' })
+const vectorPercent = computed(() =>
+  vectorProgress.total ? Math.round((vectorProgress.current / vectorProgress.total) * 100) : 0
+)
 let eventSource: EventSource | null = null
 const hasRetryableDocs = computed(() =>
   documentList.value.some((d) => d.status === 1 || d.status === 3)
 )
+
+function handleBeforeUnload(e: BeforeUnloadEvent): void {
+  e.preventDefault()
+  e.returnValue = ''
+}
 
 function closeVectorizeStream(): void {
   eventSource?.close()
   eventSource = null
   vectorizing.value = false
   reconnNotified.value = false
+  window.removeEventListener('beforeunload', handleBeforeUnload)
 }
 
 function handleRevectorize(force: boolean): void {
@@ -399,13 +419,21 @@ function handleRevectorize(force: boolean): void {
   }
   vectorizing.value = true
   reconnNotified.value = false
+  vectorProgress.current = 0
+  vectorProgress.total = 0
+  vectorProgress.fileName = ''
+  window.addEventListener('beforeunload', handleBeforeUnload)
   const token = localStorage.getItem('token') || ''
   eventSource = vectorizeKnowledgeFiles(kbId.value, token, force)
   eventSource.onmessage = (event) => {
     reconnNotified.value = false
     try {
       const payload = JSON.parse(event.data)
-      if (payload.type === 'done') {
+      if (payload.type === 'progress') {
+        vectorProgress.current = payload.data?.current ?? 0
+        vectorProgress.total = payload.data?.total ?? 0
+        vectorProgress.fileName = payload.data?.fileName || ''
+      } else if (payload.type === 'done') {
         message.success(payload.data?.message || '向量化完成')
         closeVectorizeStream()
         refresh()
@@ -430,6 +458,24 @@ function handleRevectorize(force: boolean): void {
     }
   }
 }
+
+/** 向量化进行中拦截路由离开：任务在后台继续，回管理页可恢复进度 */
+onBeforeRouteLeave((to) => {
+  if (!vectorizing.value) {
+    return true
+  }
+  Modal.confirm({
+    title: '向量化正在进行',
+    content: '任务会在后台继续，回到知识库管理页可恢复进度。',
+    okText: '离开',
+    cancelText: '留下',
+    onOk: () => {
+      closeVectorizeStream()
+      router.push(to)
+    }
+  })
+  return false
+})
 
 onBeforeUnmount(() => {
   closeVectorizeStream()
@@ -564,6 +610,52 @@ onMounted(() => {
 
     :deep(.ant-slider) {
       margin: 4px 0 10px;
+    }
+  }
+
+  .vectorize-live {
+    margin-top: 8px;
+    padding: 12px 14px;
+    border: 1px solid rgba($primary-color, 0.3);
+    background: rgba($primary-color, 0.05);
+    border-radius: 10px;
+
+    .vl-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: $text-secondary;
+
+      .vl-file {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .vl-count {
+        flex-shrink: 0;
+        font-weight: 600;
+        color: $text-dark;
+        font-variant-numeric: tabular-nums;
+      }
+    }
+
+    .vl-track {
+      height: 4px;
+      border-radius: 2px;
+      background: $border-warm-subtle;
+      overflow: hidden;
+
+      .vl-fill {
+        display: block;
+        height: 100%;
+        border-radius: 2px;
+        background: $primary-color;
+        transition: width 0.4s ease;
+      }
     }
   }
 
