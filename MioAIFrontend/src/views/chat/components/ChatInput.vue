@@ -2,7 +2,7 @@
   <div class="chat-center-area" :class="{ 'has-messages': hasMessages, embedded }">
     <!-- 消息列表底边渐隐：贴在输入区上缘，消息滚出列表边界时柔和消隐而非硬切 -->
     <div v-if="hasMessages && !embedded" class="list-fade-overlay" aria-hidden="true"></div>
-    <div class="welcome-section" v-if="!hasMessages && !loading">
+    <div class="welcome-section" v-if="!hasMessages && !loading && !welcomeOverlay">
       <BotIcon
         v-if="agentIconConfig"
         :shape="agentIconConfig.shape"
@@ -166,6 +166,8 @@ const props = defineProps<{
   embedded?: boolean
   /** 显示取消按钮（编辑模式用） */
   cancelable?: boolean
+  /** 页面已渲染覆盖式欢迎层（个性化开场白）时隐藏本组件的时段问候，避免两层叠加 */
+  welcomeOverlay?: boolean
 }>()
 
 const emit = defineEmits<{

@@ -89,16 +89,16 @@ const expanded = ref(false)
     text-overflow: ellipsis;
   }
 
-  // 展开的 SKILL.md 内容：zcode 深色代码块，含 <skill_content> 包裹
+  // 展开的 SKILL.md 内容：与其他消息展开区同一套浅色样式，含 <skill_content> 包裹
   .skill-content {
     margin: 4px 0 2px 0;
-    padding: 10px 14px;
-    background: #1e1e1e;
+    padding: 8px 12px;
+    background: #f5f3ec;
     border-radius: 8px;
     font-size: 12px;
-    line-height: 1.6;
+    line-height: 1.55;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    color: #d4d4d4;
+    color: #5f5d55;
     white-space: pre-wrap;
     word-break: break-word;
     user-select: text;

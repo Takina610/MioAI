@@ -72,6 +72,9 @@ public class BotEventChannel {
     // 技能名表（skillId → 名称，MioBot 注入）：工具读取 skills/<id>/ 文件时在工具行标注来源技能
     private volatile Map<String, String> skillNames = Map.of();
 
+    // 本轮已展示过技能行的技能（channel 与轮次同生命周期）：同一技能只展示一次，重复读取保持普通工具行
+    private final java.util.Set<String> emittedSkills = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     // WIP 行（增量落库）：轮次开始即建行，每个模型步刷新 blocks，正常收尾删除。
     // 进程崩溃/被杀时该行保留已流出的部分过程，刷新页面与下一轮水合都拿得到
     private volatile Long wipRowId;
@@ -587,8 +590,9 @@ public class BotEventChannel {
 
     /**
      * 技能使用检测（zcode 语义）：技能经系统提示清单按需暴露，模型用 Read 读 skills/&lt;id&gt;/ 下的文件
-     * 即为使用该技能——把该 Read 工具行升级为「技能 &lt;名&gt;」行（展开看 SKILL.md 内容），
-     * 是否用技能由模型按需决定，不做会话开头的"加载技能"行
+     * 即为使用该技能——把该 Read 工具行升级为「技能 &lt;名&gt;」行（展开看 SKILL.md 内容）。
+     * 同一技能本轮只升级第一次读取，后续重读保持普通工具行；是否用技能由模型按需决定，
+     * 不做会话开头的"加载技能"行
      */
     private String upgradeToSkillRow(Map<String, Object> block, String content) {
         if (skillNames.isEmpty()) {
@@ -602,7 +606,7 @@ public class BotEventChannel {
         java.util.regex.Matcher matcher = SKILL_PATH_PATTERN.matcher(args);
         while (matcher.find()) {
             String name = skillNames.get(matcher.group(1));
-            if (name != null && !name.isBlank()) {
+            if (name != null && !name.isBlank() && emittedSkills.add(name)) {
                 block.clear();
                 block.put("type", "skill_use");
                 block.put("name", name);

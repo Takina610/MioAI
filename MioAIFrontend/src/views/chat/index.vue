@@ -84,6 +84,7 @@
           :agent-avatar="agentInfo?.avatar"
           :agent-icon="agentInfo?.icon"
           :has-messages="messages.length > 0"
+          :welcome-overlay="!isLoading && !historyLoading && messages.length === 0"
           :loading="isLoading"
           :supported-efforts="supportedEfforts"
           :render-cards="renderCards"
