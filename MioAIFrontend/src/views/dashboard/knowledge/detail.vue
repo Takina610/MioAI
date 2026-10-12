@@ -4,7 +4,13 @@
       back-label="公共知识库"
       back-to="/dashboard/public-knowledge"
       :title="knowledgeBase?.name || '知识库详情'"
-    />
+    >
+      <template #actions>
+        <a-button @click="goHitTest">
+          <AimOutlined /> 命中测试
+        </a-button>
+      </template>
+    </PageHeader>
 
     <div class="dash-page-content">
       <a-spin :spinning="loading">
@@ -43,6 +49,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import { AimOutlined } from '@ant-design/icons-vue'
 import {
   getKnowledgeBaseById,
   type Document
@@ -70,6 +77,10 @@ const { docLoading, documentList, pagination, fetchDocuments, handleTableChange 
 const kbId = computed(() => Number(route.params.id))
 
 const authorName = computed(() => knowledgeBase.value?.userName || '未知用户')
+
+function goHitTest(): void {
+  router.push(`/dashboard/public-knowledge/similaritySearch/${kbId.value}`)
+}
 
 async function fetchKnowledgeBase(): Promise<void> {
   loading.value = true

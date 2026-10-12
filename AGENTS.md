@@ -29,6 +29,7 @@ git push origin        # 等价于 git push origin master:main
 
 - 长任务（向量化、批量解析等 SSE/轮询任务）必须同时满足：实时进度反馈（进度条+当前处理项，SSE progress 事件不能丢弃）、路由离开确认（告知任务后台继续+如何恢复）、`beforeunload` 关页守卫。只给按钮转圈不算反馈。
 - 控件限制优先于文字说明：能用 maxlength/minmax/disabled 表达的规则不写成文字。
+- 列表卡片的操作按钮常显，不搞 hover 浮现（触屏与可发现性双输）；同类列表共用卡片组件（如 KbCard）。
 
 ### 视觉
 
