@@ -4,6 +4,7 @@
       back-label="智能体管理"
       back-to="/dashboard/agent"
       :title="agentDetail?.name || '智能体编辑'"
+      :description="agentDetail?.description || ''"
       title-clickable
       @title-click="editModalVisible = true"
     >
@@ -21,6 +22,13 @@
         </span>
       </template>
       <template #actions>
+        <div class="public-switch">
+          <span class="switch-label">公开</span>
+          <a-switch
+            :checked="formData.isPublic === 1"
+            @change="(checked: any) => (formData.isPublic = checked ? 1 : 0)"
+          />
+        </div>
         <a-button type="primary" :loading="publishLoading" @click="handlePublish">
           <SendOutlined /> 发布
         </a-button>
@@ -28,128 +36,109 @@
     </PageHeader>
 
     <div class="dash-page-content" v-if="!loading">
-      <div class="content-wrapper">
-        <div class="left-section">
-          <div class="dash-section">
-            <h3 class="section-title">资源配置</h3>
+      <div class="edit-sections">
+        <div class="dash-section prompt-section">
+          <h3 class="section-title">系统提示词</h3>
+          <a-textarea
+            v-model:value="formData.systemPrompt"
+            placeholder="定义这个智能体的角色、语气与行为边界"
+            :auto-size="{ minRows: 8, maxRows: 20 }"
+            :maxlength="995904"
+            show-count
+          />
+        </div>
 
-            <div class="resource-section">
-              <div class="resource-header">
-                <span class="resource-title">知识库</span>
-                <a-button type="link" size="small" @click="showKnowledgeDrawer">
-                  <PlusOutlined /> 添加
-                </a-button>
-              </div>
-              <div class="resource-list" v-if="agentDetail?.knowledgeBases?.length">
-                <ResourceItem
-                  v-for="kb in agentDetail.knowledgeBases"
-                  :key="kb.id"
-                  :icon="BookOutlined"
-                  :name="kb.name"
-                  :description="kb.description"
-                  :count="kb.documentCount || 0"
-                  :count-icon="FileTextOutlined"
-                  removable
-                  @remove="handleRemoveKnowledge(kb.id)"
-                  @expand="fetchKnowledgeDocuments(kb.id, 'main')"
-                >
-                  <template #expand>
-                    <ResourceExpandList
-                      :icon="FileTextOutlined"
-                      :title="`${kb.documentCount} 个文档`"
-                      :items="getDocuments(kb.id, 'main')"
-                    />
-                    <KbRetrievalConfig :agent-id="agentId" :kb-id="kb.id" />
-                  </template>
-                </ResourceItem>
-              </div>
+        <div class="resource-grid">
+          <div class="dash-section resource-card">
+            <div class="resource-header">
+              <span class="resource-title">知识库<span v-if="agentDetail?.knowledgeBases?.length" class="resource-count">{{ agentDetail.knowledgeBases.length }}</span></span>
+              <a-button type="link" size="small" @click="showKnowledgeDrawer">
+                <PlusOutlined /> 添加
+              </a-button>
             </div>
-
-            <a-divider style="margin: 12px 0" />
-
-            <div class="resource-section">
-              <div class="resource-header">
-                <span class="resource-title">MCP工具</span>
-                <a-button type="link" size="small" @click="showMcpDrawer">
-                  <PlusOutlined /> 添加
-                </a-button>
-              </div>
-              <div class="resource-list" v-if="agentDetail?.mcpTools?.length">
-                <ResourceItem
-                  v-for="mcp in agentDetail.mcpTools"
-                  :key="mcp.id"
-                  :icon="ToolOutlined"
-                  :name="mcp.name"
-                  :description="mcp.description"
-                  :count="countMcpTools(mcp.toolInfo)"
-                  :count-icon="ToolOutlined"
-                  removable
-                  @remove="handleRemoveMcp(mcp.id)"
-                >
-                  <template #expand>
-                    <ResourceExpandList
-                      :icon="ToolOutlined"
-                      :title="`${countMcpTools(mcp.toolInfo)} 个工具`"
-                      :items="getTools(mcp)"
-                    />
-                  </template>
-                </ResourceItem>
-              </div>
+            <div class="resource-list" v-if="agentDetail?.knowledgeBases?.length">
+              <ResourceItem
+                v-for="kb in agentDetail.knowledgeBases"
+                :key="kb.id"
+                :icon="BookOutlined"
+                :name="kb.name"
+                :description="kb.description"
+                :count="kb.documentCount || 0"
+                :count-icon="FileTextOutlined"
+                removable
+                @remove="handleRemoveKnowledge(kb.id)"
+                @expand="fetchKnowledgeDocuments(kb.id, 'main')"
+              >
+                <template #expand>
+                  <ResourceExpandList
+                    :icon="FileTextOutlined"
+                    :title="`${kb.documentCount} 个文档`"
+                    :items="getDocuments(kb.id, 'main')"
+                  />
+                  <KbRetrievalConfig :agent-id="agentId" :kb-id="kb.id" />
+                </template>
+              </ResourceItem>
             </div>
+            <div v-else class="resource-empty">未绑定</div>
+          </div>
 
-            <a-divider style="margin: 12px 0" />
-
-            <div class="resource-section">
-              <div class="resource-header">
-                <span class="resource-title">技能</span>
-                <a-button type="link" size="small" @click="showSkillDrawer">
-                  <PlusOutlined /> 添加
-                </a-button>
-              </div>
-              <div class="resource-list" v-if="agentDetail?.skills?.length">
-                <ResourceItem
-                  v-for="skill in agentDetail.skills"
-                  :key="skill.id"
-                  :icon="ThunderboltOutlined"
-                  :name="skill.name"
-                  :description="skill.description"
-                  :count="(skill.files?.length || 0) + 1"
-                  :count-icon="FileTextOutlined"
-                  removable
-                  @remove="handleRemoveSkill(skill.id)"
-                />
-              </div>
+          <div class="dash-section resource-card">
+            <div class="resource-header">
+              <span class="resource-title">MCP工具<span v-if="agentDetail?.mcpTools?.length" class="resource-count">{{ agentDetail.mcpTools.length }}</span></span>
+              <a-button type="link" size="small" @click="showMcpDrawer">
+                <PlusOutlined /> 添加
+              </a-button>
             </div>
+            <div class="resource-list" v-if="agentDetail?.mcpTools?.length">
+              <ResourceItem
+                v-for="mcp in agentDetail.mcpTools"
+                :key="mcp.id"
+                :icon="ToolOutlined"
+                :name="mcp.name"
+                :description="mcp.description"
+                :count="countMcpTools(mcp.toolInfo)"
+                :count-icon="ToolOutlined"
+                removable
+                @remove="handleRemoveMcp(mcp.id)"
+              >
+                <template #expand>
+                  <ResourceExpandList
+                    :icon="ToolOutlined"
+                    :title="`${countMcpTools(mcp.toolInfo)} 个工具`"
+                    :items="getTools(mcp)"
+                  />
+                </template>
+              </ResourceItem>
+            </div>
+            <div v-else class="resource-empty">未绑定</div>
+          </div>
 
-            <a-divider style="margin: 12px 0" />
-
-            <AgentMemorySection :agent-id="agentId" />
+          <div class="dash-section resource-card">
+            <div class="resource-header">
+              <span class="resource-title">技能<span v-if="agentDetail?.skills?.length" class="resource-count">{{ agentDetail.skills.length }}</span></span>
+              <a-button type="link" size="small" @click="showSkillDrawer">
+                <PlusOutlined /> 添加
+              </a-button>
+            </div>
+            <div class="resource-list" v-if="agentDetail?.skills?.length">
+              <ResourceItem
+                v-for="skill in agentDetail.skills"
+                :key="skill.id"
+                :icon="ThunderboltOutlined"
+                :name="skill.name"
+                :description="skill.description"
+                :count="(skill.files?.length || 0) + 1"
+                :count-icon="FileTextOutlined"
+                removable
+                @remove="handleRemoveSkill(skill.id)"
+              />
+            </div>
+            <div v-else class="resource-empty">未绑定</div>
           </div>
         </div>
 
-        <div class="right-section">
-          <div class="dash-section">
-            <h3 class="section-title">系统提示词</h3>
-            <a-textarea
-              v-model:value="formData.systemPrompt"
-              placeholder="请输入系统提示词，定义智能体的角色和行为..."
-              :rows="12"
-              :maxlength="995904"
-              show-count
-            />
-          </div>
-
-          <div class="dash-section">
-            <h3 class="section-title">公开设置</h3>
-            <a-form layout="vertical">
-              <a-form-item label="是否公开">
-                <a-radio-group v-model:value="formData.isPublic">
-                  <a-radio :value="0">私有</a-radio>
-                  <a-radio :value="1">公开</a-radio>
-                </a-radio-group>
-              </a-form-item>
-            </a-form>
-          </div>
+        <div class="dash-section memory-card">
+          <AgentMemorySection :agent-id="agentId" />
         </div>
       </div>
     </div>
@@ -364,31 +353,40 @@ function handleEditSuccess(): void {
   }
 }
 
-.content-wrapper {
+.public-switch {
   display: flex;
-  gap: 24px;
+  align-items: center;
+  gap: 8px;
+  margin-right: 8px;
+
+  .switch-label {
+    font-size: 13px;
+    color: #5f5d55;
+  }
+}
+
+// 纵向流：提示词全宽 → 三资源卡自适应并排 → 记忆全宽（无联动内容不分栏）
+.edit-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   max-width: 1400px;
 }
 
-.left-section {
-  flex: 1;
-  min-width: 0;
-  max-height: 730px;
-  overflow-y: auto;
-}
-
-.right-section {
-  width: 400px;
-  flex-shrink: 0;
-  max-height: 730px;
-  overflow-y: auto;
-}
-
-.resource-section {
-  &:last-child {
-    margin-bottom: 0;
+.prompt-section {
+  .section-title {
+    margin-bottom: 12px;
   }
+}
 
+.resource-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.resource-card {
   .resource-header {
     display: flex;
     justify-content: space-between;
@@ -398,6 +396,23 @@ function handleEditSuccess(): void {
     .resource-title {
       font-weight: 600;
       font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      .resource-count {
+        min-width: 20px;
+        height: 18px;
+        padding: 0 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 500;
+        color: $primary-color;
+        background: rgba(42, 161, 169, 0.1);
+        border-radius: 9px;
+      }
     }
   }
 
@@ -405,6 +420,14 @@ function handleEditSuccess(): void {
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+
+  .resource-empty {
+    padding: 12px;
+    font-size: 12px;
+    color: #a5a29a;
+    background: #f5f3ec;
+    border-radius: 8px;
   }
 }
 </style>

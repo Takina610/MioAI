@@ -112,6 +112,12 @@
             :streaming="isLoading"
             @open="openSubagent(item.block, item.index)"
           />
+
+          <!-- 资源摘要行：知识库命中 / MCP 装配（可展开），技能清单（单行） -->
+          <ResourceRow
+            v-else-if="item.block.type === 'kb' || item.block.type === 'mcp' || item.block.type === 'skill'"
+            :block="item.block"
+          />
         </template>
       </div>
     </CollapseTransition>
@@ -166,6 +172,7 @@ import CollapseTransition from '@/components/CollapseTransition.vue'
 import BrainIcon from '@/components/BrainIcon.vue'
 import AttachmentCards from './AttachmentCards.vue'
 import ToolRow from './ToolRow.vue'
+import ResourceRow from './ResourceRow.vue'
 import { messageAttachmentDisplays } from '../attachmentUtils'
 import { answerQuestion } from '@/api/chat'
 import { formatDuration, type ToolBlock } from '../toolDisplay'

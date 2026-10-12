@@ -4,17 +4,23 @@ import com.mio.ai.bot.agent.MioBot;
 import com.mio.ai.common.utils.JacksonUtil;
 import com.mio.ai.framework.rag.KnowledgeRetrievalResult;
 import com.mio.ai.framework.rag.RetrievalOutcome;
+import com.mio.ai.resource.model.entity.KnowledgeBase;
 import com.mio.ai.resource.model.entity.RagRetrievalLog;
 import com.mio.ai.resource.model.entity.Skill;
+import com.mio.ai.resource.service.knowledge.KnowledgeBaseService;
 import com.mio.ai.resource.service.knowledge.KnowledgeRetrievalService;
 import com.mio.ai.resource.service.log.RagRetrievalLogService;
 import com.mio.ai.resource.service.mcp.McpClientManagerService;
+import com.mio.ai.resource.service.mcp.impl.McpClientManagerServiceImpl;
 import com.mio.ai.resource.service.skill.SkillService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -37,27 +43,46 @@ public class BotResourceService {
      */
     private static final int MAX_CONTEXT_CHUNKS = 8;
 
+    /**
+     * 会话摘要行里单条描述/片段的截断长度（完整内容在模型上下文里，前端只要可读摘要）
+     */
+    private static final int SUMMARY_TEXT_LENGTH = 200;
+
     private final McpClientManagerService mcpClientManagerService;
     private final KnowledgeRetrievalService knowledgeRetrievalService;
+    private final KnowledgeBaseService knowledgeBaseService;
     private final RagRetrievalLogService ragRetrievalLogService;
     private final SkillService skillService;
 
     public BotResourceService(McpClientManagerService mcpClientManagerService,
                               KnowledgeRetrievalService knowledgeRetrievalService,
+                              KnowledgeBaseService knowledgeBaseService,
                               RagRetrievalLogService ragRetrievalLogService,
                               SkillService skillService) {
         this.mcpClientManagerService = mcpClientManagerService;
         this.knowledgeRetrievalService = knowledgeRetrievalService;
+        this.knowledgeBaseService = knowledgeBaseService;
         this.ragRetrievalLogService = ragRetrievalLogService;
         this.skillService = skillService;
     }
 
     /**
      * MCP 装配结果：可用回调 + 逐工具失败摘要（空摘要 = 全部可用）
+     * + 服务摘要（真实注册的工具名/描述，按服务分组，供会话摘要行展示）
      */
-    public record McpAssembly(ToolCallback[] callbacks, List<String> failures) {
+    public record McpAssembly(ToolCallback[] callbacks, List<String> failures,
+                              List<Map<String, Object>> servers) {
         public static McpAssembly empty() {
-            return new McpAssembly(new ToolCallback[0], List.of());
+            return new McpAssembly(new ToolCallback[0], List.of(), List.of());
+        }
+    }
+
+    /**
+     * 知识库构建结果：注入提示词的上下文 + 按库分组的命中摘要（供会话摘要行展示）
+     */
+    public record KnowledgeBuild(String context, List<Map<String, Object>> groups) {
+        public static KnowledgeBuild empty() {
+            return new KnowledgeBuild("", List.of());
         }
     }
 
@@ -73,11 +98,44 @@ public class BotResourceService {
                 result = mcpClientManagerService.initMcpToolsDetailed(
                         mcpClientManagerService.getAgentMcpTools(agentId));
             }
-            return new McpAssembly(result.callbacks(), result.failures());
+            return new McpAssembly(result.callbacks(), result.failures(),
+                    buildServerSummaries(result.callbacks(), result.tools()));
         } catch (Exception e) {
             log.error("装配 MCP 工具失败，本轮仅使用内置工具, agentId={}", agentId, e);
             return McpAssembly.empty();
         }
+    }
+
+    /**
+     * 按真实注册的回调统计每个服务的工具清单（回答"本轮实际注册了什么"，而非静态 toolInfo）
+     */
+    private List<Map<String, Object>> buildServerSummaries(ToolCallback[] callbacks, List<com.mio.ai.resource.model.entity.McpTool> tools) {
+        Map<String, List<Map<String, Object>>> toolsBySegment = new LinkedHashMap<>();
+        for (ToolCallback callback : callbacks) {
+            ToolDefinition definition = callback.getToolDefinition();
+            // 前缀 mcp__<segment>__<tool>（zcode 同款命名）；tool 名本身不含 __，第三段取余即工具名
+            String[] parts = definition.name().split("__", 3);
+            if (parts.length < 3) {
+                continue;
+            }
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("name", parts[2]);
+            item.put("description", summaryText(definition.description()));
+            toolsBySegment.computeIfAbsent(parts[1], k -> new ArrayList<>()).add(item);
+        }
+        List<Map<String, Object>> servers = new ArrayList<>();
+        for (com.mio.ai.resource.model.entity.McpTool tool : tools) {
+            String segment = McpClientManagerServiceImpl.sanitizeSegment(
+                    McpClientManagerServiceImpl.firstServerKey(tool.getConfig(), tool.getName()));
+            List<Map<String, Object>> serverTools = toolsBySegment.getOrDefault(segment, List.of());
+            Map<String, Object> server = new LinkedHashMap<>();
+            server.put("id", tool.getId());
+            server.put("name", tool.getName());
+            server.put("description", summaryText(tool.getDescription()));
+            server.put("tools", serverTools);
+            servers.add(server);
+        }
+        return servers;
     }
 
     /**
@@ -96,10 +154,22 @@ public class BotResourceService {
         }
     }
 
+    /** 技能清单摘要（会话摘要行展示用） */
+    public List<Map<String, Object>> skillSummaries(List<Skill> skills) {
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (Skill skill : skills) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("name", skill.getName());
+            item.put("description", summaryText(skill.getDescription()));
+            items.add(item);
+        }
+        return items;
+    }
+
     /**
-     * 检索并拼装可注入系统提示词的上下文；同时落 rag_retrieval_log
+     * 检索并拼装可注入系统提示词的上下文，同时产出按库分组的命中摘要；落 rag_retrieval_log
      */
-    public String buildKnowledgeContext(Long agentId, Long userId, String query) {
+    public KnowledgeBuild buildKnowledge(Long agentId, Long userId, String query) {
         long startTime = System.currentTimeMillis();
         RetrievalOutcome outcome;
         try {
@@ -110,14 +180,60 @@ public class BotResourceService {
             }
         } catch (Exception e) {
             log.error("知识库检索失败, agentId={}", agentId, e);
-            return "";
+            return KnowledgeBuild.empty();
         }
         List<KnowledgeRetrievalResult> results = outcome.results();
         if (results.isEmpty()) {
-            return "";
+            return KnowledgeBuild.empty();
         }
         logRetrieval(agentId, userId, query, results, outcome, startTime);
-        return renderContext(results);
+        // 摘要分组与注入文本同源同截断：前端看到的片段就是模型拿到的片段
+        List<KnowledgeRetrievalResult> injected =
+                results.subList(0, Math.min(results.size(), MAX_CONTEXT_CHUNKS));
+        return new KnowledgeBuild(renderContext(injected), buildKbGroups(injected));
+    }
+
+    /** 命中摘要按知识库分组（保序），库名批量查表补齐 */
+    private List<Map<String, Object>> buildKbGroups(List<KnowledgeRetrievalResult> injected) {
+        Map<Long, List<KnowledgeRetrievalResult>> byKb = new LinkedHashMap<>();
+        for (KnowledgeRetrievalResult r : injected) {
+            long kbId = r.getKbId() == null ? 0L : r.getKbId();
+            byKb.computeIfAbsent(kbId, k -> new ArrayList<>()).add(r);
+        }
+        Map<Long, String> kbNames = new LinkedHashMap<>();
+        try {
+            for (KnowledgeBase kb : knowledgeBaseService.listByIds(byKb.keySet())) {
+                kbNames.put(kb.getId(), kb.getName());
+            }
+        } catch (Exception e) {
+            log.warn("查询知识库名称失败: {}", e.getMessage());
+        }
+        List<Map<String, Object>> groups = new ArrayList<>();
+        for (Map.Entry<Long, List<KnowledgeRetrievalResult>> entry : byKb.entrySet()) {
+            Map<String, Object> group = new LinkedHashMap<>();
+            group.put("kbId", entry.getKey());
+            group.put("kbName", kbNames.getOrDefault(entry.getKey(), "知识库 #" + entry.getKey()));
+            List<Map<String, Object>> hits = new ArrayList<>();
+            for (KnowledgeRetrievalResult r : entry.getValue()) {
+                Map<String, Object> hit = new LinkedHashMap<>();
+                hit.put("fileName", r.getFileName() == null ? "" : r.getFileName());
+                hit.put("snippet", summaryText(r.getText()));
+                hit.put("score", r.getScore() == null ? 0.0 : Math.round(r.getScore() * 1000) / 1000.0);
+                hits.add(hit);
+            }
+            group.put("hits", hits);
+            groups.add(group);
+        }
+        return groups;
+    }
+
+    /** 摘要文本：压平空白 + 截断（null 安全） */
+    private static String summaryText(String text) {
+        if (text == null) {
+            return "";
+        }
+        String flat = text.replaceAll("\\s+", " ").strip();
+        return flat.length() > SUMMARY_TEXT_LENGTH ? flat.substring(0, SUMMARY_TEXT_LENGTH) + "…" : flat;
     }
 
     private void logRetrieval(Long agentId, Long userId, String query,

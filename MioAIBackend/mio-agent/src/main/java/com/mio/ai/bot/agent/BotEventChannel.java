@@ -191,6 +191,46 @@ public class BotEventChannel {
         emit(SseChunk.plan(steps).fields());
     }
 
+    /** 知识库检索摘要：追加 kb 展示块并推送事件（落库，刷新后仍可见，可展开看命中片段） */
+    public void kbContext(List<Map<String, Object>> groups) {
+        if (groups == null || groups.isEmpty()) {
+            return;
+        }
+        Map<String, Object> block = new LinkedHashMap<>();
+        block.put("type", "kb");
+        block.put("groups", groups);
+        displayBlocks.add(block);
+        emit(SseChunk.kbContext(groups).fields());
+    }
+
+    /** MCP 装配摘要：追加 mcp 展示块并推送事件（落库；服务/工具清单 + 连接失败项） */
+    public void mcpContext(List<Map<String, Object>> servers, List<String> failures) {
+        boolean hasServers = servers != null && !servers.isEmpty();
+        boolean hasFailures = failures != null && !failures.isEmpty();
+        if (!hasServers && !hasFailures) {
+            return;
+        }
+        Map<String, Object> block = new LinkedHashMap<>();
+        block.put("type", "mcp");
+        block.put("servers", hasServers ? servers : List.of());
+        block.put("failures", hasFailures ? failures : List.of());
+        displayBlocks.add(block);
+        emit(SseChunk.mcpContext(hasServers ? servers : List.of(),
+                hasFailures ? failures : List.of()).fields());
+    }
+
+    /** 技能装配摘要：追加 skill 展示块并推送事件（落库，单行不展开） */
+    public void skillContext(List<Map<String, Object>> skills) {
+        if (skills == null || skills.isEmpty()) {
+            return;
+        }
+        Map<String, Object> block = new LinkedHashMap<>();
+        block.put("type", "skill");
+        block.put("skills", skills);
+        displayBlocks.add(block);
+        emit(SseChunk.skillContext(skills).fields());
+    }
+
     /** 向用户提问：追加问答展示块并推送事件（答题走 /bot/answer） */
     public void question(String id, List<Map<String, Object>> questions) {
         closeOpenThinking();

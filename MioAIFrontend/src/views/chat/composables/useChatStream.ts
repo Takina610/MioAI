@@ -8,10 +8,13 @@ import { historyFromVersions } from './useChatMessages'
 import type {
   AttachmentItem,
   ChatMessage,
+  KbContextGroup,
+  McpContextServer,
   MessageBlock,
   PlanStep,
   QuestionAnswer,
-  QuestionItem
+  QuestionItem,
+  SkillContextItem
 } from '@/types'
 import {
   generateConversationId,
@@ -523,6 +526,25 @@ export function useChatStream(options: {
           side: parsed.side === 'input' ? 'input' : 'output',
           items: (parsed.items ?? []) as AttachmentItem[]
         })
+        return { ...msg, blocks }
+      }
+      case 'kb_context': {
+        const blocks = [...(msg.blocks ?? [])]
+        blocks.push({ type: 'kb', groups: (parsed.groups ?? []) as KbContextGroup[] })
+        return { ...msg, blocks }
+      }
+      case 'mcp_context': {
+        const blocks = [...(msg.blocks ?? [])]
+        blocks.push({
+          type: 'mcp',
+          servers: (parsed.servers ?? []) as McpContextServer[],
+          failures: (parsed.failures ?? []) as string[]
+        })
+        return { ...msg, blocks }
+      }
+      case 'skill_context': {
+        const blocks = [...(msg.blocks ?? [])]
+        blocks.push({ type: 'skill', skills: (parsed.skills ?? []) as SkillContextItem[] })
         return { ...msg, blocks }
       }
       case 'usage':

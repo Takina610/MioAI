@@ -189,7 +189,8 @@ public class McpClientManagerServiceImpl implements McpClientManagerService {
             }
         }
 
-        return new McpInitResult(allCallbacks.toArray(new ToolCallback[0]), List.copyOf(failures));
+        return new McpInitResult(allCallbacks.toArray(new ToolCallback[0]), List.copyOf(failures),
+                List.copyOf(mcpTools));
     }
 
     /** 失败原因摘要：取首行、截断，供会话内提示（完整堆栈只在日志） */
@@ -224,7 +225,7 @@ public class McpClientManagerServiceImpl implements McpClientManagerService {
         return callbacks;
     }
 
-    static String sanitizeSegment(String segment) {
+    public static String sanitizeSegment(String segment) {
         String cleaned = segment == null ? "" : segment.replaceAll("[^a-zA-Z0-9_-]", "_")
                 .replaceAll("_+", "_")
                 .replaceAll("^_+|_+$", "");
@@ -236,7 +237,7 @@ public class McpClientManagerServiceImpl implements McpClientManagerService {
     }
 
     /** mcpServers 首个服务节点名作为前缀段（与配置展示一致）；解析失败回退实体名 */
-    static String firstServerKey(String config, String fallback) {
+    public static String firstServerKey(String config, String fallback) {
         try {
             JSONObject root = JSONUtil.parseObj(config);
             JSONObject servers = root.getJSONObject("mcpServers");

@@ -34,29 +34,11 @@
             />
           </a-form-item>
           <a-form-item name="config" label="MCP配置">
-            <div class="config-hint">
-              <span class="hint-text">支持 STDIO / SSE / Streamable HTTP，可含 headers 认证</span>
-            </div>
-            <div class="code-editor">
-              <div class="line-numbers" ref="lineNumbersRef">
-                <div class="line-number" v-for="line in lineCount" :key="line">{{ line }}</div>
-              </div>
-              <textarea
-                :value="formData.config"
-                @input="handleTextareaInput"
-                @scroll="syncScroll"
-                ref="textareaRef"
-                class="code-textarea"
-                placeholder='{
-  "mcpServers": {
-    "server-name": {
-      "command": "npx",
-      "args": ["-y", "mcp-server-example"]
-    }
-  }
-}'
-              ></textarea>
-            </div>
+            <McpCodeEditor
+              v-model="formData.config"
+              :min-height="220"
+              :placeholder="configPlaceholder"
+            />
           </a-form-item>
         </a-form>
         <div class="step-actions">
@@ -133,12 +115,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, watch } from 'vue'
 import { message, type FormInstance } from 'ant-design-vue'
 import type { Rule } from 'ant-design-vue/es/form'
 import { ToolOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons-vue'
 import { validateMcpConfig } from '@/api/mcpTool'
 import { formatValidateError } from '@/utils/mcpTool'
+import McpCodeEditor from '@/views/dashboard/mcp/components/McpCodeEditor.vue'
 import type { McpTool, McpToolAddRequest, McpValidateResult } from '@/types'
 
 const props = defineProps<{
@@ -155,8 +138,6 @@ const validating = ref(false)
 const submitting = ref(false)
 const currentStep = ref(0)
 const formRef = ref<FormInstance | null>(null)
-const textareaRef = ref<HTMLTextAreaElement | null>(null)
-const lineNumbersRef = ref<HTMLElement | null>(null)
 const validateResult = ref<McpValidateResult | null>(null)
 
 const formData = reactive({
@@ -165,16 +146,20 @@ const formData = reactive({
   config: ''
 })
 
+const configPlaceholder = `{
+  "mcpServers": {
+    "server-name": {
+      "command": "npx",
+      "args": ["-y", "mcp-server-example"]
+    }
+  }
+}`
+
 const rules: Record<string, Rule[]> = {
   name: [{ required: true, message: '请输入工具名称', trigger: 'blur' }],
   description: [{ required: true, message: '请输入描述', trigger: 'blur' }],
   config: [{ required: true, message: '请输入MCP配置', trigger: 'blur' }]
 }
-
-const lineCount = computed(() => {
-  const lines = formData.config.split('\n').length
-  return Math.max(lines, 10)
-})
 
 watch(() => props.visible, (val) => {
   if (val) {
@@ -189,17 +174,6 @@ watch(() => props.visible, (val) => {
     }
   }
 })
-
-function handleTextareaInput(event: Event): void {
-  const target = event.target as HTMLTextAreaElement
-  formData.config = target.value
-}
-
-function syncScroll(): void {
-  if (textareaRef.value && lineNumbersRef.value) {
-    lineNumbersRef.value.scrollTop = textareaRef.value.scrollTop
-  }
-}
 
 function getErrorMessage(result: McpValidateResult): string {
   return formatValidateError(result.errorType, result.errorMessage)
@@ -292,69 +266,6 @@ function resetForm(): void {
 
 .form-container {
   margin-top: 16px;
-}
-
-.config-hint {
-  display: flex;
-  align-items: center;
-  margin-bottom: 8px;
-  
-  .hint-text {
-    font-size: 12px;
-    color: #8c8a82;
-  }
-}
-
-.code-editor {
-  display: flex;
-  border: 1px solid #d8d5cc;
-  border-radius: 6px;
-  overflow: hidden;
-  background: #1e1e1e;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  min-height: 180px;
-  max-height: 180px;
-
-  .line-numbers {
-    background: #252526;
-    color: #858585;
-    padding: 8px 0;
-    text-align: right;
-    user-select: none;
-    min-width: 40px;
-    overflow-y: hidden;
-    border-right: 1px solid #3c3c3c;
-    flex-shrink: 0;
-
-    .line-number {
-      padding: 0 12px;
-      line-height: 22px;
-      font-size: 13px;
-    }
-  }
-
-  .code-textarea {
-    flex: 1;
-    background: #1e1e1e;
-    color: #d4d4d4;
-    border: none;
-    outline: none;
-    resize: none;
-    padding: 8px 12px;
-    font-family: inherit;
-    font-size: 13px;
-    line-height: 22px;
-    min-height: 164px;
-    max-height: 164px;
-
-    &::placeholder {
-      color: #6a6a6a;
-    }
-
-    &:focus {
-      box-shadow: none;
-    }
-  }
 }
 
 .step-actions {

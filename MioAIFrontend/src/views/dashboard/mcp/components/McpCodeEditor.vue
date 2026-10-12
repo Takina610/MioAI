@@ -1,110 +1,155 @@
 <template>
-  <div class="mcp-code-editor">
-    <div class="line-numbers" ref="lineNumbersRef">
-      <div class="line-number" v-for="line in lineCount" :key="line">{{ line }}</div>
-    </div>
-    <textarea
-      v-if="!readonly"
-      :value="modelValue"
-      @input="onInput"
-      @scroll="syncScroll"
-      ref="textareaRef"
-      class="code-textarea"
-    ></textarea>
-    <pre v-else class="code-content">{{ modelValue }}</pre>
-  </div>
+  <div class="mcp-code-editor" :class="{ readonly }" ref="containerRef"></div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { EditorView, basicSetup } from 'codemirror'
+import { EditorState, Compartment } from '@codemirror/state'
+import { placeholder } from '@codemirror/view'
+import { json, jsonParseLinter } from '@codemirror/lang-json'
+import { linter } from '@codemirror/lint'
+import { oneDark } from '@codemirror/theme-one-dark'
 
 const props = withDefaults(defineProps<{
   modelValue: string
-  /** 只读模式展示 pre，编辑模式展示 textarea */
+  /** 只读模式仍保留高亮，仅禁止编辑 */
   readonly?: boolean
-  /** 最少显示的行数 */
-  minLines?: number
+  /** 编辑区最小高度(px) */
+  minHeight?: number
+  /** 编辑区最大高度(px)，超出内部滚动 */
+  maxHeight?: number
+  /** 内容为空时的占位文本 */
+  placeholder?: string
 }>(), {
   readonly: false,
-  minLines: 1
+  minHeight: 180,
+  maxHeight: 420,
+  placeholder: ''
 })
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
 }>()
 
-const textareaRef = ref<HTMLTextAreaElement | null>(null)
-const lineNumbersRef = ref<HTMLElement | null>(null)
+const containerRef = ref<HTMLElement | null>(null)
+let view: EditorView | null = null
+const editableComp = new Compartment()
 
-const lineCount = computed(() => Math.max(props.modelValue.split('\n').length, props.minLines))
-
-function onInput(event: Event): void {
-  emit('update:modelValue', (event.target as HTMLTextAreaElement).value)
-}
-
-function syncScroll(): void {
-  if (textareaRef.value && lineNumbersRef.value) {
-    lineNumbersRef.value.scrollTop = textareaRef.value.scrollTop
+/** 将编辑器内容格式化（ compact JSON 不换行时也能展开） */
+function format(): void {
+  if (!view) return
+  try {
+    const formatted = JSON.stringify(JSON.parse(view.state.doc.toString()), null, 2)
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: formatted }
+    })
+  } catch {
+    // JSON 非法时交给 lint 标红，不在这里报错
   }
 }
+
+/** 光标移到第一个语法错误处（校验失败时定位） */
+function focusFirstError(): void {
+  if (!view) return
+  const doc = view.state.doc
+  try {
+    JSON.parse(doc.toString())
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    const m = msg.match(/position (\d+)/i)
+    const pos = m ? Number(m[1]) : 0
+    view.dispatch({ selection: { anchor: Math.min(pos, doc.length) }, scrollIntoView: true })
+    view.focus()
+  }
+}
+
+defineExpose({ format, focusFirstError })
+
+onMounted(() => {
+  if (!containerRef.value) return
+  const extensions = [
+    basicSetup,
+    json(),
+    linter(props.readonly ? () => [] : jsonParseLinter()),
+    oneDark,
+    editableComp.of([
+      EditorView.editable.of(!props.readonly),
+      EditorState.readOnly.of(props.readonly)
+    ]),
+    EditorView.updateListener.of((update) => {
+      if (update.docChanged && !props.readonly) {
+        emit('update:modelValue', update.state.doc.toString())
+      }
+    }),
+    EditorView.theme({
+      '&': { fontSize: '13px' },
+      '.cm-scroller': {
+        fontFamily: "'Consolas', 'Monaco', 'Courier New', monospace",
+        lineHeight: '1.6'
+      },
+      '.cm-gutters': { cursor: 'default' }
+    }),
+    ...(props.placeholder ? [placeholder(props.placeholder)] : [])
+  ]
+  view = new EditorView({
+    state: EditorState.create({ doc: props.modelValue, extensions }),
+    parent: containerRef.value
+  })
+})
+
+watch(() => props.modelValue, (value) => {
+  if (!view) return
+  const current = view.state.doc.toString()
+  if (value !== current) {
+    view.dispatch({ changes: { from: 0, to: current.length, insert: value } })
+  }
+})
+
+watch(() => props.readonly, (value) => {
+  if (!view) return
+  view.dispatch({
+    effects: editableComp.reconfigure([
+      EditorView.editable.of(!value),
+      EditorState.readOnly.of(value)
+    ])
+  })
+})
+
+onBeforeUnmount(() => {
+  view?.destroy()
+  view = null
+})
 </script>
 
 <style lang="scss" scoped>
 .mcp-code-editor {
-  display: flex;
   border: 1px solid #d8d5cc;
   border-radius: 6px;
   overflow: hidden;
-  background: #1e1e1e;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
 
-  .line-numbers {
-    background: #252526;
-    color: #858585;
-    padding: 8px 0;
-    text-align: right;
-    user-select: none;
-    min-width: 40px;
-    overflow-y: hidden;
-    border-right: 1px solid #3c3c3c;
-    flex-shrink: 0;
-
-    .line-number {
-      padding: 0 12px;
-      line-height: 22px;
-      font-size: 13px;
-    }
-  }
-
-  .code-textarea,
-  .code-content {
-    flex: 1;
+  :deep(.cm-editor) {
+    min-height: v-bind('props.minHeight + "px"');
+    max-height: v-bind('props.maxHeight + "px"');
     background: #1e1e1e;
-    color: #d4d4d4;
-    margin: 0;
-    padding: 8px 12px;
-    font-family: inherit;
-    font-size: 13px;
-    line-height: 22px;
-  }
 
-  .code-textarea {
-    border: none;
-    outline: none;
-    resize: none;
-
-    &::placeholder {
-      color: #6a6a6a;
-    }
-
-    &:focus {
-      box-shadow: none;
+    &.cm-focused {
+      outline: none;
     }
   }
 
-  .code-content {
+  :deep(.cm-scroller) {
     overflow: auto;
-    white-space: pre;
+  }
+
+  &.readonly {
+    :deep(.cm-editor) {
+      cursor: default;
+
+      .cm-content {
+        caret-color: transparent;
+      }
+    }
   }
 }
 </style>

@@ -32,6 +32,40 @@ export interface QuestionItem {
   options: QuestionOption[]
 }
 
+/** 知识库摘要行的单条命中片段（snippet 已由后端截断为可读摘要） */
+export interface KbContextHit {
+  fileName?: string
+  snippet: string
+  score?: number
+}
+
+/** 知识库摘要行的单库分组 */
+export interface KbContextGroup {
+  kbId: number
+  kbName: string
+  hits: KbContextHit[]
+}
+
+/** MCP 摘要行的单个工具（真实注册名/描述） */
+export interface McpContextTool {
+  name: string
+  description?: string
+}
+
+/** MCP 摘要行的单个服务 */
+export interface McpContextServer {
+  id?: number
+  name: string
+  description?: string
+  tools: McpContextTool[]
+}
+
+/** 技能摘要行的单个技能 */
+export interface SkillContextItem {
+  name: string
+  description?: string
+}
+
 /** 提交后的答案（按问题下标） */
 export interface QuestionAnswer {
   index: number
@@ -58,6 +92,22 @@ export type MessageBlock =
       type: 'attachments'
       side: 'input' | 'output'
       items: AttachmentItem[]
+    }
+  | {
+      /** 知识库检索摘要：本轮实际注入的命中，按库分组（可展开看片段） */
+      type: 'kb'
+      groups: KbContextGroup[]
+    }
+  | {
+      /** MCP 装配摘要：本轮真实注册的服务/工具清单 + 连接失败项（可展开） */
+      type: 'mcp'
+      servers: McpContextServer[]
+      failures?: string[]
+    }
+  | {
+      /** 技能装配摘要：本轮物化进沙箱的技能清单（单行不展开） */
+      type: 'skill'
+      skills: SkillContextItem[]
     }
   | {
       /** 用户主动中断标记（持久化行尾；加载历史时转为消息 stopped 态，不参与渲染） */

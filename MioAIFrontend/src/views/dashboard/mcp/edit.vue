@@ -46,7 +46,7 @@
                       <ExclamationCircleOutlined /> 配置已修改，需要重新校验
                     </span>
                   </div>
-                  <McpCodeEditor v-model="formData.config" :min-lines="9" @update:model-value="onConfigInput" />
+                  <McpCodeEditor v-model="formData.config" :min-height="260" @update:model-value="onConfigInput" />
                   <div class="config-actions">
                     <a-button
                       type="link"

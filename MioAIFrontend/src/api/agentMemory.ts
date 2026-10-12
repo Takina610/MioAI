@@ -22,14 +22,6 @@ export function getAgentMemoryContent(agentId: number, name: string): Promise<{ 
   })
 }
 
-export function saveAgentMemory(agentId: number, data: { name: string; content: string }): Promise<boolean> {
-  return request({
-    url: `/agent-memory/${agentId}`,
-    method: 'post',
-    data
-  })
-}
-
 export function deleteAgentMemory(agentId: number, name: string): Promise<boolean> {
   return request({
     url: `/agent-memory/${agentId}`,

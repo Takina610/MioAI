@@ -92,8 +92,13 @@ public class MioBot {
     /** 编辑重发场景：本轮 user 行的版本组锚（沿用被编辑轮次的组） */
     private volatile Long userGroupSeq;
 
-    /** 本轮 MCP 装配失败摘要（控制器注入）：非空时会话开头发瞬态系统提示 */
+    /** 本轮 MCP 装配失败摘要（控制器注入）：随 MCP 摘要行展示 */
     private volatile List<String> mcpFailures;
+
+    /** 本轮资源装配摘要（控制器注入）：轮次开头作为持久化摘要行下发给前端 */
+    private volatile List<Map<String, Object>> mcpServers;
+    private volatile List<Map<String, Object>> kbGroups;
+    private volatile List<Map<String, Object>> skillSummaries;
 
     public void setUserGroupSeq(Long userGroupSeq) {
         this.userGroupSeq = userGroupSeq;
@@ -101,6 +106,18 @@ public class MioBot {
 
     public void setMcpFailures(List<String> mcpFailures) {
         this.mcpFailures = mcpFailures;
+    }
+
+    public void setMcpServers(List<Map<String, Object>> mcpServers) {
+        this.mcpServers = mcpServers;
+    }
+
+    public void setKbGroups(List<Map<String, Object>> kbGroups) {
+        this.kbGroups = kbGroups;
+    }
+
+    public void setSkillSummaries(List<Map<String, Object>> skillSummaries) {
+        this.skillSummaries = skillSummaries;
     }
 
     public MioBot(ChatModel chatModel,
@@ -169,12 +186,6 @@ public class MioBot {
                 channel::heartbeat, HEARTBEAT_INTERVAL_SECONDS, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
         ToolRegistry registry = null;
         try {
-            // MCP 装配失败项在会话开头明说，替代静默降级（瞬态提示不落库，重载后不保留）
-            if (mcpFailures != null && !mcpFailures.isEmpty()) {
-                String joined = String.join("；", mcpFailures);
-                channel.notice("以下 MCP 工具本轮不可用：" + (joined.length() > 300
-                        ? joined.substring(0, 300) + "..." : joined));
-            }
             ConversationHydrator.Hydrated hydrated = hydrate();
             ConversationState state = new ConversationState();
             state.entries().addAll(hydrated.entries());
@@ -212,6 +223,10 @@ public class MioBot {
                 }
                 // WIP 行：轮次开始即落库，此后每个模型步增量刷新（进程崩溃后过程可恢复）
                 channel.beginAssistantWip();
+                // 资源摘要行（持久化）：本轮实际装配/命中的知识库、MCP、技能，替代旧的瞬态提示
+                channel.kbContext(kbGroups);
+                channel.mcpContext(mcpServers, mcpFailures);
+                channel.skillContext(skillSummaries);
                 // 轮次开始前刷新脱离式后台任务：沙箱侧已完结的补状态并入队 task-notification
                 runContext.tasks().refreshDetached(chatId, runContext.fs());
                 java.util.Set<String> outputsBefore = snapshotOutputs(runContext.fs());

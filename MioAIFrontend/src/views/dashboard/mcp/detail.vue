@@ -29,7 +29,7 @@
 
               <div class="config-section">
                 <div class="section-title">MCP配置</div>
-                <McpCodeEditor :model-value="formattedConfig" readonly style="min-height: 350px; max-height: 360px;" />
+                <McpCodeEditor :model-value="formattedConfig" readonly :min-height="350" :max-height="360" />
               </div>
             </a-card>
           </a-col>

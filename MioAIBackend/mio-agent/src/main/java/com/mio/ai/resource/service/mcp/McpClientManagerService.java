@@ -46,11 +46,11 @@ public interface McpClientManagerService {
     McpInitResult initMcpToolsDetailed(List<McpTool> mcpTools);
 
     /**
-     * MCP 装配结果：可用回调 + 失败摘要（"工具名：原因"）
+     * MCP 装配结果：可用回调 + 失败摘要（"工具名：原因"）+ 本轮参与装配的工具实体（供会话摘要行展示）
      */
-    record McpInitResult(ToolCallback[] callbacks, List<String> failures) {
+    record McpInitResult(ToolCallback[] callbacks, List<String> failures, List<McpTool> tools) {
         public static McpInitResult empty() {
-            return new McpInitResult(new ToolCallback[0], List.of());
+            return new McpInitResult(new ToolCallback[0], List.of(), List.of());
         }
     }
 

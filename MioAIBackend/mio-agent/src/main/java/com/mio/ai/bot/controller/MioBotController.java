@@ -220,7 +220,7 @@ public class MioBotController {
         }
 
         BotResourceService.McpAssembly mcp = botResourceService.assembleMcpTools(resolvedAgentId);
-        String knowledgeContext = botResourceService.buildKnowledgeContext(resolvedAgentId, userId, content);
+        BotResourceService.KnowledgeBuild knowledge = botResourceService.buildKnowledge(resolvedAgentId, userId, content);
         List<Skill> skills = botResourceService.assembleSkills(resolvedAgentId);
 
         String effort = reasoningEffort != null && REASONING_EFFORTS.contains(reasoningEffort)
@@ -233,15 +233,18 @@ public class MioBotController {
                 fileTransfer, com.mio.ai.bot.model.dto.AttachmentItem.parseList(attachments));
         // 编辑重发：新 user 行沿用被编辑轮次的组锚（版本组持久化）
         mioBot.setUserGroupSeq(groupSeq);
-        // MCP 装配失败项：本轮会话开头给一条瞬态系统提示，替代旧的静默降级
+        // 资源装配摘要（持久化到会话摘要行）：本轮注册的 MCP 服务/工具、检索命中片段、技能清单
+        mioBot.setMcpServers(mcp.servers());
         mioBot.setMcpFailures(mcp.failures());
+        mioBot.setKbGroups(knowledge.groups());
+        mioBot.setSkillSummaries(botResourceService.skillSummaries(skills));
         // 任务真正结束（含异常）时解除会话占用与轮次登记
         mioBot.setOnFinish(() -> {
             ACTIVE_CHATS.remove(chatId);
             ACTIVE_TURNS.remove(chatId);
         });
         ACTIVE_TURNS.put(chatId, mioBot);
-        return mioBot.run(content, knowledgeContext, !skipUserPersist);
+        return mioBot.run(content, knowledge.context(), !skipUserPersist);
     }
 
     /**

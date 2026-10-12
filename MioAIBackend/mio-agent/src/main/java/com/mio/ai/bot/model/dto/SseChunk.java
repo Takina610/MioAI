@@ -16,6 +16,9 @@ import java.util.Map;
  *  plan        任务清单快照     {steps:[{index,description,status}]}
  *  heartbeat   保活心跳        {}（长工具执行期间维持连接，前端忽略内容仅重挂看门狗）
  *  retry       瞬态失败自动重试 {attempt, maxAttempts, reason}（本轮尚无任何输出时无感重发，前端提示后自行恢复）
+ *  kb_context  知识库检索摘要   {groups:[{kbId, kbName, hits:[{fileName, snippet, score}]}]}（随 blocks 落库，可展开看命中片段）
+ *  mcp_context MCP 装配摘要     {servers:[{id, name, description, tools:[{name, description}]}], failures:[...]}（落库，可展开看工具清单）
+ *  skill_context 技能装配摘要   {skills:[{name, description}]}（落库，单行不展开）
  *  notice      系统提示         {content}（瞬态不落库，如 MCP 工具本轮装配失败）
  *  usage       用量尾块        {inputTokens, outputTokens, durationMs}
  *  done        结束标记        {}
@@ -85,6 +88,31 @@ public record SseChunk(Map<String, Object> fields) {
     /** 系统提示（瞬态不落库）：本轮资源装配状态等用户须知，如 MCP 工具连接失败 */
     public static SseChunk notice(String content) {
         return content("notice", content);
+    }
+
+    /** 知识库检索摘要（落库）：本轮实际注入的检索命中，按知识库分组（hits 已截断为可读摘要） */
+    public static SseChunk kbContext(List<Map<String, Object>> groups) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("type", "kb_context");
+        map.put("groups", groups);
+        return new SseChunk(map);
+    }
+
+    /** MCP 装配摘要（落库）：本轮注册的服务与工具清单 + 连接失败项 */
+    public static SseChunk mcpContext(List<Map<String, Object>> servers, List<String> failures) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("type", "mcp_context");
+        map.put("servers", servers);
+        map.put("failures", failures == null ? List.of() : failures);
+        return new SseChunk(map);
+    }
+
+    /** 技能装配摘要（落库）：本轮物化进沙箱的技能清单 */
+    public static SseChunk skillContext(List<Map<String, Object>> skills) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("type", "skill_context");
+        map.put("skills", skills);
+        return new SseChunk(map);
     }
 
     public static SseChunk plan(List<Map<String, Object>> steps) {

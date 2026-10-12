@@ -19,8 +19,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 智能体跨会话记忆接口：记忆文件活在沙箱 memory/&lt;agentId&gt;/（与会话注入同源），
- * 这里提供列表/读取/保存/删除，供智能体管理页管理。
+ * 智能体跨会话记忆接口：记忆文件活在沙箱 memory/&lt;agentId&gt;/（与会话注入同源）。
+ * 记忆由 Agent 在对话中自行写入（Write/Edit 工具），这里只提供列表/读取/删除，供智能体管理页查看。
  */
 @Slf4j
 @RestController
@@ -87,72 +87,6 @@ public class AgentMemoryController {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件过大，超出可编辑上限");
         }
         return ResultUtils.success(Map.of("name", name, "content", fs.readAll(path)));
-    }
-
-    /** 保存（新建/覆盖）记忆文件；非索引文件自动在 MEMORY.md 登记指针行（与模型的记忆协议一致） */
-    @PostMapping("/{agentId:\\d+}")
-    public BaseResponse<Boolean> save(@PathVariable Long agentId,
-                                      @RequestBody Map<String, String> body,
-                                      HttpServletRequest httpRequest) {
-        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
-        accessGuardService.checkAgentOwner(agentId, userId);
-        String name = body.get("name");
-        String content = body.getOrDefault("content", "");
-        requireValidName(name);
-        if (content.length() > AgentMemory.maxFileBytes()) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "内容超出大小上限");
-        }
-        SandboxFs fs = sandbox();
-        fs.exec("mkdir -p " + quote(AgentMemory.directory(agentId)), 10, null);
-        fs.write(AgentMemory.filePath(agentId, name), content);
-        if (!AgentMemory.INDEX_FILE.equals(name)) {
-            upsertIndexLine(fs, agentId, name, content);
-        }
-        return ResultUtils.success(true);
-    }
-
-    /** 索引缺行时补一行指针；已有指向该文件的行则不动（避免覆盖模型维护的摘要） */
-    private void upsertIndexLine(SandboxFs fs, Long agentId, String name, String content) {
-        try {
-            String indexPath = AgentMemory.filePath(agentId, AgentMemory.INDEX_FILE);
-            if (!fs.stat(indexPath).exists()) {
-                fs.write(indexPath, "# Memory Index\n");
-            }
-            String index = fs.readAll(indexPath);
-            if (index.contains(name)) {
-                return;
-            }
-            String description = frontmatterField(content, "description");
-            String line = "- [" + name + "](" + name + ")"
-                    + (description == null ? "" : " — " + description) + "\n";
-            fs.write(indexPath, index.endsWith("\n") || index.isBlank()
-                    ? index + line : index + "\n" + line);
-        } catch (Exception e) {
-            log.warn("登记记忆索引指针行失败, agentId={}, name={}: {}", agentId, name, e.getMessage());
-        }
-    }
-
-    /** frontmatter 中单行字段值（description: xxx）；无 frontmatter/字段为空则 null */
-    private String frontmatterField(String content, String field) {
-        if (content == null) {
-            return null;
-        }
-        String[] lines = content.split("\n", 40);
-        if (lines.length == 0 || !lines[0].strip().equals("---")) {
-            return null;
-        }
-        String prefix = field.toLowerCase() + ":";
-        for (int i = 1; i < lines.length; i++) {
-            String trimmed = lines[i].strip();
-            if (trimmed.equals("---")) {
-                break;
-            }
-            if (trimmed.toLowerCase().startsWith(prefix)) {
-                String value = trimmed.substring(prefix.length()).strip();
-                return value.isEmpty() ? null : value;
-            }
-        }
-        return null;
     }
 
     /** 删除记忆文件（索引 MEMORY.md 不可删；索引中指向该文件的行同步清除） */
