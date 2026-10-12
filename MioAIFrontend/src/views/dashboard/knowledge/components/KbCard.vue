@@ -13,16 +13,17 @@
       <span v-if="showAuthor && kb.userName" class="meta-item author">{{ kb.userName }}</span>
     </div>
 
-    <div class="kb-foot" @click.stop>
+    <div class="card-footer">
       <span class="update-time">更新于 {{ formatDate(kb.updateTime || kb.createTime) }}</span>
-      <div class="kb-actions">
-        <a-button size="small" class="hit-btn" @click="emit('hitTest')">
-          <AimOutlined /> 命中测试
-        </a-button>
-        <a-button v-if="showDelete" size="small" class="del-btn" @click="emit('delete')">
-          删除
-        </a-button>
-      </div>
+    </div>
+
+    <div class="card-actions" @click.stop>
+      <a-button class="action-btn primary-btn" @click="emit('hitTest')">
+        <AimOutlined /> 命中测试
+      </a-button>
+      <a-button v-if="showDelete" class="action-btn danger-btn" @click="emit('delete')">
+        删除
+      </a-button>
     </div>
   </div>
 </template>
@@ -51,6 +52,10 @@ const emit = defineEmits<{
   cursor: pointer;
   display: flex;
   flex-direction: column;
+
+  &:hover .card-footer {
+    opacity: 0;
+  }
 
   .kb-head {
     display: flex;
@@ -130,14 +135,12 @@ const emit = defineEmits<{
     }
   }
 
-  .kb-foot {
+  .card-footer {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+    height: 36px;
     margin-top: auto;
-    padding-top: 12px;
-    border-top: 1px solid $border-warm-subtle;
+    transition: opacity 0.3s;
 
     .update-time {
       font-size: 12px;
@@ -145,43 +148,6 @@ const emit = defineEmits<{
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-    }
-
-    .kb-actions {
-      display: flex;
-      gap: 6px;
-      flex-shrink: 0;
-
-      .hit-btn {
-        display: inline-flex;
-        align-items: center;
-        height: 28px;
-        border-radius: 8px;
-        border: none;
-        background: rgba($primary-color, 0.08);
-        color: $primary-color;
-        font-size: 12px;
-        padding: 0 10px;
-
-        &:hover {
-          background: $primary-color;
-          color: #fff;
-        }
-      }
-
-      .del-btn {
-        height: 28px;
-        border-radius: 8px;
-        border-color: $border-warm;
-        color: $text-secondary;
-        font-size: 12px;
-        padding: 0 10px;
-
-        &:hover {
-          color: $danger-color;
-          border-color: $danger-color;
-        }
-      }
     }
   }
 }

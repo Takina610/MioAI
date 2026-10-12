@@ -462,29 +462,15 @@ onMounted(() => {
     }
   }
 
-  /* 覆盖 dash-card 公共样式的 hover 浮现：操作按钮常显 */
-  .card-actions {
-    position: static;
-    opacity: 1;
-    visibility: visible;
-    display: flex;
-    gap: 8px;
-    height: auto;
-
-    .action-btn {
-      flex: 1;
-      height: 32px;
-      font-size: 13px;
-      gap: 4px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
+  &:hover .card-footer {
+    opacity: 0;
   }
 
   .card-footer {
-    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    height: 36px;
+    transition: opacity 0.3s;
   }
 }
 
