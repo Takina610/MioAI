@@ -357,28 +357,52 @@ public class MioBot {
         }
     }
 
+    /**
+     * UI 意图助推模式：问题命中对比/解释/分析/规划类意图时，以轮次级 system-reminder
+     * 提醒模型优先用 render_ui 块承载（弱模型对系统段的规则注意力不稳定，命中意图的
+     * 就地提醒把决策拉回规则）。仅提醒不强制——显式要求纯文字/纯文本的问题不注入。
+     */
+    private static final java.util.regex.Pattern UI_INTENT_PATTERN = java.util.regex.Pattern.compile(
+            "区别|差异|对比|比较|哪个更|哪个好|优缺点|difference|compare|vs\\.?|介绍|简介|是什么|什么是|"
+                    + "讲讲|解释|概念|原理|分析|趋势|统计|计划|规划|安排|路线|清单|整理|步骤|流程|"
+                    + "正常吗|好不好|健康|作息|睡眠|建议|推荐|方案|"
+                    + "explain|introduce|what is|plan|roadmap|checklist|how to");
+    private static final java.util.regex.Pattern PLAIN_TEXT_PATTERN = java.util.regex.Pattern.compile(
+            "纯文字|纯文本|只用文字|不要.*(图|卡|表|组件|UI)|plain text|no (charts?|cards?|tables?)");
+
     /** 模型可见的用户输入：附件以 system-reminder 注入（路径 + 产出目录约定），展示正文保持原样 */
     private String buildModelPrompt(String userPrompt, SandboxFs fs) {
-        if (attachments.isEmpty() || fs == null || fileTransfer == null || !fileTransfer.available()) {
-            return userPrompt;
-        }
         StringBuilder sb = new StringBuilder(userPrompt);
-        sb.append("\n\n<system-reminder>\n# 用户附件\n用户随本条消息上传了文件（上传已在对话外完成，"
-                + "文件就在沙箱工作区——不存在任何上传工具，不要尝试上传/下载，直接用文件工具读取）：\n");
-        for (AttachmentItem item : attachments) {
-            sb.append("- `").append(item.path()).append('`');
-            String storedName = item.path().substring(item.path().lastIndexOf('/') + 1);
-            if (item.name() != null && !item.name().isBlank() && !item.name().equals(storedName)) {
-                sb.append("（原始文件名: ").append(item.name()).append('）');
+        if (!attachments.isEmpty() && fs != null && fileTransfer != null && fileTransfer.available()) {
+            sb.append("\n\n<system-reminder>\n# 用户附件\n用户随本条消息上传了文件（上传已在对话外完成，"
+                    + "文件就在沙箱工作区——不存在任何上传工具，不要尝试上传/下载，直接用文件工具读取）：\n");
+            for (AttachmentItem item : attachments) {
+                sb.append("- `").append(item.path()).append('`');
+                String storedName = item.path().substring(item.path().lastIndexOf('/') + 1);
+                if (item.name() != null && !item.name().isBlank() && !item.name().equals(storedName)) {
+                    sb.append("（原始文件名: ").append(item.name()).append('）');
+                }
+                if (item.size() > 0) {
+                    sb.append("，").append(humanSize(item.size()));
+                }
+                sb.append('\n');
             }
-            if (item.size() > 0) {
-                sb.append("，").append(humanSize(item.size()));
-            }
-            sb.append('\n');
+            sb.append("如需把处理后的文件交付给用户，写入 outputs/").append(SandboxFileTransfer.safeDir(chatId))
+                    .append("/ 目录（已创建）：本轮结束后其中的新文件会自动作为可下载附件展示给用户。\n</system-reminder>");
         }
-        sb.append("如需把处理后的文件交付给用户，写入 outputs/").append(SandboxFileTransfer.safeDir(chatId))
-                .append("/ 目录（已创建）：本轮结束后其中的新文件会自动作为可下载附件展示给用户。\n</system-reminder>");
-        return sb.toString();
+        String prompt = sb.toString();
+        if (UI_INTENT_PATTERN.matcher(prompt).find() && !PLAIN_TEXT_PATTERN.matcher(prompt).find()) {
+            prompt += "\n\n<system-reminder>\n"
+                    + "This question looks like a comparison / explanation / analysis / planning request. "
+                    + "Per the Structured UI blocks section, carry the main content in render_ui blocks "
+                    + "(e.g. a comparison table + key-takeaway cards for a comparison; fact cards for an "
+                    + "introduction; a chart + stat cards for data; phase cards + tasks for a plan; advice "
+                    + "cards for recommendations), and keep Markdown prose only for the lead-in and "
+                    + "interpretation. One call carrying 2-4 blocks is usually enough — render each piece of "
+                    + "content once and do not repeat it in later calls. Skip the blocks only if the answer is "
+                    + "genuinely one or two sentences.\n</system-reminder>";
+        }
+        return prompt;
     }
 
     /** 本轮产出目录（工作区内相对路径，chatId 已净化） */

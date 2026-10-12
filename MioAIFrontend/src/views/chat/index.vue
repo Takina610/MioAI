@@ -324,6 +324,19 @@ watch(() => userStore.isLoggedIn, (loggedIn) => {
 
 const { currentChatId, messages, isLoading, switchChat, loadMessages } = messagesApi
 
+// 轮次结束即时同步：done/stopped/error 时后端已释放占用，乐观移除并立即刷新，
+// 不等下个 10s 轮询——侧边栏执行动画与会话状态同步停止
+watch(isLoading, (loading, was) => {
+  if (!was || loading) return
+  const id = currentChatId.value
+  if (id && backendStreamingIds.value.has(id)) {
+    const next = new Set(backendStreamingIds.value)
+    next.delete(id)
+    backendStreamingIds.value = next
+  }
+  refreshBackendStreaming()
+})
+
 const currentChatTitle = computed(() => {
   const chat = chatList.value.find(c => c.id === currentChatId.value)
   return chat?.title || '新对话'
