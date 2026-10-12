@@ -24,19 +24,18 @@
                 文档
                 <span v-if="pagination.total" class="doc-count">{{ pagination.total }}</span>
               </h3>
-              <div class="docs-actions">
-                <a-button
-                  v-if="hasRetryableDocs"
-                  :loading="vectorizing"
-                  size="small"
-                  @click="handleRevectorize(false)"
-                >
-                  <ReloadOutlined /> 重新向量化
-                </a-button>
-                <a-button type="primary" size="small" @click="uploadModalVisible = true">
-                  <PlusOutlined /> 上传文档
-                </a-button>
-              </div>
+                <div class="docs-actions">
+                  <a-button
+                    v-if="hasRetryableDocs"
+                    size="small"
+                    @click="handleRevectorize(false)"
+                  >
+                    <ReloadOutlined /> 重新向量化
+                  </a-button>
+                  <a-button type="primary" size="small" @click="uploadModalVisible = true">
+                    <PlusOutlined /> 上传文档
+                  </a-button>
+                </div>
             </div>
 
             <DocumentTable
@@ -123,17 +122,7 @@
                 />
               </div>
 
-              <div v-if="vectorizing" class="vectorize-live">
-                <div class="vl-head">
-                  <span class="vl-file">{{ vectorProgress.fileName || '向量化中' }}</span>
-                  <span class="vl-count">{{ vectorProgress.current }}/{{ vectorProgress.total }}</span>
-                </div>
-                <div class="vl-track">
-                  <i class="vl-fill" :style="{ width: `${vectorPercent}%` }" />
-                </div>
-              </div>
               <a-popconfirm
-                v-else
                 title="将按当前分块设置重建全部文档，耗时较长，确定继续？"
                 ok-text="重建"
                 cancel-text="取消"
@@ -154,6 +143,16 @@
       v-model:visible="uploadModalVisible"
       :kb-id="kbId"
       :skip-first-step="true"
+      @success="refresh"
+    />
+
+    <!-- 重建/重解析：直接落在向量化进度步骤，进行中禁关不可回退 -->
+    <KnowledgeBaseModal
+      v-model:visible="vectorModalVisible"
+      :kb-id="kbId"
+      :skip-first-step="true"
+      :resume-vectorize="true"
+      :force-vectorize="vectorModalForce"
       @success="refresh"
     />
 
@@ -182,7 +181,6 @@ import {
   updateKnowledgeBase,
   deleteDocument,
   revectorizeDocument,
-  vectorizeKnowledgeFiles,
   type Document
 } from '@/api/knowledgeBase'
 import { formatFileSize } from '@/utils/format'
@@ -389,79 +387,37 @@ async function handleDocRevectorize(record: Document): Promise<void> {
   }
 }
 
-const vectorizing = ref(false)
-const reconnNotified = ref(false)
-const vectorProgress = reactive({ current: 0, total: 0, fileName: '' })
-const vectorPercent = computed(() =>
-  vectorProgress.total ? Math.round((vectorProgress.current / vectorProgress.total) * 100) : 0
-)
-let eventSource: EventSource | null = null
+/** 向量化弹窗（进度步骤）开关；force 决定 SSE 是否全量重建 */
+const vectorModalVisible = ref(false)
+const vectorModalForce = ref(false)
+const vectorTaskActive = ref(false)
 const hasRetryableDocs = computed(() =>
   documentList.value.some((d) => d.status === 1 || d.status === 3)
 )
 
+watch(vectorModalVisible, (val) => {
+  if (!val) {
+    vectorTaskActive.value = false
+    window.removeEventListener('beforeunload', handleBeforeUnload)
+  }
+})
+
+/** 弹窗进行中禁止误触丢进度：浏览器关闭/刷新走原生确认 */
 function handleBeforeUnload(e: BeforeUnloadEvent): void {
   e.preventDefault()
   e.returnValue = ''
 }
 
-function closeVectorizeStream(): void {
-  eventSource?.close()
-  eventSource = null
-  vectorizing.value = false
-  reconnNotified.value = false
-  window.removeEventListener('beforeunload', handleBeforeUnload)
-}
-
 function handleRevectorize(force: boolean): void {
-  if (vectorizing.value) {
-    return
-  }
-  vectorizing.value = true
-  reconnNotified.value = false
-  vectorProgress.current = 0
-  vectorProgress.total = 0
-  vectorProgress.fileName = ''
+  vectorModalForce.value = force
+  vectorTaskActive.value = true
   window.addEventListener('beforeunload', handleBeforeUnload)
-  const token = localStorage.getItem('token') || ''
-  eventSource = vectorizeKnowledgeFiles(kbId.value, token, force)
-  eventSource.onmessage = (event) => {
-    reconnNotified.value = false
-    try {
-      const payload = JSON.parse(event.data)
-      if (payload.type === 'progress') {
-        vectorProgress.current = payload.data?.current ?? 0
-        vectorProgress.total = payload.data?.total ?? 0
-        vectorProgress.fileName = payload.data?.fileName || ''
-      } else if (payload.type === 'done') {
-        message.success(payload.data?.message || '向量化完成')
-        closeVectorizeStream()
-        refresh()
-      } else if (payload.type === 'error') {
-        message.error(payload.data?.message || '向量化失败，文件已保留，可重试')
-        closeVectorizeStream()
-        refresh()
-      } else if (payload.type === 'cancelled') {
-        closeVectorizeStream()
-        refresh()
-      }
-    } catch {
-      // 忽略无法解析的行
-    }
-  }
-  eventSource.onerror = () => {
-    // 网络波动：EventSource 自动重连，后端任务继续在跑并以观察者模式接管；
-    // 不关闭连接，等待终态事件
-    if (!reconnNotified.value) {
-      reconnNotified.value = true
-      message.info('网络波动，正在自动重连向量化进度...')
-    }
-  }
+  vectorModalVisible.value = true
 }
 
 /** 向量化进行中拦截路由离开：任务在后台继续，回管理页可恢复进度 */
 onBeforeRouteLeave((to) => {
-  if (!vectorizing.value) {
+  if (!vectorTaskActive.value) {
     return true
   }
   Modal.confirm({
@@ -470,7 +426,7 @@ onBeforeRouteLeave((to) => {
     okText: '离开',
     cancelText: '留下',
     onOk: () => {
-      closeVectorizeStream()
+      vectorTaskActive.value = false
       router.push(to)
     }
   })
@@ -478,7 +434,7 @@ onBeforeRouteLeave((to) => {
 })
 
 onBeforeUnmount(() => {
-  closeVectorizeStream()
+  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 
 onMounted(() => {
@@ -610,52 +566,6 @@ onMounted(() => {
 
     :deep(.ant-slider) {
       margin: 4px 0 10px;
-    }
-  }
-
-  .vectorize-live {
-    margin-top: 8px;
-    padding: 12px 14px;
-    border: 1px solid rgba($primary-color, 0.3);
-    background: rgba($primary-color, 0.05);
-    border-radius: 10px;
-
-    .vl-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 8px;
-      margin-bottom: 8px;
-      font-size: 13px;
-      color: $text-secondary;
-
-      .vl-file {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      .vl-count {
-        flex-shrink: 0;
-        font-weight: 600;
-        color: $text-dark;
-        font-variant-numeric: tabular-nums;
-      }
-    }
-
-    .vl-track {
-      height: 4px;
-      border-radius: 2px;
-      background: $border-warm-subtle;
-      overflow: hidden;
-
-      .vl-fill {
-        display: block;
-        height: 100%;
-        border-radius: 2px;
-        background: $primary-color;
-        transition: width 0.4s ease;
-      }
     }
   }
 

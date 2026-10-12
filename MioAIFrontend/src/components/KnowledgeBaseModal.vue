@@ -11,7 +11,7 @@
   >
     <div class="modal-header">
       <div class="header-left">
-        <h3>{{ skipFirstStep ? '上传文档' : '创建知识库' }}</h3>
+        <h3>{{ modalTitle }}</h3>
       </div>
       <!-- 向量化进行中禁止关闭，防止误触中断/取消流程 -->
       <a-button v-if="!vectorizing" type="text" class="close-btn" @click="handleCancel">
@@ -258,12 +258,15 @@ interface Props {
   skipFirstStep?: boolean
   /** 打开后直接进入向量化步骤并连接进度（用于页面刷新后的任务恢复） */
   resumeVectorize?: boolean
+  /** 连接向量化 SSE 时携带 force，重建场景用（需配合 resumeVectorize） */
+  forceVectorize?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   kbId: undefined,
   skipFirstStep: false,
-  resumeVectorize: false
+  resumeVectorize: false,
+  forceVectorize: false
 })
 
 const emit = defineEmits<{
@@ -344,6 +347,11 @@ watch(() => formData.chunkOverlap, (overlap) => {
 let eventSource: EventSource | null = null
 
 const skipFirstStep = computed(() => props.skipFirstStep)
+
+const modalTitle = computed(() => {
+  if (!props.skipFirstStep) return '创建知识库'
+  return props.resumeVectorize ? '向量化进度' : '上传文档'
+})
 
 const rules: Record<string, Rule[]> = {
   name: [{ required: true, message: '请输入知识库名称', trigger: 'blur' }],
@@ -544,7 +552,7 @@ function startVectorization(): void {
   vectorizeStatusMessage.value = '向量化处理可能需要较长时间，请耐心等待...'
 
   const token = localStorage.getItem('token') || ''
-  eventSource = vectorizeKnowledgeFiles(kbId.value, token)
+  eventSource = vectorizeKnowledgeFiles(kbId.value, token, props.forceVectorize)
 
   eventSource.onmessage = (event: MessageEvent) => {
     reconnecting.value = false
