@@ -82,10 +82,20 @@
                     <FileTextOutlined />
                     <span>{{ (skill.files?.length || 0) + 1 }} 文件</span>
                   </span>
+                  <span
+                    v-if="!skill.repoOwner && skill.installed === 1"
+                    class="public-toggle"
+                    @click.stop
+                  >
+                    <a-switch
+                      size="small"
+                      :checked="skill.isPublic === 1"
+                      :loading="togglingIds.has(skill.id)"
+                      @change="handleTogglePublic(skill)"
+                    />
+                    <span>公开</span>
+                  </span>
                   <a-tag v-if="skill.status === 0" color="red" class="vis-tag">已禁用</a-tag>
-                </div>
-                <div class="card-footer">
-                  <span class="update-time">更新于 {{ formatDate(skill.updateTime || skill.createTime) }}</span>
                 </div>
                 <div class="card-actions" @click.stop>
                   <a-button
@@ -113,6 +123,9 @@
                     卸载
                   </a-button>
                   <a-button class="action-btn danger-btn" @click="confirmDelete(skill)">删除</a-button>
+                </div>
+                <div class="card-footer">
+                  <span class="update-time">更新于 {{ formatDate(skill.updateTime || skill.createTime) }}</span>
                 </div>
               </div>
             </a-col>
@@ -189,7 +202,8 @@ import {
   installSkill,
   uninstallSkill,
   searchSkillsSh,
-  installSkillsSh
+  installSkillsSh,
+  updateSkillPublic
 } from '@/api/skill'
 import { formatDate } from '@/utils/format'
 import type { Skill, SkillsShSkill } from '@/types/skill'
@@ -306,6 +320,21 @@ function replaceSkill(updated: Skill): void {
   }
 }
 
+const togglingIds = reactive(new Set<number>())
+
+async function handleTogglePublic(skill: Skill): Promise<void> {
+  if (togglingIds.has(skill.id)) return
+  togglingIds.add(skill.id)
+  try {
+    const updated = await updateSkillPublic(skill.id, skill.isPublic === 1 ? 0 : 1)
+    replaceSkill(updated)
+  } catch (e) {
+    console.error(e)
+  } finally {
+    togglingIds.delete(skill.id)
+  }
+}
+
 function confirmDelete(skill: Skill): void {
   Modal.confirm({
     title: '确认删除',
@@ -383,10 +412,25 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .skill-card {
-  cursor: pointer;
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
 
-  &:hover .card-footer {
-    opacity: 0;
+    .card-title {
+      flex: 1;
+      min-width: 0;
+      margin: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .vis-tag {
+      flex-shrink: 0;
+      margin-inline-end: 0;
+    }
   }
 
   .card-stats {
@@ -395,7 +439,7 @@ onMounted(() => {
     flex-wrap: wrap;
     gap: 8px;
     min-height: 24px;
-    margin-bottom: 40px;
+    margin-bottom: 12px;
 
     .vis-tag {
       margin-inline-end: 0;
@@ -408,6 +452,39 @@ onMounted(() => {
       font-size: 12px;
       color: #6e6b62;
     }
+
+    .public-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #6e6b62;
+    }
+  }
+
+  /* 覆盖 dash-card 公共样式的 hover 浮现：操作按钮常显 */
+  .card-actions {
+    position: static;
+    opacity: 1;
+    visibility: visible;
+    display: flex;
+    gap: 8px;
+    height: auto;
+
+    .action-btn {
+      flex: 1;
+      height: 32px;
+      font-size: 13px;
+      gap: 4px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  }
+
+  .card-footer {
+    margin-top: 10px;
   }
 }
 

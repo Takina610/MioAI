@@ -574,8 +574,6 @@ window.addEventListener('resize', handleResize)
     overflow-y: auto;
     padding: 24px;
     background: #f0eee6;
-    -ms-overflow-style: none;
-    scrollbar-width: none;
   }
 
   .top-section {

@@ -28,7 +28,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 /**
  * @author: Takina
@@ -124,6 +127,110 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill> implements
     }
 
     @Override
+    public Page<SkillVO> queryPlazaSkills(long current, long pageSize, Long viewerId) {
+        // 分页参数钳制，与本人列表同一上限
+        long safeCurrent = Math.max(current, 1);
+        long safePageSize = Math.min(Math.max(pageSize, 1), 200);
+        LambdaQueryWrapper<Skill> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Skill::getStatus, SkillStatusEnum.ACTIVE.getCode())
+                .eq(Skill::getInstalled, 1)
+                // GitHub 来源天然公开；自导入技能需本人显式公开
+                .and(w -> w.eq(Skill::getIsPublic, 1).or().isNotNull(Skill::getRepoOwner))
+                .orderByDesc(Skill::getUpdateTime);
+        Page<Skill> page = this.page(new Page<>(safeCurrent, safePageSize), wrapper);
+
+        Set<String> ownedRepoKeys = new HashSet<>();
+        Set<String> ownedNames = new HashSet<>();
+        if (viewerId != null) {
+            for (Skill mine : this.list(new LambdaQueryWrapper<Skill>().eq(Skill::getUserId, viewerId))) {
+                if (StrUtil.isNotBlank(mine.getRepoOwner())) {
+                    ownedRepoKeys.add(repoKey(mine));
+                } else {
+                    ownedNames.add(mine.getName().toLowerCase(Locale.ROOT));
+                }
+            }
+        }
+        boolean checkOwned = viewerId != null;
+
+        Page<SkillVO> voPage = new Page<>(page.getCurrent(), page.getSize(), page.getTotal());
+        voPage.setRecords(page.getRecords().stream().map(skill -> {
+            SkillVO vo = convertToVO(skill);
+            // 广场只露元数据，不携带正文与附属文件
+            vo.setContent(null);
+            vo.setFiles(null);
+            vo.setOwned(checkOwned && isOwned(ownedRepoKeys, ownedNames, skill));
+            return vo;
+        }).toList());
+        return voPage;
+    }
+
+    @Override
+    public SkillVO updateSkillPublic(Long id, Long userId, boolean isPublic) {
+        Skill skill = this.getById(id);
+        if (skill == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "技能不存在");
+        }
+        checkOwner(skill, userId);
+        if (StrUtil.isNotBlank(skill.getRepoOwner())) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "GitHub 来源技能本身公开，无需设置");
+        }
+        if (!Integer.valueOf(1).equals(skill.getInstalled())) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "技能未安装，没有可分享的内容");
+        }
+        skill.setIsPublic(isPublic ? 1 : 0);
+        skill.setUpdateTime(new Date());
+        this.updateById(skill);
+        return convertToVO(skill);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public SkillVO installFromPlaza(Long id, Long userId) {
+        Skill source = this.getById(id);
+        if (source == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "技能不存在");
+        }
+        if (!Integer.valueOf(1).equals(source.getStatus()) || !Integer.valueOf(1).equals(source.getInstalled())) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "该技能不可安装");
+        }
+        boolean repoSourced = StrUtil.isNotBlank(source.getRepoOwner());
+        // 防止凭 id 摸取未公开的自导入技能
+        if (!repoSourced && !Integer.valueOf(1).equals(source.getIsPublic())) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "该技能未公开");
+        }
+        Set<String> ownedRepoKeys = new HashSet<>();
+        Set<String> ownedNames = new HashSet<>();
+        for (Skill mine : this.list(new LambdaQueryWrapper<Skill>().eq(Skill::getUserId, userId))) {
+            if (StrUtil.isNotBlank(mine.getRepoOwner())) {
+                ownedRepoKeys.add(repoKey(mine));
+            } else {
+                ownedNames.add(mine.getName().toLowerCase(Locale.ROOT));
+            }
+        }
+        if (isOwned(ownedRepoKeys, ownedNames, source)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "已拥有该技能，无需重复安装");
+        }
+
+        Skill copy = new Skill();
+        copy.setUserId(userId);
+        copy.setName(source.getName());
+        copy.setDescription(source.getDescription());
+        copy.setContent(source.getContent());
+        copy.setFiles(source.getFiles());
+        copy.setSourceUrl(source.getSourceUrl());
+        copy.setRepoOwner(source.getRepoOwner());
+        copy.setRepoName(source.getRepoName());
+        copy.setRepoBranch(source.getRepoBranch());
+        copy.setSkillPath(source.getSkillPath());
+        copy.setDocUrl(source.getDocUrl());
+        copy.setInstalled(1);
+        copy.setIsPublic(0);
+        copy.setStatus(SkillStatusEnum.ACTIVE.getCode());
+        this.save(copy);
+        return convertToVO(copy);
+    }
+
+    @Override
     public List<Skill> getEnabledSkillsForAgent(Long agentId) {
         if (agentId == null) {
             return List.of();
@@ -147,6 +254,20 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill> implements
         if (userId == null || skill.getUserId() == null || !skill.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限操作该技能");
         }
+    }
+
+    /** 已拥有判定：GitHub 来源按仓库坐标（owner/repo:目录末段），自导入按名称 */
+    private boolean isOwned(Set<String> ownedRepoKeys, Set<String> ownedNames, Skill skill) {
+        if (StrUtil.isNotBlank(skill.getRepoOwner())) {
+            return ownedRepoKeys.contains(repoKey(skill));
+        }
+        return skill.getName() != null && ownedNames.contains(skill.getName().toLowerCase(Locale.ROOT));
+    }
+
+    private String repoKey(Skill skill) {
+        String dir = StrUtil.nullToEmpty(skill.getSkillPath());
+        String base = dir.isEmpty() ? "" : dir.substring(dir.lastIndexOf('/') + 1);
+        return (skill.getRepoOwner() + "/" + skill.getRepoName() + ":" + base).toLowerCase(Locale.ROOT);
     }
 
     private Page<SkillVO> pageToVO(Page<Skill> page) {

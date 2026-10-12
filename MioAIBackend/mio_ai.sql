@@ -352,6 +352,7 @@ CREATE TABLE IF NOT EXISTS `skill` (
   `skill_path` varchar(500) NULL DEFAULT NULL COMMENT '技能在仓库内的目录（根目录为空串）',
   `doc_url` varchar(500) NULL DEFAULT NULL COMMENT '仓库内 SKILL.md 跳转链接',
   `installed` tinyint NULL DEFAULT 1 COMMENT '是否已安装:0-仅登记,1-已安装',
+  `is_public` tinyint NULL DEFAULT 0 COMMENT '是否公开进技能广场:0-私有,1-公开(仅自导入技能可设置)',
   `status` tinyint NULL DEFAULT 1 COMMENT '状态:0-禁用,1-正常',
   `is_deleted` tinyint NULL DEFAULT 0,
   `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP,

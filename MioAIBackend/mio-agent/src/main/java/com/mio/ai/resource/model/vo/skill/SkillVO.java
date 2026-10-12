@@ -82,6 +82,16 @@ public class SkillVO implements Serializable {
     private Integer installed;
 
     /**
+     * 是否公开进技能广场（0-私有 1-公开）
+     */
+    private Integer isPublic;
+
+    /**
+     * 当前登录用户是否已拥有该技能（仅技能广场列表填充）
+     */
+    private Boolean owned;
+
+    /**
      * 状态
      */
     private Integer status;

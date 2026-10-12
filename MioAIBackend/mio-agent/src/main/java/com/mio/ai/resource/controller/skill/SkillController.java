@@ -6,6 +6,7 @@ import com.mio.ai.common.common.BaseResponse;
 import com.mio.ai.common.utils.ResultUtils;
 import com.mio.ai.resource.model.dto.skill.SkillGithubImportRequest;
 import com.mio.ai.resource.model.dto.skill.SkillGithubPreviewRequest;
+import com.mio.ai.resource.model.dto.skill.SkillPublicUpdateRequest;
 import com.mio.ai.resource.model.dto.skill.SkillQueryRequest;
 import com.mio.ai.resource.model.dto.skill.SkillsShInstallRequest;
 import com.mio.ai.resource.model.dto.skill.SkillsShSearchRequest;
@@ -32,7 +33,8 @@ import java.util.List;
 /**
  * @author: Takina
  * @date: 2026/10/10
- * @description: 技能接口（用户侧）。技能仅本人可见；安装来源：zip 包 / GitHub 仓库 / skills.sh
+ * @description: 技能接口（用户侧）。本人技能私有，自导入技能可公开进技能广场；
+ *               安装来源：zip 包 / GitHub 仓库 / skills.sh / 技能广场
  */
 @Validated
 @Slf4j
@@ -156,5 +158,38 @@ public class SkillController {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         return ResultUtils.success(skillsShService.install(userId, request.getOwner(),
                 request.getRepo(), request.getSkillId()));
+    }
+
+    /**
+     * 技能广场分页（可匿名访问；GitHub 来源天然公开，自导入技能需本人公开）
+     */
+    @GetMapping("/plaza")
+    public BaseResponse<Page<SkillVO>> plazaSkills(@RequestParam(defaultValue = "1") long current,
+                                                   @RequestParam(defaultValue = "20") long size,
+                                                   HttpServletRequest httpRequest) {
+        Long viewerId = redisComponent.getUserIdNullable(httpRequest.getHeader("token"));
+        return ResultUtils.success(skillService.queryPlazaSkills(current, size, viewerId));
+    }
+
+    /**
+     * 从技能广场安装（复制一份公开技能到本人名下）
+     */
+    @PostMapping("/plaza/{id:\\d+}/install")
+    @LogInfo
+    public BaseResponse<SkillVO> installFromPlaza(@PathVariable Long id, HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        return ResultUtils.success(skillService.installFromPlaza(id, userId));
+    }
+
+    /**
+     * 设置自导入技能是否公开进技能广场（GitHub 来源不可设置）
+     */
+    @PutMapping("/{id:\\d+}/public")
+    @LogInfo
+    public BaseResponse<SkillVO> updateSkillPublic(@PathVariable Long id,
+                                                   @Valid @RequestBody SkillPublicUpdateRequest request,
+                                                   HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        return ResultUtils.success(skillService.updateSkillPublic(id, userId, request.getIsPublic() == 1));
     }
 }

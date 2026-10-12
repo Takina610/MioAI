@@ -18,6 +18,8 @@ export interface Skill {
   skillPath?: string
   docUrl?: string
   installed: number
+  isPublic?: number
+  owned?: boolean
   status: number
   statusDesc?: string
   createTime?: string

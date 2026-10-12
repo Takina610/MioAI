@@ -137,6 +137,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '技能管理', requiresAuth: false }
       },
       {
+        path: 'skill-market',
+        name: 'SkillMarket',
+        component: () => import('@/views/dashboard/skill/market.vue'),
+        meta: { title: '技能广场', requiresAuth: false }
+      },
+      {
         path: 'usage',
         name: 'Usage',
         component: () => import('@/views/dashboard/usage/index.vue'),

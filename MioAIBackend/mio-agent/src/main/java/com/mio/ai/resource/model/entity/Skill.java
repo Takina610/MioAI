@@ -79,6 +79,11 @@ public class Skill implements Serializable {
     private Integer installed;
 
     /**
+     * 是否公开进技能广场（0-私有 1-公开；仅自导入技能可设置，GitHub 来源天然公开）
+     */
+    private Integer isPublic;
+
+    /**
      * 状态（0-禁用 1-正常）
      */
     private Integer status;

@@ -113,12 +113,6 @@ const {
     overflow-y: auto;
     padding: 24px;
     background: #f0eee6;
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-
-    &::-webkit-scrollbar {
-      display: none;
-    }
   }
 
   .filter-bar {

@@ -49,6 +49,7 @@ const menuGroups: MenuGroup[] = [
   {
     title: '技能',
     items: [
+      { key: 'skill-market', label: '技能广场', icon: ShopOutlined, path: '/dashboard/skill-market' },
       { key: 'skill', label: '我的技能', icon: ThunderboltOutlined, path: '/dashboard/skill' }
     ]
   },

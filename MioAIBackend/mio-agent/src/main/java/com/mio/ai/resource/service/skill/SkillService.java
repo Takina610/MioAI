@@ -41,6 +41,22 @@ public interface SkillService extends IService<Skill> {
     SkillVO uninstallSkill(Long id, Long userId);
 
     /**
+     * 技能广场分页：GitHub 来源技能天然公开，自导入技能需本人设为公开；
+     * viewerId 非空时填充 owned 标记，VO 不携带正文内容
+     */
+    Page<SkillVO> queryPlazaSkills(long current, long pageSize, Long viewerId);
+
+    /**
+     * 设置自导入技能是否公开进技能广场（GitHub 来源不可设置，本身即公开）
+     */
+    SkillVO updateSkillPublic(Long id, Long userId, boolean isPublic);
+
+    /**
+     * 从技能广场安装：把公开技能复制一份到本人名下（已安装态、私有）
+     */
+    SkillVO installFromPlaza(Long id, Long userId);
+
+    /**
      * 智能体已启用的技能（对话装配用，权限由绑定关系保证）
      */
     List<Skill> getEnabledSkillsForAgent(Long agentId);

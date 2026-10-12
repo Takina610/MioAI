@@ -86,3 +86,27 @@ export function installSkillsSh(owner: string, repo: string, skillId: string): P
     timeout: 120000
   })
 }
+
+export function getPlazaSkills(params?: { current?: number; size?: number }): Promise<PageResponse<Skill>> {
+  return request({
+    url: '/skills/plaza',
+    method: 'get',
+    params
+  })
+}
+
+export function installPlazaSkill(id: number): Promise<Skill> {
+  return request({
+    url: `/skills/plaza/${id}/install`,
+    method: 'post',
+    timeout: 60000
+  })
+}
+
+export function updateSkillPublic(id: number, isPublic: number): Promise<Skill> {
+  return request({
+    url: `/skills/${id}/public`,
+    method: 'put',
+    data: { isPublic }
+  })
+}

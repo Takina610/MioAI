@@ -375,12 +375,6 @@ function handleEditSuccess(): void {
   min-width: 0;
   max-height: 730px;
   overflow-y: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
 }
 
 .right-section {
@@ -388,12 +382,6 @@ function handleEditSuccess(): void {
   flex-shrink: 0;
   max-height: 730px;
   overflow-y: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
 }
 
 .resource-section {

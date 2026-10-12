@@ -35,4 +35,5 @@ git push origin        # 等价于 git push origin master:main
 
 - 颜色只用 `styles/variables.scss` 既有 token（暖米底 + 主青绿 `#2aa1a9`），不引入新色相；强度分级用主色透明度，不用 antd 红绿灯配色。
 - 状态用圆点+文字（处理中加脉冲动画），不用彩色 tag 堆砌。
+- 全站滚动条由 global.scss 的 `*` 选择器统一成自定义细滚动条（暖灰 #d2cfc5）：新滚动容器直接 `overflow: auto` 即可，不要再写 thin-scrollbar mixin 或隐藏滚动条；ChatSessionList 的悬浮浮现样式是唯一例外。
 

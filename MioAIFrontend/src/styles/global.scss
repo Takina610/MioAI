@@ -12,17 +12,35 @@ html, body {
   font-size: $font-size-base;
   color: $text-dark;
   background-color: $bg-cream;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
 }
 
 ::selection {
   background: rgba(42, 161, 169, 0.22);
 }
 
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  display: none;
+/* 全站自定义滚动条：所有滚动容器（含 antd 弹层等动态节点）统一细滚动条，替代原生样式 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d2cfc5 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #d2cfc5;
+  border-radius: 3px;
+
+  &:hover {
+    background: #b5b1a7;
+  }
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 #app {
