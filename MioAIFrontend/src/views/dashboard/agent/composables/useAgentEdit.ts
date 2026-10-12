@@ -18,10 +18,6 @@ export function useAgentEdit(agentId: number) {
     description: '',
     avatar: '',
     systemPrompt: '',
-    openingMessage: '',
-    openingQuestions: [] as string[],
-    // null = 跟随引擎默认；提交时转换为 -1 哨兵（后端 update 忽略 null，-1 才是显式清除）
-    temperature: null as number | null,
     isPublic: 0
   })
 
@@ -34,9 +30,6 @@ export function useAgentEdit(agentId: number) {
       formData.description = res.description || ''
       formData.avatar = res.avatar || ''
       formData.systemPrompt = res.systemPrompt || ''
-      formData.openingMessage = res.openingMessage || ''
-      formData.openingQuestions = [...(res.openingQuestions || [])]
-      formData.temperature = res.temperature ?? null
       formData.isPublic = res.isPublic ?? 0
     } catch (e) {
       console.error(e)
@@ -46,6 +39,7 @@ export function useAgentEdit(agentId: number) {
     }
   }
 
+  // 不携带开场白/温度等对话设置字段：编辑页已移除该配置卡，缺省不提交，避免自动保存把已有值抹掉
   function buildUpdateRequest(): AgentUpdateRequest {
     return {
       id: agentId,
@@ -53,9 +47,6 @@ export function useAgentEdit(agentId: number) {
       description: formData.description,
       avatar: formData.avatar,
       systemPrompt: formData.systemPrompt,
-      openingMessage: formData.openingMessage,
-      openingQuestions: formData.openingQuestions,
-      temperature: formData.temperature ?? -1,
       isPublic: formData.isPublic
     }
   }

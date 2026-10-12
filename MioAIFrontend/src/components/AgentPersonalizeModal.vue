@@ -42,6 +42,14 @@
         v-model:opening-questions="formData.openingQuestions"
         v-model:temperature="formData.temperature"
       />
+
+      <div class="field public-field">
+        <span class="field-label">公开</span>
+        <a-switch
+          :checked="formData.isPublic === 1"
+          @change="(checked: any) => (formData.isPublic = checked ? 1 : 0)"
+        />
+      </div>
     </div>
 
     <template #footer>
@@ -94,7 +102,8 @@ const formData = reactive({
   systemPrompt: '',
   openingMessage: '',
   openingQuestions: [] as string[],
-  temperature: null as number | null
+  temperature: null as number | null,
+  isPublic: 0
 })
 
 watch(() => props.visible, async (visible) => {
@@ -106,6 +115,7 @@ watch(() => props.visible, async (visible) => {
     formData.openingMessage = config?.openingMessage || ''
     formData.openingQuestions = [...(config?.openingQuestions || [])]
     formData.temperature = config?.temperature ?? null
+    formData.isPublic = config?.isPublic ?? 0
     iconConfig.value = parseBotIcon(config?.icon) ?? parseBotIcon(props.agent.icon) ?? { ...DEFAULT_BOT_ICON }
   } catch (e) {
     console.error(e)
@@ -127,7 +137,8 @@ async function handleSave(): Promise<void> {
       openingQuestions: formData.openingQuestions,
       // 空值=清除该覆盖；温度 null=跟随内置默认
       temperature: formData.temperature,
-      icon: iconEqualsDefault(iconConfig.value) ? undefined : serializeBotIcon(iconConfig.value)
+      icon: iconEqualsDefault(iconConfig.value) ? undefined : serializeBotIcon(iconConfig.value),
+      isPublic: formData.isPublic
     })
     message.success('已保存')
     emit('update:visible', false)
@@ -185,6 +196,18 @@ function iconEqualsDefault(config: BotIconConfig): boolean {
         font-weight: 600;
         color: $text-dark;
         margin-bottom: 8px;
+      }
+    }
+
+    .public-field {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+
+      .field-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: $text-dark;
       }
     }
   }

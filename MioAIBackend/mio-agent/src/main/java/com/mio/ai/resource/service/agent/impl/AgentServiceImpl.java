@@ -9,6 +9,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.utils.JacksonUtil;
+import com.mio.ai.bot.agent.MioBot;
 import com.mio.ai.bot.controller.MioBotController;
 import com.mio.ai.bot.mapper.ChatConversationDOMapper;
 import com.mio.ai.bot.model.entity.ChatConversationDO;
@@ -117,6 +118,11 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
 
     @Autowired
     private AgentUserConfigService agentUserConfigService;
+
+    /** 广场 MioBot 槽位署名：发布者用户名 */
+    @Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.mio.ai.user.service.UserService userService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -307,16 +313,49 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
     }
 
     @Override
-    public Page<AgentVO> getPublicAgents(long current, long size) {
+    public Page<AgentVO> getPublicAgents(long current, long size, Long userId) {
         Page<Agent> page = new Page<>(current, size);
         LambdaQueryWrapper<Agent> wrapper = new LambdaQueryWrapper<>();
+        // 内置智能体不进公共查询：广场的 MioBot 槽位按当前用户单独装配
         wrapper.eq(Agent::getIsPublic, 1)
                 .eq(Agent::getStatus, AgentStatusEnum.PUBLISHED.getCode())
+                .isNotNull(Agent::getUserId)
                 .orderByDesc(Agent::getCreateTime);
         Page<Agent> agentPage = this.page(page, wrapper);
         Page<AgentVO> voPage = new Page<>(agentPage.getCurrent(), agentPage.getSize(), agentPage.getTotal());
-        voPage.setRecords(agentPage.getRecords().stream().map(this::convertToVO).toList());
+        List<AgentVO> records = new ArrayList<>();
+        appendMioBotSlot(records, userId);
+        agentPage.getRecords().forEach(a -> records.add(convertToVO(a)));
+        voPage.setRecords(records);
         return voPage;
+    }
+
+    /**
+     * 广场的 MioBot 槽位：每个用户都相当于拥有自己的 MioBot。
+     * 登录用户发布过自己的 MioBot（配置行 is_public=1）→ 显示自己的（个性化覆盖 + 本人署名，置顶）；
+     * 未发布 → 不占广场位；游客 → 显示官方内置 MioBot。
+     */
+    private void appendMioBotSlot(List<AgentVO> records, Long userId) {
+        Agent builtin = this.getById(MioBot.AGENT_ID);
+        if (builtin == null) {
+            return;
+        }
+        AgentVO slot = null;
+        if (userId != null) {
+            com.mio.ai.resource.model.entity.AgentUserConfig config =
+                    agentUserConfigService.getOverride(userId, builtin.getId());
+            if (config != null && Integer.valueOf(1).equals(config.getIsPublic())) {
+                slot = convertToVO(builtin);
+                applyUserOverride(slot, builtin.getId(), userId);
+                slot.setUserName(userService.getUserNameById(userId));
+            }
+        } else if (Integer.valueOf(1).equals(builtin.getIsPublic())
+                && AgentStatusEnum.PUBLISHED.getCode() == builtin.getStatus()) {
+            slot = convertToVO(builtin);
+        }
+        if (slot != null) {
+            records.add(slot);
+        }
     }
 
     private AgentVO convertToVO(Agent agent) {

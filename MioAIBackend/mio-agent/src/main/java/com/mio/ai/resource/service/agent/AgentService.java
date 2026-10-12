@@ -36,7 +36,12 @@ public interface AgentService extends IService<Agent> {
 
     Page<AgentVO> queryAgents(AgentQueryRequest request);
 
-    Page<AgentVO> getPublicAgents(long current, long size);
+    /**
+     * 广场列表：自定义公开智能体 + MioBot 槽位。
+     * MioBot 按当前用户装配——登录用户已发布自己的 MioBot（agent_user_config.is_public=1）
+     * 时显示自己的（带个性化覆盖与本人署名，置顶），否则不显示；游客显示官方内置 MioBot。
+     */
+    Page<AgentVO> getPublicAgents(long current, long size, Long userId);
 
     /**
      * 发布：保存配置并生成版本快照，agent.version 指向最新版本；返回新版本号

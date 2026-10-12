@@ -49,15 +49,6 @@
           />
         </div>
 
-        <div class="dash-section settings-section">
-          <h3 class="section-title">对话设置</h3>
-          <AgentConversationSettings
-            v-model:opening-message="formData.openingMessage"
-            v-model:opening-questions="formData.openingQuestions"
-            v-model:temperature="formData.temperature"
-          />
-        </div>
-
         <div class="resource-grid">
           <div class="dash-section resource-card">
             <div class="resource-header">
@@ -277,7 +268,6 @@ import {
   ThunderboltOutlined
 } from '@ant-design/icons-vue'
 import AgentCreateModal from '@/components/AgentCreateModal.vue'
-import AgentConversationSettings from '@/components/AgentConversationSettings.vue'
 import BotIcon from '@/components/bot-icon/BotIcon.vue'
 import { parseBotIcon } from '@/components/bot-icon/types'
 import { countMcpTools } from '@/utils/mcpTool'

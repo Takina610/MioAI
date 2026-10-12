@@ -52,4 +52,9 @@ public class AgentUserConfigRequest implements Serializable {
      */
     @Size(max = 500, message = "图标配置长度不能超过500")
     private String icon;
+
+    /**
+     * 是否发布到广场（null=保持不变）
+     */
+    private Integer isPublic;
 }

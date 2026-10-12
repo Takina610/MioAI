@@ -53,6 +53,11 @@ public class AgentUserConfig implements Serializable {
      */
     private String icon;
 
+    /**
+     * 是否发布到广场（0-未发布 1-已发布）：广场的 MioBot 槽位按当前用户装配
+     */
+    private Integer isPublic;
+
     @TableLogic
     private Integer isDeleted;
 

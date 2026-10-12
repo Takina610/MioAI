@@ -39,4 +39,9 @@ public class AgentUserConfigVO implements Serializable {
      * 图标配置覆盖JSON
      */
     private String icon;
+
+    /**
+     * 是否发布到广场（0-未发布 1-已发布）
+     */
+    private Integer isPublic;
 }

@@ -6,6 +6,8 @@ import type { Skill } from './skill'
 export interface Agent {
   id: number
   userId: number
+  /** 作者用户名（广场列表按需填充；空时回退官方/匿名） */
+  userName?: string
   name: string
   description?: string
   avatar?: string
@@ -109,6 +111,8 @@ export interface AgentUserConfig {
   openingQuestions?: string[]
   temperature?: number | null
   icon?: string
+  /** 是否发布到广场（0-未发布 1-已发布）：广场的 MioBot 槽位显示自己的 */
+  isPublic?: number
 }
 
 export interface AgentUserConfigRequest {
@@ -117,4 +121,6 @@ export interface AgentUserConfigRequest {
   openingQuestions?: string[]
   temperature?: number | null
   icon?: string
+  /** 是否发布到广场（不传=保持不变） */
+  isPublic?: number
 }

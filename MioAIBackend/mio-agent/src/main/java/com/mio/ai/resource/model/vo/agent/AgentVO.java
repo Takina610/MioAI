@@ -22,6 +22,11 @@ public class AgentVO implements Serializable {
     private Long userId;
 
     /**
+     * 作者用户名（广场列表按需填充；空时前端回退官方/匿名）
+     */
+    private String userName;
+
+    /**
      * 开场白（新会话首屏展示）
      */
     private String openingMessage;

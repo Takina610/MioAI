@@ -9,7 +9,7 @@
 
       <a-row v-else :gutter="[16, 16]">
         <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="agent in agentList" :key="agent.id">
-          <div class="dash-card agent-card">
+          <div class="dash-card agent-card" @click="startChat(agent)">
             <div class="card-header">
               <div class="card-icon-wrapper">
                 <BotIcon
@@ -28,24 +28,22 @@
             <p class="card-desc">{{ agent.description || '暂无描述' }}</p>
             <div class="card-footer">
               <span class="author">
-                <UserOutlined /> {{ agent.type === 0 ? '官方' : (agent.userName || '匿名') }}
+                <UserOutlined /> {{ agent.userName || (agent.type === 0 ? '官方' : '匿名') }}
               </span>
               <span class="time">{{ formatDate(agent.createTime) }}</span>
             </div>
-            <div class="card-actions static">
-              <div class="action-row">
-                <a-button class="chat-btn" type="primary" size="small" @click="startChat(agent)">
-                  开始对话
-                </a-button>
-                <a-button
-                  class="template-btn"
-                  size="small"
-                  :loading="forkingId === agent.id"
-                  @click="useTemplate(agent)"
-                >
-                  使用该模板
-                </a-button>
-              </div>
+            <div class="card-actions" @click.stop>
+              <a-button class="chat-btn" type="primary" size="small" @click="startChat(agent)">
+                开始对话
+              </a-button>
+              <a-button
+                class="template-btn"
+                size="small"
+                :loading="forkingId === agent.id"
+                @click="useTemplate(agent)"
+              >
+                使用该模板
+              </a-button>
             </div>
           </div>
         </a-col>
@@ -131,9 +129,15 @@ onMounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
+  cursor: pointer;
 
+  // 对齐管理页：悬浮时按钮浮现、footer 淡出
   &:hover {
     box-shadow: $shadow-medium;
+
+    .card-footer {
+      opacity: 0;
+    }
   }
 
   .card-header {
@@ -156,6 +160,8 @@ onMounted(() => {
     font-size: 12px;
     color: #8c8a82;
     margin-bottom: 12px;
+    height: 36px;
+    transition: opacity 0.3s;
 
     .author {
       display: flex;
@@ -165,24 +171,10 @@ onMounted(() => {
   }
 
   .card-actions {
-    &.static {
-      position: static;
-      opacity: 1;
-      visibility: visible;
-      pointer-events: auto;
-      height: auto;
-      margin-top: auto;
-    }
-
-    .action-row {
-      display: flex;
-      gap: 8px;
-    }
-
     .chat-btn {
       flex: 1;
-      height: 35px;
-      border-radius: 18px;
+      height: 36px;
+      border-radius: 10px;
       font-size: 14px;
       font-weight: 600;
       color: #fff;
@@ -190,8 +182,8 @@ onMounted(() => {
 
     .template-btn {
       flex: 1;
-      height: 35px;
-      border-radius: 18px;
+      height: 36px;
+      border-radius: 10px;
       font-size: 14px;
       font-weight: 600;
     }

@@ -88,6 +88,7 @@ CREATE TABLE `agent_user_config`  (
   `opening_questions` varchar(2000) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL COMMENT '推荐问题JSON数组覆盖',
   `temperature` double NULL COMMENT '采样温度覆盖（NULL=跟随内置默认）',
   `icon` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL COMMENT '图标配置覆盖JSON',
+  `is_public` tinyint NULL DEFAULT 0 COMMENT '是否发布到广场:0-未发布,1-已发布',
   `is_deleted` tinyint NULL DEFAULT 0 COMMENT '是否删除:0-未删除,1-已删除',
   `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP,
   `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

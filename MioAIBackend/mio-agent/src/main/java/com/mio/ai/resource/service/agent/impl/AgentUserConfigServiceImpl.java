@@ -62,6 +62,12 @@ public class AgentUserConfigServiceImpl extends ServiceImpl<AgentUserConfigMappe
         config.setOpeningQuestions(toJson(request.getOpeningQuestions()));
         config.setTemperature(request.getTemperature());
         config.setIcon(blankToNull(request.getIcon()));
+        // null=保持不变：未带发布标记的调用不应意外下架
+        if (request.getIsPublic() != null) {
+            config.setIsPublic(request.getIsPublic());
+        } else if (config.getIsPublic() == null) {
+            config.setIsPublic(0);
+        }
         this.saveOrUpdate(config);
         return toVO(config);
     }
@@ -83,6 +89,7 @@ public class AgentUserConfigServiceImpl extends ServiceImpl<AgentUserConfigMappe
         vo.setOpeningQuestions(parseQuestions(config.getOpeningQuestions()));
         vo.setTemperature(config.getTemperature());
         vo.setIcon(config.getIcon());
+        vo.setIsPublic(config.getIsPublic());
         return vo;
     }
 

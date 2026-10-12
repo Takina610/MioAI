@@ -78,11 +78,13 @@ public class AgentController {
     }
 
     @GetMapping("/market")
-    @Cacheable(value = "agents")
     public BaseResponse<Page<AgentVO>> getMarketAgents(
             @RequestParam(defaultValue = "1") long current,
-            @RequestParam(defaultValue = "12") long size) {
-        Page<AgentVO> page = agentService.getPublicAgents(current, size);
+            @RequestParam(defaultValue = "12") long size,
+            HttpServletRequest httpRequest) {
+        // MioBot 槽位按当前用户装配，结果因人而异，不能走全局缓存
+        Long userId = redisComponent.getUserIdNullable(httpRequest.getHeader("token"));
+        Page<AgentVO> page = agentService.getPublicAgents(current, size, userId);
         return ResultUtils.success(page);
     }
 
@@ -172,6 +174,7 @@ public class AgentController {
                 .parseQuestions(config.getOpeningQuestions()));
         vo.setTemperature(config.getTemperature());
         vo.setIcon(config.getIcon());
+        vo.setIsPublic(config.getIsPublic());
         return ResultUtils.success(vo);
     }
 
