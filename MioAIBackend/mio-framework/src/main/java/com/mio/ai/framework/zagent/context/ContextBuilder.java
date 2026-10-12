@@ -58,6 +58,8 @@ public final class ContextBuilder {
             systemMessages.add(new SystemMessage(SystemPrompts.IDENTITY));
             systemMessages.add(new SystemMessage(dynamicBody()));
         }
+        // 动态 UI 决策规则独立成段：自定义智能体替换身份/动态段后依然生效
+        systemMessages.add(new SystemMessage(SystemPrompts.UI_RENDERING));
 
         List<String> attachments = new ArrayList<>();
         String userContext = buildUserContext();

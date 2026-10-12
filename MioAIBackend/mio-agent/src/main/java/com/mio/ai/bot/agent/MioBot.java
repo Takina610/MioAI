@@ -227,6 +227,8 @@ public class MioBot {
                 Subagents launcher = new Subagents(chatModel, config, reasoningEffort,
                         toolsetFactory, runContext, events, modelName);
                 registry = toolsetFactory.build(chatId, state, mcpTools, null, launcher, events, toolHooks);
+                // 动态 UI 块工具：仅主轮次注册（子代理注册表不含），校验通过的块经通道下发/落库
+                registry.register(UiRenderTool.entry(channel));
                 engine.bindTools(registry);
 
                 boolean appendUserEntry = persistUserMessage || state.entries().isEmpty();

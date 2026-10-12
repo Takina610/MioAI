@@ -233,6 +233,22 @@ public class BotEventChannel {
     }
 
     /**
+     * 动态 UI 块（render_ui 工具产出，入参已过语义校验）：追加展示块并推送事件。
+     * 块 id 会话内全局唯一（uuid 片段，跨轮次不撞），供 /bot/ui-state 交互寻址。
+     * 水合器只回放 text/tool 块——UI 数据进模型上下文走 render_ui 的工具调用参数，不双算。
+     */
+    public void uiBlock(Map<String, Object> payload) {
+        closeOpenThinking();
+        Map<String, Object> block = new LinkedHashMap<>();
+        block.put("type", "ui");
+        block.put("id", "ui-" + java.util.UUID.randomUUID().toString().substring(0, 8));
+        block.put("v", 1);
+        block.putAll(payload);
+        displayBlocks.add(block);
+        emit(SseChunk.uiBlock(block).fields());
+    }
+
+    /**
      * 知识库引用行（回合收尾调用）：检索是逐轮自动注入的，但摘要行只在回答实际引用了知识库文件时出现——
      * 按回答文本中出现的文件名过滤分组；引用行插到展示块最前（前端固定置顶渲染）。
      * 相关度分数无法可靠区分"真相关"与"弱相似噪声"（实测闲聊也能命中 0.7+），引用行为是更诚实的"使用"信号。

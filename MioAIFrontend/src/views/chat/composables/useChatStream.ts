@@ -540,6 +540,14 @@ export function useChatStream(options: {
         blocks.push({ type: 'kb', groups: (parsed.groups ?? []) as KbContextGroup[] })
         return { ...msg, blocks }
       }
+      case 'ui_block': {
+        // 动态 UI 块（后端语义校验通过后下发）：整块插入回答流，与 text 块按时间序混合渲染
+        const block = parsed.block as MessageBlock | undefined
+        if (!block || block.type !== 'ui' || !block.kind) return msg
+        const blocks = [...closeOpenThinking(msg.blocks)]
+        blocks.push(block)
+        return flushRetry({ ...msg, blocks })
+      }
       case 'mcp_context': {
         const blocks = [...(msg.blocks ?? [])]
         blocks.push({

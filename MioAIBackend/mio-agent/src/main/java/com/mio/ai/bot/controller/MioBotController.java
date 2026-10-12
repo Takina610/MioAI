@@ -445,6 +445,82 @@ public class MioBotController {
     }
 
     /**
+     * 动态 UI 块交互状态持久化（任务清单勾选）：按块 id 定位 assistant 行中的 ui 块
+     * 并更新项状态。仅会话所有者；执行中的会话拒绝——WIP 增量刷新会覆盖用户勾选。
+     * 块 id 会话内全局唯一（uuid 片段），无需行 seq 寻址。
+     */
+    @PostMapping("/bot/ui-state")
+    public BaseResponse<Boolean> patchUiState(
+            @org.springframework.web.bind.annotation.RequestBody Map<String, Object> body,
+            jakarta.servlet.http.HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR, "请先登录");
+        }
+        String chatId = body.get("chatId") == null ? "" : String.valueOf(body.get("chatId"));
+        String blockId = body.get("blockId") == null ? "" : String.valueOf(body.get("blockId"));
+        String status = body.get("status") == null ? "" : String.valueOf(body.get("status"));
+        int itemIndex;
+        try {
+            itemIndex = Integer.parseInt(String.valueOf(body.get("itemIndex")));
+        } catch (NumberFormatException e) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "itemIndex 不合法");
+        }
+        if (!List.of("todo", "doing", "done").contains(status)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "status 不合法");
+        }
+        ChatConversationDO conversation = chatHistoryRepository.getChatByConversationId(chatId);
+        if (conversation == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "会话不存在");
+        }
+        if (conversation.getUserId() == null || !conversation.getUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限访问该会话");
+        }
+        if (ACTIVE_CHATS.containsKey(chatId)) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "会话正在执行中，请等待本轮完成后再操作");
+        }
+        for (AgentMessageDO row : agentMessageService.listByConversation(chatId)) {
+            List<Map<String, Object>> blocks = parseBlocks(row.getBlocks());
+            if (blocks == null) {
+                continue;
+            }
+            boolean patched = false;
+            for (Map<String, Object> block : blocks) {
+                if (!"ui".equals(block.get("type")) || !blockId.equals(block.get("id"))) {
+                    continue;
+                }
+                Object rawItems = block.get("items");
+                if (!(rawItems instanceof List<?> items) || itemIndex < 0 || itemIndex >= items.size()
+                        || !(items.get(itemIndex) instanceof Map<?, ?> item)) {
+                    throw new BusinessException(ErrorCode.PARAMS_ERROR, "任务项不存在");
+                }
+                ((Map<String, Object>) item).put("status", status);
+                patched = true;
+                break;
+            }
+            if (patched) {
+                agentMessageService.updateDisplay(row.getId(),
+                        JacksonUtil.writeValueAsString(blocks), row.getPlan());
+                return ResultUtils.success(true);
+            }
+        }
+        throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "内容块不存在（可能已被编辑或截断）");
+    }
+
+    /** 展示块 JSON 解析（畸形行返回 null 跳过） */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> parseBlocks(String blocksJson) {
+        if (blocksJson == null || blocksJson.isBlank()) {
+            return null;
+        }
+        try {
+            return JacksonUtil.readValue(blocksJson, List.class);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
      * 会话是否正在执行（ACTIVE_CHATS 占用中）：前端孤儿回合恢复轮询据此快速失败——
      * 后端不在执行时恢复轮询立即放弃并标记中断，不再空等 10 分钟把编辑/发送入口全部锁死。
      */

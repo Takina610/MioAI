@@ -17,6 +17,7 @@ import java.util.Map;
  *  heartbeat   保活心跳        {}（长工具执行期间维持连接，前端忽略内容仅重挂看门狗）
  *  retry       瞬态失败自动重试 {attempt, maxAttempts, reason}（本轮尚无任何输出时无感重发，前端提示后自行恢复）
  *  kb_context  知识库引用摘要   {groups:[{kbId, kbName, hits:[{fileName, snippet, score}]}]}（回合收尾按回答实际引用的文件过滤后落库，可展开看片段）
+ *  ui_block    动态UI块        {block:{type:'ui',id,v,kind,...}}（render_ui 工具语义校验通过后下发，前端渲染进回答区；随展示块落库/回放，刷新后原样恢复）
  *  notice      系统提示         {content}（瞬态不落库，如 MCP 工具本轮装配失败）
  *  usage       用量尾块        {inputTokens, outputTokens, durationMs}
  *  done        结束标记        {}
@@ -106,6 +107,14 @@ public record SseChunk(Map<String, Object> fields) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("type", "kb_context");
         map.put("groups", groups);
+        return new SseChunk(map);
+    }
+
+    /** 动态 UI 块（render_ui 工具语义校验通过后下发）：block 为完整展示块 {type:'ui',id,v,kind,...} */
+    public static SseChunk uiBlock(Map<String, Object> block) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("type", "ui_block");
+        map.put("block", block);
         return new SseChunk(map);
     }
 

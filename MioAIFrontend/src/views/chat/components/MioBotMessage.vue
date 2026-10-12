@@ -149,13 +149,18 @@
       :class="{ active: line.active }"
     >{{ line.label }}</div>
 
-    <!-- 最终回答（最后一个过程块之后的文本；无过程块时渲染全部文本） -->
-    <MarkdownView
-      v-if="finalText"
-      class="answer-content"
-      :class="{ 'with-process': processBlocks.length > 0 }"
-      :content="finalText"
-    />
+    <!-- 最终回答：最后过程块之后的 text/ui 块按序混合渲染（无过程块时渲染全部） -->
+    <template v-if="answerSegments.length">
+      <template v-for="(seg, si) in answerSegments" :key="`seg-${si}`">
+        <MarkdownView
+          v-if="seg.kind === 'text'"
+          class="answer-content"
+          :class="{ 'with-process': processBlocks.length > 0 }"
+          :content="seg.text"
+        />
+        <UiBlockRenderer v-else :block="seg.block" :chat-id="chatId" />
+      </template>
+    </template>
 
     <!-- 历史消息（无块信息）：直接渲染正文 -->
     <MarkdownView v-else-if="!processBlocks.length && content" class="answer-content" :content="content" />
@@ -193,6 +198,7 @@ import AttachmentCards from './AttachmentCards.vue'
 import ToolRow from './ToolRow.vue'
 import ResourceRow from './ResourceRow.vue'
 import SkillRow from './SkillRow.vue'
+import UiBlockRenderer from './ui/UiBlockRenderer.vue'
 import { messageAttachmentDisplays } from '../attachmentUtils'
 import { answerQuestion } from '@/api/chat'
 import { formatDuration, type ToolBlock } from '../toolDisplay'
@@ -294,6 +300,7 @@ onUnmounted(() => {
 
 /** 过程块 = 最后一个非文本块及其之前的全部（叙述/思考/工具），携带原 blocks 下标
  *  （思考块活跃判定与子代理面板定位键都按原下标）；其后的是最终回答。
+ *  动态 UI 块（ui）属回答内容：不参与过程边界判定，回答区内与文本按序混合渲染。
  *  附件块不属过程：单独渲染在正文下方。子代理镜像工具行不进主消息流——
  *  它们归属右侧的子代理只读面板（子代理完成后其 Agent 行可点击查看）。
  *  知识库引用行同样是上下文行：固定置顶渲染。重连行是状态行：不参与"过程/正文"
@@ -302,7 +309,7 @@ onUnmounted(() => {
 const lastNonTextIndex = computed(() => {
   for (let i = props.blocks.length - 1; i >= 0; i--) {
     const type = props.blocks[i].type
-    if (type !== 'text' && type !== 'attachments' && type !== 'kb' && type !== 'retry') return i
+    if (type !== 'text' && type !== 'attachments' && type !== 'kb' && type !== 'retry' && type !== 'ui') return i
   }
   return -1
 })
@@ -313,6 +320,10 @@ const processBlocks = computed(() => {
   for (let i = 0; i <= lastNonTextIndex.value; i++) {
     const block = props.blocks[i]
     if (block.type === 'attachments' || block.type === 'kb' || isMirroredToolBlock(block)) continue
+    // render_ui 的工具行不进过程区：其成品是回答区的 ui 块，过程行重复且只有原始 JSON
+    if (block.type === 'tool' && block.tool === 'render_ui') continue
+    // ui 块是回答内容：永不进过程区，全部按原序并入回答区（answerSegments）
+    if (block.type === 'ui') continue
     out.push({ block, index: i })
   }
   return out
@@ -348,12 +359,25 @@ const outputAttachments = computed<AttachmentDisplay[]>(() =>
   )
 )
 
-const finalText = computed(() => {
-  if (!props.blocks.length) return ''
-  const tail = lastNonTextIndex.value >= 0
-    ? props.blocks.slice(lastNonTextIndex.value + 1)
-    : props.blocks
-  return tail.filter(b => b.type === 'text').map(b => b.text).join('')
+/** 最终回答 = 全部 ui 块（按原序，永不进过程区）+ 过程边界之后的 text 块：
+ *  相邻 text 块合并成一段 Markdown，ui 块保持独立位置（流式期 render_ui 落在两段文本
+ *  之间时正文自然分段）。边界后仍可能出现 thinking（模型收尾前的短思考）——
+ *  它不再把已落位的 ui 块打回过程区 */
+type AnswerSegment = { kind: 'text'; text: string } | { kind: 'ui'; block: Extract<MessageBlock, { type: 'ui' }> }
+const answerSegments = computed<AnswerSegment[]>(() => {
+  const boundary = lastNonTextIndex.value
+  const segments: AnswerSegment[] = []
+  for (let i = 0; i < props.blocks.length; i++) {
+    const block = props.blocks[i]
+    if (block.type === 'ui') {
+      segments.push({ kind: 'ui', block })
+    } else if (block.type === 'text' && i > boundary && block.text) {
+      const last = segments[segments.length - 1]
+      if (last && last.kind === 'text') last.text += block.text
+      else segments.push({ kind: 'text', text: block.text })
+    }
+  }
+  return segments
 })
 
 // ---------- 问答块（AskUserQuestion）的草稿与提交 ----------

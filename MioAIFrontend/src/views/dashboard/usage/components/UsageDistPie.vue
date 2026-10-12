@@ -5,7 +5,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, nextTick } from 'vue'
 import type { NameValue } from '@/types'
-import { useEChart } from '../composables/useEChart'
+import { useEChart } from '@/composables/useEChart'
 
 const props = withDefaults(defineProps<{
   data: NameValue[]

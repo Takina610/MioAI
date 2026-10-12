@@ -7,7 +7,7 @@ import { ref, watch, onMounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import type { EChartsOption } from 'echarts'
 import type { TimePoint } from '@/types'
-import { useEChart } from '../composables/useEChart'
+import { useEChart } from '@/composables/useEChart'
 
 const props = withDefaults(defineProps<{
   /** 本周期趋势数据 */

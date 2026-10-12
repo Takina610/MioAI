@@ -143,6 +143,17 @@ export const answerQuestion = async (
   return Boolean(result?.resolved)
 }
 
+/** 动态 UI 块交互状态持久化（任务清单勾选）：按块 id 定位并更新项状态 */
+export const patchUiBlock = async (
+  chatId: string,
+  blockId: string,
+  itemIndex: number,
+  status: string
+): Promise<boolean> => {
+  const result = await request.post<boolean>('/bot/ui-state', { chatId, blockId, itemIndex, status })
+  return Boolean(result)
+}
+
 /** 会话是否正在后端执行（孤儿回合恢复轮询据此快速失败） */
 export const isChatActive = async (chatId: string): Promise<boolean> => {
   const result = await request.get<boolean>(`/bot/active/${chatId}`, { skipErrorMessage: true } as never)

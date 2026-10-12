@@ -127,6 +127,22 @@ export type MessageBlock =
       /** 用户主动中断标记（持久化行尾；加载历史时转为消息 stopped 态，不参与渲染） */
       type: 'stopped'
     }
+  | {
+      /** 动态 UI 块（render_ui 工具产出，协议 v=1）：与 text 块按时间序混合渲染进回答区 */
+      type: 'ui'
+      /** 会话内全局唯一（交互寻址：/bot/ui-state 按 id 定位） */
+      id: string
+      v?: number
+      kind: 'cards' | 'chart' | 'table' | 'tasks' | (string & {})
+      title?: string
+      cards?: UiCardItem[]
+      chartType?: 'bar' | 'line' | 'pie'
+      categories?: string[]
+      series?: UiChartSeries[]
+      columns?: string[]
+      rows?: string[][]
+      items?: UiTaskItem[]
+    }
 
 /** 会话附件（沙箱工作区内相对路径）：path 形如 uploads/<chatId>/xxx 或 outputs/<chatId>/xxx */
 export interface AttachmentItem {
@@ -156,6 +172,26 @@ export interface PendingAttachment extends AttachmentDisplay {
   localPreviewUrl?: string
   /** 编辑会话中新追加的附件（发送/取消时区别处理沙箱文件） */
   addedDuringEdit?: boolean
+}
+
+/** 动态 UI 卡片（kind=cards 载荷） */
+export interface UiCardItem {
+  title: string
+  value?: string
+  desc?: string
+  trend?: 'up' | 'down' | 'flat'
+}
+
+/** 动态 UI 图表系列（kind=chart 载荷） */
+export interface UiChartSeries {
+  name: string
+  data: number[]
+}
+
+/** 动态 UI 任务项（kind=tasks 载荷，status 可被用户勾选更新并持久化） */
+export interface UiTaskItem {
+  text: string
+  status: 'todo' | 'doing' | 'done'
 }
 
 /** 任务清单步骤（SSE plan 事件快照，渲染于输入框上方） */
