@@ -24,7 +24,6 @@
                   <a-radio-button value="hybrid">混合检索</a-radio-button>
                   <a-radio-button value="vector">向量检索</a-radio-button>
                 </a-radio-group>
-                <span class="config-hint">{{ config.method === 'hybrid' ? '语义 + 关键词双路召回并融合，专有名词命中更好' : '纯语义相似度召回' }}</span>
               </div>
             </div>
             <div class="config-item">
@@ -58,7 +57,6 @@
                     class="threshold-input"
                   />
                 </div>
-                <span class="config-hint">低于该相似度的结果将被过滤</span>
               </div>
             </div>
             <div class="config-item">
@@ -263,13 +261,6 @@ onMounted(() => {
             flex: 1;
             text-align: center;
           }
-        }
-
-        .config-hint {
-          display: block;
-          font-size: 12px;
-          color: #8c8a82;
-          margin-top: 8px;
         }
 
         .threshold-input-wrapper {

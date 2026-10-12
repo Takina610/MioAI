@@ -1,9 +1,6 @@
 <template>
   <div class="kb-retrieval-config">
-    <div class="config-title">
-      检索参数
-      <span class="config-sub">仅对该知识库的召回生效</span>
-    </div>
+    <div class="config-title">检索参数</div>
     <a-spin :spinning="loading" size="small">
       <div class="form-grid">
         <div class="form-item">
@@ -160,12 +157,6 @@ async function save(): Promise<void> {
     font-weight: 600;
     color: $text-dark;
     margin-bottom: 10px;
-
-    .config-sub {
-      font-weight: 400;
-      color: #8c8a82;
-      margin-left: 6px;
-    }
   }
 
   .form-grid {

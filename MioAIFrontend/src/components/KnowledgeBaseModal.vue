@@ -122,7 +122,6 @@
                   size="small"
                 />
               </div>
-              <p class="chunk-note">单位为 token；重叠用于避免句子在块边界被切断。后续可在知识库设置中调整，重新向量化后生效。</p>
             </div>
           </a-form-item>
         </a-form>
@@ -807,12 +806,6 @@ onUnmounted(() => {
           flex-shrink: 0;
           width: 84px;
         }
-      }
-
-      .chunk-note {
-        margin: 8px 0 0;
-        font-size: 12px;
-        color: #8c8a82;
       }
     }
   }

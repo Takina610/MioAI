@@ -30,7 +30,7 @@
             切片
           </a-button>
           <a-popconfirm
-            title="重新解析该文档？完成后新分块配置生效"
+            title="重新解析该文档？"
             ok-text="解析"
             cancel-text="取消"
             @confirm="emit('revectorize', record)"

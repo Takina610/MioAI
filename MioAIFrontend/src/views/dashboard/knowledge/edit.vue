@@ -60,7 +60,7 @@
             <div class="dash-section chunk-section">
               <div class="section-header">
                 <h3 class="section-title">分块设置</h3>
-                <a-tag v-if="chunkDirty" color="warning">已修改，保存并重新向量化后生效</a-tag>
+                <a-tag v-if="chunkDirty" color="warning">未保存</a-tag>
               </div>
 
               <div class="preset-row">
@@ -115,26 +115,20 @@
                   size="small"
                 />
               </div>
-              <p class="field-note">单位为 token；重叠用于避免句子在块边界被切断。分块越小检索越精细，越大上下文越完整。</p>
 
               <div class="rebuild-row">
-                <div class="rebuild-info">
-                  <span class="info-label">向量模型</span>
-                  <span class="info-value">mistral-embed · 1024 维</span>
-                </div>
                 <a-popconfirm
-                  title="将按当前分块设置重建全部文档的向量索引，耗时较长，确定继续？"
+                  title="将按当前分块设置重建全部文档，耗时较长，确定继续？"
                   ok-text="重建"
                   cancel-text="取消"
-                  :disabled="!chunkDirty && !hasRetryableDocs"
+                  :disabled="chunkDirty"
                   @confirm="handleRevectorize(true)"
                 >
-                  <a-button danger :disabled="!chunkDirty && !hasRetryableDocs" :loading="vectorizing">
+                  <a-button danger :disabled="chunkDirty" :loading="vectorizing">
                     <ReloadOutlined /> 按当前设置全量重建
                   </a-button>
                 </a-popconfirm>
               </div>
-              <p v-if="chunkDirty" class="field-note warn">分块设置已修改：请先保存更改，再执行全量重建使新设置对已有文档生效。</p>
             </div>
           </a-tab-pane>
         </a-tabs>
@@ -524,41 +518,13 @@ onMounted(() => {
     }
   }
 
-  .field-note {
-    margin: 8px 0 0;
-    font-size: 12px;
-    color: #8c8a82;
-    max-width: 520px;
-
-    &.warn {
-      color: #b8860b;
-    }
-  }
-
   .rebuild-row {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    justify-content: flex-end;
     max-width: 520px;
     margin-top: 20px;
     padding-top: 16px;
     border-top: 1px dashed #ece9de;
-
-    .rebuild-info {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-
-      .info-label {
-        font-size: 12px;
-        color: #8c8a82;
-      }
-
-      .info-value {
-        font-size: 13px;
-        color: $text-dark;
-      }
-    }
   }
 }
 </style>
