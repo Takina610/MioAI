@@ -22,6 +22,7 @@
             :interrupted="displayOf(msg).interrupted"
             :stopped="displayOf(msg).stopped"
             :retry-notice="isLatestVersion(msg) ? msg.retryNotice : undefined"
+            :retry-history="isLatestVersion(msg) ? msg.retryHistory : undefined"
             :mcp-notice="isLatestVersion(msg) ? msg.mcpNotice : undefined"
             :chat-id="chatId"
             :message-id="msg.id"

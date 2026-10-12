@@ -392,14 +392,23 @@ export function useChatStream(options: {
     rearmStreamWatchdog(chatId, () => handleStreamError(new Event('stream-watchdog')))
   }
 
-  /** 文本增量：content 累积 + 合并进同类末块（块序即显示序）；重试提示随之清除 */
-  function appendTextDelta(msg: ChatMessage, delta: string): ChatMessage {
+  /** 重连成功（内容恢复流动）：活动重试行转入历史——保留静态行标记该轮经历过重连，动画取消 */
+  function flushRetry(msg: ChatMessage): ChatMessage {
+    if (!msg.retryNotice) return msg
     return {
       ...msg,
-      content: msg.content + delta,
-      blocks: appendBlockDelta(closeOpenThinking(msg.blocks), 'text', delta),
+      retryHistory: [...(msg.retryHistory ?? []), msg.retryNotice],
       retryNotice: undefined
     }
+  }
+
+  /** 文本增量：content 累积 + 合并进同类末块（块序即显示序）；重试提示随之转入历史 */
+  function appendTextDelta(msg: ChatMessage, delta: string): ChatMessage {
+    return flushRetry({
+      ...msg,
+      content: msg.content + delta,
+      blocks: appendBlockDelta(closeOpenThinking(msg.blocks), 'text', delta)
+    })
   }
 
   /** 向同类末块合并增量；末块类型不同或无块时新开一块（思考块开块时记起点） */
@@ -438,11 +447,10 @@ export function useChatStream(options: {
       case 'answer':
         return appendTextDelta(msg, String(parsed.delta ?? parsed.content ?? ''))
       case 'thinking':
-        return {
+        return flushRetry({
           ...msg,
-          blocks: appendBlockDelta(msg.blocks, 'thinking', String(parsed.delta ?? parsed.content ?? '')),
-          retryNotice: undefined
-        }
+          blocks: appendBlockDelta(msg.blocks, 'thinking', String(parsed.delta ?? parsed.content ?? ''))
+        })
       case 'tool_use': {
         const blocks = [...closeOpenThinking(msg.blocks)]
         blocks.push({
@@ -452,7 +460,7 @@ export function useChatStream(options: {
           args: '',
           status: 'running'
         })
-        return { ...msg, blocks }
+        return flushRetry({ ...msg, blocks })
       }
       case 'tool_args': {
         const id = parsed.id ? String(parsed.id) : ''
@@ -532,21 +540,22 @@ export function useChatStream(options: {
       case 'retry': {
         const attempt = Number(parsed.attempt) || 1
         const maxAttempts = Number(parsed.maxAttempts) || attempt
-        return { ...msg, retryNotice: `正在重试（${attempt}/${maxAttempts}）` }
+        // 同一次重连过程原地更新计数（zcode 式单行 n/m）；内容恢复时整行才归档为静态
+        return { ...msg, retryNotice: `重新连接中... ${attempt}/${maxAttempts}` }
       }
       case 'notice':
         // 瞬态系统提示（如 MCP 工具本轮装配失败）：不落历史，刷新后不保留
         return { ...msg, mcpNotice: String(parsed.content ?? '') }
       case 'done':
         markFinished()
-        return { ...msg, blocks: closeOpenThinking(msg.blocks) }
+        return flushRetry({ ...msg, blocks: closeOpenThinking(msg.blocks) })
       case 'stopped':
         // 用户主动中断：部分过程已由后端落库，状态行显示"已停止"（无折叠入口）
         markFinished()
-        return { ...msg, blocks: closeOpenThinking(msg.blocks), stopped: true }
+        return flushRetry({ ...msg, blocks: closeOpenThinking(msg.blocks), stopped: true })
       case 'error':
         markFinished()
-        return { ...msg, blocks: closeOpenThinking(msg.blocks), interrupted: true }
+        return flushRetry({ ...msg, blocks: closeOpenThinking(msg.blocks), interrupted: true })
       default:
         return msg
     }

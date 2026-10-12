@@ -123,8 +123,10 @@ export interface ChatMessage {
   interrupted?: boolean
   /** 用户主动中断（状态行显示"已停止"，保留工作过程但无折叠入口） */
   stopped?: boolean
-  /** 瞬态失败自动重试中的提示（后端 retry 事件；下一段内容到达即清除） */
+  /** 瞬态失败自动重试中的提示（后端 retry 事件；内容恢复即转入 retryHistory） */
   retryNotice?: string
+  /** 本轮已完成的重新连接记录（zcode 式：重连成功后保留静态行，标记该轮经历过重连） */
+  retryHistory?: string[]
   /** 本轮 MCP 工具装配失败提示（瞬态，不随历史持久化） */
   mcpNotice?: string
   /** 本消息的历史版本（旧→新，不含当前正文）：编辑/重新生成时旧回复存档于此 */

@@ -116,8 +116,13 @@
       </div>
     </CollapseTransition>
 
-    <!-- 重试提示：一条特殊消息行，出现在内容即将继续的位置（重试发生在尚无输出时，紧贴着即将流出的正文） -->
-    <div v-if="isLoading && retryNotice" class="retry-line">{{ retryNotice }}</div>
+    <!-- 重新连接行（zcode 式）：进行中带工具行同款扫光；完成后保留为静态行，标记该轮经历过重连 -->
+    <div
+      v-for="(line, ri) in retryLines"
+      :key="`retry-${ri}`"
+      class="retry-line"
+      :class="{ active: line.active }"
+    >{{ line.label }}</div>
 
     <!-- 最终回答（最后一个过程块之后的文本；无过程块时渲染全部文本） -->
     <MarkdownView
@@ -182,8 +187,10 @@ interface Props {
   interrupted?: boolean
   /** 用户主动中断（状态行显示"已停止"，工作过程保持可见且无折叠入口） */
   stopped?: boolean
-  /** 瞬态失败自动重试提示（后端 retry 事件，内容恢复即清除） */
+  /** 瞬态失败自动重试提示（后端 retry 事件；内容恢复即转入 retryHistory） */
   retryNotice?: string
+  /** 本轮已完成的重新连接记录（重连成功后保留静态行） */
+  retryHistory?: string[]
   /** 本轮 MCP 工具装配失败提示（后端 notice 事件，瞬态不落历史） */
   mcpNotice?: string
   /** 所属会话 id（提交问答答案用） */
@@ -289,6 +296,15 @@ const finalText = computed(() => {
     ? props.blocks.slice(lastNonTextIndex.value + 1)
     : props.blocks
   return tail.filter(b => b.type === 'text').map(b => b.text).join('')
+})
+
+/** 重新连接行：已完成的归档（静态）+ 进行中的活动行（扫光） */
+const retryLines = computed(() => {
+  const lines = (props.retryHistory ?? []).map(label => ({ label, active: false }))
+  if (props.isLoading && props.retryNotice) {
+    lines.push({ label: props.retryNotice, active: true })
+  }
+  return lines
 })
 
 // ---------- 问答块（AskUserQuestion）的草稿与提交 ----------
@@ -536,18 +552,28 @@ function durationSuffix(block: ThinkingBlock): string {
   }
 }
 
-// 重试提示（消息体内、内容即将继续的位置）：瞬态，不落历史
+// 重新连接行（zcode 式）：灰字；进行中用工具动词同款渐变扫光（animated-gradient-text）
+@keyframes gradient-flow {
+  0% {
+    background-position: 100% 0;
+  }
+  50% {
+    background-position: 0% 0;
+  }
+  100% {
+    background-position: 100% 0;
+  }
+}
+
 .retry-line {
-  display: inline-flex;
-  align-items: center;
-  align-self: flex-start;
-  margin: 2px 0 8px;
-  padding: 1px 8px;
-  border-radius: 8px;
-  background: #fff7e6;
-  color: #d48806;
-  font-size: 12px;
+  font-size: 13px;
+  color: #8c8a82;
   user-select: none;
+  align-self: flex-start;
+
+  &.active {
+    @include animated-gradient-text($primary-color, rgba(42, 161, 169, 0.25));
+  }
 }
 
 .process-list {
