@@ -7,44 +7,29 @@
     />
 
     <div class="dash-page-content">
-      <div class="hit-layout">
-        <aside class="hit-rail">
-          <div class="kb-chip">
-            <div class="kb-icon"><DatabaseOutlined /></div>
-            <div class="kb-info">
-              <span class="kb-name" :title="kb?.name">{{ kb?.name || '加载中…' }}</span>
-              <span class="kb-meta">{{ kb ? `${kb.documentCount || 0} 个文档` : ' ' }}</span>
-            </div>
-          </div>
+      <div class="composer dash-section">
+        <div class="composer-kb">
+          <div class="kb-icon"><DatabaseOutlined /></div>
+          <span class="kb-name" :title="kb?.name">{{ kb?.name || '加载中…' }}</span>
+          <span v-if="kb" class="kb-meta">{{ kb.documentCount || 0 }} 个文档</span>
+        </div>
 
-          <a-textarea
-            ref="queryRef"
-            v-model:value="searchContent"
-            class="query-input"
-            placeholder="输入一个问题或关键词"
-            :maxlength="500"
-            :rows="5"
-            show-count
-            @keydown.ctrl.enter.prevent="runSearch"
-            @keydown.meta.enter.prevent="runSearch"
-          />
+        <a-textarea
+          ref="queryRef"
+          v-model:value="searchContent"
+          class="query-input"
+          placeholder="输入一个问题或关键词"
+          :maxlength="500"
+          :rows="4"
+          show-count
+          @keydown="handleQueryKeydown"
+        />
 
-          <a-button
-            type="primary"
-            block
-            class="run-btn"
-            :loading="searching"
-            :disabled="!canSearch"
-            @click="runSearch"
-          >
-            开始测试
-          </a-button>
-
+        <div class="composer-bar">
           <div class="param">
             <span class="param-label">检索方式</span>
             <a-segmented
               v-model:value="config.method"
-              class="param-segmented"
               size="small"
               :options="[{ label: '混合', value: 'hybrid' }, { label: '向量', value: 'vector' }]"
             />
@@ -53,85 +38,92 @@
             <span class="param-label">返回数量</span>
             <a-input-number v-model:value="config.topK" :min="1" :max="10" size="small" class="param-number" />
           </div>
-          <div class="param param-block">
-            <div class="param-head">
-              <span class="param-label">相似度阈值</span>
-              <span class="param-value">{{ thresholdPercent }}%</span>
-            </div>
+          <div class="param">
+            <span class="param-label">阈值</span>
             <a-slider
               v-model:value="thresholdPercent"
+              class="threshold-slider"
               :min="0"
               :max="100"
               :step="5"
               :tooltip-visible="false"
             />
+            <span class="param-value">{{ thresholdPercent }}%</span>
           </div>
           <div class="param">
             <span class="param-label">重排</span>
             <a-switch v-model:checked="config.enableRerank" size="small" />
           </div>
-        </aside>
+          <a-button
+            type="primary"
+            class="run-btn"
+            :loading="searching"
+            :disabled="!canSearch"
+            @click="runSearch"
+          >
+            开始测试
+          </a-button>
+        </div>
+      </div>
 
-        <section class="hit-results">
-          <div v-if="!hasSearched && !searching" class="results-blank">
-            <AimOutlined class="blank-icon" />
-            <p>输入内容，测试知识库能召回什么</p>
+      <section class="hit-results">
+        <div v-if="!hasSearched && !searching" class="results-blank">
+          <AimOutlined class="blank-icon" />
+          <p>输入内容，测试知识库能召回什么</p>
+        </div>
+
+        <template v-else-if="searching">
+          <div v-for="i in 3" :key="i" class="hit-row skeleton-row">
+            <a-skeleton active :title="{ width: '30%' }" :paragraph="{ rows: 2, width: ['90%', '60%'] }" />
           </div>
+        </template>
 
-          <template v-else-if="searching">
-            <div v-for="i in 3" :key="i" class="hit-row skeleton-row">
-              <a-skeleton active :title="{ width: '30%' }" :paragraph="{ rows: 2, width: ['90%', '60%'] }" />
-            </div>
-          </template>
+        <template v-else>
+          <div v-if="results.length" class="results-head">
+            <span>召回 {{ results.length }} 条</span>
+            <span class="elapsed">{{ elapsedMs }} ms</span>
+          </div>
+          <a-empty v-else class="results-empty" description="未命中任何内容，试试降低阈值或换一种问法" />
 
-          <template v-else>
-            <div v-if="results.length" class="results-head">
-              <span>召回 {{ results.length }} 条</span>
-              <span class="elapsed">{{ elapsedMs }} ms</span>
-            </div>
-            <a-empty v-else class="results-empty" description="未命中任何内容，试试降低阈值或换一种问法" />
-
-            <div v-for="(result, index) in results" :key="result.id" class="hit-row">
+          <div v-for="(result, index) in results" :key="result.id" class="hit-row">
+            <div class="hit-score">
               <span class="hit-rank">{{ String(index + 1).padStart(2, '0') }}</span>
+              <span class="score-num">{{ (result.score * 100).toFixed(1) }}<em>%</em></span>
+              <span class="score-track">
+                <i
+                  class="score-fill"
+                  :style="{ width: `${Math.round(result.score * 100)}%`, opacity: 0.4 + result.score * 0.6 }"
+                />
+              </span>
+            </div>
 
-              <div class="hit-main">
-                <div class="hit-meta">
-                  <span v-if="matchTypeText(result)" class="match-chip" :class="`chip-${result.matchType}`">
-                    {{ matchTypeText(result) }}
-                  </span>
-                  <span class="hit-doc">
-                    <FileTextOutlined />
-                    <span class="doc-name">{{ result.fileName || '未知文档' }}</span>
-                    <em v-if="result.chunkIndex != null">#{{ result.chunkIndex }}</em>
-                  </span>
-                </div>
-
-                <div class="hit-body" :class="{ clamped: !expandedIds.has(result.id) }">
-                  <HitText :text="result.text" :query="searchContent" />
-                </div>
-                <button
-                  v-if="result.text.length > 240"
-                  type="button"
-                  class="expand-btn"
-                  @click="toggleExpand(result.id)"
-                >
-                  {{ expandedIds.has(result.id) ? '收起' : '展开全文' }}
-                </button>
-              </div>
-
-              <div class="hit-score">
-                <span class="score-num">{{ (result.score * 100).toFixed(1) }}<em>%</em></span>
-                <span class="score-track">
-                  <i
-                    class="score-fill"
-                    :style="{ width: `${Math.round(result.score * 100)}%`, opacity: 0.4 + result.score * 0.6 }"
-                  />
+            <div class="hit-main">
+              <div class="hit-meta">
+                <span v-if="matchTypeText(result)" class="match-chip" :class="`chip-${result.matchType}`">
+                  {{ matchTypeText(result) }}
+                </span>
+                <span class="hit-doc">
+                  <FileTextOutlined />
+                  <span class="doc-name">{{ result.fileName || '未知文档' }}</span>
+                  <em v-if="result.chunkIndex != null">#{{ result.chunkIndex }}</em>
                 </span>
               </div>
+
+              <div class="hit-body" :class="{ clamped: !expandedIds.has(result.id) }">
+                <HitText :text="result.text" :query="searchContent" />
+              </div>
+              <button
+                v-if="result.text.length > 240"
+                type="button"
+                class="expand-btn"
+                @click="toggleExpand(result.id)"
+              >
+                {{ expandedIds.has(result.id) ? '收起' : '展开全文' }}
+              </button>
             </div>
-          </template>
-        </section>
-      </div>
+          </div>
+        </template>
+      </section>
     </div>
   </div>
 </template>
@@ -169,6 +161,14 @@ const config = reactive({
 
 const kbId = computed(() => Number(route.params.id))
 const canSearch = computed(() => searchContent.value.trim().length > 0)
+
+/** Ctrl/⌘ + Enter 触发检索（单一处理器：antd Textarea 的 onKeydown prop 不接受修饰符监听数组） */
+function handleQueryKeydown(e: KeyboardEvent): void {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault()
+    runSearch()
+  }
+}
 
 function matchTypeText(result: SimilarityResult): string {
   if (result.matchType === 'keyword') return '关键词'
@@ -228,37 +228,20 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .similarity-search {
-  .hit-layout {
-    display: flex;
-    gap: 20px;
-    align-items: flex-start;
+  .composer {
+    padding: 20px 24px;
   }
 
-  .hit-rail {
-    width: 320px;
-    flex-shrink: 0;
-    position: sticky;
-    top: 24px;
-    display: flex;
-    flex-direction: column;
-    background: $bg-ivory;
-    border: 1px solid #ece9de;
-    border-radius: 12px;
-    padding: 20px;
-  }
-
-  .kb-chip {
+  .composer-kb {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding-bottom: 16px;
-    margin-bottom: 16px;
-    border-bottom: 1px solid $border-warm-subtle;
+    gap: 10px;
+    margin-bottom: 14px;
 
     .kb-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 10px;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
       background: rgba($primary-color, 0.1);
       display: flex;
       align-items: center;
@@ -266,20 +249,13 @@ onMounted(() => {
       flex-shrink: 0;
 
       .anticon {
-        font-size: 18px;
+        font-size: 15px;
         color: $primary-color;
       }
     }
 
-    .kb-info {
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
     .kb-name {
-      font-size: 14px;
+      font-size: 15px;
       font-weight: 600;
       color: $text-dark;
       overflow: hidden;
@@ -290,77 +266,72 @@ onMounted(() => {
     .kb-meta {
       font-size: 12px;
       color: $text-muted;
+      flex-shrink: 0;
     }
   }
 
   .query-input {
-    margin-bottom: 12px;
+    margin-bottom: 14px;
 
     :deep(textarea) {
       resize: none;
     }
   }
 
-  .run-btn {
-    height: 38px;
-    border-radius: 10px;
-    font-weight: 500;
-    margin-bottom: 20px;
-  }
-
-  .param {
+  .composer-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    min-height: 32px;
-    margin-bottom: 12px;
+    gap: 22px;
+    flex-wrap: wrap;
 
-    &:last-child {
-      margin-bottom: 0;
-    }
+    .param {
+      display: flex;
+      align-items: center;
+      gap: 8px;
 
-    &.param-block {
-      display: block;
-
-      .param-head {
-        display: flex;
-        justify-content: space-between;
-        align-items: baseline;
+      .param-label {
+        font-size: 13px;
+        color: $text-secondary;
+        flex-shrink: 0;
       }
 
-      :deep(.ant-slider) {
-        margin: 6px 0 2px;
+      .param-number {
+        width: 72px;
+      }
+
+      .param-value {
+        font-size: 13px;
+        font-weight: 600;
+        color: $text-dark;
+        font-variant-numeric: tabular-nums;
+        min-width: 34px;
       }
     }
 
-    .param-label {
-      font-size: 13px;
-      color: $text-secondary;
+    .threshold-slider {
+      width: 130px;
+      margin: 0;
+
+      :deep(.ant-slider-rail) {
+        height: 4px;
+      }
     }
 
-    .param-value {
-      font-size: 13px;
-      font-weight: 600;
-      color: $text-dark;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .param-segmented {
-      width: auto;
-    }
-
-    .param-number {
-      width: 72px;
+    .run-btn {
+      margin-left: auto;
+      height: 36px;
+      padding: 0 26px;
+      border-radius: 10px;
+      font-weight: 500;
     }
   }
 
   .hit-results {
-    flex: 1;
-    min-width: 0;
+    margin-top: 20px;
   }
 
   .results-blank {
-    height: 320px;
+    height: 280px;
     border: 1px dashed $border-warm;
     border-radius: 12px;
     display: flex;
@@ -401,7 +372,7 @@ onMounted(() => {
 
   .hit-row {
     display: flex;
-    gap: 16px;
+    gap: 18px;
     padding: 16px 20px;
     background: $bg-ivory;
     border: 1px solid #ece9de;
@@ -419,13 +390,52 @@ onMounted(() => {
     }
   }
 
-  .hit-rank {
+  /* 相关度锚点：行首固定宽，视线先落在分数上再读内容 */
+  .hit-score {
     flex-shrink: 0;
-    width: 24px;
-    padding-top: 2px;
-    font-size: 13px;
-    font-variant-numeric: tabular-nums;
-    color: $text-muted;
+    width: 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+
+    .hit-rank {
+      font-size: 12px;
+      line-height: 1;
+      color: $text-muted;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .score-num {
+      font-size: 22px;
+      font-weight: 600;
+      line-height: 1.1;
+      color: $text-dark;
+      font-variant-numeric: tabular-nums;
+
+      em {
+        font-style: normal;
+        font-size: 12px;
+        font-weight: 500;
+        color: $text-muted;
+        margin-left: 1px;
+      }
+    }
+
+    .score-track {
+      width: 76px;
+      height: 4px;
+      border-radius: 2px;
+      background: $border-warm-subtle;
+      overflow: hidden;
+
+      .score-fill {
+        display: block;
+        height: 100%;
+        border-radius: 2px;
+        background: $primary-color;
+        transition: width 0.4s ease;
+      }
+    }
   }
 
   .hit-main {
@@ -515,59 +525,6 @@ onMounted(() => {
 
     &:hover {
       color: darken($primary-color, 10%);
-    }
-  }
-
-  .hit-score {
-    flex-shrink: 0;
-    width: 96px;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 6px;
-    padding-top: 2px;
-
-    .score-num {
-      font-size: 20px;
-      font-weight: 600;
-      line-height: 1;
-      color: $text-dark;
-      font-variant-numeric: tabular-nums;
-
-      em {
-        font-style: normal;
-        font-size: 12px;
-        font-weight: 500;
-        color: $text-muted;
-        margin-left: 1px;
-      }
-    }
-
-    .score-track {
-      width: 100%;
-      height: 4px;
-      border-radius: 2px;
-      background: $border-warm-subtle;
-      overflow: hidden;
-
-      .score-fill {
-        display: block;
-        height: 100%;
-        border-radius: 2px;
-        background: $primary-color;
-        transition: width 0.4s ease;
-      }
-    }
-  }
-
-  @media (max-width: 1100px) {
-    .hit-layout {
-      flex-direction: column;
-    }
-
-    .hit-rail {
-      width: 100%;
-      position: static;
     }
   }
 }
