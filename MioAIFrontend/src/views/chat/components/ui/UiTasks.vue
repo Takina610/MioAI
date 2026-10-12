@@ -27,7 +27,7 @@ type UiBlock = Extract<MessageBlock, { type: 'ui' }>
 const props = defineProps<{ block: UiBlock; chatId?: string }>()
 
 const items = computed<UiTaskItem[]>(() =>
-  (props.block.items ?? []).filter(item => item && item.text)
+  ((props.block.items ?? []) as UiTaskItem[]).filter(item => item && item.text)
 )
 
 /** 勾选：乐观更新块内状态（块对象在消息 blocks 响应式树内，直改即触发渲染），

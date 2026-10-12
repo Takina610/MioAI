@@ -130,22 +130,38 @@ export type MessageBlock =
   | {
       /** 动态 UI 块（render_ui 工具产出，协议 v=1）：与 text 块按时间序混合渲染进回答区 */
       type: 'ui'
-      /** 会话内全局唯一（交互寻址：/bot/ui-state 按 id 定位） */
+      /** 会话内全局唯一（交互寻址：/bot/ui-state 按 id 定位；targetId 原位更新寻址） */
       id: string
       v?: number
-      kind: 'cards' | 'chart' | 'table' | 'tasks' | 'form' | 'actions' | 'status' | (string & {})
+      /** targetId 原位替换事件标记（历史加载时忽略；流式期据此跨消息按 id 替换） */
+      update?: boolean
+      kind: 'cards' | 'chart' | 'table' | 'tasks' | 'form' | 'actions' | 'status' | 'timeline' | 'quote' | 'metric' | 'choice' | 'image' | 'image_list' | 'image_gallery' | 'figure' | (string & {})
       title?: string
       cards?: UiCardItem[]
-      chartType?: 'bar' | 'line' | 'pie'
+      chartType?: 'bar' | 'line' | 'pie' | 'scatter'
       categories?: string[]
       series?: UiChartSeries[]
       columns?: string[]
       rows?: string[][]
-      items?: UiTaskItem[]
+      items?: UiTaskItem[] | UiImageMeta[] | UiMetricItem[]
       fields?: UiFormField[]
       submitLabel?: string
       actions?: UiActionItem[]
       steps?: UiStatusStep[]
+      events?: UiTimelineEvent[]
+      /** kind=quote：正文 */
+      text?: string
+      author?: string
+      source?: string
+      options?: UiChoiceOption[]
+      /** kind=image / figure：单图载荷 */
+      image?: UiImageMeta
+      /** kind=image_gallery：图集 */
+      images?: UiImageMeta[]
+      /** kind=figure：图说明 */
+      caption?: string
+      ratio?: 'auto' | '16/9' | '4/3' | '1/1' | '3/4'
+      fit?: 'cover' | 'contain'
     }
 
 /** 会话附件（沙箱工作区内相对路径）：path 形如 uploads/<chatId>/xxx 或 outputs/<chatId>/xxx */
@@ -218,6 +234,47 @@ export interface UiActionItem {
 export interface UiStatusStep {
   text: string
   status: 'todo' | 'doing' | 'done' | 'failed'
+}
+
+/** 动态 UI 时间线事件（kind=timeline 载荷） */
+export interface UiTimelineEvent {
+  time?: string
+  title: string
+  desc?: string
+}
+
+/** 动态 UI KPI 项（kind=metric 载荷） */
+export interface UiMetricItem {
+  label: string
+  value: string
+  unit?: string
+  trend?: 'up' | 'down' | 'flat'
+}
+
+/** 动态 UI 单选胶囊（kind=choice 载荷）：点击即把 prompt（缺省 label）作为用户消息发送 */
+export interface UiChoiceOption {
+  label: string
+  prompt?: string
+}
+
+/**
+ * 动态 UI 图片元数据（image/image_list/image_gallery/figure 载荷单元）：
+ * url 必须是本会话 image_search 工具结果登记过的 https 地址（后端防伪造核对），
+ * 作者/授权照实透传可为空，前端不推断不编造。
+ */
+export interface UiImageMeta {
+  url: string
+  thumbnailUrl?: string
+  title?: string
+  alt?: string
+  caption?: string
+  desc?: string
+  sourceUrl?: string
+  sourceName?: string
+  author?: string
+  license?: string
+  width?: number
+  height?: number
 }
 
 /** 任务清单步骤（SSE plan 事件快照，渲染于输入框上方） */

@@ -26,6 +26,14 @@ import UiTasks from './UiTasks.vue'
 import UiForm from './UiForm.vue'
 import UiActions from './UiActions.vue'
 import UiStatus from './UiStatus.vue'
+import UiTimeline from './UiTimeline.vue'
+import UiQuote from './UiQuote.vue'
+import UiMetric from './UiMetric.vue'
+import UiChoice from './UiChoice.vue'
+import UiImage from './UiImage.vue'
+import UiImageList from './UiImageList.vue'
+import UiImageGallery from './UiImageGallery.vue'
+import UiFigure from './UiFigure.vue'
 
 type UiBlock = Extract<MessageBlock, { type: 'ui' }>
 
@@ -40,7 +48,15 @@ const REGISTRY: Record<string, Component> = {
   tasks: UiTasks,
   form: UiForm,
   actions: UiActions,
-  status: UiStatus
+  status: UiStatus,
+  timeline: UiTimeline,
+  quote: UiQuote,
+  metric: UiMetric,
+  choice: UiChoice,
+  image: UiImage,
+  image_list: UiImageList,
+  image_gallery: UiImageGallery,
+  figure: UiFigure
 }
 
 const resolved = computed<Component | null>(() => REGISTRY[props.block.kind] ?? null)

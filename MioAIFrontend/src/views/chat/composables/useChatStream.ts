@@ -364,7 +364,7 @@ export function useChatStream(options: {
       let finished = false
       patchMessage(chatId, aiMessageIndex, (msg) => applyEnvelope(msg, parsed!, () => {
         finished = true
-      }))
+      }, chatId))
 
       if (finished) {
         finishStream()
@@ -440,11 +440,12 @@ export function useChatStream(options: {
     return next
   }
 
-  /** 把一条信封事件应用到 AI 消息上，返回新消息对象 */
+  /** 把一条信封事件应用到 AI 消息上，返回新消息对象（chatId 供 update 块跨消息寻址） */
   function applyEnvelope(
     msg: ChatMessage,
     parsed: Record<string, any>,
-    markFinished: () => void
+    markFinished: () => void,
+    chatId: string
   ): ChatMessage {
     switch (String(parsed.type ?? '')) {
       case 'answer':
@@ -541,9 +542,11 @@ export function useChatStream(options: {
         return { ...msg, blocks }
       }
       case 'ui_block': {
-        // 动态 UI 块（后端语义校验通过后下发）：整块插入回答流，与 text 块按时间序混合渲染
+        // 动态 UI 块（后端语义校验通过后下发）：整块插入回答流，与 text 块按时间序混合渲染。
+        // update 块（render_ui targetId 原位替换）跨消息按 id 寻址替换，寻址失败降级并入当前消息
         const block = parsed.block as MessageBlock | undefined
         if (!block || block.type !== 'ui' || !block.kind) return msg
+        if (block.update && replaceUiBlock(chatId, block)) return msg
         const blocks = [...closeOpenThinking(msg.blocks)]
         blocks.push(block)
         return flushRetry({ ...msg, blocks })
@@ -688,6 +691,24 @@ export function useChatStream(options: {
     const updated = [...msgs]
     updated[index] = patch(updated[index])
     messagesApi.setChatMessages(chatId, updated)
+  }
+
+  /** targetId 原位替换：扫本会话全部消息按块 id 定位并整块替换（更新早前轮次渲染的块） */
+  function replaceUiBlock(
+    chatId: string,
+    block: Extract<MessageBlock, { type: 'ui' }>
+  ): boolean {
+    const msgs = messagesApi.getChatMessages(chatId)
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const blocks = msgs[i].blocks
+      const idx = blocks?.findIndex(b => b.type === 'ui' && b.id === block.id) ?? -1
+      if (idx < 0) continue
+      const next = [...(blocks ?? [])]
+      next[idx] = block
+      patchMessage(chatId, i, m => ({ ...m, blocks: next }))
+      return true
+    }
+    return false
   }
 
   function followIfCurrent(chatId: string): void {
@@ -935,7 +956,7 @@ export function useChatStream(options: {
         let finished = false
         patchMessage(chatId, pendingIndex, (msg) => applyEnvelope(msg, parsed!, () => {
           finished = true
-        }))
+        }, chatId))
         followIfCurrent(chatId)
         if (finished) {
           finishReplay()

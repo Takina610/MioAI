@@ -31,7 +31,8 @@ const AXIS_COLOR = '#8c8a82'
 const SPLIT_LINE = '#e8e6dc'
 
 function buildOption(): EChartsOption {
-  const type = props.block.chartType === 'pie' ? 'pie' : props.block.chartType === 'line' ? 'line' : 'bar'
+  const raw = props.block.chartType
+  const type = raw === 'pie' ? 'pie' : raw === 'scatter' ? 'scatter' : raw === 'line' ? 'line' : 'bar'
   const cats = categories.value
 
   if (type === 'pie') {
@@ -76,7 +77,8 @@ function buildOption(): EChartsOption {
       type,
       data: s.data,
       smooth: type === 'line',
-      barMaxWidth: 32
+      // 散点=类别轴上的点图（分布/离群观察），柱图限宽
+      ...(type === 'scatter' ? { symbolSize: 10 } : { barMaxWidth: 32 })
     }))
   }
 }

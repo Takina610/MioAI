@@ -65,6 +65,7 @@ public class MioBot {
     private final ToolCallLogService toolCallLogService;
     private final AgentMessageService agentMessageService;
     private final com.mio.ai.bot.service.ChatFileService chatFileService;
+    private final com.mio.ai.bot.service.image.ImageSearchService imageSearchService;
     private final SandboxFileTransfer fileTransfer;
 
     private final String chatId;
@@ -118,6 +119,7 @@ public class MioBot {
                   ToolCallLogService toolCallLogService,
                   AgentMessageService agentMessageService,
                   com.mio.ai.bot.service.ChatFileService chatFileService,
+                  com.mio.ai.bot.service.image.ImageSearchService imageSearchService,
                   String chatId,
                   Long userId,
                   Long agentId,
@@ -135,6 +137,7 @@ public class MioBot {
         this.toolCallLogService = toolCallLogService;
         this.agentMessageService = agentMessageService;
         this.chatFileService = chatFileService;
+        this.imageSearchService = imageSearchService;
         this.chatId = chatId;
         this.userId = userId;
         this.agentId = agentId != null ? agentId : AGENT_ID;
@@ -227,8 +230,12 @@ public class MioBot {
                 Subagents launcher = new Subagents(chatModel, config, reasoningEffort,
                         toolsetFactory, runContext, events, modelName);
                 registry = toolsetFactory.build(chatId, state, mcpTools, null, launcher, events, toolHooks);
-                // 动态 UI 块工具：仅主轮次注册（子代理注册表不含），校验通过的块经通道下发/落库
-                registry.register(UiRenderTool.entry(channel));
+                // 动态 UI 块工具：仅主轮次注册（子代理注册表不含），校验通过的块经通道下发/落库；
+                // 图片块按本会话 image_search 登记簿核对 url（防伪造）并回填来源元数据
+                registry.register(UiRenderTool.entry(channel,
+                        url -> imageSearchService.resolveImage(chatId, url)));
+                // 图片检索工具（图文混排）：模型在实体介绍等场景自主决定是否调用
+                registry.register(ImageSearchTool.entry(imageSearchService));
                 engine.bindTools(registry);
 
                 boolean appendUserEntry = persistUserMessage || state.entries().isEmpty();
@@ -370,6 +377,11 @@ public class MioBot {
     private static final java.util.regex.Pattern PLAIN_TEXT_PATTERN = java.util.regex.Pattern.compile(
             "纯文字|纯文本|只用文字|不要.*(图|卡|表|组件|UI)|plain text|no (charts?|cards?|tables?)");
 
+    /** 图片意图助推模式：问题涉及具象视觉实体（角色/人物/景点/产品等）时，提醒可走 image_search 图文链路 */
+    private static final java.util.regex.Pattern IMAGE_INTENT_PATTERN = java.util.regex.Pattern.compile(
+            "动漫|漫画|动画|角色|主角|人物|明星|景点|地标|旅游|旅行|风景|城市|外观|长什么样|照片|图集|手办|"
+                    + "anime|manga|character|landmark|travel|scenic|destination|photos?");
+
     /** 模型可见的用户输入：附件以 system-reminder 注入（路径 + 产出目录约定），展示正文保持原样 */
     private String buildModelPrompt(String userPrompt, SandboxFs fs) {
         StringBuilder sb = new StringBuilder(userPrompt);
@@ -400,6 +412,17 @@ public class MioBot {
                     + "cards for recommendations), and keep Markdown prose only for the lead-in and "
                     + "interpretation. One call carrying 2-4 blocks is usually enough — render each piece of "
                     + "content once and do not repeat it in later calls.\n</system-reminder>";
+        }
+        if (IMAGE_INTENT_PATTERN.matcher(prompt).find() && !PLAIN_TEXT_PATTERN.matcher(prompt).find()) {
+            prompt += "\n\n<system-reminder>\n"
+                    + "This question is about a concrete visual entity (a character, person, landmark, "
+                    + "destination or product). Call image_search first (query in English or romaji; "
+                    + "category=\"anime\" for anime/manga characters or works; one call is usually enough), "
+                    + "then render the returned candidates in the SAME turn with image blocks "
+                    + "(image_list for an entity line-up, image_gallery for scenery, image/figure for a "
+                    + "single illustration) using the returned URLs verbatim — a search followed by a "
+                    + "text-only answer is a failure. Skip image_search only when images clearly add "
+                    + "nothing or the user asked for plain text.\n</system-reminder>";
         }
         return prompt;
     }

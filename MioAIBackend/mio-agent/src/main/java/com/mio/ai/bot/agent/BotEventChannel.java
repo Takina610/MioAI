@@ -234,10 +234,11 @@ public class BotEventChannel {
 
     /**
      * 动态 UI 块（render_ui 工具产出，入参已过语义校验）：追加展示块并推送事件。
-     * 块 id 会话内全局唯一（uuid 片段，跨轮次不撞），供 /bot/ui-state 交互寻址。
+     * 块 id 会话内全局唯一（uuid 片段，跨轮次不撞），供 /bot/ui-state 交互寻址与
+     * render_ui targetId 原位更新寻址；返回分配的 id（工具回执带 id，模型后续可更新）。
      * 水合器只回放 text/tool 块——UI 数据进模型上下文走 render_ui 的工具调用参数，不双算。
      */
-    public void uiBlock(Map<String, Object> payload) {
+    public String uiBlock(Map<String, Object> payload) {
         closeOpenThinking();
         Map<String, Object> block = new LinkedHashMap<>();
         block.put("type", "ui");
@@ -246,6 +247,79 @@ public class BotEventChannel {
         block.putAll(payload);
         displayBlocks.add(block);
         emit(SseChunk.uiBlock(block).fields());
+        return String.valueOf(block.get("id"));
+    }
+
+    /**
+     * 原位替换既有 UI 块（render_ui targetId）：块 id 保持不变，事件带 update 标记
+     * （前端跨消息按 id 替换，历史重载读到已更新版本）。先查本轮 displayBlocks
+     * （同轮调整，随 WIP 增量落库）；再查历史行——定位后整行写回（与 /bot/ui-state
+     * 同款路径），不新增消息。找不到目标返回 false（回执告知模型改为新建）。
+     */
+    public boolean uiBlockReplace(String targetId, Map<String, Object> payload) {
+        closeOpenThinking();
+        for (int i = 0; i < displayBlocks.size(); i++) {
+            Map<String, Object> b = displayBlocks.get(i);
+            if ("ui".equals(b.get("type")) && targetId.equals(b.get("id"))) {
+                Map<String, Object> updated = replaceBlock(targetId, payload);
+                displayBlocks.set(i, updated);
+                emit(SseChunk.uiBlock(updated).fields());
+                return true;
+            }
+        }
+        if (agentMessageService == null || userId == null) {
+            return false;
+        }
+        try {
+            for (AgentMessageDO row : agentMessageService.listByConversation(chatId)) {
+                List<Map<String, Object>> blocks = parseBlocks(row.getBlocks());
+                if (blocks == null) {
+                    continue;
+                }
+                for (int i = 0; i < blocks.size(); i++) {
+                    Map<String, Object> b = blocks.get(i);
+                    if (!"ui".equals(b.get("type")) || !targetId.equals(b.get("id"))) {
+                        continue;
+                    }
+                    blocks.set(i, replaceBlock(targetId, payload));
+                    agentMessageService.updateDisplay(row.getId(),
+                            JacksonUtil.writeValueAsString(blocks), row.getPlan());
+                    emit(SseChunk.uiBlock(blocks.get(i)).fields());
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("UI 块原位替换失败, chatId={}, blockId={}: {}", chatId, targetId, e.getMessage());
+        }
+        return false;
+    }
+
+    private static Map<String, Object> replaceBlock(String targetId, Map<String, Object> payload) {
+        Map<String, Object> block = new LinkedHashMap<>();
+        block.put("type", "ui");
+        block.put("id", targetId);
+        block.put("v", 1);
+        block.put("update", true);
+        block.putAll(payload);
+        return block;
+    }
+
+    /** 展示块 JSON 解析（畸形行返回 null 跳过） */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> parseBlocks(String blocksJson) {
+        if (blocksJson == null || blocksJson.isBlank()) {
+            return null;
+        }
+        try {
+            return JacksonUtil.readValue(blocksJson, List.class);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** 会话 id（render_ui 图片块 URL 登记簿核对等工具侧用途） */
+    public String chatId() {
+        return chatId;
     }
 
     /**

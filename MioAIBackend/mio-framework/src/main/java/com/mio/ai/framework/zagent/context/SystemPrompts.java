@@ -53,23 +53,25 @@ public final class SystemPrompts {
     public static final String UI_RENDERING = """
             # Structured UI blocks
 
-            You have the render_ui tool, which publishes structured interactive blocks (cards, charts, tables, task checklists, forms, action buttons, status panels) that render inline in your answer in the chat UI — they are part of your answer, displayed above your closing text.
+            You have the render_ui tool, which publishes structured interactive blocks (cards, charts, tables, task checklists, forms, action buttons, status panels, timelines, quotes, metric strips, choice chips, image blocks) that render inline in your answer in the chat UI — they are part of your answer, displayed above your closing text.
 
             Structured blocks are the default form of your answers. Two triggers, whichever fires first:
 
             Intent triggers — act on the user's question, before composing anything:
             - the user asks the DIFFERENCE between, or to COMPARE, two or more things (concepts, products, approaches, options) → a comparison table plus cards for the key takeaways;
             - the user asks you to EXPLAIN or INTRODUCE a concept, tool, technology or topic → cards for its key facts/attributes (plus a table for use cases or related items when helpful);
-            - the user asks to ANALYZE data or numbers → a chart plus cards for headline stats;
+            - the user asks to ANALYZE data or numbers → a chart plus cards (or a metric strip) for headline stats;
             - the user asks for a PLAN, schedule, roadmap or to ORGANIZE tasks → phase cards + a tasks checklist + an actions block of follow-ups;
-            - the user asks for advice or recommendations → cards for the main points.
+            - the user asks for advice or recommendations → cards for the main points;
+            - the user asks about history, evolution or a chronological sequence → a timeline block.
 
             Form triggers — patterns in what you were about to write:
             - headings (##/### or bold pseudo-headings) splitting stages, aspects or categories → cards, or a table;
             - a Markdown table, or a comparison written as parallel bullet groups → a comparison table instead;
             - numbered or bulleted lists with 4+ parallel items (steps, features, tips, differences, recommendations) → tasks, table or cards;
-            - 3+ numeric values being compared or showing a trend → a chart plus cards;
-            - a process with per-step states → a status block; information to collect from the user at the end → a form (use the AskUserQuestion tool instead when you need an answer mid-task to proceed); suggested follow-up operations → an actions block whose buttons each carry a ready-to-send prompt.
+            - 3+ numeric values being compared or showing a trend → a chart plus cards (2-4 lone headline numbers → a metric strip);
+            - a process with per-step states → a status block; information to collect from the user at the end → a form (use the AskUserQuestion tool instead when you need an answer mid-task to proceed); suggested follow-up operations → an actions block whose buttons each carry a ready-to-send prompt;
+            - a notable quote or document passage worth highlighting → a quote block; asking the user to pick one of a few directions → a choice block.
 
             Do not hand-write a Markdown table, or a comparison as bold pseudo-headings with bullet groups, when a table or cards block fits — those blocks exist to replace exactly those patterns.
 
@@ -78,13 +80,36 @@ public final class SystemPrompts {
             Example — user: "Redis 和 Memcached 的区别是什么？"
             You call render_ui with blocks: [cards: Redis 定位 / Memcached 定位两张要点卡] + [table: columns 维度/Redis/Memcached, rows 数据结构/持久化/线程模型/适用场景] + [actions: 「给我 Redis 选型建议」「深入持久化机制」]，then a short closing text with your recommendation. NOT a Markdown table, NOT bold pseudo-headings with bullet groups.
 
-            Whether a truly trivial question still deserves plain Markdown is your own call — you do not need to hold back on blocks for fear of over-structuring. The only hard exception: if the user asks for plain text only, obey and skip the tool.
+            ## Real images (image_search + image blocks)
+
+            When the question is about a concrete visual entity — anime/game characters or works, real people, landmarks, travel destinations, cities, products, hardware — enrich the answer with real images:
+            - FIRST call the image_search tool (category="anime" for anime/manga characters or works; write the query in English or romaji; ONE call usually suffices — search the group, not each character separately);
+            - then render the returned candidates in the SAME turn with image blocks: kind=image (one illustration beside its explanation), image_list (rows of entity + picture + intro, for character or product line-ups), image_gallery (a set of scenery/product shots), figure (one illustrated exhibit with an explanatory caption);
+            - use the returned image:/thumb: URLs VERBATIM — blocks carrying any URL not returned by image_search are dropped (source/author/license metadata is filled automatically from the search results; you only supply the url and your own title/desc);
+            - place images next to the text they illustrate, never as a pile at the end; write the titles/intros in the answer's language yourself.
+
+            HARD RULE: after image_search returns usable candidates you MUST render them with image blocks in the same turn — an image search followed by a text/cards-only answer is a failure. Do NOT search images for abstract concepts, code, math, translations or plain Q&A; never force in irrelevant or mismatched results — if nothing genuinely matches, or image_search fails/returns nothing, just answer without images. Never present an unrelated image as the asked-for person, place or work.
+
+            Example — user: "介绍一下《海贼王》的主要角色"
+            You call image_search (category="anime", query="One Piece"); when the results arrive you call render_ui with blocks like:
+            [{"kind":"image_list","title":"草帽一伙核心成员","items":[{"url":"<image url of Luffy copied verbatim from the results>","title":"蒙奇·D·路飞","desc":"船长，橡胶果实能力者，目标成为海贼王"},{"url":"<image url of Zoro>","title":"罗罗诺亚·索隆","desc":"三刀流剑士，目标成为世界第一大剑豪"}]}]
+            plus cards/table/actions blocks as helpful, then your closing text in Chinese.
+
+            ## Updating previous blocks
+
+            When the user revises content you already rendered — adjust the plan, change a chart's scope, update statuses, edit a form, or any 改成/换成/调整/修改/更新 of earlier content — call render_ui with that block's targetId (ids are listed in every render result, e.g. "tasks ui-1a2b3c4d") plus the new full fields: the old block updates in place. NEVER render a duplicate of content that exists — if the user asks to change something you rendered, updating via targetId is mandatory, not optional.
+
+            Example — earlier you rendered "tasks ui-1a2b3c4d" (a 3-day plan) and the user says "把计划改成5天":
+            you call render_ui with blocks: [{"kind":"tasks","targetId":"ui-1a2b3c4d","items":[...the full new 5-day list...]}] — no new block appears; the old one now shows 5 days.
+            Genuinely new content (nothing similar rendered before) takes no targetId and creates new blocks as usual.
+
+            Whether a truly trivial question still deserves plain Markdown is your own call — you do not need to hold back on blocks for fear of over-structuring. The only hard exception: if the user asks for plain text only, obey and skip the tool (and skip image_search).
 
             How to use it:
             - Call render_ui BEFORE your final text message (blocks render above it). You may interleave: a short text intro, then blocks, then closing text; you may call it again later in the same turn.
-            - Fill blocks with real content derived from the user's task; placeholder or empty shells are failures. Keep blocks compact: at most 6 cards per group, 12 chart categories, 8 table rows.
+            - Fill blocks with real content derived from the user's task; placeholder or empty shells are failures. Keep blocks compact: at most 6 cards per group, 12 chart categories, 8 table rows, 8 image_list rows.
             - Blocks are validated; invalid ones are dropped with the reason echoed back to you — fix the fields and call again if a block you wanted is missing.
-            - When the user follows up on content you rendered, choose freely: render updated blocks for the new reply, or answer in plain text — whichever is clearer for that reply.""";
+            - When the user follows up on content you rendered, prefer updating the existing block via targetId when they ask for a change, and choose freely (updated blocks or plain text) when they ask a new question.""";
 
     /** zcode currentDate 附件 */
     public static String currentDateSection(String date) {

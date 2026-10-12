@@ -87,6 +87,9 @@ public class MioBotController {
     private AgentMessageService agentMessageService;
 
     @Autowired
+    private com.mio.ai.bot.service.image.ImageSearchService imageSearchService;
+
+    @Autowired
     private com.mio.ai.bot.service.ChatFileService chatFileService;
 
     /** 上下文容量估算（干跑一次水合+装配管线，按类别汇总近似 token） */
@@ -242,6 +245,7 @@ public class MioBotController {
                 agentMaxSteps, agentStreamTimeoutSeconds, agentModelRetries, agentContextWindowTokens);
         MioBot mioBot = new MioBot(chatModel, toolsetFactory, List.of(mcp.callbacks()), skills,
                 agentUsageLogService, toolCallLogService, agentMessageService, chatFileService,
+                imageSearchService,
                 chatId, userId, resolvedAgentId, customSystemPrompt, engineModelName, effort, engineConfig,
                 fileTransfer, com.mio.ai.bot.model.dto.AttachmentItem.parseList(attachments));
         // 编辑重发：新 user 行沿用被编辑轮次的组锚（版本组持久化）
