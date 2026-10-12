@@ -1,36 +1,56 @@
 <template>
   <div class="ui-block">
     <div v-if="block.title" class="ui-block-title">{{ block.title }}</div>
-    <component :is="resolved" v-if="resolved" :block="block" :chat-id="chatId" />
-    <!-- 协议降级：未知 kind 渲染为可折叠原始数据，不整条崩掉 -->
+    <component
+      :is="resolved"
+      v-if="resolved && !renderError"
+      :block="block"
+      :chat-id="chatId"
+      @send="emit('send', $event)"
+    />
+    <!-- 协议降级：未知 kind 或组件渲染异常 → 可折叠原始数据，不整条崩掉 -->
     <details v-else class="ui-block-fallback">
-      <summary>未支持的内容块（{{ block.kind }}）</summary>
+      <summary>{{ renderError ? '内容块渲染异常' : `未支持的内容块（${block.kind}）` }}</summary>
       <pre>{{ fallbackJson }}</pre>
     </details>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, type Component } from 'vue'
+import { computed, onErrorCaptured, ref, type Component } from 'vue'
 import type { MessageBlock } from '@/types'
 import UiCards from './UiCards.vue'
 import UiChart from './UiChart.vue'
 import UiTable from './UiTable.vue'
 import UiTasks from './UiTasks.vue'
+import UiForm from './UiForm.vue'
+import UiActions from './UiActions.vue'
+import UiStatus from './UiStatus.vue'
 
 type UiBlock = Extract<MessageBlock, { type: 'ui' }>
 
 const props = defineProps<{ block: UiBlock; chatId?: string }>()
+const emit = defineEmits<{ (e: 'send', text: string): void }>()
 
 /** kind → 组件白名单：协议允许的类型之外一律走降级渲染 */
 const REGISTRY: Record<string, Component> = {
   cards: UiCards,
   chart: UiChart,
   table: UiTable,
-  tasks: UiTasks
+  tasks: UiTasks,
+  form: UiForm,
+  actions: UiActions,
+  status: UiStatus
 }
 
 const resolved = computed<Component | null>(() => REGISTRY[props.block.kind] ?? null)
+
+/** 子组件渲染异常就地降级（阻断向上冒泡避免整条消息消失） */
+const renderError = ref(false)
+onErrorCaptured(() => {
+  renderError.value = true
+  return false
+})
 
 const fallbackJson = computed(() => {
   try {

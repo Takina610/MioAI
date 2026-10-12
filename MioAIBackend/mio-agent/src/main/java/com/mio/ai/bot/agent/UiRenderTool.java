@@ -55,7 +55,7 @@ final class UiRenderTool {
             "properties":{
             "kind":{
             "type":"string",
-            "enum":["cards","chart","table","tasks"],
+            "enum":["cards","chart","table","tasks","form","actions","status"],
             "description":"Block type"
             },
             "title":{
@@ -136,6 +136,63 @@ final class UiRenderTool {
             },
             "required":["text"]
             }
+            },
+            "fields":{
+            "type":"array",
+            "maxItems":12,
+            "description":"kind=form: fields the user fills and submits back as a message",
+            "items":{
+            "type":"object",
+            "properties":{
+            "label":{"type":"string"},
+            "type":{
+            "type":"string",
+            "enum":["text","textarea","number","select"]
+            },
+            "options":{
+            "type":"array",
+            "items":{"type":"string"},
+            "description":"choices for type=select"
+            },
+            "placeholder":{"type":"string"},
+            "required":{"type":"boolean"}
+            },
+            "required":["label"]
+            }
+            },
+            "submitLabel":{"type":"string","description":"kind=form: submit button label"},
+            "actions":{
+            "type":"array",
+            "maxItems":6,
+            "description":"kind=actions: buttons that each send their prompt as the user's next message",
+            "items":{
+            "type":"object",
+            "properties":{
+            "label":{"type":"string"},
+            "prompt":{"type":"string","description":"Message sent when the button is clicked"},
+            "style":{
+            "type":"string",
+            "enum":["primary","default"]
+            }
+            },
+            "required":["label","prompt"]
+            }
+            },
+            "steps":{
+            "type":"array",
+            "maxItems":12,
+            "description":"kind=status: process step states",
+            "items":{
+            "type":"object",
+            "properties":{
+            "text":{"type":"string"},
+            "status":{
+            "type":"string",
+            "enum":["todo","doing","done","failed"]
+            }
+            },
+            "required":["text"]
+            }
             }
             },
             "required":["kind"]
@@ -212,8 +269,11 @@ final class UiRenderTool {
             case "chart" -> block.putAll(validateChart(raw));
             case "table" -> block.putAll(validateTable(raw));
             case "tasks" -> block.put("items", validateTasks(raw.get("items")));
+            case "form" -> block.putAll(validateForm(raw));
+            case "actions" -> block.put("actions", validateActions(raw.get("actions")));
+            case "status" -> block.put("steps", validateStatus(raw.get("steps")));
             default -> throw new IllegalArgumentException(
-                    "unsupported kind '" + kind + "' (supported: cards, chart, table, tasks)");
+                    "unsupported kind '" + kind + "' (supported: cards, chart, table, tasks, form, actions, status)");
         }
         return block;
     }
@@ -371,6 +431,137 @@ final class UiRenderTool {
             throw new IllegalArgumentException("tasks needs 1-" + MAX_TASKS + " items each with a non-empty text");
         }
         return items;
+    }
+
+    private static final Set<String> FIELD_TYPES = Set.of("text", "textarea", "number", "select");
+
+    private static Map<String, Object> validateForm(JsonNode raw) {
+        JsonNode rawFields = raw.get("fields");
+        if (rawFields == null || !rawFields.isArray() || rawFields.isEmpty()) {
+            throw new IllegalArgumentException("form needs a non-empty fields array");
+        }
+        List<Map<String, Object>> fields = new ArrayList<>();
+        for (JsonNode item : rawFields) {
+            if (fields.size() >= MAX_TASKS || !item.isObject()) {
+                continue;
+            }
+            String label = text(item, "label");
+            if (label == null) {
+                continue;
+            }
+            String type = text(item, "type");
+            if (type == null || !FIELD_TYPES.contains(type)) {
+                type = "text";
+            }
+            Map<String, Object> field = new LinkedHashMap<>();
+            field.put("label", label);
+            field.put("type", type);
+            // select 无选项时降级为普通文本输入（比整块丢弃更宽容）
+            if ("select".equals(type)) {
+                List<String> options = new ArrayList<>();
+                if (item.get("options") != null && item.get("options").isArray()) {
+                    for (JsonNode opt : item.get("options")) {
+                        if (options.size() >= MAX_COLUMNS) {
+                            break;
+                        }
+                        String option = cap(opt.isTextual() ? opt.asText() : String.valueOf(opt));
+                        if (!option.isBlank()) {
+                            options.add(option);
+                        }
+                    }
+                }
+                if (options.isEmpty()) {
+                    field.put("type", "text");
+                } else {
+                    field.put("options", options);
+                }
+            }
+            String placeholder = text(item, "placeholder");
+            if (placeholder != null) {
+                field.put("placeholder", placeholder);
+            }
+            if (item.path("required").asBoolean(false)) {
+                field.put("required", true);
+            }
+            fields.add(field);
+        }
+        if (fields.isEmpty()) {
+            throw new IllegalArgumentException("form needs 1-" + MAX_TASKS + " fields each with a non-empty label");
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("fields", fields);
+        String submitLabel = text(raw, "submitLabel");
+        result.put("submitLabel", submitLabel != null ? submitLabel : "提交");
+        return result;
+    }
+
+    /**
+     * 业务操作白名单：action.op 需要后端真实处理的操作 id。AI 无法自行开通——
+     * 未注册的 op 一律按未授权丢弃（安全边界：模型只能生成 prompt 类聊天按钮，
+     * 业务操作必须由后端显式注册后才可下发）。
+     */
+    private static final Set<String> OP_WHITELIST = Set.of();
+
+    private static List<Map<String, Object>> validateActions(JsonNode raw) {
+        List<Map<String, Object>> actions = new ArrayList<>();
+        if (raw != null && raw.isArray()) {
+            for (JsonNode item : raw) {
+                if (actions.size() >= MAX_CARDS || !item.isObject()) {
+                    continue;
+                }
+                String label = text(item, "label");
+                String prompt = text(item, "prompt");
+                if (label == null) {
+                    continue;
+                }
+                if (item.hasNonNull("op") && !OP_WHITELIST.contains(item.get("op").asText())) {
+                    // 带未授权 op 的按钮丢弃并告知模型：改用 prompt 型按钮
+                    throw new IllegalArgumentException("action '" + label
+                            + "' uses op '" + item.get("op").asText()
+                            + "' which is not an authorized operation; use prompt instead");
+                }
+                if (prompt == null) {
+                    continue;
+                }
+                Map<String, Object> action = new LinkedHashMap<>();
+                action.put("label", label);
+                action.put("prompt", prompt);
+                String style = text(item, "style");
+                action.put("style", "primary".equals(style) ? "primary" : "default");
+                actions.add(action);
+            }
+        }
+        if (actions.isEmpty()) {
+            throw new IllegalArgumentException("actions needs 1-" + MAX_CARDS
+                    + " buttons each with label and prompt (an unregistered op was rejected if provided)");
+        }
+        return actions;
+    }
+
+    private static final Set<String> STATUS_VALUES = Set.of("todo", "doing", "done", "failed");
+
+    private static List<Map<String, Object>> validateStatus(JsonNode raw) {
+        List<Map<String, Object>> steps = new ArrayList<>();
+        if (raw != null && raw.isArray()) {
+            for (JsonNode item : raw) {
+                if (steps.size() >= MAX_TASKS || !item.isObject()) {
+                    continue;
+                }
+                String stepText = text(item, "text");
+                if (stepText == null) {
+                    continue;
+                }
+                Map<String, Object> step = new LinkedHashMap<>();
+                step.put("text", stepText);
+                String status = text(item, "status");
+                step.put("status", status != null && STATUS_VALUES.contains(status) ? status : "todo");
+                steps.add(step);
+            }
+        }
+        if (steps.isEmpty()) {
+            throw new IllegalArgumentException("status needs 1-" + MAX_TASKS + " steps each with a non-empty text");
+        }
+        return steps;
     }
 
     private static String text(JsonNode node, String field) {

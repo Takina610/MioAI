@@ -57,7 +57,10 @@ public final class SystemPrompts {
             - a multi-stage plan, roadmap, schedule or curriculum: cards for the phases, tasks for the checklist;
             - a comparison of two or more options, products or approaches: a table, plus cards for the key takeaways;
             - numeric data with several data points worth showing: a chart, plus cards for headline stats;
-            - a to-do or work list the user will track: a tasks block.
+            - a to-do or work list the user will track: a tasks block;
+            - information to collect from the user at the end of your answer (experience, preferences, requirements): a form with input fields and selects — the user fills it and submits back as a message. Use the AskUserQuestion tool instead when you need an answer mid-task before you can proceed;
+            - suggested follow-up operations for the user (e.g. "expand stage 2 into a weekly plan", "switch to another approach"): an actions block of buttons, each carrying a ready-to-send prompt;
+            - a multi-step process with per-step states: a status block summarizing the stages.
 
             Do NOT use the tool for simple Q&A, short explanations, translations, rewrites, or anything a couple of sentences answer — write plain Markdown there. Never wrap a simple answer in cards just to look structured. If the user asks for plain text only, obey and skip the tool.
 

@@ -26,6 +26,7 @@
             :message-id="msg.id"
             :version="versionOf(msg)"
             @open-subagent="emit('openSubagent', $event)"
+            @send-prompt="emit('sendPrompt', $event)"
           />
           <template v-else-if="editingId !== msg.id">
             <AttachmentCards
@@ -136,6 +137,8 @@ const emit = defineEmits<{
   (e: 'removeEditAtt', key: string): void
   /** 子智能体行被点击（父级打开右侧只读面板） */
   (e: 'openSubagent', target: SubagentPanelTarget): void
+  /** 动态 UI 交互（actions 按钮/表单提交）：编排好的文本作为用户消息发送 */
+  (e: 'sendPrompt', text: string): void
 }>()
 
 const messagesRef = ref<HTMLElement | null>(null)

@@ -133,7 +133,7 @@ export type MessageBlock =
       /** 会话内全局唯一（交互寻址：/bot/ui-state 按 id 定位） */
       id: string
       v?: number
-      kind: 'cards' | 'chart' | 'table' | 'tasks' | (string & {})
+      kind: 'cards' | 'chart' | 'table' | 'tasks' | 'form' | 'actions' | 'status' | (string & {})
       title?: string
       cards?: UiCardItem[]
       chartType?: 'bar' | 'line' | 'pie'
@@ -142,6 +142,10 @@ export type MessageBlock =
       columns?: string[]
       rows?: string[][]
       items?: UiTaskItem[]
+      fields?: UiFormField[]
+      submitLabel?: string
+      actions?: UiActionItem[]
+      steps?: UiStatusStep[]
     }
 
 /** 会话附件（沙箱工作区内相对路径）：path 形如 uploads/<chatId>/xxx 或 outputs/<chatId>/xxx */
@@ -192,6 +196,28 @@ export interface UiChartSeries {
 export interface UiTaskItem {
   text: string
   status: 'todo' | 'doing' | 'done'
+}
+
+/** 动态 UI 表单字段（kind=form 载荷）：用户填写后编排为消息提交回对话 */
+export interface UiFormField {
+  label: string
+  type: 'text' | 'textarea' | 'number' | 'select'
+  options?: string[]
+  placeholder?: string
+  required?: boolean
+}
+
+/** 动态 UI 操作按钮（kind=actions 载荷）：点击即把 prompt 作为用户消息发送 */
+export interface UiActionItem {
+  label: string
+  prompt: string
+  style?: 'primary' | 'default'
+}
+
+/** 动态 UI 状态步骤（kind=status 载荷，静态进度面板） */
+export interface UiStatusStep {
+  text: string
+  status: 'todo' | 'doing' | 'done' | 'failed'
 }
 
 /** 任务清单步骤（SSE plan 事件快照，渲染于输入框上方） */

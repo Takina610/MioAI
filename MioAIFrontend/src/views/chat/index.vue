@@ -62,6 +62,7 @@
           @regenerate="handleRegenerate"
           @switch-version="handleSwitchVersion"
           @open-subagent="subagentPanelTarget = $event"
+          @send-prompt="sendFromUi"
         />
         <!-- 左下角常驻机器人：眼睛跟随指针，情绪随会话执行情况实时切换 -->
         <BotPet
@@ -523,6 +524,17 @@ function handleSend(): void {
   sendMessage(content, { reasoningEffort: reasoningEffort.value, attachments })
   cleanupPendingAttachments()
   inputMessage.value = ''
+}
+
+/** 动态 UI 交互（actions 按钮/表单提交）：编排好的文本直接作为用户消息发送（不带附件） */
+function sendFromUi(text: string): void {
+  const content = text.trim()
+  if (!content || isLoading.value) return
+  if (agentId.value !== 1 && !userStore.isLoggedIn) {
+    authModalVisible.value = true
+    return
+  }
+  sendMessage(content, { reasoningEffort: reasoningEffort.value })
 }
 
 /** 停止按钮：中断当前会话正在执行的轮次（后端停止引擎，界面由 stopped 事件/恢复轮询收尾） */

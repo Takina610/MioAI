@@ -158,12 +158,18 @@
           :class="{ 'with-process': processBlocks.length > 0 }"
           :content="seg.text"
         />
-        <UiBlockRenderer v-else :block="seg.block" :chat-id="chatId" />
+        <UiBlockRenderer v-else :block="seg.block" :chat-id="chatId" @send="emit('sendPrompt', $event)" />
       </template>
     </template>
 
     <!-- 历史消息（无块信息）：直接渲染正文 -->
     <MarkdownView v-else-if="!processBlocks.length && content" class="answer-content" :content="content" />
+
+    <!-- render_ui 参数流式传输中的轻量占位 -->
+    <div v-if="uiRendering && isLoading" class="ui-rendering-hint">
+      <RoseFourLoader :size="16" />
+      <span>正在生成界面…</span>
+    </div>
 
     <!-- Agent 本轮产出文件（outputs 目录新文件，点击即下载） -->
     <AttachmentCards
@@ -240,6 +246,8 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   /** 子智能体行被点击：页面打开该子代理的只读对话面板 */
   (e: 'openSubagent', target: SubagentPanelTarget): void
+  /** 动态 UI 交互（actions 按钮/表单提交）：编排好的文本作为用户消息发送 */
+  (e: 'sendPrompt', text: string): void
 }>()
 
 function openSubagent(block: ToolBlock, index: number): void {
@@ -357,6 +365,11 @@ const outputAttachments = computed<AttachmentDisplay[]>(() =>
       .filter(b => b.side === 'output')
       .flatMap(b => b.items)
   )
+)
+
+/** render_ui 参数流式传输中：回答区末尾给轻量占位（参数校验完成后 ui 块瞬间落位） */
+const uiRendering = computed(() =>
+  props.blocks.some(b => b.type === 'tool' && b.tool === 'render_ui' && b.status === 'running')
 )
 
 /** 最终回答 = 全部 ui 块（按原序，永不进过程区）+ 过程边界之后的 text 块：
@@ -920,6 +933,17 @@ function durationSuffix(block: ThinkingBlock): string {
   display: flex;
   align-items: center;
   padding: 0 4px;
+  user-select: none;
+}
+
+// render_ui 参数流式传输中的轻量占位
+.ui-rendering-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+  font-size: 13px;
+  color: $text-muted;
   user-select: none;
 }
 
