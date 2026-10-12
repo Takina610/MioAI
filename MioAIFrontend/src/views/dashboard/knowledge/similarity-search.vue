@@ -67,23 +67,18 @@
       </div>
 
       <section class="hit-results">
-        <div v-if="!hasSearched && !searching" class="results-blank">
-          <AimOutlined class="blank-icon" />
-          <p>输入内容，测试知识库能召回什么</p>
-        </div>
-
-        <template v-else-if="searching">
+        <template v-if="searching">
           <div v-for="i in 3" :key="i" class="hit-row skeleton-row">
             <a-skeleton active :title="{ width: '30%' }" :paragraph="{ rows: 2, width: ['90%', '60%'] }" />
           </div>
         </template>
 
-        <template v-else>
+        <template v-else-if="hasSearched">
           <div v-if="results.length" class="results-head">
             <span>召回 {{ results.length }} 条</span>
             <span class="elapsed">{{ elapsedMs }} ms</span>
           </div>
-          <a-empty v-else class="results-empty" description="未命中任何内容，试试降低阈值或换一种问法" />
+          <a-empty v-else class="results-empty" description="未命中任何内容" />
 
           <div v-for="(result, index) in results" :key="result.id" class="hit-row">
             <div class="hit-score">
@@ -132,7 +127,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { AimOutlined, DatabaseOutlined, FileTextOutlined } from '@ant-design/icons-vue'
+import { DatabaseOutlined, FileTextOutlined } from '@ant-design/icons-vue'
 import { similaritySearchV2, getKnowledgeBaseById, type SimilarityResult } from '@/api/knowledgeBase'
 import type { KnowledgeBase } from '@/types'
 import PageHeader from '../components/PageHeader.vue'
@@ -328,28 +323,6 @@ onMounted(() => {
 
   .hit-results {
     margin-top: 20px;
-  }
-
-  .results-blank {
-    height: 280px;
-    border: 1px dashed $border-warm;
-    border-radius: 12px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    color: $text-muted;
-
-    .blank-icon {
-      font-size: 32px;
-      color: rgba($primary-color, 0.5);
-    }
-
-    p {
-      margin: 0;
-      font-size: 14px;
-    }
   }
 
   .results-head {

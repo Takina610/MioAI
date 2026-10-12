@@ -5,7 +5,7 @@
     <template v-if="mode === 'edit'">
       <div class="field">
         <label class="field-label">名称</label>
-        <a-input v-model:value="name" placeholder="知识库名称" :maxlength="50" />
+        <a-input v-model:value="name" :maxlength="50" />
       </div>
       <div class="field">
         <label class="field-label">描述</label>
