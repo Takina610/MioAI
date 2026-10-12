@@ -31,7 +31,7 @@
         <div v-for="(server, si) in block.servers" :key="server.id ?? si" class="detail-group">
           <div class="group-title">
             {{ server.name }}
-            <span class="group-count">{{ server.tools.length }} 个工具</span>
+            <span class="group-count">{{ server.tools.length }} 个可用工具</span>
           </div>
           <div v-if="server.description" class="server-desc">{{ server.description }}</div>
           <div v-for="tool in server.tools" :key="tool.name" class="mcp-tool">
@@ -80,7 +80,7 @@ const meta = computed(() => {
   }
   if (props.block.type === 'mcp') {
     const tools = props.block.servers.reduce((sum, s) => sum + s.tools.length, 0)
-    const parts = [`${props.block.servers.length} 个服务`, `${tools} 个工具`]
+    const parts = [`${props.block.servers.length} 个服务`, `${tools} 个可用工具`]
     if (props.block.failures?.length) parts.push(`${props.block.failures.length} 个失败`)
     return parts.join(' · ')
   }

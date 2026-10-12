@@ -223,10 +223,16 @@ public class MioBot {
                 }
                 // WIP 行：轮次开始即落库，此后每个模型步增量刷新（进程崩溃后过程可恢复）
                 channel.beginAssistantWip();
-                // 资源摘要行（持久化）：本轮实际装配/命中的知识库、MCP、技能，替代旧的瞬态提示
+                // 资源摘要行：知识库检索逐轮呈现；MCP/技能是会话级装配，仅首轮（或 MCP 装配失败）呈现——
+                // 逐轮重复会被误读为"每轮都在调用全部工具"。是否调用由模型按需决定，实际调用见工具行
+                boolean sessionStart = hydrated.entries().isEmpty();
                 channel.kbContext(kbGroups);
-                channel.mcpContext(mcpServers, mcpFailures);
-                channel.skillContext(skillSummaries);
+                if (sessionStart || (mcpFailures != null && !mcpFailures.isEmpty())) {
+                    channel.mcpContext(mcpServers, mcpFailures);
+                }
+                if (sessionStart) {
+                    channel.skillContext(skillSummaries);
+                }
                 // 轮次开始前刷新脱离式后台任务：沙箱侧已完结的补状态并入队 task-notification
                 runContext.tasks().refreshDetached(chatId, runContext.fs());
                 java.util.Set<String> outputsBefore = snapshotOutputs(runContext.fs());
