@@ -123,6 +123,8 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .skill-card {
+  cursor: pointer;
+
   .card-header {
     display: flex;
     align-items: center;
