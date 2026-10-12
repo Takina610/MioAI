@@ -92,7 +92,7 @@
                   :min="200"
                   :max="2048"
                   :step="50"
-                  :tooltip-visible="false"
+                  :tooltip-open="false"
                 />
                 <a-input-number
                   v-model:value="formData.chunkSize"
@@ -111,7 +111,7 @@
                   :min="0"
                   :max="maxChunkOverlap"
                   :step="10"
-                  :tooltip-visible="false"
+                  :tooltip-open="false"
                 />
                 <a-input-number
                   v-model:value="formData.chunkOverlap"

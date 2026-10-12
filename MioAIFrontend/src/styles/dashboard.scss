@@ -144,8 +144,10 @@
     display: flex;
     gap: 8px;
     opacity: 0;
-    visibility: hidden;
-    transition: all 0.3s;
+    /* pointer-events 而非 visibility：hidden 态不可点击、hover 态整体可命中，
+       不依赖 visibility 继承链（后者在技能卡片上出现过按钮点不动的命中失效） */
+    pointer-events: none;
+    transition: opacity 0.3s, pointer-events 0.3s;
     position: absolute;
     bottom: 20px;
     left: 20px;
@@ -167,6 +169,6 @@
   /* 悬浮时显示操作、隐藏 footer */
   &:hover .card-actions {
     opacity: 1;
-    visibility: visible;
+    pointer-events: auto;
   }
 }

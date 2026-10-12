@@ -46,7 +46,7 @@
               :min="0"
               :max="100"
               :step="5"
-              :tooltip-visible="false"
+              :tooltip-open="false"
             />
             <span class="param-value">{{ thresholdPercent }}%</span>
           </div>

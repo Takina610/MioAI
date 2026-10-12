@@ -131,6 +131,7 @@ onMounted(() => {
       position: static;
       opacity: 1;
       visibility: visible;
+      pointer-events: auto;
       height: auto;
       margin-top: auto;
     }
