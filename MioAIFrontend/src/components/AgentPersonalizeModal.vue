@@ -37,13 +37,7 @@
         />
       </div>
 
-      <AgentConversationSettings
-        v-model:opening-message="formData.openingMessage"
-        v-model:opening-questions="formData.openingQuestions"
-        v-model:temperature="formData.temperature"
-      />
-
-      <div class="field public-field">
+      <div class="public-field">
         <span class="field-label">公开</span>
         <a-switch
           :checked="formData.isPublic === 1"
@@ -79,7 +73,6 @@ import BotIcon from '@/components/bot-icon/BotIcon.vue'
 import BotIconDesigner from '@/components/bot-icon/BotIconDesigner.vue'
 import { DEFAULT_BOT_ICON, parseBotIcon, serializeBotIcon } from '@/components/bot-icon/types'
 import type { BotIconConfig } from '@/components/bot-icon/types'
-import AgentConversationSettings from '@/components/AgentConversationSettings.vue'
 import { getMyAgentConfig, saveMyAgentConfig, resetMyAgentConfig } from '@/api/agent'
 import type { Agent } from '@/types'
 
@@ -100,9 +93,6 @@ const iconConfig = ref<BotIconConfig>({ ...DEFAULT_BOT_ICON })
 
 const formData = reactive({
   systemPrompt: '',
-  openingMessage: '',
-  openingQuestions: [] as string[],
-  temperature: null as number | null,
   isPublic: 0
 })
 
@@ -112,9 +102,6 @@ watch(() => props.visible, async (visible) => {
     const config = await getMyAgentConfig(props.agent.id)
     personalized.value = !!config
     formData.systemPrompt = config?.systemPrompt || ''
-    formData.openingMessage = config?.openingMessage || ''
-    formData.openingQuestions = [...(config?.openingQuestions || [])]
-    formData.temperature = config?.temperature ?? null
     formData.isPublic = config?.isPublic ?? 0
     iconConfig.value = parseBotIcon(config?.icon) ?? parseBotIcon(props.agent.icon) ?? { ...DEFAULT_BOT_ICON }
   } catch (e) {
@@ -133,10 +120,6 @@ async function handleSave(): Promise<void> {
     saving.value = true
     await saveMyAgentConfig(props.agent.id, {
       systemPrompt: formData.systemPrompt.trim() || undefined,
-      openingMessage: formData.openingMessage.trim() || undefined,
-      openingQuestions: formData.openingQuestions,
-      // 空值=清除该覆盖；温度 null=跟随内置默认
-      temperature: formData.temperature,
       icon: iconEqualsDefault(iconConfig.value) ? undefined : serializeBotIcon(iconConfig.value),
       isPublic: formData.isPublic
     })

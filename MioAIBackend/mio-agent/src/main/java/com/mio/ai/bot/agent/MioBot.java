@@ -73,7 +73,6 @@ public class MioBot {
     private final String customSystemPrompt;
     private final String modelName;
     private final String reasoningEffort;
-    private final Double temperature;
     private final AgentEngineConfig config;
 
     /** 本轮用户附件（可空）：落库展示 + 注入模型上下文 */
@@ -125,7 +124,6 @@ public class MioBot {
                   String customSystemPrompt,
                   String modelName,
                   String reasoningEffort,
-                  Double temperature,
                   AgentEngineConfig config,
                   SandboxFileTransfer fileTransfer,
                   List<AttachmentItem> attachments) {
@@ -143,7 +141,6 @@ public class MioBot {
         this.customSystemPrompt = customSystemPrompt;
         this.modelName = modelName;
         this.reasoningEffort = reasoningEffort;
-        this.temperature = temperature;
         this.config = config;
         this.attachments = attachments == null ? List.of() : attachments;
         this.fileTransfer = fileTransfer;
@@ -219,15 +216,15 @@ public class MioBot {
             ContextBuilder contextBuilder = new ContextBuilder(
                     customSystemPrompt, knowledgeContext, skillsContext, runContext.fs(), modelName,
                     userId != null ? agentId : null);
-            AgentEngine engine = new AgentEngine(chatModel, config, reasoningEffort, temperature,
-                    contextBuilder, state, chatId, events, runContext.tasks());
+            AgentEngine engine = new AgentEngine(chatModel, config, reasoningEffort, contextBuilder,
+                    state, chatId, events, runContext.tasks());
             // 用户中断：引擎步间/重试等待处检查取消信号，命中即停（不走兜底抢救）
             engine.setCancelSignal(() -> stopped);
 
             if ("/compact".equals(userPrompt.strip())) {
                 runManualCompact(engine, hydrated);
             } else {
-                Subagents launcher = new Subagents(chatModel, config, reasoningEffort, temperature,
+                Subagents launcher = new Subagents(chatModel, config, reasoningEffort,
                         toolsetFactory, runContext, events, modelName);
                 registry = toolsetFactory.build(chatId, state, mcpTools, null, launcher, events, toolHooks);
                 engine.bindTools(registry);

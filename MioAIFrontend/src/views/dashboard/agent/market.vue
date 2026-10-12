@@ -11,12 +11,12 @@
         <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="agent in agentList" :key="agent.id">
           <div class="dash-card agent-card" @click="startChat(agent)">
             <div class="card-header">
-              <div class="card-icon-wrapper">
+              <div class="card-icon-wrapper plain">
                 <BotIcon
                   v-if="agentIcon(agent)"
                   :shape="agentIcon(agent)!.shape"
                   :fill="agentIcon(agent)!.fill"
-                  :size="40"
+                  :size="48"
                   :live="false"
                   eye-color="#ffffff"
                 />
@@ -37,6 +37,7 @@
                 开始对话
               </a-button>
               <a-button
+                v-if="!isOwn(agent)"
                 class="template-btn"
                 size="small"
                 :loading="forkingId === agent.id"
@@ -81,6 +82,11 @@ const agentList = ref<AgentWithUser[]>([])
 
 function agentIcon(agent: Agent) {
   return parseBotIcon(agent.icon)
+}
+
+/** 自己发布的智能体（含自己发布的 MioBot）不提供模板复制 */
+function isOwn(agent: Agent): boolean {
+  return userStore.userInfo?.id != null && agent.userId === userStore.userInfo.id
 }
 
 async function fetchAgents(): Promise<void> {
@@ -137,6 +143,17 @@ onMounted(() => {
 
     .card-footer {
       opacity: 0;
+    }
+  }
+
+  // 只显示 bot-icon：去掉公共卡头的底色与圆角
+  .card-icon-wrapper.plain {
+    background: none;
+    border-radius: 0;
+    overflow: visible;
+
+    img {
+      border-radius: 0;
     }
   }
 

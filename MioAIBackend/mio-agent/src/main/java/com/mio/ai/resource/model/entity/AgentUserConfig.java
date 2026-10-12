@@ -34,21 +34,6 @@ public class AgentUserConfig implements Serializable {
     private String systemPrompt;
 
     /**
-     * 开场白覆盖
-     */
-    private String openingMessage;
-
-    /**
-     * 推荐问题JSON数组覆盖
-     */
-    private String openingQuestions;
-
-    /**
-     * 采样温度覆盖（NULL=跟随内置默认）
-     */
-    private Double temperature;
-
-    /**
      * 图标配置覆盖JSON
      */
     private String icon;

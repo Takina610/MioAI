@@ -4,7 +4,6 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.util.Date;
-import java.util.List;
 
 /**
  * @author: Takina
@@ -25,21 +24,6 @@ public class AgentVO implements Serializable {
      * 作者用户名（广场列表按需填充；空时前端回退官方/匿名）
      */
     private String userName;
-
-    /**
-     * 开场白（新会话首屏展示）
-     */
-    private String openingMessage;
-
-    /**
-     * 推荐问题
-     */
-    private List<String> openingQuestions;
-
-    /**
-     * 采样温度（null=引擎默认）
-     */
-    private Double temperature;
 
     /**
      * 智能体名称

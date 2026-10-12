@@ -33,12 +33,6 @@ public class AgentVersionVO implements Serializable {
 
     private String systemPrompt;
 
-    private String openingMessage;
-
-    private List<String> openingQuestions;
-
-    private Double temperature;
-
     /**
      * 回滚来源版本号（回滚产生的版本才有）
      */

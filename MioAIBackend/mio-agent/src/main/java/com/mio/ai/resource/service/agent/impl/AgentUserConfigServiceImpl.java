@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
-import com.mio.ai.common.utils.JacksonUtil;
 import com.mio.ai.resource.mapper.agent.AgentMapper;
 import com.mio.ai.resource.mapper.agent.AgentUserConfigMapper;
 import com.mio.ai.resource.model.dto.agent.AgentUserConfigRequest;
@@ -14,8 +13,6 @@ import com.mio.ai.resource.model.vo.agent.AgentUserConfigVO;
 import com.mio.ai.resource.service.agent.AgentUserConfigService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
 
 /**
  * @author: Takina
@@ -58,9 +55,6 @@ public class AgentUserConfigServiceImpl extends ServiceImpl<AgentUserConfigMappe
             config.setAgentId(agentId);
         }
         config.setSystemPrompt(blankToNull(request.getSystemPrompt()));
-        config.setOpeningMessage(blankToNull(request.getOpeningMessage()));
-        config.setOpeningQuestions(toJson(request.getOpeningQuestions()));
-        config.setTemperature(request.getTemperature());
         config.setIcon(blankToNull(request.getIcon()));
         // null=保持不变：未带发布标记的调用不应意外下架
         if (request.getIsPublic() != null) {
@@ -85,9 +79,6 @@ public class AgentUserConfigServiceImpl extends ServiceImpl<AgentUserConfigMappe
         AgentUserConfigVO vo = new AgentUserConfigVO();
         vo.setAgentId(config.getAgentId());
         vo.setSystemPrompt(config.getSystemPrompt());
-        vo.setOpeningMessage(config.getOpeningMessage());
-        vo.setOpeningQuestions(parseQuestions(config.getOpeningQuestions()));
-        vo.setTemperature(config.getTemperature());
         vo.setIcon(config.getIcon());
         vo.setIsPublic(config.getIsPublic());
         return vo;
@@ -95,35 +86,5 @@ public class AgentUserConfigServiceImpl extends ServiceImpl<AgentUserConfigMappe
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.strip();
-    }
-
-    /** 推荐问题列表 → JSON 数字符串（去空白项，全空回退 null=无覆盖） */
-    public static String toJsonQuestions(List<String> questions) {
-        if (questions == null || questions.isEmpty()) {
-            return null;
-        }
-        List<String> cleaned = questions.stream()
-                .filter(q -> q != null && !q.isBlank())
-                .map(String::strip)
-                .toList();
-        return cleaned.isEmpty() ? null : JacksonUtil.writeValueAsString(cleaned);
-    }
-
-    private static String toJson(List<String> questions) {
-        return toJsonQuestions(questions);
-    }
-
-    /** 推荐问题JSON数组安全解析（历史脏数据/空值回退空列表） */
-    public static List<String> parseQuestions(String json) {
-        if (json == null || json.isBlank()) {
-            return List.of();
-        }
-        try {
-            List<?> raw = JacksonUtil.readValue(json, List.class);
-            return raw == null ? List.of()
-                    : raw.stream().map(String::valueOf).filter(s -> !s.isBlank()).toList();
-        } catch (Exception e) {
-            return List.of();
-        }
     }
 }

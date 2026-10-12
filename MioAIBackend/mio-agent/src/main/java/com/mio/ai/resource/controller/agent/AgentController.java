@@ -169,10 +169,6 @@ public class AgentController {
         AgentUserConfigVO vo = new AgentUserConfigVO();
         vo.setAgentId(config.getAgentId());
         vo.setSystemPrompt(config.getSystemPrompt());
-        vo.setOpeningMessage(config.getOpeningMessage());
-        vo.setOpeningQuestions(com.mio.ai.resource.service.agent.impl.AgentUserConfigServiceImpl
-                .parseQuestions(config.getOpeningQuestions()));
-        vo.setTemperature(config.getTemperature());
         vo.setIcon(config.getIcon());
         vo.setIsPublic(config.getIsPublic());
         return ResultUtils.success(vo);

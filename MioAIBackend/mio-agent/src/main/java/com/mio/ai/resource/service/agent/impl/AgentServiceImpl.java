@@ -156,18 +156,9 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         }
         agent.setUpdateTime(new Date());
 
-        // 忽略 null：编辑弹窗只传名称/描述/图标，不允许把未传字段（提示词/公开状态）静默置空；
-        // List→String 的 openingQuestions 类型不匹配，由下方显式转换
+        // 忽略 null：编辑弹窗只传名称/描述/图标，不允许把未传字段（提示词/公开状态）静默置空
         BeanUtil.copyProperties(request, agent,
                 CopyOptions.create().setIgnoreNullValue(true).setIgnoreError(true));
-        if (request.getOpeningQuestions() != null) {
-            agent.setOpeningQuestions(AgentUserConfigServiceImpl
-                    .toJsonQuestions(request.getOpeningQuestions()));
-        }
-        if (request.getTemperature() != null) {
-            // -1 = 清除自定义温度，回退引擎默认
-            agent.setTemperature(request.getTemperature() < 0 ? null : request.getTemperature());
-        }
         return this.updateById(agent);
     }
 
@@ -269,7 +260,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
     }
 
     /**
-     * 内置智能体（user_id 为空，如 MioBot）按用户合并个性化覆盖（开场白/推荐问题/温度/图标）；
+     * 内置智能体（user_id 为空，如 MioBot）按用户合并个性化覆盖（人设/图标）；
      * 自定义智能体没有用户级配置，原样返回
      */
     private void applyUserOverride(AgentVO vo, Long agentId, Long userId) {
@@ -283,15 +274,6 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         AgentUserConfig override = agentUserConfigService.getOverride(userId, agentId);
         if (override == null) {
             return;
-        }
-        if (override.getOpeningMessage() != null) {
-            vo.setOpeningMessage(override.getOpeningMessage());
-        }
-        if (override.getOpeningQuestions() != null) {
-            vo.setOpeningQuestions(AgentUserConfigServiceImpl.parseQuestions(override.getOpeningQuestions()));
-        }
-        if (override.getTemperature() != null) {
-            vo.setTemperature(override.getTemperature());
         }
         if (override.getIcon() != null) {
             vo.setIcon(override.getIcon());
@@ -346,6 +328,8 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
                     agentUserConfigService.getOverride(userId, builtin.getId());
             if (config != null && Integer.valueOf(1).equals(config.getIsPublic())) {
                 slot = convertToVO(builtin);
+                // 槽位归属当前用户：userId 供前端判定"自己发布的"（隐藏模板复制按钮）
+                slot.setUserId(userId);
                 applyUserOverride(slot, builtin.getId(), userId);
                 slot.setUserName(userService.getUserNameById(userId));
             }
@@ -360,10 +344,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
 
     private AgentVO convertToVO(Agent agent) {
         AgentVO vo = new AgentVO();
-        // openingQuestions 实体侧是 JSON 字符串、VO 侧是列表，类型不匹配走显式转换（BeanUtil 强转会炸）
-        BeanUtil.copyProperties(agent, vo,
-                CopyOptions.create().setIgnoreError(true));
-        vo.setOpeningQuestions(AgentUserConfigServiceImpl.parseQuestions(agent.getOpeningQuestions()));
+        BeanUtil.copyProperties(agent, vo, CopyOptions.create().setIgnoreError(true));
         AgentTypeEnum typeEnum = AgentTypeEnum.getByCode(agent.getType());
         vo.setTypeDesc(typeEnum != null ? typeEnum.getDesc() : "未知");
         AgentStatusEnum statusEnum = AgentStatusEnum.getByCode(agent.getStatus());
@@ -393,25 +374,13 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         vo.setTypeDesc(typeEnum != null ? typeEnum.getDesc() : "未知");
         AgentStatusEnum statusEnum = AgentStatusEnum.getByCode(agent.getStatus());
         vo.setStatusDesc(statusEnum != null ? statusEnum.getDesc() : "未知");
-        vo.setOpeningQuestions(AgentUserConfigServiceImpl.parseQuestions(agent.getOpeningQuestions()));
 
-        // 内置智能体：合并当前用户的个性化覆盖（聊天页开场白/图标/温度按"我的配置"生效）
+        // 内置智能体：标记当前用户是否有个性化覆盖（聊天页图标按"我的配置"生效）
         if (agent.getUserId() == null && userId != null) {
             AgentUserConfig override = agentUserConfigService.getOverride(userId, id);
             vo.setPersonalized(override != null);
-            if (override != null) {
-                if (override.getOpeningMessage() != null) {
-                    vo.setOpeningMessage(override.getOpeningMessage());
-                }
-                if (override.getOpeningQuestions() != null) {
-                    vo.setOpeningQuestions(AgentUserConfigServiceImpl.parseQuestions(override.getOpeningQuestions()));
-                }
-                if (override.getTemperature() != null) {
-                    vo.setTemperature(override.getTemperature());
-                }
-                if (override.getIcon() != null) {
-                    vo.setIcon(override.getIcon());
-                }
+            if (override != null && override.getIcon() != null) {
+                vo.setIcon(override.getIcon());
             }
         }
 
@@ -498,15 +467,6 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         if (request.getSystemPrompt() != null) {
             agent.setSystemPrompt(request.getSystemPrompt());
         }
-        if (request.getOpeningMessage() != null) {
-            agent.setOpeningMessage(request.getOpeningMessage());
-        }
-        if (request.getOpeningQuestions() != null) {
-            agent.setOpeningQuestions(AgentUserConfigServiceImpl.toJsonQuestions(request.getOpeningQuestions()));
-        }
-        if (request.getTemperature() != null) {
-            agent.setTemperature(request.getTemperature() < 0 ? null : request.getTemperature());
-        }
         if (request.getIsPublic() != null) {
             agent.setIsPublic(request.getIsPublic());
         }
@@ -541,9 +501,6 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         agent.setAvatar(target.getAvatar());
         agent.setIcon(target.getIcon());
         agent.setSystemPrompt(target.getSystemPrompt());
-        agent.setOpeningMessage(target.getOpeningMessage());
-        agent.setOpeningQuestions(target.getOpeningQuestions());
-        agent.setTemperature(target.getTemperature());
         agent.setStatus(AgentStatusEnum.PUBLISHED.getCode());
 
         // 资源绑定恢复到版本快照（此后被删除的资源跳过），再以恢复后的状态生成新版本留档
@@ -571,9 +528,6 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         copy.setAvatar(template.getAvatar());
         copy.setIcon(template.getIcon());
         copy.setSystemPrompt(template.getSystemPrompt());
-        copy.setOpeningMessage(template.getOpeningMessage());
-        copy.setOpeningQuestions(template.getOpeningQuestions());
-        copy.setTemperature(template.getTemperature());
         copy.setType(AgentTypeEnum.CUSTOM.getCode());
         copy.setStatus(AgentStatusEnum.DRAFT.getCode());
         copy.setIsPublic(0);

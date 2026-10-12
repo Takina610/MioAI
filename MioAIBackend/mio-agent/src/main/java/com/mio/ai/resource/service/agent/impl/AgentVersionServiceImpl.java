@@ -52,9 +52,6 @@ public class AgentVersionServiceImpl extends ServiceImpl<AgentVersionMapper, Age
         snapshot.setAvatar(agent.getAvatar());
         snapshot.setIcon(agent.getIcon());
         snapshot.setSystemPrompt(agent.getSystemPrompt());
-        snapshot.setOpeningMessage(agent.getOpeningMessage());
-        snapshot.setOpeningQuestions(agent.getOpeningQuestions());
-        snapshot.setTemperature(agent.getTemperature());
         snapshot.setBindingsJson(bindingsJson);
         snapshot.setRollbackFrom(rollbackFrom);
         snapshot.setUserId(userId);
@@ -104,9 +101,6 @@ public class AgentVersionServiceImpl extends ServiceImpl<AgentVersionMapper, Age
         vo.setAvatar(version.getAvatar());
         vo.setIcon(version.getIcon());
         vo.setSystemPrompt(version.getSystemPrompt());
-        vo.setOpeningMessage(version.getOpeningMessage());
-        vo.setOpeningQuestions(AgentUserConfigServiceImpl.parseQuestions(version.getOpeningQuestions()));
-        vo.setTemperature(version.getTemperature());
         vo.setRollbackFrom(version.getRollbackFrom());
         vo.setCreateTime(version.getCreateTime());
         vo.setBindings(parseBindings(version.getBindingsJson(), nameCache));

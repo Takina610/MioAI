@@ -47,20 +47,6 @@
           <pre class="view-prompt">{{ viewing.systemPrompt || '—' }}</pre>
         </div>
         <div class="view-field">
-          <span class="view-label">开场白</span>
-          <span>{{ viewing.openingMessage || '—' }}</span>
-        </div>
-        <div v-if="viewing.openingQuestions?.length" class="view-field">
-          <span class="view-label">推荐问题</span>
-          <div class="view-questions">
-            <a-tag v-for="(q, i) in viewing.openingQuestions" :key="i" class="view-question-tag">{{ q }}</a-tag>
-          </div>
-        </div>
-        <div class="view-field">
-          <span class="view-label">温度</span>
-          <span>{{ viewing.temperature != null ? viewing.temperature.toFixed(1) : '默认' }}</span>
-        </div>
-        <div class="view-field">
           <span class="view-label">绑定资源</span>
           <div v-if="viewing.bindings?.length" class="view-bindings">
             <div v-for="(b, i) in viewing.bindings" :key="i" class="view-binding-row">

@@ -65,11 +65,9 @@ public final class AgentEngine {
     /** 轮次取消信号（用户中断）：步间与重试等待处检查，命中即抛 TurnStoppedException */
     private volatile java.util.function.BooleanSupplier cancelSignal = () -> false;
 
-    /** 智能体级采样温度（null=跟随模型默认），一步不落直接透传给模型执行器 */
     public AgentEngine(ChatModel chatModel, AgentEngineConfig config, String reasoningEffort,
-                       Double temperature, ContextBuilder contextBuilder, ConversationState state,
-                       String chatId, AgentEvents events,
-                       com.mio.ai.framework.zagent.task.BackgroundTasks tasks) {
+                       ContextBuilder contextBuilder, ConversationState state, String chatId,
+                       AgentEvents events, com.mio.ai.framework.zagent.task.BackgroundTasks tasks) {
         this.chatModel = chatModel;
         this.config = config;
         this.reasoningEffort = reasoningEffort;
@@ -79,7 +77,7 @@ public final class AgentEngine {
         this.events = events;
         this.tasks = tasks;
         this.modelRunner = new ModelStepRunner(chatModel, config.streamTimeoutSeconds(),
-                reasoningEffort, temperature, config.modelRetries());
+                reasoningEffort, config.modelRetries());
         this.compactor = new ConversationCompactor(chatModel, config.contextWindowTokens());
     }
 

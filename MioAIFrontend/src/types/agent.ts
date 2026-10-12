@@ -16,12 +16,6 @@ export interface Agent {
   type: number
   typeDesc?: string
   systemPrompt?: string
-  /** 开场白（新会话首屏展示） */
-  openingMessage?: string
-  /** 推荐问题（点击直接发送） */
-  openingQuestions?: string[]
-  /** 采样温度（null/undefined=引擎默认） */
-  temperature?: number | null
   status: number
   statusDesc?: string
   isPublic: number
@@ -59,10 +53,6 @@ export interface AgentUpdateRequest {
   icon?: string
   type?: number
   systemPrompt?: string
-  openingMessage?: string
-  /** 推荐问题；temperature 传 -1 表示清除自定义温度回退引擎默认 */
-  openingQuestions?: string[]
-  temperature?: number | null
   status?: number
   isPublic?: number
   version?: string
@@ -87,9 +77,6 @@ export interface AgentVersion {
   avatar?: string
   icon?: string
   systemPrompt?: string
-  openingMessage?: string
-  openingQuestions?: string[]
-  temperature?: number | null
   /** 回滚来源版本号（回滚产生的版本才有） */
   rollbackFrom?: string
   createTime: string
@@ -107,9 +94,6 @@ export interface AgentVersionBinding {
 export interface AgentUserConfig {
   agentId: number
   systemPrompt?: string
-  openingMessage?: string
-  openingQuestions?: string[]
-  temperature?: number | null
   icon?: string
   /** 是否发布到广场（0-未发布 1-已发布）：广场的 MioBot 槽位显示自己的 */
   isPublic?: number
@@ -117,9 +101,6 @@ export interface AgentUserConfig {
 
 export interface AgentUserConfigRequest {
   systemPrompt?: string
-  openingMessage?: string
-  openingQuestions?: string[]
-  temperature?: number | null
   icon?: string
   /** 是否发布到广场（不传=保持不变） */
   isPublic?: number

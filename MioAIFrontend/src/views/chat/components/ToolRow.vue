@@ -16,7 +16,8 @@
       />
     </div>
     <CollapseTransition :open="expanded">
-      <pre v-if="block.result" class="tool-result">{{ block.result }}</pre>
+      <!-- 懒挂载：首次展开才建 DOM，长会话进入时不必挂载全部历史工具结果 -->
+      <pre v-if="expanded && block.result" class="tool-result">{{ block.result }}</pre>
     </CollapseTransition>
 
     <!-- 来源链接（DeepSeek 式：点击直接跳转网页） -->

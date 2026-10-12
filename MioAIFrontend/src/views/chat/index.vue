@@ -45,11 +45,6 @@
       </div>
 
       <div class="chat-container">
-        <ChatWelcome
-          v-if="!isLoading && !historyLoading && messages.length === 0"
-          :agent="agentInfo"
-          @ask="sendQuestion"
-        />
         <ChatMessageList
           ref="messageListRef"
           :messages="messages"
@@ -84,7 +79,6 @@
           :agent-avatar="agentInfo?.avatar"
           :agent-icon="agentInfo?.icon"
           :has-messages="messages.length > 0"
-          :welcome-overlay="!isLoading && !historyLoading && messages.length === 0"
           :loading="isLoading"
           :supported-efforts="supportedEfforts"
           :render-cards="renderCards"
@@ -169,7 +163,6 @@ import type { BotIconConfig } from '@/components/bot-icon/types'
 import ChatSidebar from './components/ChatSidebar.vue'
 import ChatMessageList from './components/ChatMessageList.vue'
 import ChatInput from './components/ChatInput.vue'
-import ChatWelcome from './components/ChatWelcome.vue'
 import ChatPlanPanel from './components/ChatPlanPanel.vue'
 import ChatSearchModal from './components/ChatSearchModal.vue'
 import SubagentPanel from './components/SubagentPanel.vue'
@@ -330,17 +323,6 @@ watch(() => userStore.isLoggedIn, (loggedIn) => {
 
 const { currentChatId, messages, isLoading, switchChat, loadMessages } = messagesApi
 
-// 历史消息加载中：开场白欢迎页据此避免在切入已有会话时闪现
-const historyLoading = ref(false)
-async function loadMessagesTracked(conversationId: string): Promise<void> {
-  historyLoading.value = true
-  try {
-    await loadMessages(conversationId)
-  } finally {
-    historyLoading.value = false
-  }
-}
-
 const currentChatTitle = computed(() => {
   const chat = chatList.value.find(c => c.id === currentChatId.value)
   return chat?.title || '新对话'
@@ -461,7 +443,7 @@ watch(
   (conversationId) => {
     if (conversationId && typeof conversationId === 'string') {
       switchChat(conversationId)
-      loadMessagesTracked(conversationId)
+      loadMessages(conversationId)
     } else {
       switchChat('')
     }
@@ -475,7 +457,7 @@ watch(
   () => userStore.isLoggedIn,
   (loggedIn) => {
     if (loggedIn && currentChatId.value && !messages.value.length) {
-      loadMessagesTracked(currentChatId.value)
+      loadMessages(currentChatId.value)
     }
   }
 )
@@ -513,13 +495,7 @@ function selectChat(conversationId: string): void {
   sidebarClosePeek()
   switchChat(conversationId)
   router.push(`/chat/${agentId.value}/${conversationId}`)
-  loadMessagesTracked(conversationId)
-}
-
-/** 推荐问题点击直接发送 */
-function sendQuestion(question: string): void {
-  inputMessage.value = question
-  handleSend()
+  loadMessages(conversationId)
 }
 
 function handleSend(): void {

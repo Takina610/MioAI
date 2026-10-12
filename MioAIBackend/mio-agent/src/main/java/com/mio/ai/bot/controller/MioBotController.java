@@ -158,30 +158,21 @@ public class MioBotController {
      * 会话上下文容量估算：与真实轮次同源的水合/上下文构建/工具注册做一次干跑，
      * 返回窗口大小与按类别（消息/系统工具/MCP 工具/系统提示词/技能/其他）的近似 token 占用。
      */
-    /** 智能体级生效配置：人设提示词 + 采样温度（内置智能体按用户合并个性化覆盖） */
-    private record EffectiveConfig(String systemPrompt, Double temperature) {
-    }
-
     /**
-     * 解析智能体级生效配置：自定义智能体读 agent 行；
+     * 解析智能体级人设提示词：自定义智能体读 agent 行；
      * MioBot（内置）登录用户优先取其个性化覆盖，无覆盖回退内置默认
      */
-    private EffectiveConfig resolveEffectiveConfig(long resolvedAgentId, Long userId) {
+    private String resolveCustomSystemPrompt(long resolvedAgentId, Long userId) {
         if (resolvedAgentId != MioBot.AGENT_ID) {
-            Agent agent = accessGuardService.checkAgentUsable(resolvedAgentId, userId);
-            return new EffectiveConfig(agent.getSystemPrompt(), agent.getTemperature());
+            return accessGuardService.checkAgentUsable(resolvedAgentId, userId).getSystemPrompt();
         }
         if (userId == null) {
-            return new EffectiveConfig(null, null);
+            return null;
         }
         com.mio.ai.resource.model.entity.AgentUserConfig override =
                 agentUserConfigService.getOverride(userId, MioBot.AGENT_ID);
-        if (override == null) {
-            return new EffectiveConfig(null, null);
-        }
-        String prompt = override.getSystemPrompt() != null && !override.getSystemPrompt().isBlank()
+        return override != null && override.getSystemPrompt() != null && !override.getSystemPrompt().isBlank()
                 ? override.getSystemPrompt() : null;
-        return new EffectiveConfig(prompt, override.getTemperature());
     }
 
     @GetMapping("/bot/context-usage")
@@ -191,9 +182,9 @@ public class MioBotController {
         String token = httpRequest.getHeader("token");
         Long userId = StrUtil.isBlank(token) ? null : redisComponent.getUserId(token);
         long resolvedAgentId = agentId != null ? agentId : MioBot.AGENT_ID;
-        EffectiveConfig effective = resolveEffectiveConfig(resolvedAgentId, userId);
+        String customSystemPrompt = resolveCustomSystemPrompt(resolvedAgentId, userId);
         return ResultUtils.success(
-                contextUsageService.estimate(chatId, userId, resolvedAgentId, effective.systemPrompt()));
+                contextUsageService.estimate(chatId, userId, resolvedAgentId, customSystemPrompt));
     }
 
     @GetMapping("/bot/chat")
@@ -224,8 +215,7 @@ public class MioBotController {
         }
 
         // MioBot 游客可用；自定义智能体要求登录且有权使用（所有者/公开已发布）
-        EffectiveConfig effective = resolveEffectiveConfig(resolvedAgentId, userId);
-        String customSystemPrompt = effective.systemPrompt();
+        String customSystemPrompt = resolveCustomSystemPrompt(resolvedAgentId, userId);
 
         // 会话记录：仅登录用户落库（游客会话不产生列表项）；重新生成时用户消息已在历史里，跳过
         if (userId != null && !skipUserPersist) {
@@ -252,8 +242,7 @@ public class MioBotController {
                 agentMaxSteps, agentStreamTimeoutSeconds, agentModelRetries, agentContextWindowTokens);
         MioBot mioBot = new MioBot(chatModel, toolsetFactory, List.of(mcp.callbacks()), skills,
                 agentUsageLogService, toolCallLogService, agentMessageService, chatFileService,
-                chatId, userId, resolvedAgentId, customSystemPrompt, engineModelName, effort,
-                effective.temperature(), engineConfig,
+                chatId, userId, resolvedAgentId, customSystemPrompt, engineModelName, effort, engineConfig,
                 fileTransfer, com.mio.ai.bot.model.dto.AttachmentItem.parseList(attachments));
         // 编辑重发：新 user 行沿用被编辑轮次的组锚（版本组持久化）
         mioBot.setUserGroupSeq(groupSeq);

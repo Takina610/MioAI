@@ -27,7 +27,7 @@
       :open="isLoading || stopped || processExpanded || holdProcessOpen"
       :seam-gap="PROCESS_SEAM_GAP"
     >
-      <div v-if="hasProcessArea" class="process-list">
+      <div v-if="hasProcessArea && (processEverOpened || isLoading || stopped || holdProcessOpen)" class="process-list">
         <!-- 知识库引用行：回合收尾按回答实际引用生成，固定置顶（与块序无关） -->
         <ResourceRow
           v-for="(kbBlock, ki) in kbBlocks"
@@ -55,7 +55,7 @@
               <CaretRightOutlined :rotate="isThinkingExpanded(item.index) ? 90 : 0" class="caret-icon" />
             </div>
             <CollapseTransition :open="isThinkingExpanded(item.index)">
-              <div class="thinking-text">{{ item.block.text }}</div>
+              <div v-if="isThinkingExpanded(item.index)" class="thinking-text">{{ item.block.text }}</div>
             </CollapseTransition>
           </div>
 
@@ -253,6 +253,17 @@ const PROCESS_SEAM_GAP = 12
 // 完成于后台标签页时暂缓收缩：等页面重新可见再收（动画才不会被浏览器吞掉）
 const holdProcessOpen = ref(false)
 let holdVisibleListener: (() => void) | null = null
+
+/** 过程区懒挂载：完成后默认收起（v-show 隐藏但子树仍挂载），长会话进入时
+ *  全部历史工具行/结果一次性挂载造成进入顿挫——首次展开才挂内容，此后保持挂载
+ *  （collapse 动画需要内容在场；流式/中断/后台暂缓态恒为展开，直接挂载。
+ *  注意本 watch 须在 holdProcessOpen 声明之后，getter 立即求值有 TDZ） */
+const processEverOpened = ref(false)
+watch(
+  () => props.isLoading || props.stopped || processExpanded.value || holdProcessOpen.value,
+  (open) => { if (open) processEverOpened.value = true },
+  { immediate: true }
+)
 
 watch(
   () => props.isLoading,

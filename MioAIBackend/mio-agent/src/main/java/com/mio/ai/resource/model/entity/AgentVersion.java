@@ -56,21 +56,6 @@ public class AgentVersion implements Serializable {
     private String systemPrompt;
 
     /**
-     * 开场白快照
-     */
-    private String openingMessage;
-
-    /**
-     * 推荐问题快照JSON数组
-     */
-    private String openingQuestions;
-
-    /**
-     * 采样温度快照
-     */
-    private Double temperature;
-
-    /**
      * 资源绑定快照JSON（知识库/MCP/技能）
      */
     private String bindingsJson;

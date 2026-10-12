@@ -38,21 +38,6 @@ public class AgentDetailVO implements Serializable {
     private String systemPrompt;
 
     /**
-     * 开场白（新会话首屏展示）
-     */
-    private String openingMessage;
-
-    /**
-     * 推荐问题
-     */
-    private List<String> openingQuestions;
-
-    /**
-     * 采样温度（null=引擎默认）
-     */
-    private Double temperature;
-
-    /**
      * 内置智能体：当前用户是否已保存个性化配置（有覆盖行）
      */
     private Boolean personalized;
