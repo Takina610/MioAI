@@ -4,7 +4,9 @@
     :data-source="documents"
     :loading="loading"
     :pagination="pagination"
+    :scroll="{ x: 'max-content' }"
     row-key="id"
+    class="doc-table"
     @change="emit('change', $event)"
   >
     <template #bodyCell="{ column, record }">
@@ -17,9 +19,10 @@
         {{ formatFileSize(record.fileSize) }}
       </template>
       <template v-else-if="column.key === 'status'">
-        <a-tag :color="getStatusColor(record.status)">
+        <span class="status-cell" :class="`status-${record.status}`">
+          <i class="status-dot" />
           {{ record.statusDesc }}
-        </a-tag>
+        </span>
       </template>
       <template v-else-if="column.key === 'createTime'">
         {{ formatLocaleDateTime(record.createTime) }}
@@ -45,7 +48,7 @@
             cancel-text="取消"
             @confirm="emit('delete', record.id)"
           >
-            <a-button type="link" danger size="small">
+            <a-button type="link" size="small" class="action-btn danger">
               删除
             </a-button>
           </a-popconfirm>
@@ -83,33 +86,51 @@ const emit = defineEmits<{
 const columns = computed(() => {
   const base = [
     { title: '文档名称', dataIndex: 'fileName', key: 'fileName', ellipsis: true },
-    { title: '文件类型', dataIndex: 'fileType', key: 'fileType', width: 100 },
-    { title: '文件大小', dataIndex: 'fileSize', key: 'fileSize', width: 110 },
-    { title: '状态', dataIndex: 'status', key: 'status', width: 90 },
+    { title: '类型', dataIndex: 'fileType', key: 'fileType', width: 90 },
+    { title: '大小', dataIndex: 'fileSize', key: 'fileSize', width: 100 },
+    { title: '状态', dataIndex: 'status', key: 'status', width: 100 },
     { title: '创建时间', dataIndex: 'createTime', key: 'createTime', width: 170 }
   ]
   return props.showActions
-    ? [...base, { title: '操作', key: 'action', width: 200 }]
+    ? [...base, { title: '操作', key: 'action', width: 190 }]
     : base
 })
-
-function getStatusColor(status: number): string {
-  const colors: Record<number, string> = {
-    0: 'default',
-    1: 'processing',
-    2: 'success',
-    3: 'error'
-  }
-  return colors[status] || 'default'
-}
 </script>
 
 <style lang="scss" scoped>
-:deep(.ant-table) {
-  .ant-table-thead > tr > th {
+.doc-table {
+  :deep(.ant-table) {
+    background: transparent;
+  }
+
+  :deep(.ant-table-thead > tr > th) {
+    background: transparent;
+    border-bottom-color: $border-warm-subtle;
+    font-size: 12px;
+    font-weight: 500;
+    color: $text-muted;
+
+    &::before {
+      display: none;
+    }
+  }
+
+  :deep(.ant-table-tbody > tr > td) {
+    border-bottom-color: $border-warm-subtle;
+  }
+
+  :deep(.ant-table-tbody > tr:hover > td) {
     background: #f5f3ec;
-    font-weight: 600;
-    color: #5f5d55;
+  }
+
+  :deep(.ant-pagination) {
+    .ant-pagination-item-active {
+      border-color: $primary-color;
+
+      a {
+        color: $primary-color;
+      }
+    }
   }
 }
 
@@ -117,10 +138,50 @@ function getStatusColor(status: number): string {
   padding: 0;
   height: auto;
   font-size: 14px;
-  color: $primary-color;
+  color: $text-dark;
+  font-weight: 500;
 
   &:hover {
-    color: darken($primary-color, 10%);
+    color: $primary-color;
+  }
+}
+
+.status-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: $text-secondary;
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: $border-warm;
+  }
+
+  &.status-1 .status-dot {
+    background: $primary-color;
+    animation: status-pulse 1.6s ease-in-out infinite;
+  }
+
+  &.status-2 .status-dot {
+    background: $primary-color;
+  }
+
+  &.status-3 .status-dot {
+    background: $danger-color;
+  }
+}
+
+@keyframes status-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba($primary-color, 0.35);
+  }
+
+  50% {
+    box-shadow: 0 0 0 4px rgba($primary-color, 0);
   }
 }
 
@@ -135,6 +196,10 @@ function getStatusColor(status: number): string {
 
     &:hover {
       color: $primary-color;
+    }
+
+    &.danger:hover {
+      color: $danger-color;
     }
   }
 }

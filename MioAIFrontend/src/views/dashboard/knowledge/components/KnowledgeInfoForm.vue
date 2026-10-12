@@ -1,49 +1,42 @@
 <template>
-  <div class="dash-section">
+  <div class="dash-section info-card">
     <h3 class="section-title">基本信息</h3>
-    <a-form layout="vertical" class="info-form">
-      <a-row :gutter="24">
-        <a-col :span="12">
-          <a-form-item label="作者">
-            <a-input :value="author" disabled />
-          </a-form-item>
-        </a-col>
-        <a-col :span="12">
-          <a-form-item label="文档数量">
-            <a-input :value="documentCount" disabled suffix="个" />
-          </a-form-item>
-        </a-col>
-      </a-row>
-      <a-row :gutter="24">
-        <a-col :span="12">
-          <a-form-item label="知识库名称">
-            <a-input v-if="mode === 'edit'" v-model:value="name" placeholder="请输入知识库名称" />
-            <a-input v-else :value="name" disabled />
-          </a-form-item>
-        </a-col>
-        <a-col :span="12">
-          <a-form-item label="存储大小">
-            <a-input :value="storageSize" disabled />
-          </a-form-item>
-        </a-col>
-      </a-row>
-      <a-row :gutter="24">
-        <a-col :span="24">
-          <a-form-item label="知识库描述">
-            <a-textarea v-if="mode === 'edit'" v-model:value="description" placeholder="请输入知识库描述" :rows="3" />
-            <a-textarea v-else :value="description" disabled :rows="3" />
-          </a-form-item>
-        </a-col>
-      </a-row>
-      <a-row v-if="mode === 'edit'" :gutter="24">
-        <a-col :span="12">
-          <a-form-item label="是否公开">
-            <a-switch v-model:checked="isPublicChecked" />
-            <span class="switch-hint">{{ isPublicChecked ? '公开后其他用户可见' : '仅自己可见' }}</span>
-          </a-form-item>
-        </a-col>
-      </a-row>
-    </a-form>
+
+    <template v-if="mode === 'edit'">
+      <div class="field">
+        <label class="field-label">名称</label>
+        <a-input v-model:value="name" placeholder="知识库名称" :maxlength="50" />
+      </div>
+      <div class="field">
+        <label class="field-label">描述</label>
+        <a-textarea
+          v-model:value="description"
+          placeholder="这份知识库收录什么内容"
+          :rows="3"
+          :maxlength="200"
+        />
+      </div>
+      <div class="field vis-row">
+        <span class="field-label">公开性</span>
+        <div class="vis-control">
+          <span class="vis-text">{{ isPublicChecked ? '其他人可见' : '仅自己可见' }}</span>
+          <a-switch v-model:checked="isPublicChecked" size="small" />
+        </div>
+      </div>
+    </template>
+
+    <template v-else>
+      <div class="info-head">
+        <span class="info-name">{{ name || '未命名知识库' }}</span>
+      </div>
+      <p class="info-desc" :class="{ muted: !description }">{{ description || '暂无描述' }}</p>
+    </template>
+
+    <div class="meta-list">
+      <div class="meta-row"><span>作者</span><b>{{ author }}</b></div>
+      <div class="meta-row"><span>文档</span><b>{{ documentCount }} 个</b></div>
+      <div class="meta-row"><span>存储</span><b>{{ storageSize }}</b></div>
+    </div>
   </div>
 </template>
 
@@ -77,23 +70,92 @@ const isPublicChecked = computed({
 </script>
 
 <style lang="scss" scoped>
-.info-form {
-  :deep(.ant-form-item-label) {
-    label {
-      color: #5f5d55;
+.info-card {
+  .field {
+    margin-bottom: 16px;
+
+    .field-label {
+      display: block;
+      font-size: 13px;
       font-weight: 500;
+      color: $text-secondary;
+      margin-bottom: 8px;
     }
   }
 
-  :deep(.ant-input-disabled) {
-    color: #141413;
-    background: #f0ede4;
-  }
-}
+  .vis-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0;
 
-.switch-hint {
-  margin-left: 12px;
-  color: #8c8a82;
-  font-size: 13px;
+    .field-label {
+      margin-bottom: 0;
+    }
+
+    .vis-control {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+
+      .vis-text {
+        font-size: 13px;
+        color: $text-muted;
+      }
+    }
+  }
+
+  .info-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    .info-name {
+      font-size: 17px;
+      font-weight: 600;
+      color: $text-dark;
+      word-break: break-word;
+    }
+  }
+
+  .info-desc {
+    margin: 8px 0 0;
+    font-size: 13px;
+    line-height: 1.7;
+    color: $text-secondary;
+    white-space: pre-wrap;
+    word-break: break-word;
+
+    &.muted {
+      color: $text-muted;
+    }
+  }
+
+  .meta-list {
+    max-width: 360px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid $border-warm-subtle;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 13px;
+
+      span {
+        color: $text-muted;
+      }
+
+      b {
+        font-weight: 500;
+        color: $text-dark;
+        font-variant-numeric: tabular-nums;
+      }
+    }
+  }
 }
 </style>

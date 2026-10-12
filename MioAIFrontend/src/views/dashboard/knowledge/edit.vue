@@ -6,7 +6,10 @@
       :title="knowledgeBase?.name || '知识库详情'"
     >
       <template #actions>
-        <a-button type="primary" :loading="saving" @click="handleSave">
+        <a-button @click="goHitTest">
+          <AimOutlined /> 命中测试
+        </a-button>
+        <a-button type="primary" :loading="saving" :disabled="!dirty" @click="handleSave">
           保存更改
         </a-button>
       </template>
@@ -14,19 +17,24 @@
 
     <div class="dash-page-content">
       <a-spin :spinning="loading">
-        <a-tabs v-model:active-key="activeTab" class="kb-edit-tabs">
-          <a-tab-pane key="documents" tab="文档管理">
-            <div class="dash-section document-section">
-              <div class="section-header">
-                <div class="section-actions">
+        <div class="edit-layout">
+          <div class="edit-main">
+            <div class="dash-section docs-section">
+              <div class="docs-header">
+                <h3 class="section-title">
+                  文档
+                  <span v-if="pagination.total" class="doc-count">{{ pagination.total }}</span>
+                </h3>
+                <div class="docs-actions">
                   <a-button
                     v-if="hasRetryableDocs"
                     :loading="vectorizing"
+                    size="small"
                     @click="handleRevectorize(false)"
                   >
                     <ReloadOutlined /> 重新向量化
                   </a-button>
-                  <a-button type="primary" @click="uploadModalVisible = true">
+                  <a-button type="primary" size="small" @click="uploadModalVisible = true">
                     <PlusOutlined /> 上传文档
                   </a-button>
                 </div>
@@ -44,9 +52,9 @@
                 @delete="handleDeleteDocument"
               />
             </div>
-          </a-tab-pane>
+          </div>
 
-          <a-tab-pane key="settings" tab="知识库设置">
+          <aside class="edit-side">
             <KnowledgeInfoForm
               v-model:name="formData.name"
               v-model:description="formData.description"
@@ -58,10 +66,10 @@
             />
 
             <div class="dash-section chunk-section">
-              <div class="section-header">
-                <h3 class="section-title">分块设置</h3>
-                <a-tag v-if="chunkDirty" color="warning">未保存</a-tag>
-              </div>
+              <h3 class="section-title">
+                分块设置
+                <span v-if="chunkDirty" class="dirty-chip">未保存</span>
+              </h3>
 
               <div class="preset-row">
                 <button
@@ -77,61 +85,60 @@
                 </button>
               </div>
 
-              <div class="slider-row">
-                <span class="slider-label">分块大小</span>
+              <div class="slider-field">
+                <div class="slider-head">
+                  <span class="slider-label">分块大小</span>
+                  <a-input-number
+                    v-model:value="formData.chunkSize"
+                    :min="200"
+                    :max="2048"
+                    :step="50"
+                    size="small"
+                  />
+                </div>
                 <a-slider
                   v-model:value="formData.chunkSize"
-                  class="slider-track"
                   :min="200"
                   :max="2048"
                   :step="50"
                   :tooltip-visible="false"
-                />
-                <a-input-number
-                  v-model:value="formData.chunkSize"
-                  class="slider-number"
-                  :min="200"
-                  :max="2048"
-                  :step="50"
-                  size="small"
-                />
-              </div>
-              <div class="slider-row">
-                <span class="slider-label">分块重叠</span>
-                <a-slider
-                  v-model:value="formData.chunkOverlap"
-                  class="slider-track"
-                  :min="0"
-                  :max="maxChunkOverlap"
-                  :step="10"
-                  :tooltip-visible="false"
-                />
-                <a-input-number
-                  v-model:value="formData.chunkOverlap"
-                  class="slider-number"
-                  :min="0"
-                  :max="maxChunkOverlap"
-                  :step="10"
-                  size="small"
                 />
               </div>
 
-              <div class="rebuild-row">
-                <a-popconfirm
-                  title="将按当前分块设置重建全部文档，耗时较长，确定继续？"
-                  ok-text="重建"
-                  cancel-text="取消"
-                  :disabled="chunkDirty"
-                  @confirm="handleRevectorize(true)"
-                >
-                  <a-button danger :disabled="chunkDirty" :loading="vectorizing">
-                    <ReloadOutlined /> 按当前设置全量重建
-                  </a-button>
-                </a-popconfirm>
+              <div class="slider-field">
+                <div class="slider-head">
+                  <span class="slider-label">分块重叠</span>
+                  <a-input-number
+                    v-model:value="formData.chunkOverlap"
+                    :min="0"
+                    :max="maxChunkOverlap"
+                    :step="10"
+                    size="small"
+                  />
+                </div>
+                <a-slider
+                  v-model:value="formData.chunkOverlap"
+                  :min="0"
+                  :max="maxChunkOverlap"
+                  :step="10"
+                  :tooltip-visible="false"
+                />
               </div>
+
+              <a-popconfirm
+                title="将按当前分块设置重建全部文档，耗时较长，确定继续？"
+                ok-text="重建"
+                cancel-text="取消"
+                :disabled="chunkDirty"
+                @confirm="handleRevectorize(true)"
+              >
+                <a-button danger block :disabled="chunkDirty" :loading="vectorizing" class="rebuild-btn">
+                  <ReloadOutlined /> 按当前设置全量重建
+                </a-button>
+              </a-popconfirm>
             </div>
-          </a-tab-pane>
-        </a-tabs>
+          </aside>
+        </div>
       </a-spin>
     </div>
 
@@ -172,7 +179,7 @@ import {
 } from '@/api/knowledgeBase'
 import { formatFileSize } from '@/utils/format'
 import type { KnowledgeBase } from '@/types'
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, ReloadOutlined, AimOutlined } from '@ant-design/icons-vue'
 import KnowledgeBaseModal from '@/components/KnowledgeBaseModal.vue'
 import FilePreviewDrawer from '@/components/FilePreviewDrawer.vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -193,7 +200,6 @@ const previewFileName = ref('')
 const previewFileUrl = ref('')
 const previewDocumentId = ref(0)
 const knowledgeBase = ref<KnowledgeBase | null>(null)
-const activeTab = ref('documents')
 
 const { docLoading, documentList, pagination, fetchDocuments, handleTableChange } = useKbDocuments()
 
@@ -205,6 +211,27 @@ const formData = reactive({
   chunkOverlap: 100
 })
 
+/** 已落库快照：与 formData 比对得出脏状态，门控保存按钮 */
+const savedSnapshot = ref('')
+const savedChunkSize = ref(800)
+const savedChunkOverlap = ref(100)
+
+const dirty = computed(() => JSON.stringify(snapshotOf()) !== savedSnapshot.value)
+
+function snapshotOf() {
+  return {
+    name: formData.name,
+    description: formData.description,
+    isPublic: formData.isPublic,
+    chunkSize: formData.chunkSize,
+    chunkOverlap: formData.chunkOverlap
+  }
+}
+
+function goHitTest(): void {
+  router.push(`/dashboard/knowledge/similaritySearch/${kbId.value}`)
+}
+
 type ChunkPresetKey = 'fine' | 'balanced' | 'coarse' | 'custom'
 
 const chunkPresets: { key: Exclude<ChunkPresetKey, 'custom'>; name: string; hint: string; chunkSize: number; chunkOverlap: number }[] = [
@@ -214,13 +241,12 @@ const chunkPresets: { key: Exclude<ChunkPresetKey, 'custom'>; name: string; hint
 ]
 
 const chunkPreset = ref<ChunkPresetKey>('balanced')
-const savedChunkSize = ref(800)
-const savedChunkOverlap = ref(100)
 
 const maxChunkOverlap = computed(() => Math.min(500, Math.floor(formData.chunkSize / 2)))
 
 const chunkDirty = computed(() =>
-  formData.chunkSize !== savedChunkSize.value || formData.chunkOverlap !== savedChunkOverlap.value
+  formData.chunkSize !== savedChunkSize.value ||
+  formData.chunkOverlap !== savedChunkOverlap.value
 )
 
 function matchChunkPreset(size: number, overlap: number): ChunkPresetKey {
@@ -271,6 +297,7 @@ async function fetchKnowledgeBase(): Promise<void> {
     formData.isPublic = res.isPublic ?? 0
     formData.chunkSize = res.chunkSize ?? 800
     formData.chunkOverlap = res.chunkOverlap ?? 100
+    savedSnapshot.value = JSON.stringify(snapshotOf())
     savedChunkSize.value = formData.chunkSize
     savedChunkOverlap.value = formData.chunkOverlap
     chunkPreset.value = matchChunkPreset(formData.chunkSize, formData.chunkOverlap)
@@ -416,44 +443,77 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
-.kb-edit-tabs {
-  :deep(.ant-tabs-tab) {
-    font-size: 15px;
-  }
+.edit-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
 }
 
-.document-section,
-.chunk-section {
-  .section-header {
+.edit-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.edit-side {
+  width: 380px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.docs-section {
+  .docs-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid #ece9de;
+    margin-bottom: 16px;
 
     .section-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
       margin-bottom: 0;
       padding-bottom: 0;
       border-bottom: none;
     }
 
-    .section-actions {
+    .doc-count {
+      font-size: 12px;
+      font-weight: 500;
+      color: $text-muted;
+      background: rgba($primary-color, 0.08);
+      border-radius: 10px;
+      padding: 1px 8px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .docs-actions {
       display: flex;
-      gap: 12px;
-      justify-content: flex-end;
-      flex: 1;
+      gap: 8px;
     }
   }
 }
 
 .chunk-section {
+  .dirty-chip {
+    font-size: 11px;
+    font-weight: 500;
+    color: #8c6d2f;
+    background: $background-light;
+    border-radius: 4px;
+    padding: 1px 7px;
+    margin-left: 8px;
+    vertical-align: 2px;
+  }
+
   .preset-row {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    max-width: 520px;
-    margin-bottom: 16px;
+    gap: 8px;
+    margin-bottom: 18px;
   }
 
   .preset-chip {
@@ -461,10 +521,10 @@ onMounted(() => {
     flex-direction: column;
     align-items: center;
     gap: 2px;
-    padding: 10px 8px;
+    padding: 10px 4px;
     border: 1px solid #ece9de;
     border-radius: 10px;
-    background: #faf9f5;
+    background: transparent;
     cursor: pointer;
     transition: all 0.15s ease;
 
@@ -489,42 +549,48 @@ onMounted(() => {
 
     .preset-hint {
       font-size: 11px;
-      color: #8c8a82;
+      color: $text-muted;
     }
   }
 
-  .slider-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    max-width: 520px;
-    margin-bottom: 6px;
+  .slider-field {
+    margin-bottom: 8px;
 
-    .slider-label {
-      flex-shrink: 0;
-      width: 60px;
-      font-size: 13px;
-      color: $text-secondary;
+    .slider-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2px;
+
+      .slider-label {
+        font-size: 13px;
+        color: $text-secondary;
+      }
+
+      .ant-input-number-sm {
+        width: 76px;
+      }
     }
 
-    .slider-track {
-      flex: 1;
-      margin: 0;
-    }
-
-    .slider-number {
-      flex-shrink: 0;
-      width: 84px;
+    :deep(.ant-slider) {
+      margin: 4px 0 10px;
     }
   }
 
-  .rebuild-row {
-    display: flex;
-    justify-content: flex-end;
-    max-width: 520px;
-    margin-top: 20px;
-    padding-top: 16px;
-    border-top: 1px dashed #ece9de;
+  .rebuild-btn {
+    margin-top: 8px;
+    border-radius: 10px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .edit-layout {
+    flex-direction: column;
+  }
+
+  .edit-side {
+    width: 100%;
+    position: static;
   }
 }
 </style>
