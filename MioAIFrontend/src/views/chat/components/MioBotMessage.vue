@@ -154,7 +154,10 @@
     <template v-if="answerSegments.length">
       <template v-for="(seg, si) in answerSegments" :key="`seg-${si}`">
         <div v-if="seg.kind === 'text' && groupMode" class="group-own-row">
-          <span v-if="groupName" class="group-own-name">{{ groupName }}</span>
+          <div class="group-own-head">
+            <span v-if="groupName" class="group-own-name">{{ groupName }}</span>
+            <GroupAvatar v-if="groupMembers?.length" class="group-own-avatar" :members="groupMembers" :size="26" :live="true" />
+          </div>
           <div class="group-own-bubble">
             <MarkdownView :content="seg.text" />
           </div>
@@ -213,6 +216,7 @@ import ToolRow from './ToolRow.vue'
 import ResourceRow from './ResourceRow.vue'
 import SkillRow from './SkillRow.vue'
 import MemberBubble from './MemberBubble.vue'
+import GroupAvatar from '@/components/GroupAvatar.vue'
 import UiBlockRenderer from './ui/UiBlockRenderer.vue'
 import { messageAttachmentDisplays } from '../attachmentUtils'
 import { answerQuestion } from '@/api/chat'
@@ -247,6 +251,8 @@ interface Props {
   groupMode?: boolean
   /** 群聊模式下的群名（群主气泡署名） */
   groupName?: string
+  /** 群聊成员概要（群主行的堆叠群头像，动态呈现） */
+  groupMembers?: import('@/types').AgentMemberBrief[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -955,11 +961,17 @@ function durationSuffix(block: ThinkingBlock): string {
   margin: 10px 0;
 }
 
+.group-own-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
 .group-own-name {
   font-size: 12px;
   color: #8c8a82;
   line-height: 1;
-  margin-bottom: 4px;
 }
 
 .group-own-bubble {

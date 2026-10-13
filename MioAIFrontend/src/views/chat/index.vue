@@ -72,6 +72,7 @@
           :chat-id="currentChatId ?? undefined"
           :group-mode="agentInfo?.type === 2"
           :group-name="agentInfo?.name"
+          :group-members="agentInfo?.members"
           :edit-render-cards="renderEditCards"
           :edit-leaving-keys="leavingEditKeys"
           :edit-ref-setter="setEditCardRef"
@@ -85,8 +86,10 @@
           @open-subagent="subagentPanelTarget = $event"
           @send-prompt="sendFromUi"
         />
-        <!-- 左下角常驻机器人：眼睛跟随指针，情绪随会话执行情况实时切换 -->
+        <!-- 左下角常驻机器人：眼睛跟随指针，情绪随会话执行情况实时切换。
+             群聊不显示（成员/群主头像在消息流内动态呈现） -->
         <BotPet
+          v-if="agentInfo?.type !== 2"
           class="chat-pet"
           :config="petIconConfig"
           :mood="petMood"

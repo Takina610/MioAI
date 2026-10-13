@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.mio.ai.resource.model.dto.agent.AgentGroupCreateRequest;
 import com.mio.ai.resource.model.entity.Agent;
 import com.mio.ai.resource.model.entity.AgentGroupMember;
+import com.mio.ai.resource.model.vo.agent.AgentVO;
 
 import java.util.List;
 
@@ -27,4 +28,10 @@ public interface AgentGroupService extends IService<AgentGroupMember> {
 
     /** 把该智能体从所有群中移除（成员被删时级联） */
     void deleteByMemberId(Long memberAgentId);
+
+    /** 给 type=2 的 VO 填充成员概要（id/名称/图标，堆叠群头像渲染用）；非群聊 VO 不动 */
+    void attachMembers(AgentVO vo);
+
+    /** 群成员概要列表（按加入顺序；空群/非群返回空表） */
+    List<com.mio.ai.resource.model.vo.agent.AgentGroupMemberVO> buildMembers(Long groupAgentId);
 }

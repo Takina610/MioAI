@@ -3,15 +3,6 @@
     <!-- 消息列表底边渐隐：贴在输入区上缘，消息滚出列表边界时柔和消隐而非硬切 -->
     <div v-if="hasMessages && !embedded" class="list-fade-overlay" aria-hidden="true"></div>
     <div class="welcome-section" v-if="!hasMessages && !loading">
-      <BotIcon
-        v-if="agentIconConfig"
-        :shape="agentIconConfig.shape"
-        :fill="agentIconConfig.fill"
-        :size="56"
-        :live="false"
-        eye-color="#faf9f5"
-      />
-      <img v-else :src="agentAvatar || '/logo.png'" alt="Agent" class="welcome-avatar" />
       <h2 class="welcome-title">{{ welcomeTitle }}</h2>
     </div>
     <!-- 与输入框融合的上区（任务清单等，共享同一容器边框） -->
@@ -123,9 +114,7 @@ import { useUserStore } from '@/store/user'
 import { ArrowUpOutlined, DownOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import BrainIcon from '@/components/BrainIcon.vue'
 import AttachmentCard from './AttachmentCard.vue'
-import BotIcon from '@/components/bot-icon/BotIcon.vue'
 import ContextUsageIndicator from './ContextUsageIndicator.vue'
-import { DEFAULT_BOT_ICON, parseBotIcon } from '@/components/bot-icon/types'
 import type { ContextUsageData, PendingAttachment } from '@/types'
 
 /** 思考档位全量标签（实际渲染哪些档由后端按模型能力返回） */
@@ -145,9 +134,6 @@ const FALLBACK_EFFORTS = ['high', 'medium', 'low', 'none']
 const props = defineProps<{
   modelValue: string
   agentName?: string
-  agentAvatar?: string
-  /** agent.icon 原始 JSON（bot-icon 配置），存在时欢迎区用动态机器人图标 */
-  agentIcon?: string
   hasMessages: boolean
   loading: boolean
   /** 思考强度（后端返回的该模型支持的档位之一） */
@@ -206,9 +192,6 @@ const welcomeTitle = computed(() => {
   const picked = usable[Math.floor(Math.random() * usable.length)]
   return picked.split('{name}').join(name).split('{profile}').join(profile ?? '')
 })
-
-/** 欢迎logo：icon 配置优先；无配置且有头像则用头像图；都没有用默认机器人 */
-const agentIconConfig = computed(() => parseBotIcon(props.agentIcon) ?? (props.agentAvatar ? null : DEFAULT_BOT_ICON))
 
 const value = computed({
   get: () => props.modelValue,
@@ -341,15 +324,6 @@ function onFileChange(event: Event): void {
     align-items: center;
     gap: 16px;
     margin-bottom: 32px;
-
-    .welcome-avatar {
-      width: 48px;
-      height: 48px;
-      border-radius: 25%;
-      object-fit: cover;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-      flex-shrink: 0;
-    }
 
     .welcome-title {
       font-size: 24px;
@@ -594,11 +568,6 @@ function onFileChange(event: Event): void {
 
     .welcome-section {
       gap: 12px;
-
-      .welcome-avatar {
-        width: 40px;
-        height: 40px;
-      }
 
       .welcome-title {
         font-size: 20px;

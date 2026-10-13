@@ -124,4 +124,27 @@ public class AgentGroupServiceImpl extends ServiceImpl<AgentGroupMemberMapper, A
         this.remove(new LambdaQueryWrapper<AgentGroupMember>()
                 .eq(AgentGroupMember::getMemberAgentId, memberAgentId));
     }
+
+    @Override
+    public void attachMembers(com.mio.ai.resource.model.vo.agent.AgentVO vo) {
+        if (vo == null || !Integer.valueOf(AgentTypeEnum.GROUP.getCode()).equals(vo.getType())) {
+            return;
+        }
+        vo.setMembers(buildMembers(vo.getId()));
+    }
+
+    @Override
+    public List<com.mio.ai.resource.model.vo.agent.AgentGroupMemberVO> buildMembers(Long groupAgentId) {
+        List<com.mio.ai.resource.model.vo.agent.AgentGroupMemberVO> members = new ArrayList<>();
+        for (Agent member : listMembers(groupAgentId)) {
+            com.mio.ai.resource.model.vo.agent.AgentGroupMemberVO brief =
+                    new com.mio.ai.resource.model.vo.agent.AgentGroupMemberVO();
+            brief.setId(member.getId());
+            brief.setName(member.getName());
+            brief.setIcon(member.getIcon());
+            brief.setAvatar(member.getAvatar());
+            members.add(brief);
+        }
+        return members;
+    }
 }

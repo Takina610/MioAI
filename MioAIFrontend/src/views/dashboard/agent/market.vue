@@ -9,7 +9,7 @@
 
       <a-row v-else :gutter="[16, 16]">
         <a-col :xs="24" :sm="12" :md="8" :lg="6" v-for="agent in agentList" :key="agent.id">
-          <div class="dash-card agent-card" @click="startChat(agent)">
+          <div class="dash-card agent-card" :class="{ actionable: !isOwn(agent) }">
             <div class="card-header">
               <div class="card-icon-wrapper plain">
                 <BotIcon
@@ -32,13 +32,11 @@
               </span>
               <span class="time">{{ formatDate(agent.createTime) }}</span>
             </div>
-            <div class="card-actions" @click.stop>
-              <a-button class="chat-btn" type="primary" size="small" @click="startChat(agent)">
-                开始对话
-              </a-button>
+            <!-- 广场模板不可直接对话：先复制为我的智能体，再从我的智能体发起对话 -->
+            <div v-if="!isOwn(agent)" class="card-actions" @click.stop>
               <a-button
-                v-if="!isOwn(agent)"
                 class="template-btn"
+                type="primary"
                 size="small"
                 :loading="forkingId === agent.id"
                 @click="useTemplate(agent)"
@@ -101,13 +99,8 @@ async function fetchAgents(): Promise<void> {
   }
 }
 
-function startChat(agent: AgentWithUser): void {
-  router.push(`/chat/${agent.id}`)
-}
-
-/** 使用该模板：复制一份为我的草稿智能体，跳转编辑页微调 */
-async function useTemplate(agent: AgentWithUser): Promise<void> {
-  if (!userStore.isLoggedIn) {
+/** 使用该模板：复制一份为我的草稿智能体，跳转编辑页微调后即可对话 */
+async function useTemplate(agent: AgentWithUser): Promise<void> {  if (!userStore.isLoggedIn) {
     emit('login-required')
     return
   }
@@ -135,14 +128,17 @@ onMounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  cursor: pointer;
 
-  // 对齐管理页：悬浮时按钮浮现、footer 淡出
-  &:hover {
-    box-shadow: $shadow-medium;
+  // 有模板操作（非本人）才可交互：悬浮按钮浮现、footer 淡出
+  &.actionable {
+    cursor: pointer;
 
-    .card-footer {
-      opacity: 0;
+    &:hover {
+      box-shadow: $shadow-medium;
+
+      .card-footer {
+        opacity: 0;
+      }
     }
   }
 
@@ -188,17 +184,8 @@ onMounted(() => {
   }
 
   .card-actions {
-    .chat-btn {
-      flex: 1;
-      height: 36px;
-      border-radius: 10px;
-      font-size: 14px;
-      font-weight: 600;
-      color: #fff;
-    }
-
     .template-btn {
-      flex: 1;
+      width: 100%;
       height: 36px;
       border-radius: 10px;
       font-size: 14px;

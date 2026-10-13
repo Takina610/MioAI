@@ -94,4 +94,9 @@ public class AgentVO implements Serializable {
      * 更新时间
      */
     private Date updateTime;
+
+    /**
+     * 群聊成员概要（type=2 时填充）：堆叠群头像与成员气泡头像渲染用
+     */
+    private java.util.List<AgentGroupMemberVO> members;
 }

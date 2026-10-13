@@ -25,9 +25,12 @@
               :fill="iconByAgent.get(agent.id)!.fill"
               :size="expanded ? 34 : 38"
             />
-            <span v-else-if="agent.type === 2" class="group-tile">
-              <TeamOutlined />
-            </span>
+            <GroupAvatar
+              v-else-if="agent.type === 2"
+              :members="agent.members ?? []"
+              :size="expanded ? 38 : 42"
+              :live="true"
+            />
             <a-avatar v-else :size="expanded ? 34 : 38" :src="agent.avatar">
               {{ agent.name?.charAt(0)?.toUpperCase() }}
             </a-avatar>
@@ -55,6 +58,7 @@
 import { computed } from 'vue'
 import { PlusOutlined, TeamOutlined } from '@ant-design/icons-vue'
 import BotIcon from '@/components/bot-icon/BotIcon.vue'
+import GroupAvatar from '@/components/GroupAvatar.vue'
 import { parseBotIcon, type BotIconConfig } from '@/components/bot-icon/types'
 import type { Agent } from '@/types'
 
@@ -198,18 +202,6 @@ const iconByAgent = computed(() => {
     display: flex;
     align-items: center;
     justify-content: center;
-  }
-
-  .group-tile {
-    width: 36px;
-    height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 25%;
-    background: linear-gradient(135deg, rgba($primary-color, 0.16) 0%, rgba($primary-color, 0.07) 100%);
-    color: $primary-color;
-    font-size: 17px;
   }
 
   .agent-meta {

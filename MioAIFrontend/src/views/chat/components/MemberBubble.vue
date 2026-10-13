@@ -8,6 +8,7 @@
         :shape="iconConfig.shape"
         :fill="iconConfig.fill"
         :size="30"
+        :live="true"
       />
       <span v-else class="member-initial">{{ memberName?.charAt(0)?.toUpperCase() }}</span>
     </span>

@@ -27,6 +27,7 @@
             :version="versionOf(msg)"
             :group-mode="groupMode"
             :group-name="groupName"
+            :group-members="groupMembers"
             @open-subagent="emit('openSubagent', $event)"
             @send-prompt="emit('sendPrompt', $event)"
           />
@@ -124,6 +125,8 @@ const props = defineProps<{
   groupMode?: boolean
   /** 群聊模式下的群名（群主气泡署名） */
   groupName?: string
+  /** 群聊成员概要（群主气泡的堆叠群头像渲染） */
+  groupMembers?: import('@/types').AgentMemberBrief[]
 }>()
 
 const emit = defineEmits<{

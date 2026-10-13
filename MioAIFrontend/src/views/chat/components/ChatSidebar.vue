@@ -8,7 +8,13 @@
   >
     <div class="sidebar-capsule">
       <div class="sidebar-top">
-        <img :src="agentInfo?.avatar || '/logo.png'" alt="Avatar" class="agent-avatar" />
+        <GroupAvatar
+          v-if="agentInfo?.type === 2"
+          class="agent-avatar group"
+          :members="agentInfo?.members ?? []"
+          :size="34"
+        />
+        <img v-else :src="agentInfo?.avatar || '/logo.png'" alt="Avatar" class="agent-avatar" />
         <span class="agent-name">{{ agentInfo?.name || 'MioBot' }}</span>
         <button
           v-if="canPersonalize"
@@ -119,6 +125,7 @@ import { message } from 'ant-design-vue'
 import { useUserStore } from '@/store/user'
 import type { Agent, ChatSession } from '@/types'
 import ChatSessionList from './ChatSessionList.vue'
+import GroupAvatar from '@/components/GroupAvatar.vue'
 import {
   SearchOutlined,
   HomeOutlined,
@@ -208,13 +215,19 @@ defineExpose({ checkListFilled, scrollToTop })
   @include floating-sidebar-shell(304px);
 
   // peek 悬浮唤出：logo 从中心向四周放大出现（延迟期由 backwards 保持隐藏）；
-  // 缩进量与收缩按钮错开（按钮 28~64px），互不压叠
+  // 缩进量与收缩按钮错开（按钮 28~64px），互不压叠。
+  // peek 是瞬态预览：配置类按钮（个性化/左轨开关）隐藏，避免与收起按钮及彼此拥挤
   &.peek .sidebar-top {
     padding-left: 64px;
 
     .agent-avatar,
     .agent-name {
       animation: peek-logo-in 0.22s ease 0.24s backwards;
+    }
+
+    .personalize-btn,
+    .rail-toggle-btn {
+      display: none;
     }
   }
 

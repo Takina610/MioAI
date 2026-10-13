@@ -61,4 +61,7 @@ public class AgentDetailVO implements Serializable {
     private List<McpToolVO> mcpTools;
 
     private List<com.mio.ai.resource.model.vo.skill.SkillVO> skills;
+
+    /** 群聊成员概要（type=2 时填充）：堆叠群头像与成员气泡头像渲染 */
+    private List<AgentGroupMemberVO> members;
 }

@@ -3,6 +3,15 @@ import type { KnowledgeBase } from './knowledgeBase'
 import type { McpTool } from './mcpTool'
 import type { Skill } from './skill'
 
+/** 群聊成员概要（type=2 的智能体附带）：堆叠群头像/成员气泡头像渲染 */
+export interface AgentMemberBrief {
+  id: number
+  name?: string
+  /** bot-icon 配置 JSON */
+  icon?: string
+  avatar?: string
+}
+
 export interface Agent {
   id: number
   userId: number
@@ -23,6 +32,8 @@ export interface Agent {
   version?: string
   createTime: string
   updateTime: string
+  /** 群聊成员概要（type=2 时后端填充） */
+  members?: AgentMemberBrief[]
 }
 
 export interface AgentDetail extends Agent {

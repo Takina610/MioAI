@@ -356,6 +356,10 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         vo.setTypeDesc(typeEnum != null ? typeEnum.getDesc() : "未知");
         AgentStatusEnum statusEnum = AgentStatusEnum.getByCode(agent.getStatus());
         vo.setStatusDesc(statusEnum != null ? statusEnum.getDesc() : "未知");
+        // 群聊附带成员概要（非群聊零开销）：前端堆叠群头像渲染
+        if (Integer.valueOf(AgentTypeEnum.GROUP.getCode()).equals(agent.getType())) {
+            agentGroupService.attachMembers(vo);
+        }
         return vo;
     }
 
@@ -381,6 +385,10 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         vo.setTypeDesc(typeEnum != null ? typeEnum.getDesc() : "未知");
         AgentStatusEnum statusEnum = AgentStatusEnum.getByCode(agent.getStatus());
         vo.setStatusDesc(statusEnum != null ? statusEnum.getDesc() : "未知");
+        // 群聊附带成员概要（堆叠群头像渲染）
+        if (Integer.valueOf(AgentTypeEnum.GROUP.getCode()).equals(agent.getType())) {
+            vo.setMembers(agentGroupService.buildMembers(id));
+        }
 
         // 内置智能体：标记当前用户是否有个性化覆盖（聊天页图标按"我的配置"生效）
         if (agent.getUserId() == null && userId != null) {
