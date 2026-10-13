@@ -181,9 +181,21 @@ public class MioBot {
      * @param knowledgeContext  知识库检索命中的上下文（可为空），以附件注入
      * @param persistUserMessage 为 false 时不重复落库用户消息（重新生成场景：截断后重发）
      */
+    /** 轮次开始时间（epoch ms）：/bot/active-chats 携带，前端多会话并发时"最新会话优先"排序 */
+    private volatile long turnStartedAt;
+
+    public long getAgentId() {
+        return agentId;
+    }
+
+    public long getTurnStartedAt() {
+        return turnStartedAt;
+    }
+
     public SseEmitter run(String userPrompt, String knowledgeContext, boolean persistUserMessage) {
         SseEmitter sseEmitter = new SseEmitter(SseStreams.CHAT_TIMEOUT_MS);
         channel.bind(sseEmitter);
+        turnStartedAt = System.currentTimeMillis();
 
         // 专用轮次池：不占 ForkJoinPool.commonPool（阻塞任务会饿死全 JVM 的 CompletableFuture）
         if (!TurnExecutors.execute(() -> runTurnTask(userPrompt, knowledgeContext,

@@ -573,16 +573,24 @@ public class MioBotController {
      * 侧边栏据此轮询补齐，执行动画跨刷新保持，不再依赖"点开会话触发接管"才出现。
      */
     @GetMapping("/bot/active-chats")
-    public BaseResponse<List<String>> activeChats(jakarta.servlet.http.HttpServletRequest httpRequest) {
+    public BaseResponse<List<java.util.Map<String, Object>>> activeChats(jakarta.servlet.http.HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         String ownerKey = userId != null ? "u:" + userId : "guest:" + clientIp(httpRequest);
-        List<String> ids = new ArrayList<>();
+        List<java.util.Map<String, Object>> turns = new ArrayList<>();
         for (Map.Entry<String, String> entry : ACTIVE_CHATS.entrySet()) {
-            if (entry.getValue().equals(ownerKey)) {
-                ids.add(entry.getKey());
+            if (!entry.getValue().equals(ownerKey)) {
+                continue;
             }
+            java.util.Map<String, Object> turn = new java.util.LinkedHashMap<>();
+            turn.put("chatId", entry.getKey());
+            MioBot turnBot = ACTIVE_TURNS.get(entry.getKey());
+            if (turnBot != null) {
+                turn.put("agentId", turnBot.getAgentId());
+                turn.put("startedAt", turnBot.getTurnStartedAt());
+            }
+            turns.add(turn);
         }
-        return ResultUtils.success(ids);
+        return ResultUtils.success(turns);
     }
 
     /**

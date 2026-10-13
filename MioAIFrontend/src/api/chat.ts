@@ -160,9 +160,16 @@ export const isChatActive = async (chatId: string): Promise<boolean> => {
   return Boolean(result)
 }
 
-/** 当前归属正在执行的会话 id 列表（侧边栏执行动画数据源，跨刷新/切页保持） */
-export const getActiveChats = async (): Promise<string[]> => {
-  const result = await request.get<string[]>('/bot/active-chats', { skipErrorMessage: true } as never)
+/** 当前归属正在执行的轮次（chatId+智能体+开始时间）：侧边栏执行动画数据源 + 左轨活动绑定
+ *  （agentId 供会话→智能体映射，startedAt 供多会话并发时"最新会话优先"裁决），跨刷新/切页保持 */
+export interface ActiveTurnInfo {
+  chatId: string
+  agentId?: number
+  startedAt?: number
+}
+
+export const getActiveTurns = async (): Promise<ActiveTurnInfo[]> => {
+  const result = await request.get<ActiveTurnInfo[]>('/bot/active-chats', { skipErrorMessage: true } as never)
   return Array.isArray(result) ? result : []
 }
 

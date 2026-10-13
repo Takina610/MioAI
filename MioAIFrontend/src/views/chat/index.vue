@@ -230,9 +230,10 @@ import { useChatSessions } from './composables/useChatSessions'
 import { useChatMessages, generateConversationId } from './composables/useChatMessages'
 import { useChatStream } from './composables/useChatStream'
 import { useBotMood } from './composables/useBotMood'
+import { endTurn, syncBackendTurns } from './composables/useAgentActivity'
 import { usePendingCardAnimations } from './composables/usePendingCardAnimations'
 import { buildSubagentTranscript } from './subagentTranscript'
-import { truncateConversation, getReasoningEfforts, getContextUsage, uploadAttachment, deleteAttachment, getActiveChats } from '@/api/chat'
+import { truncateConversation, getReasoningEfforts, getContextUsage, uploadAttachment, deleteAttachment, getActiveTurns } from '@/api/chat'
 import { getBotMessages } from '@/api/botMessages'
 
 const route = useRoute()
@@ -471,7 +472,7 @@ const messagesApi = useChatMessages({
   },
   // 历史末尾是 user 行：回合仍在后端执行，交给流式模块恢复轮询接管
   onPendingTurn: (chatId) => {
-    streamApi.recoverPendingTurn(chatId)
+    streamApi.recoverPendingTurn(chatId, agentId.value)
   }
 })
 
@@ -508,7 +509,11 @@ const backendStreamingIds = ref<Set<string>>(new Set())
 async function refreshBackendStreaming(): Promise<void> {
   if (!userStore.isLoggedIn) return
   try {
-    backendStreamingIds.value = new Set(await getActiveChats())
+    const turns = await getActiveTurns()
+    backendStreamingIds.value = new Set(turns.map(t => t.chatId))
+    // 左轨活动绑定同步：补挂本页无流连接的执行中会话（按 agentId 归属）；
+    // 后端 active 列表是执行与否的权威——已结束的轮次在此兜底清除（正常收尾由 done 事件先行）
+    syncBackendTurns(turns)
   } catch {
     // 后端暂不可达：保留现有状态，下个周期再试
   }
@@ -536,6 +541,7 @@ const { currentChatId, messages, isLoading, switchChat, loadMessages } = message
 watch(isLoading, (loading, was) => {
   if (!was || loading) return
   const id = currentChatId.value
+  if (id) endTurn(id)
   if (id && backendStreamingIds.value.has(id)) {
     const next = new Set(backendStreamingIds.value)
     next.delete(id)

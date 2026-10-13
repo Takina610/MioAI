@@ -52,6 +52,7 @@ import { computed } from 'vue'
 import BotIcon from '@/components/bot-icon/BotIcon.vue'
 import GroupAvatar from '@/components/GroupAvatar.vue'
 import { HolderOutlined, PushpinFilled, PushpinOutlined } from '@ant-design/icons-vue'
+import { agentActivityStates } from '../composables/useAgentActivity'
 import type { BotIconConfig } from '@/components/bot-icon/types'
 import type { Agent } from '@/types'
 
@@ -77,12 +78,17 @@ const MOODS = [
   'scared', 'suspicious', 'confused', 'celebrate'
 ]
 
-/** 按 id 稳定散列取情绪：同一智能体情绪固定，不同 id 充分散开（避免大面积雷同） */
-const mood = computed(() => {
-  const id = props.agent.id
+/** 闲置情绪：按 id 稳定散列取情绪——同一智能体情绪固定，不同 id 充分散开（避免大面积雷同） */
+function idleMood(id: number): string {
   const hash = (Math.imul(id, 2654435761) ^ (id << 7) ^ (id >>> 3)) >>> 0
   return MOODS[hash % MOODS.length]
-})
+}
+
+/** 执行中绑定会话实时状态（思考/工具/作答……与聊天页宠物同一套状态词汇）；
+ *  多会话并发取最新会话（活动仓内裁决）；空闲回退按 id 散列的固定情绪 */
+const mood = computed(() =>
+  agentActivityStates.value.get(props.agent.id) ?? idleMood(props.agent.id)
+)
 </script>
 
 <style lang="scss" scoped>

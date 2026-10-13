@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { chatWithMioBot, chatWithStream, isChatActive, reconnectChatStream, stopChat } from '@/api/chat'
 import { getBotMessages, type BotMessageRow } from '@/api/botMessages'
+import { beginTurn, endTurn, observeTurn } from './useAgentActivity'
 import { historyFromVersions } from './useChatMessages'
 import type {
   AttachmentItem,
@@ -60,34 +61,61 @@ export function useChatStream(options: {
   const userStore = useUserStore()
   const { messagesApi } = options
 
-  let eventSource: EventSource | null = null
-  let currentEventSourceChatId = ''
   let activeStream: { close: () => void } | null = null
   let currentStreamChatId = ''
-  let streamWatchdogTimer: ReturnType<typeof setTimeout> | null = null
+
+  /**
+   * 每会话独立 SSE 流：多会话并发执行时互不干扰——向会话 B 发消息不再杀掉
+   * 会话 A 的后台流（单例 eventSource 的旧行为会让后台轮次静默失联：
+   * 无 onerror、无恢复，侧栏转圈与左轨活动状态永久卡住）。
+   * 看门狗也按会话各自计时，互不重挂。
+   */
+  interface ChatStream {
+    es: EventSource
+    lastSeq: number
+    reconnectAttempts: number
+    watchdog: ReturnType<typeof setTimeout> | null
+  }
+  const chatStreams = new Map<string, ChatStream>()
+
+  /** 关闭并摘除某会话的流（幂等） */
+  function closeChatStream(chatId: string): void {
+    const stream = chatStreams.get(chatId)
+    if (!stream) return
+    chatStreams.delete(chatId)
+    if (stream.watchdog) clearTimeout(stream.watchdog)
+    try {
+      stream.es.close()
+    } catch {
+      // 连接已被浏览器关闭
+    }
+  }
 
   /** 恢复中的会话（重连回放/恢复轮询全程占位）：loadMessages 并发触发时防止重复接管开双流 */
   const recoveringChatIds = new Set<string>()
   /** 恢复流的清理回调（关闭回放连接/停表）：组件卸载时统一执行 */
   const recoveryCleanups = new Set<() => void>()
 
-  /** 事件驱动的静默看门狗：每收到任何事件重挂；超时仍未收到才触发异常收尾 */
+  /** 事件驱动的静默看门狗：每收到任何事件重挂；超时仍未收到才触发异常收尾（按会话独立计时） */
   function rearmStreamWatchdog(chatId: string, onStall: () => void): void {
-    if (streamWatchdogTimer) {
-      clearTimeout(streamWatchdogTimer)
+    const stream = chatStreams.get(chatId)
+    if (!stream) return
+    if (stream.watchdog) {
+      clearTimeout(stream.watchdog)
     }
-    streamWatchdogTimer = setTimeout(() => {
-      streamWatchdogTimer = null
+    stream.watchdog = setTimeout(() => {
+      stream.watchdog = null
       if (messagesApi.chatLoadingMap.value.get(chatId)) {
         onStall()
       }
     }, STREAM_WATCHDOG_TIMEOUT_MS)
   }
 
-  function disarmStreamWatchdog(): void {
-    if (streamWatchdogTimer) {
-      clearTimeout(streamWatchdogTimer)
-      streamWatchdogTimer = null
+  function disarmStreamWatchdog(chatId: string): void {
+    const stream = chatStreams.get(chatId)
+    if (stream && stream.watchdog) {
+      clearTimeout(stream.watchdog)
+      stream.watchdog = null
     }
   }
 
@@ -233,14 +261,14 @@ export function useChatStream(options: {
       return
     }
 
-    // 关闭旧的 EventSource
-    if (eventSource) {
-      eventSource.close()
-      eventSource = null
-    }
-    currentEventSourceChatId = chatId
+    // 同一会话残留的旧流先关（防重复）；其他会话的后台流保持不动
+    closeChatStream(chatId)
 
-    eventSource = chatWithMioBot(content, chatId, options.agentId.value, token, {
+    // 左轨活动绑定：本轮归属发送时的智能体（流式期间切走也按此归属），
+    // 实时状态由 SSE 事件观察更新；Ollama 本地直连路径无信封事件，不注册
+    beginTurn(chatId, options.agentId.value)
+
+    const es = chatWithMioBot(content, chatId, options.agentId.value, token, {
       skipUserPersist: opts?.skipUserPersist ?? false,
       reasoningEffort: opts?.reasoningEffort,
       groupSeq: opts?.groupSeq,
@@ -250,41 +278,34 @@ export function useChatStream(options: {
     // 断点续播：服务端为执行中的回合缓冲了全部事件（seq 递增），
     // 连接断开时携 lastSeq 重连 /bot/chat/stream——先回放缺口再续播直播；
     // 重连预算耗尽（后端不在执行/网络持续不通）才回退到恢复轮询（落库还原）
-    let lastSeq = 0
-    let reconnectAttempts = MAX_RECONNECT_ATTEMPTS
+    const stream: ChatStream = { es, lastSeq: 0, reconnectAttempts: MAX_RECONNECT_ATTEMPTS, watchdog: null }
+    chatStreams.set(chatId, stream)
 
     // 流式异常处理：先尝试重连回放，失败再走静默自愈
     const handleStreamError = (error: Event) => {
-      // 不是当前会话的消息则忽略
-      if (currentEventSourceChatId !== chatId) {
-        return
-      }
-      // 该会话已不在加载中，说明消息已完成接收，忽略此错误
+      // 该会话已不在加载中（已收尾/已被恢复路径接管）：忽略此错误
       if (!messagesApi.chatLoadingMap.value.get(chatId)) {
         return
       }
 
-      if (reconnectAttempts > 0) {
-        reconnectAttempts--
+      if (stream.reconnectAttempts > 0) {
+        stream.reconnectAttempts--
         console.warn('SSE 断开，尝试重连回放:', error)
-        disarmStreamWatchdog()
-        if (eventSource) {
-          eventSource.close()
+        disarmStreamWatchdog(chatId)
+        try {
+          stream.es.close()
+        } catch {
+          // 连接已被浏览器关闭
         }
-        eventSource = reconnectChatStream(chatId, lastSeq, token)
-        currentEventSourceChatId = chatId
-        eventSource.onmessage = onStreamMessage
-        eventSource.onerror = handleStreamError
+        stream.es = reconnectChatStream(chatId, stream.lastSeq, token)
+        stream.es.onmessage = onStreamMessage
+        stream.es.onerror = handleStreamError
         return
       }
 
       console.error('SSE连接错误（重连回放不可用）:', error)
-      disarmStreamWatchdog()
-      if (eventSource) {
-        eventSource.close()
-        eventSource = null
-        currentEventSourceChatId = ''
-      }
+      disarmStreamWatchdog(chatId)
+      closeChatStream(chatId)
 
       const partial = messagesApi.getChatMessages(chatId)[aiMessageIndex]
       const empty = !partial || (!partial.content && !(partial.blocks && partial.blocks.length))
@@ -331,11 +352,6 @@ export function useChatStream(options: {
 
     /** 原流与重连流共用的事件处理：喂狗、追踪 seq 断点、应用信封 */
     const onStreamMessage = (event: MessageEvent): void => {
-      // 不是当前会话的消息则忽略
-      if (currentEventSourceChatId !== chatId) {
-        return
-      }
-
       let parsed: Record<string, any> | null = null
       try {
         const obj = JSON.parse(event.data)
@@ -349,22 +365,24 @@ export function useChatStream(options: {
       // 服务端明确不可回放（回合已结束/缓冲停用）或本连接已被更新的接管顶掉：
       // 不再重连，交给 onerror 走落库还原
       if (parsed.type === 'replay_unavailable' || parsed.type === 'superseded') {
-        reconnectAttempts = 0
+        stream.reconnectAttempts = 0
         return
       }
 
       // 任何事件都证明连接活着：喂狗 + 恢复重连预算 + 记录断点
       rearmStreamWatchdog(chatId, () => handleStreamError(new Event('stream-watchdog')))
-      reconnectAttempts = MAX_RECONNECT_ATTEMPTS
+      stream.reconnectAttempts = MAX_RECONNECT_ATTEMPTS
       const seqNum = Number(parsed.seq)
       if (Number.isFinite(seqNum) && seqNum > 0) {
-        lastSeq = seqNum
+        stream.lastSeq = seqNum
       }
 
       let finished = false
       patchMessage(chatId, aiMessageIndex, (msg) => applyEnvelope(msg, parsed!, () => {
         finished = true
       }, chatId))
+      // 左轨活动绑定：信封事件映射为该智能体的实时状态（done/stopped/error 自动摘除）
+      observeTurn(chatId, parsed)
 
       if (finished) {
         finishStream()
@@ -376,21 +394,17 @@ export function useChatStream(options: {
 
     /** 流完成：生成标题（早触发过则跳过）、复位加载状态、关闭连接 */
     function finishStream(): void {
-      disarmStreamWatchdog()
+      disarmStreamWatchdog(chatId)
       const finalMessages = messagesApi.getChatMessages(chatId)
       if (!earlyTitleDone && isNewChat && userStore.isLoggedIn) {
         options.updateTitle(content, finalMessages[aiMessageIndex]?.content || '', chatId)
       }
       messagesApi.setLoading(chatId, false)
-      if (eventSource) {
-        eventSource.close()
-        eventSource = null
-      }
-      currentEventSourceChatId = ''
+      closeChatStream(chatId)
     }
 
-    eventSource.onmessage = onStreamMessage
-    eventSource.onerror = handleStreamError
+    es.onmessage = onStreamMessage
+    es.onerror = handleStreamError
     // 初始挂一次看门狗；此后每个事件（含心跳）到达都会重挂
     rearmStreamWatchdog(chatId, () => handleStreamError(new Event('stream-watchdog')))
   }
@@ -831,6 +845,7 @@ export function useChatStream(options: {
       // 加载状态被其他路径复位（如用户切走/删除）则停止
       if (!messagesApi.chatLoadingMap.value.get(chatId)) {
         clearInterval(timer)
+        endTurn(chatId)
         onStopped?.()
         return
       }
@@ -848,6 +863,7 @@ export function useChatStream(options: {
 
         if (row) {
           clearInterval(timer)
+          endTurn(chatId)
           onRecovered(row)
           return
         }
@@ -858,6 +874,7 @@ export function useChatStream(options: {
             const active = await isChatActive(chatId)
             if (!active) {
               clearInterval(timer)
+              endTurn(chatId)
               onGiveUp()
               return
             }
@@ -867,12 +884,14 @@ export function useChatStream(options: {
         }
         if (elapsed > RECOVERY_MAX_WAIT_MS) {
           clearInterval(timer)
+          endTurn(chatId)
           onGiveUp()
         }
       } catch {
         // 轮询失败（后端暂不可达）：继续尝试直到超时
         if (elapsed > RECOVERY_MAX_WAIT_MS) {
           clearInterval(timer)
+          endTurn(chatId)
           onGiveUp()
         }
       }
@@ -884,7 +903,8 @@ export function useChatStream(options: {
    * assistant 行被 loadMessages 剥离替换）——置为加载中并重连回放续播；
    * 重连不可用（回合已结束/网络不通）再回退到恢复轮询，落库后自动补全完整回复。
    */
-  function recoverPendingTurn(chatId: string): void {
+  /** agentId：会话所属智能体（接管只发生在当前打开的智能体页），供左轨活动绑定注册 */
+  function recoverPendingTurn(chatId: string, agentId?: number): void {
     const msgs = messagesApi.getChatMessages(chatId)
     const pendingIndex = msgs.length - 1
     if (pendingIndex < 0 || msgs[pendingIndex].role !== 'assistant' || msgs[pendingIndex].content) {
@@ -896,6 +916,9 @@ export function useChatStream(options: {
       return
     }
     recoveringChatIds.add(chatId)
+    if (agentId) {
+      beginTurn(chatId, agentId)
+    }
     const releaseRecovery = (): void => {
       recoveringChatIds.delete(chatId)
       recoveryCleanups.delete(cleanupRecovery)
@@ -995,6 +1018,7 @@ export function useChatStream(options: {
         patchMessage(chatId, pendingIndex, (msg) => applyEnvelope(msg, parsed!, () => {
           finished = true
         }, chatId))
+        observeTurn(chatId, parsed)
         followIfCurrent(chatId)
         if (finished) {
           finishReplay()
@@ -1022,7 +1046,9 @@ export function useChatStream(options: {
 
   /** 组件卸载前关闭所有流式连接 */
   function cleanup(): void {
-    disarmStreamWatchdog()
+    for (const chatId of [...chatStreams.keys()]) {
+      closeChatStream(chatId)
+    }
     for (const fn of recoveryCleanups) {
       try {
         fn()
@@ -1032,11 +1058,6 @@ export function useChatStream(options: {
     }
     recoveryCleanups.clear()
     recoveringChatIds.clear()
-    if (eventSource) {
-      eventSource.close()
-      eventSource = null
-      currentEventSourceChatId = ''
-    }
     if (activeStream) {
       activeStream.close()
       activeStream = null
