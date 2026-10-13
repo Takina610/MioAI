@@ -20,6 +20,7 @@
           :shape="sidebarIconConfig.shape"
           :fill="sidebarIconConfig.fill"
           :size="32"
+          :live="false"
         />
         <img v-else :src="agentInfo?.avatar || '/logo.png'" alt="Avatar" class="agent-avatar" />
         <span class="agent-name">{{ agentInfo?.name || 'MioBot' }}</span>

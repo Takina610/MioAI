@@ -78,6 +78,7 @@
           :can-modify="userStore.isLoggedIn"
           :chat-id="currentChatId ?? undefined"
           :group-mode="agentInfo?.type === 2"
+          :group-members="agentInfo?.members"
           :edit-render-cards="renderEditCards"
           :edit-leaving-keys="leavingEditKeys"
           :edit-ref-setter="setEditCardRef"

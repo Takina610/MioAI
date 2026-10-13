@@ -70,11 +70,11 @@ const emit = defineEmits<{
   (e: 'toggle-pin', agent: Agent): void
 }>()
 
-/** 情绪池：视觉上互有区分的姿态，左轨里相邻智能体各有各的情绪 */
+/** 情绪池：纯情绪/神态（不含笔、感叹号、变形类产品形态），左轨里各智能体各有各的情绪 */
 const MOODS = [
   'idle', 'happy', 'curious', 'playful', 'proud', 'surprised', 'thinking',
-  'listening', 'excited', 'shy', 'bored', 'drowsy', 'laughing', 'orbit',
-  'radar', 'humming', 'alerting', 'searching'
+  'listening', 'excited', 'shy', 'bored', 'drowsy', 'laughing', 'sad',
+  'scared', 'suspicious', 'confused', 'celebrate'
 ]
 
 /** 按 id 稳定散列取情绪：同一智能体情绪固定，不同 id 充分散开（避免大面积雷同） */

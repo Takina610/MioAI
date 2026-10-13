@@ -154,6 +154,7 @@
     <template v-if="answerSegments.length">
       <template v-for="(seg, si) in answerSegments" :key="`seg-${si}`">
         <div v-if="seg.kind === 'text' && groupMode" class="group-own-row">
+          <GroupAvatar v-if="groupMembers?.length" class="group-own-avatar" :members="groupMembers" :size="30" />
           <div class="group-own-bubble">
             <MarkdownView :content="seg.text" />
           </div>
@@ -212,6 +213,7 @@ import ToolRow from './ToolRow.vue'
 import ResourceRow from './ResourceRow.vue'
 import SkillRow from './SkillRow.vue'
 import MemberBubble from './MemberBubble.vue'
+import GroupAvatar from '@/components/GroupAvatar.vue'
 import UiBlockRenderer from './ui/UiBlockRenderer.vue'
 import { messageAttachmentDisplays } from '../attachmentUtils'
 import { answerQuestion } from '@/api/chat'
@@ -242,8 +244,10 @@ interface Props {
   messageId?: string
   /** 当前显示的版本号（历史版本的块里也能打开子代理面板） */
   version?: number
-  /** 群聊模式：群主正文渲染为右对齐气泡（与用户消息同款，无署名——成员在左侧带署名） */
+  /** 群聊模式：群主正文渲染为左对齐群头像气泡（右侧只属于用户消息） */
   groupMode?: boolean
+  /** 群聊成员概要（群主行的堆叠群头像） */
+  groupMembers?: import('@/types').AgentMemberBrief[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -944,18 +948,23 @@ function durationSuffix(block: ThinkingBlock): string {
   padding: 0 4px;
 }
 
-// ---------- 群聊模式：群主正文 = 右对齐气泡（与用户消息同一气泡语言，无署名） ----------
+// ---------- 群聊模式：群主正文 = 左对齐群头像 + 米色气泡（与成员白底气泡区分；右侧只属于用户） ----------
 .group-own-row {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
+  gap: 10px;
   margin: 10px 0;
+}
+
+.group-own-avatar {
+  flex-shrink: 0;
+  margin-top: 4px;
 }
 
 .group-own-bubble {
   max-width: 70%;
   padding: 12px 16px;
-  border-radius: 14px 4px 14px 14px;
+  border-radius: 4px 14px 14px 14px;
   background: #ece9de;
   color: #141413;
   font-size: 14px;

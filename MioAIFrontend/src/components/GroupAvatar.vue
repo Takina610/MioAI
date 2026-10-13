@@ -76,9 +76,9 @@ function iconOf(m: GroupAvatarMember): BotIconConfig | null {
   return iconCache.get(m.id) ?? null
 }
 
-/** 成员小图标的稳定随机情绪（静态渲染，姿态各异） */
+/** 成员小图标的稳定随机情绪（静态渲染，只取纯情绪神态） */
 const MOODS = ['happy', 'curious', 'playful', 'proud', 'surprised', 'thinking',
-  'listening', 'excited', 'shy', 'bored', 'drowsy', 'laughing', 'orbit', 'radar']
+  'listening', 'excited', 'shy', 'bored', 'drowsy', 'laughing', 'sad', 'confused', 'celebrate']
 
 function moodOf(id: number): string {
   const hash = (Math.imul(id, 2654435761) ^ (id << 7) ^ (id >>> 3)) >>> 0
