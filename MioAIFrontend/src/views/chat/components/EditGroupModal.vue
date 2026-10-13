@@ -39,6 +39,27 @@
         <div v-if="!members.length" class="member-empty">成员不足，无法保存</div>
       </div>
 
+      <!-- 添加成员：我的自定义智能体中尚未入群的，点击即加入 -->
+      <div v-if="addableCandidates.length" class="add-section">
+        <div class="add-title">添加成员</div>
+        <div class="member-list add-list">
+          <div v-for="a in addableCandidates" :key="a.id" class="member-item add" @click="addMember(a)">
+            <span class="member-icon">
+              <BotIcon
+                v-if="iconOf(a)"
+                :shape="iconOf(a)!.shape"
+                :fill="iconOf(a)!.fill"
+                :size="26"
+                :live="false"
+              />
+              <span v-else class="member-initial">{{ a.name?.charAt(0)?.toUpperCase() }}</span>
+            </span>
+            <span class="member-name">{{ a.name }}</span>
+            <PlusCircleOutlined class="member-add-icon" />
+          </div>
+        </div>
+      </div>
+
       <div class="modal-actions">
         <a-button @click="close">取消</a-button>
         <a-button type="primary" :loading="saving" :disabled="!canSubmit" @click="submit">
@@ -52,7 +73,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import { CloseCircleOutlined } from '@ant-design/icons-vue'
+import { CloseCircleOutlined, PlusCircleOutlined } from '@ant-design/icons-vue'
 import BotIcon from '@/components/bot-icon/BotIcon.vue'
 import { parseBotIcon, type BotIconConfig } from '@/components/bot-icon/types'
 import { updateAgentGroup } from '@/api/agent'
@@ -62,6 +83,8 @@ const props = defineProps<{
   visible: boolean
   /** 当前群聊（含 members 概要） */
   group: Agent | null
+  /** 候选成员：我的自定义智能体（用于添加成员） */
+  candidates: Agent[]
 }>()
 
 const emit = defineEmits<{
@@ -95,6 +118,21 @@ watch(() => props.visible, v => {
 function removeMember(id: number): void {
   if (members.value.length <= 2) return
   members.value = members.value.filter(m => m.id !== id)
+}
+
+/** 尚未入群的候选（点击加入成员列表） */
+const addableCandidates = computed(() => {
+  const inGroup = new Set(members.value.map(m => m.id))
+  return props.candidates.filter(a => !inGroup.has(a.id))
+})
+
+function addMember(agent: Agent): void {
+  members.value = [...members.value, {
+    id: agent.id,
+    name: agent.name,
+    icon: agent.icon,
+    avatar: agent.avatar
+  }]
 }
 
 function close(): void {
@@ -224,6 +262,38 @@ async function submit(): Promise<void> {
     font-size: 13px;
     color: #8c8a82;
     text-align: center;
+  }
+
+  // 添加成员区
+  .add-section {
+    .add-title {
+      font-size: 12px;
+      color: #8c8a82;
+    }
+
+    .add-list {
+      max-height: 160px;
+    }
+
+    .member-item.add {
+      cursor: pointer;
+      background: #faf9f5;
+
+      &:hover {
+        border-color: $primary-color;
+
+        .member-add-icon {
+          color: $primary-color;
+        }
+      }
+    }
+
+    .member-add-icon {
+      flex-shrink: 0;
+      font-size: 15px;
+      color: #b0aea5;
+      transition: color 0.2s;
+    }
   }
 
   .modal-actions {

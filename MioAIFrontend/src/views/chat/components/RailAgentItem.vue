@@ -16,6 +16,7 @@
         :shape="icon.shape"
         :fill="icon.fill"
         :size="expanded ? 34 : 38"
+        :state="mood"
         :live="!sorting"
       />
       <GroupAvatar
@@ -47,13 +48,14 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import BotIcon from '@/components/bot-icon/BotIcon.vue'
 import GroupAvatar from '@/components/GroupAvatar.vue'
 import { HolderOutlined, PushpinFilled, PushpinOutlined } from '@ant-design/icons-vue'
 import type { BotIconConfig } from '@/components/bot-icon/types'
 import type { Agent } from '@/types'
 
-defineProps<{
+const props = defineProps<{
   agent: Agent
   expanded: boolean
   currentAgentId: number
@@ -67,6 +69,20 @@ const emit = defineEmits<{
   (e: 'open', agentId: number): void
   (e: 'toggle-pin', agent: Agent): void
 }>()
+
+/** 情绪池：视觉上互有区分的姿态，左轨里相邻智能体各有各的情绪 */
+const MOODS = [
+  'idle', 'happy', 'curious', 'playful', 'proud', 'surprised', 'thinking',
+  'listening', 'excited', 'shy', 'bored', 'drowsy', 'laughing', 'orbit',
+  'radar', 'humming', 'alerting', 'searching'
+]
+
+/** 按 id 稳定散列取情绪：同一智能体情绪固定，不同 id 充分散开（避免大面积雷同） */
+const mood = computed(() => {
+  const id = props.agent.id
+  const hash = (Math.imul(id, 2654435761) ^ (id << 7) ^ (id >>> 3)) >>> 0
+  return MOODS[hash % MOODS.length]
+})
 </script>
 
 <style lang="scss" scoped>

@@ -14,6 +14,13 @@
           :members="agentInfo?.members ?? []"
           :size="34"
         />
+        <BotIcon
+          v-else-if="sidebarIconConfig"
+          class="agent-avatar bot"
+          :shape="sidebarIconConfig.shape"
+          :fill="sidebarIconConfig.fill"
+          :size="32"
+        />
         <img v-else :src="agentInfo?.avatar || '/logo.png'" alt="Avatar" class="agent-avatar" />
         <span class="agent-name">{{ agentInfo?.name || 'MioBot' }}</span>
         <button
@@ -119,13 +126,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useUserStore } from '@/store/user'
 import type { Agent, ChatSession } from '@/types'
 import ChatSessionList from './ChatSessionList.vue'
 import GroupAvatar from '@/components/GroupAvatar.vue'
+import BotIcon from '@/components/bot-icon/BotIcon.vue'
+import { parseBotIcon, type BotIconConfig } from '@/components/bot-icon/types'
 import {
   SearchOutlined,
   HomeOutlined,
@@ -172,6 +181,9 @@ const router = useRouter()
 const userStore = useUserStore()
 
 const sessionListRef = ref<InstanceType<typeof ChatSessionList> | null>(null)
+
+/** 当前智能体的 bot-icon 配置（内置/自定义/个性化覆盖后）：有配置用动态图标，否则回退头像/站点 logo */
+const sidebarIconConfig = computed<BotIconConfig | null>(() => parseBotIcon(props.agentInfo?.icon))
 
 // 面板收起（含 peek 收回）时同步关闭内部浮层：下拉框挂在 body 上，不会随面板 transform 消失
 const userMenuOpen = ref(false)

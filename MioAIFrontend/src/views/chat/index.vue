@@ -14,6 +14,7 @@
       :visible="railOpen || railPeeking"
       :expanded="agentRailExpanded"
       :peek="railPeeking && sidebarPeeking"
+      :overlay="railPeeking && !railOpen"
       @mouseenter="panelEnter"
       @mouseleave="panelLeave"
       @select="handleRailSelect"
@@ -175,10 +176,11 @@
       @success="onCurrentAgentEdited"
     />
 
-    <!-- 编辑当前群聊：改名 + 移除成员 -->
+    <!-- 编辑当前群聊：改名 + 移除/添加成员 -->
     <EditGroupModal
       v-model:visible="groupEditVisible"
       :group="agentInfo?.type === 2 ? agentInfo : null"
+      :candidates="groupCandidates"
       @saved="onCurrentAgentEdited"
     />
 
@@ -1165,24 +1167,21 @@ onBeforeUnmount(() => {
   margin-left: 12px;
 }
 
-// 智能体左轨融合：轨道胶囊占位 64px（信息面板 240px），会话胶囊右移并拆除相接侧
-// 圆角与边线（两胶囊同底色无缝拼接）；main-container 同步让位。
-// rail-open=常驻展开；rail-peek=收起态悬浮 peek（覆盖层，不挤动内容，左轨一起滑出）。
 // 胶囊圆角/左边线宽度做成可过渡属性：收轨时融合侧平滑还原为独立胶囊
 :deep(.sidebar .sidebar-capsule) {
   transition: box-shadow 0.28s, border-radius 0.28s cubic-bezier(0.32, 0.72, 0.35, 1),
     border-left-width 0.28s cubic-bezier(0.32, 0.72, 0.35, 1);
 }
 
-.rail-open,
-.rail-peek {
+// 相位0 常驻融合：轨道占位 64px（信息面板 240px），会话胶囊右移拼接、拆除左边线，
+// 两栏之间由轨道右缘的 1px 分隔线承担（无阴影）；main-container 同步让位
+.rail-open {
   :deep(.sidebar) {
     transform: translateX(64px);
   }
 
-  // peek 态会话胶囊本停在 0 位：有左轨时同样右移让位（特异性盖过胶囊自身的 peek 规则）
-  :deep(.sidebar.collapsed.peek) {
-    transform: translateX(64px);
+  &.rail-wide :deep(.sidebar) {
+    transform: translateX(240px);
   }
 
   :deep(.sidebar .sidebar-capsule) {
@@ -1190,18 +1189,31 @@ onBeforeUnmount(() => {
     border-left-width: 0;
   }
 
-  &.rail-wide :deep(.sidebar),
-  &.rail-wide :deep(.sidebar.collapsed.peek) {
-    transform: translateX(240px);
+  .main-container {
+    margin-left: 364px;
+  }
+
+  &.rail-wide .main-container {
+    margin-left: 540px;
   }
 }
 
-.rail-open .main-container {
-  margin-left: 364px;
-}
+// 双栏同时 peek（都收起态）：会话胶囊 peek 右移让位与轨道拼接。
+// 仅左轨 peek（会话栏常驻）不位移会话胶囊——轨道以更高 z 覆盖其左缘（带投影），
+// 会话胶囊与 header 开关按钮位置不动，杜绝任何重叠冲突
+.rail-peek {
+  :deep(.sidebar.collapsed.peek) {
+    transform: translateX(64px);
+  }
 
-.rail-open.rail-wide .main-container {
-  margin-left: 540px;
+  &.rail-wide :deep(.sidebar.collapsed.peek) {
+    transform: translateX(240px);
+  }
+
+  :deep(.sidebar.collapsed.peek .sidebar-capsule) {
+    border-radius: 0 18px 18px 0;
+    border-left-width: 0;
+  }
 }
 
 @media (max-width: 768px) {

@@ -14,6 +14,7 @@
         :fill="iconOf(m)!.fill"
         :size="cellSize"
         :live="false"
+        :state="moodOf(m.id)"
       />
       <img v-else-if="m.avatar" :src="m.avatar" alt="" class="ga-img" />
       <span v-else class="ga-initial">{{ m.name?.charAt(0)?.toUpperCase() }}</span>
@@ -51,10 +52,10 @@ const shown = computed(() =>
   props.members.slice(0, overflow.value ? 3 : Math.min(props.members.length, MAX_SHOWN)))
 const overflow = computed(() => props.members.length > MAX_SHOWN)
 
-/** 网格槽位：2=左右（垂直居中）；3=上中+左下+右下；4/5+=左上/右上/左下/右下 */
+/** 网格槽位：2=左右（垂直居中）；3=上中+左下+右下；4=满格；5+=左上/右上/左下+右下省略号 */
 function cellClass(index: number): string {
   if (overflow.value) {
-    return ['ga-l ga-t', 'ga-r ga-t', 'ga-l ga-b'][index] ?? 'ga-l ga-t'
+    return ['ga-l ga-t', 'ga-r ga-t', 'ga-l ga-b', 'ga-r ga-b'][index] ?? 'ga-r ga-b'
   }
   if (props.members.length === 2) {
     return index === 0 ? 'ga-l ga-c' : 'ga-r ga-c'
@@ -73,6 +74,15 @@ function iconOf(m: GroupAvatarMember): BotIconConfig | null {
     iconCache.set(m.id, parseBotIcon(m.icon))
   }
   return iconCache.get(m.id) ?? null
+}
+
+/** 成员小图标的稳定随机情绪（静态渲染，姿态各异） */
+const MOODS = ['happy', 'curious', 'playful', 'proud', 'surprised', 'thinking',
+  'listening', 'excited', 'shy', 'bored', 'drowsy', 'laughing', 'orbit', 'radar']
+
+function moodOf(id: number): string {
+  const hash = (Math.imul(id, 2654435761) ^ (id << 7) ^ (id >>> 3)) >>> 0
+  return MOODS[hash % MOODS.length]
 }
 </script>
 

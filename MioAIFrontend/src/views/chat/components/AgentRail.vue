@@ -3,34 +3,34 @@
        默认 64px 图标窄轨，底部加号展开为 240px 信息面板（左 icon、右上名称、右下描述）。
        排序模式（宽轨顶部按钮切换）：免长按直接拖动，点击与图钉暂停；
        双栏 peek 时创建按钮下移，给悬浮的会话开关按钮让位 -->
-  <aside class="agent-rail" :class="{ hidden: !visible, expanded, peek }">
+  <aside class="agent-rail" :class="{ hidden: !visible, expanded, peek, overlay }">
     <div class="rail-capsule">
       <div class="rail-top-actions">
         <button class="rail-btn rail-create" title="创建群聊" aria-label="创建群聊" @click="emit('create-group')">
           <TeamOutlined class="rail-btn-icon" />
           <span v-if="expanded" class="rail-btn-text">创建群聊</span>
         </button>
-        <!-- 排序模式开关：仅信息面板态显示（窄轨无位） -->
+        <!-- 排序模式开关：圆形图标按钮，仅信息面板态显示（窄轨无位） -->
         <button
           v-if="expanded"
-          class="rail-btn rail-sort"
+          class="rail-sort"
           :class="{ active: sortMode }"
           :title="sortMode ? '退出排序' : '拖动排序'"
           :aria-label="sortMode ? '退出排序模式' : '进入排序模式'"
           @click="toggleSortMode"
         >
           <DragOutlined class="rail-btn-icon" />
-          <span v-if="expanded" class="rail-btn-text">{{ sortMode ? '完成' : '排序' }}</span>
         </button>
       </div>
 
       <div class="rail-list">
         <div v-if="pinnedAgents.length && expanded" class="rail-group-label">置顶</div>
         <draggable
+          v-if="sortMode"
           v-model="pinnedAgents"
+          :key="`sort-pinned-${sortMode}`"
           :animation="220"
-          :delay="260"
-          :disabled="!sortMode"
+          :delay="0"
           item-key="id"
           class="rail-drag-zone"
           ghost-class="rail-ghost"
@@ -50,12 +50,25 @@
             />
           </template>
         </draggable>
+        <div v-if="!sortMode" class="rail-drag-zone">
+          <RailAgentItem
+            v-for="element in pinnedAgents"
+            :key="element.id"
+            :agent="element"
+            :expanded="expanded"
+            :current-agent-id="currentAgentId"
+            :icon="iconByAgent.get(element.id)"
+            @open="emit('select', $event)"
+            @toggle-pin="emit('toggle-pin', $event)"
+          />
+        </div>
         <div v-if="pinnedAgents.length && normalAgents.length && expanded" class="rail-group-divider" />
         <draggable
+          v-if="sortMode"
           v-model="normalAgents"
+          :key="`sort-normal-${sortMode}`"
           :animation="220"
-          :delay="260"
-          :disabled="!sortMode"
+          :delay="0"
           item-key="id"
           class="rail-drag-zone"
           ghost-class="rail-ghost"
@@ -75,10 +88,22 @@
             />
           </template>
         </draggable>
+        <div v-if="!sortMode" class="rail-drag-zone">
+          <RailAgentItem
+            v-for="element in normalAgents"
+            :key="element.id"
+            :agent="element"
+            :expanded="expanded"
+            :current-agent-id="currentAgentId"
+            :icon="iconByAgent.get(element.id)"
+            @open="emit('select', $event)"
+            @toggle-pin="emit('toggle-pin', $event)"
+          />
+        </div>
       </div>
 
       <button
-        class="rail-btn rail-expand"
+        class="rail-expand"
         :title="expanded ? '收起信息面板' : '展开信息面板'"
         :aria-label="expanded ? '收起信息面板' : '展开信息面板'"
         @click="emit('toggle-expanded')"
@@ -108,6 +133,8 @@ const props = defineProps<{
   expanded: boolean
   /** 双栏同时 peek（会话开关按钮悬浮在轨道顶部，创建按钮让位下移） */
   peek?: boolean
+  /** 覆盖态投影（仅左轨 peek、会话栏常驻时，轨道浮在会话胶囊左缘之上） */
+  overlay?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -163,7 +190,8 @@ function emitReorder(): void {
   top: 0;
   bottom: 0;
   left: 0;
-  z-index: 60;
+  // 高于会话胶囊（z-60）：仅左轨 peek 时轨道覆盖在会话胶囊左缘之上
+  z-index: 61;
   // 12 出血 + 64 胶囊（信息面板 240），宽度变化与会话胶囊位移同曲线同步。
   // 右侧零 padding：胶囊右缘必须紧贴会话胶囊左缘（融合无间隙）
   width: 76px;
@@ -183,7 +211,7 @@ function emitReorder(): void {
     transform: translateX(-110%);
   }
 
-  // 右缘直角 + 无右边线：与会话胶囊融合成一体（融合对侧由页面 .rail-open 控制）
+  // 右缘直角 + 右缘分隔线（无阴影）：与会话胶囊拼接，一条竖线分隔即可
   .rail-capsule {
     pointer-events: auto;
     width: 100%;
@@ -192,10 +220,15 @@ function emitReorder(): void {
     flex-direction: column;
     background: #f5f3ec;
     border: 1px solid $border-warm-subtle;
-    border-right: none;
+    border-right: 1px solid $border-warm-subtle;
     border-radius: 18px 0 0 18px;
-    box-shadow: 0 8px 24px rgba(20, 20, 19, 0.05);
+    box-shadow: none;
     overflow: hidden;
+  }
+
+  // 覆盖态（仅左轨 peek）：加深投影示意浮层
+  &.overlay .rail-capsule {
+    box-shadow: 0 16px 44px rgba(20, 20, 19, 0.16);
   }
 
   // 双栏 peek：会话开关按钮悬浮在轨道顶部区域，创建/排序按钮下移让位
@@ -260,20 +293,41 @@ function emitReorder(): void {
   padding: 0;
 }
 
-.agent-rail.expanded .rail-create,
-.agent-rail.expanded .rail-sort {
+.agent-rail.expanded .rail-create {
   justify-content: flex-start;
   padding: 0 14px;
 }
 
-// 排序模式激活：主色实底点亮
-.rail-sort.active {
-  background: $primary-color;
-  border-color: $primary-color;
-  color: #fff;
+// 排序模式开关：圆形图标按钮（无文字），激活态主色实底
+.rail-sort {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba($primary-color, 0.45);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  color: $primary-color;
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s;
 
   &:hover {
-    background: darken($primary-color, 6%);
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 6px 18px rgba(20, 20, 19, 0.12);
+  }
+
+  &.active {
+    background: $primary-color;
+    border-color: $primary-color;
+    color: #fff;
+
+    &:hover {
+      background: darken($primary-color, 6%);
+    }
   }
 }
 
@@ -325,11 +379,16 @@ function emitReorder(): void {
 .rail-expand {
   flex-shrink: 0;
   margin: 0 8px 8px;
+  width: 38px;
   height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
-  border-radius: 999px;
+  border-radius: 50%;
   background: transparent;
   color: #8c8a82;
+  font-size: 15px;
   cursor: pointer;
   transition: color 0.2s, background 0.2s;
 
