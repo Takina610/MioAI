@@ -3,6 +3,7 @@
        hover 浮现图钉按钮（置顶/取消）；排序模式下暂停点击与图钉，改为可拖拽手柄 -->
   <div
     class="rail-agent"
+    :data-id="agent.id"
     :class="{ active: agent.id === currentAgentId, pinned: agent.pinned === 1, sorting }"
     :title="agent.name"
     role="button"

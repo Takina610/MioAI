@@ -32,7 +32,7 @@
           :animation="220"
           :delay="0"
           item-key="id"
-          class="rail-drag-zone"
+          class="rail-drag-zone rail-sort-pinned"
           ghost-class="rail-ghost"
           chosen-class="rail-chosen"
           drag-class="rail-dragging"
@@ -72,7 +72,7 @@
           :animation="220"
           :delay="0"
           item-key="id"
-          class="rail-drag-zone"
+          class="rail-drag-zone rail-sort-normal"
           ghost-class="rail-ghost"
           chosen-class="rail-chosen"
           drag-class="rail-dragging"
@@ -185,7 +185,25 @@ function syncFromProps(): void {
 watch(() => props.agents, syncFromProps, { immediate: true, deep: true })
 
 function emitReorder(): void {
-  emit('reorder', [...pinnedAgents.value, ...normalAgents.value].map(a => a.id))
+  // 以 DOM 实际顺序为准（Sortable 直接改 DOM；本地数组在个别时序下可能未同步，
+  // 拖完的可见顺序就是用户要的顺序），并回写本地数组保持后续拖拽的索引基准正确
+  const zoneIds = (cls: string): number[] => {
+    const zone = document.querySelector(`.agent-rail .${cls}`)
+    if (!zone) return []
+    return [...zone.querySelectorAll('.rail-agent[data-id]')]
+      .map(el => Number(el.getAttribute('data-id')))
+      .filter(id => !!id)
+  }
+  const orderedIds = [...zoneIds('rail-sort-pinned'), ...zoneIds('rail-sort-normal')]
+  if (orderedIds.length !== props.agents.length) {
+    emit('reorder', [...pinnedAgents.value, ...normalAgents.value].map(a => a.id))
+    return
+  }
+  const byId = new Map(props.agents.map(a => [a.id, a]))
+  const ordered = orderedIds.map(id => byId.get(id)).filter((a): a is Agent => !!a)
+  pinnedAgents.value = ordered.filter(a => a.pinned === 1)
+  normalAgents.value = ordered.filter(a => a.pinned !== 1)
+  emit('reorder', orderedIds)
 }
 </script>
 
