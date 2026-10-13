@@ -66,6 +66,13 @@ export interface AgentQueryRequest extends PaginationParams {
   userId?: number
 }
 
+/** 创建群聊智能体：群本体只有名称/描述，能力来自成员智能体集合（type=2） */
+export interface AgentGroupCreateRequest {
+  name: string
+  description?: string
+  memberAgentIds: number[]
+}
+
 /** 智能体发布版本快照 */
 export interface AgentVersion {
   id: number

@@ -4,6 +4,7 @@ import type {
   Agent,
   AgentDetail,
   AgentAddRequest,
+  AgentGroupCreateRequest,
   AgentUpdateRequest,
   AgentQueryRequest,
   AgentUserConfig,
@@ -15,6 +16,15 @@ import type {
 export function addAgent(data: AgentAddRequest): Promise<number> {
   return request({
     url: '/agents',
+    method: 'post',
+    data
+  })
+}
+
+/** 创建群聊智能体（成员智能体集合），返回群智能体ID */
+export function createAgentGroup(data: AgentGroupCreateRequest): Promise<number> {
+  return request({
+    url: '/agents/group',
     method: 'post',
     data
   })

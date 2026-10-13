@@ -45,6 +45,9 @@ public class AgentController {
     private AgentService agentService;
 
     @Resource
+    private com.mio.ai.resource.service.agent.AgentGroupService agentGroupService;
+
+    @Resource
     private AgentUserConfigService agentUserConfigService;
 
     @Resource
@@ -58,6 +61,17 @@ public class AgentController {
     public BaseResponse<Long> addAgent(@Valid @RequestBody AgentAddRequest request, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         Long id = agentService.addAgent(request, userId);
+        return ResultUtils.success(id);
+    }
+
+    /** 创建群聊智能体：成员为当前用户自己的自定义智能体集合，返回群智能体ID */
+    @PostMapping("/group")
+    @CacheEvict(value = "agents", allEntries = true)
+    public BaseResponse<Long> createGroup(
+            @Valid @RequestBody com.mio.ai.resource.model.dto.agent.AgentGroupCreateRequest request,
+            HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        Long id = agentGroupService.createGroup(request, userId);
         return ResultUtils.success(id);
     }
 

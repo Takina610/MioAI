@@ -99,6 +99,13 @@ public class MioBot {
     /** 本轮知识库检索命中摘要（控制器注入）：回答实际引用时在收尾落引用行 */
     private volatile List<Map<String, Object>> kbGroups;
 
+    /** 群聊协调器（控制器注入，普通会话为 null）：Agent 工具的 subagent_type 命中成员名时以成员自身配置运行 */
+    private volatile GroupCoordinator groupCoordinator;
+
+    public void setGroupCoordinator(GroupCoordinator groupCoordinator) {
+        this.groupCoordinator = groupCoordinator;
+    }
+
     public void setUserGroupSeq(Long userGroupSeq) {
         this.userGroupSeq = userGroupSeq;
     }
@@ -228,7 +235,7 @@ public class MioBot {
                 runManualCompact(engine, hydrated);
             } else {
                 Subagents launcher = new Subagents(chatModel, config, reasoningEffort,
-                        toolsetFactory, runContext, events, modelName);
+                        toolsetFactory, runContext, events, modelName, groupCoordinator);
                 registry = toolsetFactory.build(chatId, state, mcpTools, null, launcher, events, toolHooks);
                 // 动态 UI 块工具：仅主轮次注册（子代理注册表不含），校验通过的块经通道下发/落库；
                 // 图片块按本会话 image_search 登记簿核对 url（防伪造）并回填来源元数据

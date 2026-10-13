@@ -38,10 +38,18 @@ public final class Subagents implements SubagentLauncher {
     private final ToolsetFactory.RunContext runContext;
     private final AgentEvents parentEvents;
     private final String modelName;
+    /** 群聊成员启动器（null = 普通会话，只有内置档案） */
+    private final MemberLauncher memberLauncher;
 
     public Subagents(ChatModel chatModel, AgentEngineConfig config, String reasoningEffort,
                      ToolsetFactory toolsetFactory, ToolsetFactory.RunContext runContext,
                      AgentEvents parentEvents, String modelName) {
+        this(chatModel, config, reasoningEffort, toolsetFactory, runContext, parentEvents, modelName, null);
+    }
+
+    public Subagents(ChatModel chatModel, AgentEngineConfig config, String reasoningEffort,
+                     ToolsetFactory toolsetFactory, ToolsetFactory.RunContext runContext,
+                     AgentEvents parentEvents, String modelName, MemberLauncher memberLauncher) {
         this.chatModel = chatModel;
         this.config = config;
         this.reasoningEffort = reasoningEffort;
@@ -49,10 +57,18 @@ public final class Subagents implements SubagentLauncher {
         this.runContext = runContext;
         this.parentEvents = parentEvents;
         this.modelName = modelName;
+        this.memberLauncher = memberLauncher;
     }
 
     @Override
     public Result launch(String subagentType, String description, String prompt, boolean background) {
+        // 群聊成员优先：subagent_type 命中成员名时以成员自己的提示词/工具/上下文运行
+        if (memberLauncher != null) {
+            MemberLauncher.MemberPlan plan = memberLauncher.prepare(subagentType, prompt, runContext.fs());
+            if (plan != null) {
+                return launchPlan(plan, description, prompt, background);
+            }
+        }
         AgentProfiles.Profile profile = AgentProfiles.resolve(subagentType);
         String agentId = "agent_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         long startedAt = System.currentTimeMillis();
@@ -74,18 +90,59 @@ public final class Subagents implements SubagentLauncher {
                 outcome.toolUseCount(), outcome.tokens(), System.currentTimeMillis() - startedAt, null);
     }
 
+    /** 群成员委派：与内置档案同一套前台/后台结构，标签用成员名 */
+    private Result launchPlan(MemberLauncher.MemberPlan plan, String description, String prompt,
+                              boolean background) {
+        String agentId = "agent_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        long startedAt = System.currentTimeMillis();
+        if (background) {
+            var task = runContext.tasks().register(runContext.chatId(), "agent",
+                    description == null ? plan.name() : description);
+            POOL.execute(() -> {
+                task.runnerThread = Thread.currentThread();
+                Outcome outcome = runPlan(plan, agentId, prompt);
+                runContext.tasks().complete(task, outcome.failed(), 0, outcome.content());
+            });
+            return new Result(agentId, plan.name(), prompt,
+                    "Agent launched in background (" + plan.name() + "). You will be notified when it "
+                            + "completes; use TaskOutput with task_id \"" + task.id + "\" to wait for it.",
+                    0, 0, 0, task.id);
+        }
+        Outcome outcome = runPlan(plan, agentId, prompt);
+        return new Result(agentId, plan.name(), prompt, outcome.content(),
+                outcome.toolUseCount(), outcome.tokens(), System.currentTimeMillis() - startedAt, null);
+    }
+
     private record Outcome(String content, int toolUseCount, long tokens, boolean failed) {
     }
 
     private Outcome runChild(AgentProfiles.Profile profile, String agentId, String prompt) {
+        return runEngine(buildChildSystemPrompt(profile), profile.tools(), runContext.mcpTools(),
+                null, null, agentId, prompt);
+    }
+
+    /** 群成员运行：成员自己的 MCP 工具/知识库命中/技能清单，全量内置工具面 */
+    private Outcome runPlan(MemberLauncher.MemberPlan plan, String agentId, String prompt) {
+        String systemPrompt = plan.systemPrompt() == null || plan.systemPrompt().isBlank()
+                ? AgentProfiles.generalPurpose().systemPrompt()
+                : plan.systemPrompt().strip();
+        if (plan.description() != null && !plan.description().isBlank()) {
+            systemPrompt += "\n\n# 角色描述\n" + plan.description().strip();
+        }
+        return runEngine(systemPrompt, List.of("*"), plan.mcpTools(),
+                plan.knowledgeContext(), plan.skillsContext(), agentId, prompt);
+    }
+
+    private Outcome runEngine(String systemPrompt, List<String> allowedTools, List<ToolCallback> mcpTools,
+                              String knowledgeContext, String skillsContext, String agentId, String prompt) {
         MirroringEvents childEvents = new MirroringEvents(parentEvents, agentId + "-");
         ConversationState childState = new ConversationState();
         ContextBuilder childContext = new ContextBuilder(
-                buildChildSystemPrompt(profile), null, runContext.fs(), modelName);
+                systemPrompt, knowledgeContext, skillsContext, runContext.fs(), modelName);
         AgentEngine child = new AgentEngine(chatModel, config, reasoningEffort, childContext,
                 childState, runContext.chatId() + "/" + agentId, childEvents, runContext.tasks());
         ToolRegistry childRegistry = toolsetFactory.build(runContext.chatId(), childState,
-                runContext.mcpTools(), profile.tools(), null, null, runContext.hooks());
+                mcpTools, allowedTools, null, null, runContext.hooks());
         child.bindTools(childRegistry);
         try {
             child.runTurn(prompt, true);
@@ -93,7 +150,7 @@ public final class Subagents implements SubagentLauncher {
             return new Outcome(content, childEvents.toolUseCount.get(),
                     child.inputTokens() + child.outputTokens(), false);
         } catch (Exception e) {
-            log.warn("子代理执行失败 ({}): {}", profile.name(), e.getMessage());
+            log.warn("子代理执行失败 ({}): {}", agentId, e.getMessage());
             return new Outcome("(Subagent failed: " + e.getMessage() + ")", childEvents.toolUseCount.get(),
                     0, true);
         } finally {

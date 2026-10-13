@@ -117,6 +117,9 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
     private AgentVersionService agentVersionService;
 
     @Autowired
+    private com.mio.ai.resource.service.agent.AgentGroupService agentGroupService;
+
+    @Autowired
     private AgentUserConfigService agentUserConfigService;
 
     /** 广场 MioBot 槽位署名：发布者用户名 */
@@ -217,6 +220,10 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         agentMcpService.deleteByAgentId(agentId);
         agentKnowledgeService.deleteByAgentId(agentId);
         agentSkillService.deleteByAgentId(agentId);
+
+        // 群聊关系双向清理：本智能体是群则解散，是某群成员则从群中移除
+        agentGroupService.deleteByGroupId(agentId);
+        agentGroupService.deleteByMemberId(agentId);
 
         deleteSandboxMemory(agentId);
 
@@ -451,6 +458,9 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
     @Transactional(rollbackFor = Exception.class)
     public String publishAgent(Long agentId, AgentUpdateRequest request, Long userId) {
         Agent agent = checkAgentOwner(agentId, userId);
+        if (Integer.valueOf(AgentTypeEnum.GROUP.getCode()).equals(agent.getType())) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "群聊智能体不支持发布");
+        }
 
         if (request.getName() != null) {
             agent.setName(request.getName());
@@ -519,6 +529,9 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         Agent template = this.getById(templateId);
         if (template == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "智能体不存在");
+        }
+        if (Integer.valueOf(AgentTypeEnum.GROUP.getCode()).equals(template.getType())) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "群聊智能体不支持复制");
         }
 
         Agent copy = new Agent();

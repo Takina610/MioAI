@@ -11,7 +11,9 @@ import lombok.Getter;
 public enum AgentTypeEnum {
 
     GENERAL(0, "内置智能体"),
-    CUSTOM(1, "自定义智能体");
+    CUSTOM(1, "自定义智能体"),
+    /** 多个成员智能体的集合：对话时由调度中枢按任务委派成员执行 */
+    GROUP(2, "群聊智能体");
 
     private final int code;
     private final String desc;

@@ -73,6 +73,10 @@ public class MioBotController {
     @Autowired
     private AccessGuardService accessGuardService;
 
+    /** 群聊智能体成员装配（群聊轮次的调度中枢提示词与成员协调器来源） */
+    @Autowired
+    private com.mio.ai.resource.service.agent.AgentGroupService agentGroupService;
+
     /** 内置智能体的用户级个性化配置（MioBot 每人一套独立人设/温度） */
     @Autowired
     private com.mio.ai.resource.service.agent.AgentUserConfigService agentUserConfigService;
@@ -158,24 +162,42 @@ public class MioBotController {
     }
 
     /**
-     * 会话上下文容量估算：与真实轮次同源的水合/上下文构建/工具注册做一次干跑，
-     * 返回窗口大小与按类别（消息/系统工具/MCP 工具/系统提示词/技能/其他）的近似 token 占用。
-     */
-    /**
-     * 解析智能体级人设提示词：自定义智能体读 agent 行；
+     * 解析轮次级提示词与群聊协调器：自定义智能体读 agent 行；
+     * 群聊智能体（type=2）生成调度中枢提示词并携带成员装配器；
      * MioBot（内置）登录用户优先取其个性化覆盖，无覆盖回退内置默认
      */
-    private String resolveCustomSystemPrompt(long resolvedAgentId, Long userId) {
+    private PromptContext resolvePromptContext(long resolvedAgentId, Long userId) {
         if (resolvedAgentId != MioBot.AGENT_ID) {
-            return accessGuardService.checkAgentUsable(resolvedAgentId, userId).getSystemPrompt();
+            Agent agent = accessGuardService.checkAgentUsable(resolvedAgentId, userId);
+            if (Integer.valueOf(com.mio.ai.resource.model.enums.AgentTypeEnum.GROUP.getCode())
+                    .equals(agent.getType())) {
+                List<Agent> memberRows =
+                        agentGroupService.listUsableMembers(resolvedAgentId, userId);
+                if (memberRows.isEmpty()) {
+                    throw new BusinessException(ErrorCode.PARAMS_ERROR, "该群聊没有可用成员");
+                }
+                List<com.mio.ai.bot.agent.GroupCoordinator.MemberAgent> members = memberRows.stream()
+                        .map(a -> new com.mio.ai.bot.agent.GroupCoordinator.MemberAgent(
+                                a.getId(), a.getName(),
+                                a.getDescription() == null ? "" : a.getDescription(),
+                                a.getSystemPrompt()))
+                        .toList();
+                return new PromptContext(com.mio.ai.bot.agent.GroupPrompts.orchestrator(agent, members),
+                        new com.mio.ai.bot.agent.GroupCoordinator(members, userId, botResourceService));
+            }
+            return new PromptContext(agent.getSystemPrompt(), null);
         }
         if (userId == null) {
-            return null;
+            return new PromptContext(null, null);
         }
         com.mio.ai.resource.model.entity.AgentUserConfig override =
                 agentUserConfigService.getOverride(userId, MioBot.AGENT_ID);
-        return override != null && override.getSystemPrompt() != null && !override.getSystemPrompt().isBlank()
-                ? override.getSystemPrompt() : null;
+        return new PromptContext(override != null && override.getSystemPrompt() != null
+                && !override.getSystemPrompt().isBlank() ? override.getSystemPrompt() : null, null);
+    }
+
+    /** 提示词解析结果：群聊时携带协调器（Agent 工具的成员委派装配） */
+    private record PromptContext(String systemPrompt, com.mio.ai.bot.agent.GroupCoordinator coordinator) {
     }
 
     @GetMapping("/bot/context-usage")
@@ -185,7 +207,7 @@ public class MioBotController {
         String token = httpRequest.getHeader("token");
         Long userId = StrUtil.isBlank(token) ? null : redisComponent.getUserId(token);
         long resolvedAgentId = agentId != null ? agentId : MioBot.AGENT_ID;
-        String customSystemPrompt = resolveCustomSystemPrompt(resolvedAgentId, userId);
+        String customSystemPrompt = resolvePromptContext(resolvedAgentId, userId).systemPrompt();
         return ResultUtils.success(
                 contextUsageService.estimate(chatId, userId, resolvedAgentId, customSystemPrompt));
     }
@@ -217,8 +239,16 @@ public class MioBotController {
             return emitSingleReply("当前会话有正在进行的任务，请等待完成后再发送（可刷新页面查看进度）。");
         }
 
-        // MioBot 游客可用；自定义智能体要求登录且有权使用（所有者/公开已发布）
-        String customSystemPrompt = resolveCustomSystemPrompt(resolvedAgentId, userId);
+        // MioBot 游客可用；自定义/群聊智能体要求登录且有权使用。
+        // 会话占用已登记：解析失败（未登录/无权限/群无成员）须解除占用后再回单条提示
+        PromptContext promptContext;
+        try {
+            promptContext = resolvePromptContext(resolvedAgentId, userId);
+        } catch (BusinessException e) {
+            ACTIVE_CHATS.remove(chatId);
+            return emitSingleReply(e.getMessage());
+        }
+        String customSystemPrompt = promptContext.systemPrompt();
 
         // 会话记录：仅登录用户落库（游客会话不产生列表项）；重新生成时用户消息已在历史里，跳过
         if (userId != null && !skipUserPersist) {
@@ -248,6 +278,10 @@ public class MioBotController {
                 imageSearchService,
                 chatId, userId, resolvedAgentId, customSystemPrompt, engineModelName, effort, engineConfig,
                 fileTransfer, com.mio.ai.bot.model.dto.AttachmentItem.parseList(attachments));
+        // 群聊智能体：注入成员协调器（Agent 工具按成员名委派时以成员自身资源运行）
+        if (promptContext.coordinator() != null) {
+            mioBot.setGroupCoordinator(promptContext.coordinator());
+        }
         // 编辑重发：新 user 行沿用被编辑轮次的组锚（版本组持久化）
         mioBot.setUserGroupSeq(groupSeq);
         // 知识库命中摘要：回答实际引用时在收尾落引用行；MCP/技能由模型按需使用，走工具行标注

@@ -1,5 +1,17 @@
 <template>
-  <div class="chat-layout" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+  <div
+    class="chat-layout"
+    :class="{ 'sidebar-collapsed': sidebarCollapsed, 'rail-open': railOpen, 'rail-wide': railOpen && agentRailExpanded }"
+  >
+    <AgentRail
+      :agents="myAgents"
+      :current-agent-id="agentId"
+      :visible="railOpen"
+      :expanded="agentRailExpanded"
+      @select="handleRailSelect"
+      @create-group="groupModalVisible = true"
+      @toggle-expanded="agentRailExpanded = !agentRailExpanded"
+    />
     <ChatSidebar
       ref="sidebarRef"
       :agent-info="agentInfo"
@@ -41,7 +53,17 @@
           <h3 class="chat-title">{{ currentChatTitle }}</h3>
           <span v-if="!currentChatId" class="chat-subtitle">内容由AI动态生成</span>
         </div>
-        <div class="header-spacer"></div>
+        <!-- 智能体左轨开关（header 右侧，与左侧会话开关对称保持标题居中） -->
+        <button
+          v-if="userStore.isLoggedIn"
+          class="sidebar-toggle rail-toggle"
+          :class="{ active: agentRailVisible }"
+          aria-label="切换智能体侧边栏"
+          @click="agentRailVisible = !agentRailVisible"
+        >
+          <AppstoreOutlined style="font-size: 17px" />
+        </button>
+        <div v-else class="header-spacer"></div>
       </div>
 
       <div class="chat-container">
@@ -132,6 +154,13 @@
       @open-dashboard="router.push('/dashboard')"
     />
 
+    <!-- 创建群聊：从我的自定义智能体中选成员（≥2 个）+ 起名，成功后进入群聊对话 -->
+    <GroupCreateModal
+      v-model:visible="groupModalVisible"
+      :agents="groupCandidates"
+      @success="handleGroupCreated"
+    />
+
     <a-modal
       v-model:open="deleteModalVisible"
       title="⚠️确定删除对话？"
@@ -152,8 +181,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { message } from 'ant-design-vue'
+import { AppstoreOutlined } from '@ant-design/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getAgentDetail } from '@/api/agent'
+import { getAgentDetail, queryAgents } from '@/api/agent'
 import { useUserStore } from '@/store/user'
 import type { Agent, AttachmentItem, ChatMessage, ContextUsageData, MessageBlock, PendingAttachment, SubagentPanelTarget } from '@/types'
 import { isImageName } from './attachmentUtils'
@@ -162,6 +192,8 @@ import BotPet from '@/components/bot-icon/BotPet.vue'
 import { DEFAULT_BOT_ICON, parseBotIcon } from '@/components/bot-icon/types'
 import type { BotIconConfig } from '@/components/bot-icon/types'
 import ChatSidebar from './components/ChatSidebar.vue'
+import AgentRail from './components/AgentRail.vue'
+import GroupCreateModal from './components/GroupCreateModal.vue'
 import ChatMessageList from './components/ChatMessageList.vue'
 import ChatInput from './components/ChatInput.vue'
 import ChatPlanPanel from './components/ChatPlanPanel.vue'
@@ -225,6 +257,45 @@ const {
 
 // ---------- 会话搜索命令面板 ----------
 const searchModalVisible = ref(false)
+
+// ---------- 智能体左轨：我的智能体（含群聊）+ 创建群聊入口 ----------
+// 会话胶囊收缩按钮同时收起左轨（railOpen 排除 sidebarCollapsed）；左轨自己的开关在 header 右侧
+const agentRailVisible = ref(true)
+const agentRailExpanded = ref(false)
+const myAgents = ref<Agent[]>([])
+const groupModalVisible = ref(false)
+
+const railOpen = computed(() =>
+  userStore.isLoggedIn && agentRailVisible.value && !sidebarCollapsed.value)
+
+/** 群聊候选成员：我的自定义智能体（群聊不可嵌套） */
+const groupCandidates = computed(() => myAgents.value.filter(a => a.type === 1))
+
+async function loadMyAgents(): Promise<void> {
+  if (!userStore.isLoggedIn) {
+    myAgents.value = []
+    return
+  }
+  try {
+    const res = await queryAgents({ current: 1, pageSize: 100 })
+    myAgents.value = res.records ?? []
+  } catch (e) {
+    console.error('加载我的智能体失败', e)
+  }
+}
+
+function handleRailSelect(targetAgentId: number): void {
+  if (targetAgentId === agentId.value) {
+    createNewChat()
+  } else {
+    router.push(`/chat/${targetAgentId}`)
+  }
+}
+
+function handleGroupCreated(groupAgentId: number): void {
+  loadMyAgents()
+  router.push(`/chat/${groupAgentId}`)
+}
 
 function handleSearchSelectAgent(targetAgentId: number): void {
   router.push(`/chat/${targetAgentId}`)
@@ -905,7 +976,10 @@ function handleAuthSuccess(): void {
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyboardShortcut)
+  loadMyAgents()
 })
+
+watch(() => userStore.isLoggedIn, () => loadMyAgents())
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyboardShortcut)
@@ -946,10 +1020,43 @@ onBeforeUnmount(() => {
   margin-left: 12px;
 }
 
+// 智能体左轨融合：轨道胶囊占位 64px（信息面板 240px），会话胶囊右移并拆除相接侧
+// 圆角与边线（两胶囊同底色拼成一体）；main-container 同步让位。
+// 胶囊圆角/左边线宽度做成可过渡属性：收轨时融合侧平滑还原为独立胶囊
+:deep(.sidebar .sidebar-capsule) {
+  transition: box-shadow 0.28s, border-radius 0.28s cubic-bezier(0.32, 0.72, 0.35, 1),
+    border-left-width 0.28s cubic-bezier(0.32, 0.72, 0.35, 1);
+}
+
+.rail-open {
+  :deep(.sidebar) {
+    transform: translateX(64px);
+  }
+
+  &.rail-wide :deep(.sidebar) {
+    transform: translateX(240px);
+  }
+
+  :deep(.sidebar .sidebar-capsule) {
+    border-radius: 0 18px 18px 0;
+    border-left-width: 0;
+  }
+
+  .main-container {
+    margin-left: 364px;
+  }
+
+  &.rail-wide .main-container {
+    margin-left: 540px;
+  }
+}
+
 @media (max-width: 768px) {
   // 窄屏：侧边栏始终以覆盖层出现，内容不再让位
   .main-container,
-  .sidebar-collapsed .main-container {
+  .sidebar-collapsed .main-container,
+  .rail-open .main-container,
+  .rail-open.rail-wide .main-container {
     margin-left: 12px;
   }
 }
@@ -1010,6 +1117,12 @@ onBeforeUnmount(() => {
       font-size: 12px;
       color: #8c8a82;
     }
+  }
+
+  // 智能体左轨开关（header 右侧）：开启态主色点亮
+  .rail-toggle.active {
+    color: $primary-color;
+    background: rgba(42, 161, 169, 0.1);
   }
 
   // 与左侧按钮等宽的占位，保证标题绝对居中
