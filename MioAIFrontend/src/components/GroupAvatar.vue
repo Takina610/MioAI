@@ -78,15 +78,10 @@ function iconOf(m: GroupAvatarMember): BotIconConfig | null {
   return iconCache.get(m.id) ?? null
 }
 
-/** 成员小图标的稳定随机情绪（静态渲染，只取纯情绪神态） */
-const MOODS = ['happy', 'curious', 'playful', 'proud', 'surprised', 'thinking',
-  'listening', 'excited', 'shy', 'bored', 'drowsy', 'laughing', 'sad', 'confused', 'celebrate']
-
+/** 成员小图标情绪：群聊绑定状态优先（执行中全体同步），空闲一律中性 idle */
 function moodOf(id: number): string {
-  // 群聊绑定状态优先：群会话执行中全体成员小脸同步（活动仓下发）
-  if (props.state) return props.state
-  const hash = (Math.imul(id, 2654435761) ^ (id << 7) ^ (id >>> 3)) >>> 0
-  return MOODS[hash % MOODS.length]
+  void id
+  return props.state || 'idle'
 }
 </script>
 

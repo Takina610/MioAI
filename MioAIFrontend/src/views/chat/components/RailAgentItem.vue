@@ -74,25 +74,10 @@ const emit = defineEmits<{
   (e: 'toggle-pin', agent: Agent): void
 }>()
 
-/** 情绪池：纯情绪/神态（不含笔、感叹号、变形类产品形态），左轨里各智能体各有各的情绪 */
-const MOODS = [
-  'idle', 'happy', 'curious', 'playful', 'proud', 'surprised', 'thinking',
-  'listening', 'excited', 'shy', 'bored', 'drowsy', 'laughing', 'sad',
-  'scared', 'suspicious', 'confused', 'celebrate'
-]
-
-/** 闲置情绪：按 id 稳定散列取情绪——同一智能体情绪固定，不同 id 充分散开（避免大面积雷同） */
-function idleMood(id: number): string {
-  const hash = (Math.imul(id, 2654435761) ^ (id << 7) ^ (id >>> 3)) >>> 0
-  return MOODS[hash % MOODS.length]
-}
-
 /** 左轨最终情绪：执行中绑定会话实时状态（思考/工具/作答……与聊天页宠物同一套状态词汇，
  *  多会话并发取最新）；空闲以最新会话收尾状态为准（celebrate→idle→bored→drowsy→sleeping 递进）；
- *  从无会话记录的智能体回退按 id 散列的固定情绪 */
-const mood = computed(() =>
-  railMoodStates.value.get(props.agent.id) ?? idleMood(props.agent.id)
-)
+ *  从无会话记录的智能体为中性 idle——左轨状态一律与实际状态对应，不用随机情绪冒充 */
+const mood = computed(() => railMoodStates.value.get(props.agent.id) ?? 'idle')
 </script>
 
 <style lang="scss" scoped>
