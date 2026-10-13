@@ -53,7 +53,7 @@ const MOOD_TIPS: Record<string, string> = {
   sending: '发送中…',
   thinking: '思考中…',
   humming: '哼歌等待…',
-  radar: '搜索中…',
+  searching: '搜索中…',
   working: '处理中…',
   progress: '推进中…',
   writing: '编写中…',

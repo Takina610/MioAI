@@ -23,7 +23,7 @@
         v-else-if="agent.type === 2"
         :members="agent.members ?? []"
         :size="expanded ? 38 : 42"
-        :state="groupState ?? idleCycleMood(agent.id)"
+        :state="groupState ?? (sorting ? 'idle' : idleCycleMood(agent.id))"
       />
       <a-avatar v-else :size="expanded ? 34 : 38" :src="agent.avatar">
         {{ agent.name?.charAt(0)?.toUpperCase() }}
@@ -75,8 +75,14 @@ const emit = defineEmits<{
 }>()
 
 /** 左轨最终情绪：执行中绑定会话实时状态（思考/工具/作答……与聊天页宠物同一套状态词汇，
- *  多会话并发取最新）；无会话执行时空闲三态循环 happy→shy→idle（按 id 相位错开） */
-const mood = computed(() => railMoodStates.value.get(props.agent.id) ?? idleCycleMood(props.agent.id))
+ *  多会话并发取最新）；无会话执行时空闲三态循环 happy→shy→idle（按 id 相位错开）。
+ *  排序模式下冻结情绪（恒 idle/执行态）：4s 一次的状态切换会重建图标 SVG，
+ *  与 SortableJS 拖拽中的 DOM 操作冲突（首拖 ghost 失真改序失败，再拖拖不动） */
+const mood = computed(() => {
+  const bound = railMoodStates.value.get(props.agent.id)
+  if (bound) return bound
+  return props.sorting ? 'idle' : idleCycleMood(props.agent.id)
+})
 </script>
 
 <style lang="scss" scoped>
