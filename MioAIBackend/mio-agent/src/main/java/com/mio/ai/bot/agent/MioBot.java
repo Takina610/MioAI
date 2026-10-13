@@ -235,7 +235,10 @@ public class MioBot {
                 runManualCompact(engine, hydrated);
             } else {
                 Subagents launcher = new Subagents(chatModel, config, reasoningEffort,
-                        toolsetFactory, runContext, events, modelName, groupCoordinator);
+                        toolsetFactory, runContext, events, modelName, groupCoordinator,
+                        groupCoordinator != null ? new GroupMemberPresenter() : null);
+                // 群聊：成员委派以平等消息块呈现，Agent 工具行不进主消息流
+                channel.setSuppressAgentToolRows(groupCoordinator != null);
                 registry = toolsetFactory.build(chatId, state, mcpTools, null, launcher, events, toolHooks);
                 // 动态 UI 块工具：仅主轮次注册（子代理注册表不含），校验通过的块经通道下发/落库；
                 // 图片块按本会话 image_search 登记簿核对 url（防伪造）并回填来源元数据
@@ -673,6 +676,27 @@ public class MioBot {
             } catch (Exception e) {
                 return null;
             }
+        }
+    }
+
+    /**
+     * 群成员展示回调：成员执行以平等消息呈现——开始/回答流/结束分别落 member 块与事件，
+     * 用户在消息流里直接看到各成员的作答（不经子代理工具行）。
+     */
+    private final class GroupMemberPresenter implements com.mio.ai.framework.zagent.subagent.MemberPresenter {
+        @Override
+        public void started(String agentId, com.mio.ai.framework.zagent.subagent.MemberLauncher.MemberPlan plan) {
+            channel.memberStart(agentId, plan.memberId(), plan.name(), plan.icon());
+        }
+
+        @Override
+        public void delta(String agentId, String delta) {
+            channel.memberDelta(agentId, delta);
+        }
+
+        @Override
+        public void finished(String agentId, boolean failed) {
+            channel.memberDone(agentId, failed);
         }
     }
 

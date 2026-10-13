@@ -18,6 +18,17 @@
         >
           <SettingOutlined />
         </button>
+        <!-- 智能体左轨开关（侧栏右上角）：开启态主色点亮 -->
+        <button
+          v-if="userStore.isLoggedIn"
+          class="personalize-btn rail-toggle-btn"
+          :class="{ active: railVisible }"
+          title="智能体侧边栏"
+          aria-label="切换智能体侧边栏"
+          @click="emit('toggle-rail')"
+        >
+          <AppstoreOutlined />
+        </button>
       </div>
 
       <div class="sidebar-content">
@@ -115,7 +126,8 @@ import {
   SettingOutlined,
   LogoutOutlined,
   UserOutlined,
-  FormOutlined
+  FormOutlined,
+  AppstoreOutlined
 } from '@ant-design/icons-vue'
 
 const props = defineProps<{
@@ -132,6 +144,8 @@ const props = defineProps<{
   peeking: boolean
   enterPanel: () => void
   leavePanel: () => void
+  /** 智能体左轨是否展开（右上角开关的点亮态） */
+  railVisible?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -143,6 +157,7 @@ const emit = defineEmits<{
   (e: 'load-more'): void
   (e: 'login'): void
   (e: 'personalize'): void
+  (e: 'toggle-rail'): void
 }>()
 
 const router = useRouter()
@@ -237,6 +252,8 @@ defineExpose({ checkListFilled, scrollToTop })
     }
 
     .agent-name {
+      flex: 1;
+      min-width: 0;
       font-size: 16px;
       font-weight: 600;
       color: #141413;
@@ -246,7 +263,6 @@ defineExpose({ checkListFilled, scrollToTop })
     }
 
     .personalize-btn {
-      margin-left: auto;
       flex-shrink: 0;
       width: 28px;
       height: 28px;
@@ -265,6 +281,12 @@ defineExpose({ checkListFilled, scrollToTop })
         color: $primary-color;
         background: rgba(42, 161, 169, 0.08);
       }
+    }
+
+    // 左轨开关：开启态主色点亮
+    .rail-toggle-btn.active {
+      color: $primary-color;
+      background: rgba(42, 161, 169, 0.12);
     }
   }
 

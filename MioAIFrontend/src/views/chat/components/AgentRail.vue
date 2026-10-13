@@ -92,9 +92,10 @@ const iconByAgent = computed(() => {
   bottom: 0;
   left: 0;
   z-index: 60;
-  // 12 出血 + 64 胶囊（信息面板 240），宽度变化与会话胶囊位移同曲线同步
+  // 12 出血 + 64 胶囊（信息面板 240），宽度变化与会话胶囊位移同曲线同步。
+  // 右侧零 padding：胶囊右缘必须紧贴会话胶囊左缘（融合无间隙）
   width: 76px;
-  padding: 12px;
+  padding: 12px 0 12px 12px;
   box-sizing: border-box;
   transform: translateX(0);
   transition: transform 0.28s cubic-bezier(0.32, 0.72, 0.35, 1),

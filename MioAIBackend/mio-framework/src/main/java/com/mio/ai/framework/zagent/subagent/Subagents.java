@@ -40,16 +40,27 @@ public final class Subagents implements SubagentLauncher {
     private final String modelName;
     /** 群聊成员启动器（null = 普通会话，只有内置档案） */
     private final MemberLauncher memberLauncher;
+    /** 群成员展示回调（null = 沿用子代理镜像呈现） */
+    private final MemberPresenter memberPresenter;
 
     public Subagents(ChatModel chatModel, AgentEngineConfig config, String reasoningEffort,
                      ToolsetFactory toolsetFactory, ToolsetFactory.RunContext runContext,
                      AgentEvents parentEvents, String modelName) {
-        this(chatModel, config, reasoningEffort, toolsetFactory, runContext, parentEvents, modelName, null);
+        this(chatModel, config, reasoningEffort, toolsetFactory, runContext, parentEvents, modelName,
+                null, null);
     }
 
     public Subagents(ChatModel chatModel, AgentEngineConfig config, String reasoningEffort,
                      ToolsetFactory toolsetFactory, ToolsetFactory.RunContext runContext,
                      AgentEvents parentEvents, String modelName, MemberLauncher memberLauncher) {
+        this(chatModel, config, reasoningEffort, toolsetFactory, runContext, parentEvents, modelName,
+                memberLauncher, null);
+    }
+
+    public Subagents(ChatModel chatModel, AgentEngineConfig config, String reasoningEffort,
+                     ToolsetFactory toolsetFactory, ToolsetFactory.RunContext runContext,
+                     AgentEvents parentEvents, String modelName, MemberLauncher memberLauncher,
+                     MemberPresenter memberPresenter) {
         this.chatModel = chatModel;
         this.config = config;
         this.reasoningEffort = reasoningEffort;
@@ -58,16 +69,19 @@ public final class Subagents implements SubagentLauncher {
         this.parentEvents = parentEvents;
         this.modelName = modelName;
         this.memberLauncher = memberLauncher;
+        this.memberPresenter = memberPresenter;
     }
 
     @Override
     public Result launch(String subagentType, String description, String prompt, boolean background) {
-        // 群聊成员优先：subagent_type 命中成员名时以成员自己的提示词/工具/上下文运行
+        // 群聊会话：成员名命中走成员路径；群内不提供内置档案（成员是平等的，没有隐藏子代理）
         if (memberLauncher != null) {
             MemberLauncher.MemberPlan plan = memberLauncher.prepare(subagentType, prompt, runContext.fs());
-            if (plan != null) {
-                return launchPlan(plan, description, prompt, background);
+            if (plan == null) {
+                throw new IllegalStateException("subagent_type 必须使用系统提示成员名单里的成员名原文，收到: "
+                        + subagentType);
             }
+            return launchPlan(plan, description, prompt, background);
         }
         AgentProfiles.Profile profile = AgentProfiles.resolve(subagentType);
         String agentId = "agent_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
@@ -90,7 +104,7 @@ public final class Subagents implements SubagentLauncher {
                 outcome.toolUseCount(), outcome.tokens(), System.currentTimeMillis() - startedAt, null);
     }
 
-    /** 群成员委派：与内置档案同一套前台/后台结构，标签用成员名 */
+    /** 群成员委派：前台阻塞/后台任务两种结构，成员执行以平等消息呈现（presenter） */
     private Result launchPlan(MemberLauncher.MemberPlan plan, String description, String prompt,
                               boolean background) {
         String agentId = "agent_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
@@ -100,15 +114,27 @@ public final class Subagents implements SubagentLauncher {
                     description == null ? plan.name() : description);
             POOL.execute(() -> {
                 task.runnerThread = Thread.currentThread();
+                if (memberPresenter != null) {
+                    memberPresenter.started(agentId, plan);
+                }
                 Outcome outcome = runPlan(plan, agentId, prompt);
                 runContext.tasks().complete(task, outcome.failed(), 0, outcome.content());
+                if (memberPresenter != null) {
+                    memberPresenter.finished(agentId, outcome.failed());
+                }
             });
             return new Result(agentId, plan.name(), prompt,
                     "Agent launched in background (" + plan.name() + "). You will be notified when it "
                             + "completes; use TaskOutput with task_id \"" + task.id + "\" to wait for it.",
                     0, 0, 0, task.id);
         }
+        if (memberPresenter != null) {
+            memberPresenter.started(agentId, plan);
+        }
         Outcome outcome = runPlan(plan, agentId, prompt);
+        if (memberPresenter != null) {
+            memberPresenter.finished(agentId, outcome.failed());
+        }
         return new Result(agentId, plan.name(), prompt, outcome.content(),
                 outcome.toolUseCount(), outcome.tokens(), System.currentTimeMillis() - startedAt, null);
     }
@@ -116,12 +142,8 @@ public final class Subagents implements SubagentLauncher {
     private record Outcome(String content, int toolUseCount, long tokens, boolean failed) {
     }
 
-    private Outcome runChild(AgentProfiles.Profile profile, String agentId, String prompt) {
-        return runEngine(buildChildSystemPrompt(profile), profile.tools(), runContext.mcpTools(),
-                null, null, agentId, prompt);
-    }
-
-    /** 群成员运行：成员自己的 MCP 工具/知识库命中/技能清单，全量内置工具面 */
+    /** 群成员运行：成员自己的 MCP 工具/知识库命中/技能清单，全量内置工具面。
+     *  有展示回调时成员正文直接外流（平等消息），工具/思考不打扰主会话流 */
     private Outcome runPlan(MemberLauncher.MemberPlan plan, String agentId, String prompt) {
         String systemPrompt = plan.systemPrompt() == null || plan.systemPrompt().isBlank()
                 ? AgentProfiles.generalPurpose().systemPrompt()
@@ -129,13 +151,24 @@ public final class Subagents implements SubagentLauncher {
         if (plan.description() != null && !plan.description().isBlank()) {
             systemPrompt += "\n\n# 角色描述\n" + plan.description().strip();
         }
-        return runEngine(systemPrompt, List.of("*"), plan.mcpTools(),
-                plan.knowledgeContext(), plan.skillsContext(), agentId, prompt);
+        MemberStreamingEvents events = new MemberStreamingEvents(memberPresenter, agentId);
+        Outcome outcome = runEngine(systemPrompt, List.of("*"), plan.mcpTools(),
+                plan.knowledgeContext(), plan.skillsContext(), agentId, prompt, events);
+        return new Outcome(outcome.content(), events.toolUseCount.get(),
+                outcome.tokens(), outcome.failed());
+    }
+
+    private Outcome runChild(AgentProfiles.Profile profile, String agentId, String prompt) {
+        MirroringEvents mirror = new MirroringEvents(parentEvents, agentId + "-");
+        Outcome outcome = runEngine(buildChildSystemPrompt(profile), profile.tools(), runContext.mcpTools(),
+                null, null, agentId, prompt, mirror);
+        return new Outcome(outcome.content(), mirror.toolUseCount.get(),
+                outcome.tokens(), outcome.failed());
     }
 
     private Outcome runEngine(String systemPrompt, List<String> allowedTools, List<ToolCallback> mcpTools,
-                              String knowledgeContext, String skillsContext, String agentId, String prompt) {
-        MirroringEvents childEvents = new MirroringEvents(parentEvents, agentId + "-");
+                              String knowledgeContext, String skillsContext, String agentId, String prompt,
+                              AgentEvents childEvents) {
         ConversationState childState = new ConversationState();
         ContextBuilder childContext = new ContextBuilder(
                 systemPrompt, knowledgeContext, skillsContext, runContext.fs(), modelName);
@@ -146,15 +179,69 @@ public final class Subagents implements SubagentLauncher {
         child.bindTools(childRegistry);
         try {
             child.runTurn(prompt, true);
-            String content = finalText(childState);
-            return new Outcome(content, childEvents.toolUseCount.get(),
+            return new Outcome(finalText(childState), 0,
                     child.inputTokens() + child.outputTokens(), false);
         } catch (Exception e) {
             log.warn("子代理执行失败 ({}): {}", agentId, e.getMessage());
-            return new Outcome("(Subagent failed: " + e.getMessage() + ")", childEvents.toolUseCount.get(),
+            return new Outcome("(Subagent failed: " + e.getMessage() + ")", 0,
                     0, true);
         } finally {
             childRegistry.shutdown();
+        }
+    }
+
+    /** 群成员事件桥：回答增量外流给展示回调，其余（思考/工具/清单）不打扰主会话 */
+    private static final class MemberStreamingEvents implements AgentEvents {
+        private final MemberPresenter presenter;
+        private final String agentId;
+        private final java.util.concurrent.atomic.AtomicInteger toolUseCount =
+                new java.util.concurrent.atomic.AtomicInteger();
+
+        private MemberStreamingEvents(MemberPresenter presenter, String agentId) {
+            this.presenter = presenter;
+            this.agentId = agentId;
+        }
+
+        @Override
+        public void thinkingDelta(String delta) {
+        }
+
+        @Override
+        public void answerDelta(String delta) {
+            if (presenter != null) {
+                presenter.delta(agentId, delta);
+            }
+        }
+
+        @Override
+        public void toolUse(String id, String name) {
+        }
+
+        @Override
+        public void toolArgs(String id, String delta) {
+        }
+
+        @Override
+        public void toolResult(String id, String name, String content, boolean error, long durationMs) {
+            toolUseCount.incrementAndGet();
+        }
+
+        @Override
+        public void todosChanged() {
+        }
+
+        @Override
+        public void retryScheduled(int attempt, int maxAttempts, String reason) {
+        }
+
+        @Override
+        public void stepFinished(int step, long inputTokens, long outputTokens, long cachedInputTokens,
+                                 boolean cachedInputKnown,
+                                 List<com.mio.ai.framework.zagent.history.ConversationEntry.ToolCallInput> toolCalls) {
+        }
+
+        @Override
+        public void compacted(String summary) {
         }
     }
 

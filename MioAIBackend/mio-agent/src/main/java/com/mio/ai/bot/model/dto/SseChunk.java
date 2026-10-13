@@ -82,6 +82,36 @@ public record SseChunk(Map<String, Object> fields) {
         return new SseChunk(map);
     }
 
+    // ---------- 群聊成员消息（成员与群主平等显示）：member_start/delta/done 按块 id 配对 ----------
+
+    public static SseChunk memberStart(String id, long memberId, String name, String icon) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("type", "member_start");
+        putIfNotBlank(map, "id", id);
+        map.put("memberId", memberId);
+        map.put("memberName", name);
+        putIfNotBlank(map, "memberIcon", icon);
+        return new SseChunk(map);
+    }
+
+    public static SseChunk memberDelta(String id, String delta) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("type", "member_delta");
+        putIfNotBlank(map, "id", id);
+        map.put("delta", delta);
+        return new SseChunk(map);
+    }
+
+    public static SseChunk memberDone(String id, boolean failed) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("type", "member_done");
+        putIfNotBlank(map, "id", id);
+        if (failed) {
+            map.put("failed", true);
+        }
+        return new SseChunk(map);
+    }
+
     public static SseChunk heartbeat() {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("type", "heartbeat");

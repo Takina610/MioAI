@@ -541,6 +541,44 @@ export function useChatStream(options: {
         blocks.push({ type: 'kb', groups: (parsed.groups ?? []) as KbContextGroup[] })
         return { ...msg, blocks }
       }
+      case 'member_start': {
+        // 群聊成员以平等身份作答：追加成员消息块（running=正在输入态）
+        const blocks = [...closeOpenThinking(msg.blocks)]
+        blocks.push({
+          type: 'member',
+          id: String(parsed.id ?? ''),
+          memberId: Number(parsed.memberId ?? 0),
+          memberName: String(parsed.memberName ?? ''),
+          memberIcon: parsed.memberIcon ? String(parsed.memberIcon) : undefined,
+          status: 'running',
+          text: ''
+        })
+        return flushRetry({ ...msg, blocks })
+      }
+      case 'member_delta': {
+        const id = String(parsed.id ?? '')
+        const delta = String(parsed.delta ?? '')
+        if (!delta) return msg
+        const blocks = [...(msg.blocks ?? [])]
+        const idx = blocks.findIndex(b => b.type === 'member' && b.id === id)
+        if (idx < 0) return msg
+        const target = blocks[idx] as Extract<MessageBlock, { type: 'member' }>
+        blocks[idx] = { ...target, text: (target.text || '') + delta }
+        return { ...msg, blocks }
+      }
+      case 'member_done': {
+        const id = String(parsed.id ?? '')
+        const blocks = [...(msg.blocks ?? [])]
+        const idx = blocks.findIndex(b => b.type === 'member' && b.id === id)
+        if (idx < 0) return msg
+        const target = blocks[idx] as Extract<MessageBlock, { type: 'member' }>
+        blocks[idx] = {
+          ...target,
+          status: 'done',
+          failed: parsed.failed ? true : undefined
+        }
+        return { ...msg, blocks }
+      }
       case 'ui_block': {
         // 动态 UI 块（后端语义校验通过后下发）：整块插入回答流，与 text 块按时间序混合渲染。
         // update 块（render_ui targetId 原位替换）跨消息按 id 寻址替换，寻址失败降级并入当前消息

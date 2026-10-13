@@ -180,7 +180,7 @@ public class MioBotController {
                         .map(a -> new com.mio.ai.bot.agent.GroupCoordinator.MemberAgent(
                                 a.getId(), a.getName(),
                                 a.getDescription() == null ? "" : a.getDescription(),
-                                a.getSystemPrompt()))
+                                a.getSystemPrompt(), a.getIcon()))
                         .toList();
                 return new PromptContext(com.mio.ai.bot.agent.GroupPrompts.orchestrator(agent, members),
                         new com.mio.ai.bot.agent.GroupCoordinator(members, userId, botResourceService));

@@ -83,6 +83,18 @@ export type MessageBlock =
   | { type: 'thinking'; text: string; startedAt?: number; durationMs?: number }
   | (ToolEvent & { type: 'tool' })
   | {
+      /** 群聊成员消息：成员以平等身份在消息流作答（委派执行的回答直接外流） */
+      type: 'member'
+      id: string
+      memberId: number
+      memberName: string
+      /** bot-icon 配置 JSON（缺失回退首字圆形头像） */
+      memberIcon?: string
+      status: 'running' | 'done'
+      failed?: boolean
+      text: string
+    }
+  | {
       type: 'question'
       id: string
       status: 'pending' | 'answered'

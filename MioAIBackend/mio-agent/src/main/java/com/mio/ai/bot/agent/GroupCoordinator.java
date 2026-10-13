@@ -15,8 +15,8 @@ import java.util.List;
  */
 public final class GroupCoordinator implements MemberLauncher {
 
-    /** 群成员（轮次开始时已过滤可用性） */
-    public record MemberAgent(long id, String name, String description, String systemPrompt) {
+    /** 群成员（轮次开始时已过滤可用性；icon 为 bot-icon 配置 JSON，供前端渲染成员头像） */
+    public record MemberAgent(long id, String name, String description, String systemPrompt, String icon) {
     }
 
     private final List<MemberAgent> members;
@@ -38,8 +38,8 @@ public final class GroupCoordinator implements MemberLauncher {
         List<ToolCallback> mcpTools = List.of(resources.assembleMcpTools(member.id()).callbacks());
         String knowledge = resources.buildKnowledge(member.id(), userId, taskPrompt).context();
         String skills = SkillRuntime.materialize(resources.assembleSkills(member.id()), fs);
-        return new MemberPlan(member.name(), member.description(), member.systemPrompt(),
-                mcpTools, knowledge, skills);
+        return new MemberPlan(member.id(), member.name(), member.description(), member.systemPrompt(),
+                member.icon(), mcpTools, knowledge, skills);
     }
 
     /** 按成员名精确匹配（提示词里 subagent_type 用成员名原文）；兜底接受 agent-&lt;id&gt; 形式 */

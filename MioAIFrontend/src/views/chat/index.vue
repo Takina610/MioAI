@@ -1,12 +1,17 @@
 <template>
   <div
     class="chat-layout"
-    :class="{ 'sidebar-collapsed': sidebarCollapsed, 'rail-open': railOpen, 'rail-wide': railOpen && agentRailExpanded }"
+    :class="{
+      'sidebar-collapsed': sidebarCollapsed,
+      'rail-open': railOpen,
+      'rail-peek': railPeeking,
+      'rail-wide': (railOpen || railPeeking) && agentRailExpanded
+    }"
   >
     <AgentRail
       :agents="myAgents"
       :current-agent-id="agentId"
-      :visible="railOpen"
+      :visible="railOpen || railPeeking"
       :expanded="agentRailExpanded"
       @select="handleRailSelect"
       @create-group="groupModalVisible = true"
@@ -14,6 +19,8 @@
     />
     <ChatSidebar
       ref="sidebarRef"
+      :rail-visible="agentRailVisible"
+      @toggle-rail="agentRailVisible = !agentRailVisible"
       :agent-info="agentInfo"
       :can-personalize="userStore.isLoggedIn && agentInfo?.type === 0"
       :chat-list="chatList"
@@ -53,17 +60,7 @@
           <h3 class="chat-title">{{ currentChatTitle }}</h3>
           <span v-if="!currentChatId" class="chat-subtitle">内容由AI动态生成</span>
         </div>
-        <!-- 智能体左轨开关（header 右侧，与左侧会话开关对称保持标题居中） -->
-        <button
-          v-if="userStore.isLoggedIn"
-          class="sidebar-toggle rail-toggle"
-          :class="{ active: agentRailVisible }"
-          aria-label="切换智能体侧边栏"
-          @click="agentRailVisible = !agentRailVisible"
-        >
-          <AppstoreOutlined style="font-size: 17px" />
-        </button>
-        <div v-else class="header-spacer"></div>
+        <div class="header-spacer"></div>
       </div>
 
       <div class="chat-container">
@@ -73,6 +70,8 @@
           :is-loading="isLoading"
           :can-modify="userStore.isLoggedIn"
           :chat-id="currentChatId ?? undefined"
+          :group-mode="agentInfo?.type === 2"
+          :group-name="agentInfo?.name"
           :edit-render-cards="renderEditCards"
           :edit-leaving-keys="leavingEditKeys"
           :edit-ref-setter="setEditCardRef"
@@ -181,7 +180,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { message } from 'ant-design-vue'
-import { AppstoreOutlined } from '@ant-design/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getAgentDetail, queryAgents } from '@/api/agent'
 import { useUserStore } from '@/store/user'
@@ -267,6 +265,10 @@ const groupModalVisible = ref(false)
 
 const railOpen = computed(() =>
   userStore.isLoggedIn && agentRailVisible.value && !sidebarCollapsed.value)
+
+/** 收起态悬浮会话开关（peek）时左轨一起滑出：与展开态同款融合，但作为覆盖层不挤动内容 */
+const railPeeking = computed(() =>
+  userStore.isLoggedIn && agentRailVisible.value && sidebarCollapsed.value && sidebarPeeking.value)
 
 /** 群聊候选成员：我的自定义智能体（群聊不可嵌套） */
 const groupCandidates = computed(() => myAgents.value.filter(a => a.type === 1))
@@ -1021,20 +1023,23 @@ onBeforeUnmount(() => {
 }
 
 // 智能体左轨融合：轨道胶囊占位 64px（信息面板 240px），会话胶囊右移并拆除相接侧
-// 圆角与边线（两胶囊同底色拼成一体）；main-container 同步让位。
+// 圆角与边线（两胶囊同底色无缝拼接）；main-container 同步让位。
+// rail-open=常驻展开；rail-peek=收起态悬浮 peek（覆盖层，不挤动内容，左轨一起滑出）。
 // 胶囊圆角/左边线宽度做成可过渡属性：收轨时融合侧平滑还原为独立胶囊
 :deep(.sidebar .sidebar-capsule) {
   transition: box-shadow 0.28s, border-radius 0.28s cubic-bezier(0.32, 0.72, 0.35, 1),
     border-left-width 0.28s cubic-bezier(0.32, 0.72, 0.35, 1);
 }
 
-.rail-open {
+.rail-open,
+.rail-peek {
   :deep(.sidebar) {
     transform: translateX(64px);
   }
 
-  &.rail-wide :deep(.sidebar) {
-    transform: translateX(240px);
+  // peek 态会话胶囊本停在 0 位：有左轨时同样右移让位（特异性盖过胶囊自身的 peek 规则）
+  :deep(.sidebar.collapsed.peek) {
+    transform: translateX(64px);
   }
 
   :deep(.sidebar .sidebar-capsule) {
@@ -1042,13 +1047,18 @@ onBeforeUnmount(() => {
     border-left-width: 0;
   }
 
-  .main-container {
-    margin-left: 364px;
+  &.rail-wide :deep(.sidebar),
+  &.rail-wide :deep(.sidebar.collapsed.peek) {
+    transform: translateX(240px);
   }
+}
 
-  &.rail-wide .main-container {
-    margin-left: 540px;
-  }
+.rail-open .main-container {
+  margin-left: 364px;
+}
+
+.rail-open.rail-wide .main-container {
+  margin-left: 540px;
 }
 
 @media (max-width: 768px) {
@@ -1117,12 +1127,6 @@ onBeforeUnmount(() => {
       font-size: 12px;
       color: #8c8a82;
     }
-  }
-
-  // 智能体左轨开关（header 右侧）：开启态主色点亮
-  .rail-toggle.active {
-    color: $primary-color;
-    background: rgba(42, 161, 169, 0.1);
   }
 
   // 与左侧按钮等宽的占位，保证标题绝对居中

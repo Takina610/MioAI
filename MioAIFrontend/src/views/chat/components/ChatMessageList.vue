@@ -25,6 +25,8 @@
             :chat-id="chatId"
             :message-id="msg.id"
             :version="versionOf(msg)"
+            :group-mode="groupMode"
+            :group-name="groupName"
             @open-subagent="emit('openSubagent', $event)"
             @send-prompt="emit('sendPrompt', $event)"
           />
@@ -118,6 +120,10 @@ const props = defineProps<{
   editLeavingKeys?: Set<string>
   /** 编辑卡片 v-for 动态 ref 登记器（父级动画组合式需要元素引用） */
   editRefSetter?: (key: string) => (el: unknown) => void
+  /** 群聊模式（当前智能体是群聊）：助手消息以群聊气泡语言渲染 */
+  groupMode?: boolean
+  /** 群聊模式下的群名（群主气泡署名） */
+  groupName?: string
 }>()
 
 const emit = defineEmits<{

@@ -20,8 +20,8 @@ public interface MemberLauncher {
      */
     MemberPlan prepare(String subagentType, String taskPrompt, SandboxFs fs);
 
-    /** 群成员一次委派的运行物料：成员自己的提示词 / MCP 工具 / 知识库命中 / 技能清单 */
-    record MemberPlan(String name, String description, String systemPrompt,
+    /** 群成员一次委派的运行物料：成员自己的提示词 / MCP 工具 / 知识库命中 / 技能清单 / 展示信息 */
+    record MemberPlan(long memberId, String name, String description, String systemPrompt, String icon,
                       List<ToolCallback> mcpTools, String knowledgeContext, String skillsContext) {
     }
 }

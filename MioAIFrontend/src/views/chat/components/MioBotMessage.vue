@@ -149,15 +149,23 @@
       :class="{ active: line.active }"
     >{{ line.label }}</div>
 
-    <!-- 最终回答：最后过程块之后的 text/ui 块按序混合渲染（无过程块时渲染全部） -->
+    <!-- 最终回答：最后过程块之后的 text/member/ui 块按序混合渲染（无过程块时渲染全部）。
+         群聊模式：群主正文=右对齐署名气泡，成员消息=左对齐成员气泡（平等层级） -->
     <template v-if="answerSegments.length">
       <template v-for="(seg, si) in answerSegments" :key="`seg-${si}`">
+        <div v-if="seg.kind === 'text' && groupMode" class="group-own-row">
+          <span v-if="groupName" class="group-own-name">{{ groupName }}</span>
+          <div class="group-own-bubble">
+            <MarkdownView :content="seg.text" />
+          </div>
+        </div>
         <MarkdownView
-          v-if="seg.kind === 'text'"
+          v-else-if="seg.kind === 'text'"
           class="answer-content"
           :class="{ 'with-process': processBlocks.length > 0 }"
           :content="seg.text"
         />
+        <MemberBubble v-else-if="seg.kind === 'member'" :block="seg.block" />
         <UiBlockRenderer v-else :block="seg.block" :chat-id="chatId" @send="emit('sendPrompt', $event)" />
       </template>
     </template>
@@ -204,6 +212,7 @@ import AttachmentCards from './AttachmentCards.vue'
 import ToolRow from './ToolRow.vue'
 import ResourceRow from './ResourceRow.vue'
 import SkillRow from './SkillRow.vue'
+import MemberBubble from './MemberBubble.vue'
 import UiBlockRenderer from './ui/UiBlockRenderer.vue'
 import { messageAttachmentDisplays } from '../attachmentUtils'
 import { answerQuestion } from '@/api/chat'
@@ -234,6 +243,10 @@ interface Props {
   messageId?: string
   /** 当前显示的版本号（历史版本的块里也能打开子代理面板） */
   version?: number
+  /** 群聊模式：群主正文渲染为右对齐署名气泡，成员消息为左对齐成员气泡 */
+  groupMode?: boolean
+  /** 群聊模式下的群名（群主气泡署名） */
+  groupName?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -317,7 +330,8 @@ onUnmounted(() => {
 const lastNonTextIndex = computed(() => {
   for (let i = props.blocks.length - 1; i >= 0; i--) {
     const type = props.blocks[i].type
-    if (type !== 'text' && type !== 'attachments' && type !== 'kb' && type !== 'retry' && type !== 'ui') return i
+    if (type !== 'text' && type !== 'attachments' && type !== 'kb' && type !== 'retry'
+      && type !== 'ui' && type !== 'member') return i
   }
   return -1
 })
@@ -327,7 +341,8 @@ const processBlocks = computed(() => {
   const out: Array<{ block: MessageBlock; index: number }> = []
   for (let i = 0; i <= lastNonTextIndex.value; i++) {
     const block = props.blocks[i]
-    if (block.type === 'attachments' || block.type === 'kb' || isMirroredToolBlock(block)) continue
+    if (block.type === 'attachments' || block.type === 'kb' || block.type === 'member'
+      || isMirroredToolBlock(block)) continue
     // render_ui 的工具行不进过程区：其成品是回答区的 ui 块，过程行重复且只有原始 JSON
     if (block.type === 'tool' && block.tool === 'render_ui') continue
     // ui 块是回答内容：永不进过程区，全部按原序并入回答区（answerSegments）
@@ -372,12 +387,15 @@ const uiRendering = computed(() =>
   props.blocks.some(b => b.type === 'tool' && b.tool === 'render_ui' && b.status === 'running')
 )
 
-/** 最终回答 = 全部 ui 块（按原序，永不进过程区）+ 过程边界之后的 text 块：
- *  相邻 text 块合并成一段 Markdown，ui 块保持独立位置（流式期 render_ui 落在两段文本
- *  之间时正文自然分段）。边界后仍可能出现 thinking（模型收尾前的短思考）——
- *  它不再把已落位的 ui 块打回过程区。actions（后续操作按钮）固定沉底：
- *  按钮是"预测用户下一步"的组件，放在整条回答末尾才符合直觉 */
-type AnswerSegment = { kind: 'text'; text: string } | { kind: 'ui'; block: Extract<MessageBlock, { type: 'ui' }> }
+/** 最终回答 = 全部 ui/member 块（按原序，永不进过程区）+ 过程边界之后的 text 块：
+ *  相邻 text 块合并成一段 Markdown，ui/member 块保持独立位置（流式期 render_ui 落在两段文本
+ *  之间时正文自然分段；群聊里成员消息把群主正文天然分段成多条气泡）。边界后仍可能出现
+ *  thinking（模型收尾前的短思考）——它不再把已落位的 ui 块打回过程区。
+ *  actions（后续操作按钮）固定沉底：按钮是"预测用户下一步"的组件，放在整条回答末尾才符合直觉 */
+type AnswerSegment =
+  | { kind: 'text'; text: string }
+  | { kind: 'ui'; block: Extract<MessageBlock, { type: 'ui' }> }
+  | { kind: 'member'; block: Extract<MessageBlock, { type: 'member' }> }
 const answerSegments = computed<AnswerSegment[]>(() => {
   const boundary = lastNonTextIndex.value
   const segments: AnswerSegment[] = []
@@ -388,6 +406,8 @@ const answerSegments = computed<AnswerSegment[]>(() => {
       const seg: AnswerSegment = { kind: 'ui', block }
       if (block.kind === 'actions') trailingActions.push(seg)
       else segments.push(seg)
+    } else if (block.type === 'member') {
+      segments.push({ kind: 'member', block })
     } else if (block.type === 'text' && i > boundary && block.text) {
       const last = segments[segments.length - 1]
       if (last && last.kind === 'text') last.text += block.text
@@ -925,6 +945,56 @@ function durationSuffix(block: ThinkingBlock): string {
 .answer-content {
   font-size: 14px;
   padding: 0 4px;
+}
+
+// ---------- 群聊模式：群主正文 = 右对齐署名气泡（与用户消息同一气泡语言） ----------
+.group-own-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin: 10px 0;
+}
+
+.group-own-name {
+  font-size: 12px;
+  color: #8c8a82;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.group-own-bubble {
+  max-width: 70%;
+  padding: 12px 16px;
+  border-radius: 14px 4px 14px 14px;
+  background: #ece9de;
+  color: #141413;
+  font-size: 14px;
+  line-height: 1.6;
+  word-break: break-word;
+
+  :deep(code) {
+    background: rgba(20, 20, 19, 0.08);
+  }
+
+  :deep(pre.md-code) {
+    background: rgba(20, 20, 19, 0.05);
+    border-color: transparent;
+
+    code {
+      color: #141413;
+    }
+  }
+
+  :deep(a) {
+    color: $primary-color;
+    text-decoration: underline;
+  }
+
+  :deep(blockquote) {
+    background: rgba(20, 20, 19, 0.05);
+    color: #5f5d55;
+    border-left-color: #b0aea5;
+  }
 }
 
 // Agent 产出附件区（正文下方，可下载）

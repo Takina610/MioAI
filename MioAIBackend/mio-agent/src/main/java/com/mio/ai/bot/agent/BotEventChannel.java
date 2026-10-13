@@ -75,6 +75,9 @@ public class BotEventChannel {
     // 本轮已展示过技能行的技能（channel 与轮次同生命周期）：同一技能只展示一次，重复读取保持普通工具行
     private final java.util.Set<String> emittedSkills = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
+    // 群聊会话（MioBot 注入）：Agent 工具行不下发——成员委派以 member 块（平等消息）呈现
+    private volatile boolean suppressAgentToolRows;
+
     // WIP 行（增量落库）：轮次开始即建行，每个模型步刷新 blocks，正常收尾删除。
     // 进程崩溃/被杀时该行保留已流出的部分过程，刷新页面与下一轮水合都拿得到
     private volatile Long wipRowId;
@@ -106,6 +109,11 @@ public class BotEventChannel {
         this.skillNames = skillNames == null ? Map.of() : skillNames;
     }
 
+    /** 群聊模式（MioBot 轮次开始时注入）：抑制 Agent 工具行，成员委派改走 member 块 */
+    public void setSuppressAgentToolRows(boolean suppressAgentToolRows) {
+        this.suppressAgentToolRows = suppressAgentToolRows;
+    }
+
     /** Agent 产出文件：追加附件展示块并推送事件（前端渲染为可下载附件） */
     public void attachments(List<Map<String, Object>> items) {
         if (items == null || items.isEmpty()) {
@@ -132,6 +140,10 @@ public class BotEventChannel {
     }
 
     public void toolUse(String id, String tool) {
+        // 群聊：Agent 工具行不呈现（成员委派由 member 块承载，成员与群主平等显示）
+        if (suppressAgentToolRows && "Agent".equals(tool)) {
+            return;
+        }
         closeOpenThinking();
         Map<String, Object> block = new LinkedHashMap<>();
         block.put("type", "tool");
@@ -182,6 +194,10 @@ public class BotEventChannel {
      * （最终报告 + agentId/usage 页脚），预览截断会让面板流式期间缺报告，故与落库同量级下发。
      */
     public void toolResult(String id, String tool, String content) {
+        // 群聊：Agent 工具结果不呈现（成员回答已在 member 块流式外流）
+        if (suppressAgentToolRows && "Agent".equals(tool)) {
+            return;
+        }
         String full = content == null ? "" : content;
         if (full.length() > TOOL_RESULT_PERSIST_CAP) {
             full = full.substring(0, TOOL_RESULT_PERSIST_CAP)
@@ -202,7 +218,20 @@ public class BotEventChannel {
      */
     public void abortRunningTools() {
         for (Map<String, Object> block : displayBlocks) {
-            if (!"tool".equals(block.get("type")) || !"running".equals(block.get("status"))) {
+            if ("tool".equals(block.get("type")) && !"running".equals(block.get("status"))) {
+                continue;
+            }
+            if ("member".equals(block.get("type"))) {
+                // 中断收尾：悬挂的成员消息也关闭（前端停止输入态）
+                if ("running".equals(block.get("status"))) {
+                    block.put("status", "done");
+                    Object mid = block.get("id");
+                    emit(SseChunk.memberDone(mid instanceof String text && !text.isBlank() ? text : null,
+                            true).fields());
+                }
+                continue;
+            }
+            if (!"tool".equals(block.get("type"))) {
                 continue;
             }
             block.put("status", "done");
@@ -212,6 +241,63 @@ public class BotEventChannel {
             emit(SseChunk.toolResult(idText, String.valueOf(block.get("tool")),
                     INTERRUPTED_TOOL_RESULT).fields());
         }
+    }
+
+    // ---------- 群聊成员消息块（成员与群主平等显示，不经过子代理工具行） ----------
+
+    /** 成员开始执行：追加 member 块（running，前端出"正在输入"态） */
+    public void memberStart(String id, long memberId, String name, String icon) {
+        closeOpenThinking();
+        Map<String, Object> block = new LinkedHashMap<>();
+        block.put("type", "member");
+        block.put("id", id);
+        block.put("memberId", memberId);
+        block.put("memberName", name);
+        if (icon != null && !icon.isBlank()) {
+            block.put("memberIcon", icon);
+        }
+        block.put("status", "running");
+        block.put("text", "");
+        displayBlocks.add(block);
+        emit(SseChunk.memberStart(id, memberId, name, icon).fields());
+    }
+
+    /** 成员回答增量：按块 id 追加文本并下发事件 */
+    public void memberDelta(String id, String delta) {
+        if (delta == null || delta.isEmpty()) {
+            return;
+        }
+        Map<String, Object> target = findMemberBlock(id);
+        if (target != null) {
+            target.put("text", String.valueOf(target.get("text")) + delta);
+        }
+        emit(SseChunk.memberDelta(id, delta).fields());
+    }
+
+    /** 成员结束：块状态收尾（failed=true 时前端按失败呈现） */
+    public void memberDone(String id, boolean failed) {
+        Map<String, Object> target = findMemberBlock(id);
+        if (target != null) {
+            target.put("status", "done");
+            if (failed) {
+                target.put("failed", true);
+            }
+        }
+        emit(SseChunk.memberDone(id, failed).fields());
+    }
+
+    /** 按块 id 找成员块 */
+    private Map<String, Object> findMemberBlock(String id) {
+        if (id == null || id.isBlank()) {
+            return null;
+        }
+        for (int i = displayBlocks.size() - 1; i >= 0; i--) {
+            Map<String, Object> b = displayBlocks.get(i);
+            if ("member".equals(b.get("type")) && id.equals(b.get("id"))) {
+                return b;
+            }
+        }
+        return null;
     }
 
     /** 任务清单变化：推送结构化步骤列表，前端渲染为计划面板 */
