@@ -23,7 +23,7 @@
         v-else-if="agent.type === 2"
         :members="agent.members ?? []"
         :size="expanded ? 38 : 42"
-        :state="groupState"
+        :state="groupState ?? idleCycleMood(agent.id)"
       />
       <a-avatar v-else :size="expanded ? 34 : 38" :src="agent.avatar">
         {{ agent.name?.charAt(0)?.toUpperCase() }}
@@ -53,7 +53,7 @@ import { computed } from 'vue'
 import BotIcon from '@/components/bot-icon/BotIcon.vue'
 import GroupAvatar from '@/components/GroupAvatar.vue'
 import { HolderOutlined, PushpinFilled, PushpinOutlined } from '@ant-design/icons-vue'
-import { railMoodStates } from '../composables/useAgentActivity'
+import { idleCycleMood, railMoodStates } from '../composables/useAgentActivity'
 import type { BotIconConfig } from '@/components/bot-icon/types'
 import type { Agent } from '@/types'
 
@@ -75,9 +75,8 @@ const emit = defineEmits<{
 }>()
 
 /** 左轨最终情绪：执行中绑定会话实时状态（思考/工具/作答……与聊天页宠物同一套状态词汇，
- *  多会话并发取最新）；空闲以最新会话收尾状态为准（celebrate→idle→bored→drowsy→sleeping 递进）；
- *  从无会话记录的智能体为中性 idle——左轨状态一律与实际状态对应，不用随机情绪冒充 */
-const mood = computed(() => railMoodStates.value.get(props.agent.id) ?? 'idle')
+ *  多会话并发取最新）；无会话执行时空闲三态循环 happy→shy→idle（按 id 相位错开） */
+const mood = computed(() => railMoodStates.value.get(props.agent.id) ?? idleCycleMood(props.agent.id))
 </script>
 
 <style lang="scss" scoped>

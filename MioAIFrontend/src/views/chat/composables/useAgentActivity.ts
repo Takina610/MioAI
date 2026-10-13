@@ -5,12 +5,17 @@ import { computed, reactive, ref } from 'vue'
  *
  * 数据流：
  * - 流式事件（useChatStream.applyEnvelope 处的 observe）→ 按事件类型映射引擎状态
- *   （思考→thinking / 工具→radar|working / 回答→writing / 重试→confused / 提问→curious / 清单→progress）
+ *   （思考→thinking / 工具→searching|working / 回答→writing / 重试→confused / 提问→curious / 清单→progress）
  * - 后端轮询（/bot/active-chats，10s）→ 补挂本页没有流式连接的执行中会话（刷新/接管场景），
- *   并摘除已不在后端执行且本地也无流连接的轮次
+ *   并摘除已不在后端执行的轮次（后端 active 列表是执行与否的权威）
  * - done/stopped/error → endTurn
  *
- * 同一智能体多个会话并发执行时，以 startedAt 最新的会话状态为绑定基准（computed 每次取最大）。
+ * 状态规则：
+ * - 会话执行中：实时绑定该会话状态；同一智能体多会话并发以 startedAt 最新者为准（computed 取最大），
+ *   较新的会话结束后回退到较旧会话的实时状态
+ * - 无会话执行：happy → shy → idle 三态循环（按 id 相位错开，不同智能体不同步）——
+ *   不用随机情绪、也不显示收尾结果情绪，左轨不出现与实际执行无关的状态
+ *
  * 状态值为 BotIcon 引擎的合法状态名（与 useBotMood 的忙碌态同一套词汇）。
  */
 
@@ -31,9 +36,9 @@ export interface BackendTurn {
 /** chatId → 轮次（reactive Map，组件外模块级：切会话/切智能体不重置） */
 const activeTurns = reactive(new Map<string, ActiveTurn>())
 
-/** 搜索类工具 → radar（与 useBotMood.toolMood 同一启发式） */
+/** 搜索类工具 → searching（与 useBotMood.toolMood 同一启发式） */
 function toolState(tool: string): string {
-  return /search|web|fetch|browse|http|news/i.test(tool) ? 'radar' : 'working'
+  return /search|web|fetch|browse|http|news/i.test(tool) ? 'searching' : 'working'
 }
 
 /** 本地发起一轮：发送瞬间为 sending（首字前恒发送中，与宠物映射一致） */
@@ -42,61 +47,22 @@ export function beginTurn(chatId: string, agentId: number, startedAt = Date.now(
   activeTurns.set(chatId, { agentId, startedAt, state: 'sending' })
 }
 
-// ---------- 最近一轮收尾（空闲态绑定：无执行中会话时，以最新会话收尾状态为准） ----------
-
-export type TurnOutcome = 'success' | 'stopped' | 'error'
-
-/** agentId → 最近一轮收尾信息（live 记录 + /bot/agent-latest-turns 持久化来源） */
-const latestTurnEnds = reactive(new Map<number, { endedAt: number; outcome: TurnOutcome }>())
-
-/** 后端 /bot/agent-latest-turns 行 */
-export interface LatestTurnInfo {
-  agentId: number
-  endedAt?: number
-  stopped?: boolean
-}
-
-/** 页面加载/轮询：以持久化的最近一轮初始化（live 记录的一律更新——它更新） */
-export function syncLatestTurns(turns: LatestTurnInfo[]): void {
-  for (const t of turns) {
-    if (!t.agentId || !t.endedAt) continue
-    const existing = latestTurnEnds.get(t.agentId)
-    // 后端行更晚（其他端发起的轮次）才采纳；live 记录的时间通常更新
-    if (!existing || t.endedAt > existing.endedAt) {
-      latestTurnEnds.set(t.agentId, { endedAt: t.endedAt, outcome: t.stopped ? 'stopped' : 'success' })
-    }
-  }
-}
-
-/** 结束一轮（done/stopped/error/后端消失）：摘除执行态并记录收尾（幂等，重复调用不覆盖已记录的收尾） */
-export function endTurn(chatId: string, outcome: TurnOutcome = 'success'): void {
-  const turn = activeTurns.get(chatId)
+/** 结束一轮（done/stopped/error/后端消失）：摘除执行态。幂等 */
+export function endTurn(chatId: string): void {
   activeTurns.delete(chatId)
-  if (!turn) return
-  latestTurnEnds.set(turn.agentId, { endedAt: Date.now(), outcome })
 }
 
-/**
- * 空闲态递进（与聊天页宠物同一时间轴）：收尾瞬间出结果情绪（celebrate/confused/angry），
- * 90 秒后 idle → 3 分钟 bored → 6 分钟 drowsy → 之后 sleeping。
- * tick 每分钟自增驱动 computed 重估（时间推移不依赖新事件）。
- */
-const OUTCOME_MOODS: Record<TurnOutcome, string> = {
-  success: 'celebrate',
-  stopped: 'confused',
-  error: 'angry'
-}
-const nowTick = ref(0)
-window.setInterval(() => { nowTick.value++ }, 30_000)
+/** 空闲三态循环（无会话执行时左轨的唯一空闲表现）：happy → shy → idle 循环，
+ *  相位按智能体 id 错开避免全员同拍。tick 驱动使用方 computed 周期重估。 */
+const IDLE_CYCLE = ['happy', 'shy', 'idle']
+const IDLE_PHASE_MS = 4000
+const idleCycleTick = ref(0)
+window.setInterval(() => { idleCycleTick.value++ }, IDLE_PHASE_MS)
 
-function idleMoodFromTurn(info: { endedAt: number; outcome: TurnOutcome }): string {
-  void nowTick.value
-  const idleMs = Date.now() - info.endedAt
-  if (idleMs < 8_000) return OUTCOME_MOODS[info.outcome]
-  if (idleMs < 90_000) return 'idle'
-  if (idleMs < 3 * 60_000) return 'bored'
-  if (idleMs < 6 * 60_000) return 'drowsy'
-  return 'sleeping'
+export function idleCycleMood(id: number): string {
+  void idleCycleTick.value
+  const phase = Math.floor(Date.now() / IDLE_PHASE_MS) + id
+  return IDLE_CYCLE[phase % IDLE_CYCLE.length]
 }
 
 /** agentId → 执行中状态（仅活跃轮次，最新会话优先）：群组磁贴（成员拼贴头像）执行中绑定用 */
@@ -116,14 +82,11 @@ export const agentExecutingStates = computed(() => {
 })
 
 /**
- * 左轨最终情绪（agentId → 状态）：执行中绑定实时状态（多会话最新优先）；
- * 空闲时以最新会话收尾状态为准（结果情绪 → 随时间递进入睡）；从无会话记录的
- * 智能体不在表内，由调用方回退各自的固定散列情绪。
+ * 左轨最终情绪（agentId → 状态）：执行中绑定实时状态（多会话最新优先）。
+ * 无执行中会话的智能体不在表内，由调用方（RailAgentItem）回退 idleCycleMood 三态循环。
  */
 export const railMoodStates = computed(() => {
-  void nowTick.value
   const states = new Map<number, string>()
-  // 执行中（最新会话优先）
   const best = new Map<number, ActiveTurn>()
   for (const turn of activeTurns.values()) {
     const current = best.get(turn.agentId)
@@ -133,12 +96,6 @@ export const railMoodStates = computed(() => {
   }
   for (const [agentId, turn] of best) {
     states.set(agentId, turn.state)
-  }
-  // 空闲：最近一轮收尾递进（执行中的不覆盖）
-  for (const [agentId, info] of latestTurnEnds) {
-    if (!states.has(agentId)) {
-      states.set(agentId, idleMoodFromTurn(info))
-    }
   }
   return states
 })
@@ -167,7 +124,7 @@ export function observeTurn(chatId: string, event: Record<string, any>): void {
       break
     case 'tool_result':
       // 工具收尾：引擎继续下一步（与宠物 busy 映射的"工具完成→思考"一致）
-      if (turn.state === 'radar' || turn.state === 'working') turn.state = 'thinking'
+      if (turn.state === 'searching' || turn.state === 'working') turn.state = 'thinking'
       break
     case 'member_start':
     case 'member_delta':
@@ -184,13 +141,9 @@ export function observeTurn(chatId: string, event: Record<string, any>): void {
       turn.state = 'confused'
       break
     case 'done':
-      endTurn(chatId, 'success')
-      break
     case 'stopped':
-      endTurn(chatId, 'stopped')
-      break
     case 'error':
-      endTurn(chatId, 'error')
+      endTurn(chatId)
       break
     default:
       break
@@ -219,8 +172,7 @@ export function syncBackendTurns(turns: BackendTurn[]): void {
   }
   for (const [chatId, turn] of [...activeTurns.entries()]) {
     if (!backendIds.has(chatId) && Date.now() - turn.startedAt > 20_000) {
-      // 后端权威兜底清除的轮次已收尾（收尾事件可能已丢）：按成功收尾记录
-      endTurn(chatId, 'success')
+      endTurn(chatId)
     }
   }
 }

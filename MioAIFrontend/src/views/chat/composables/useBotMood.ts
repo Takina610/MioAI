@@ -10,7 +10,7 @@ import type { ChatMessage, MessageBlock, PlanStep } from '@/types'
  * - sending 持续到回复首字出现（避免首字前出现"思考中"的空档）
  * - 提问待回答 ……………………………… curious（凑近等你说）
  * - 瞬态重试中（retryNotice）……………… confused（疑惑挠头）
- * - 搜索类工具运行 ………………………… radar（雷达扫描）
+ * - 搜索类工具运行 ………………………… searching（搜寻张望）
  * - 其他工具运行 …………………………… working（忙碌晃动）
  * - 任务清单有进行中步骤 …………………… progress（进度环）
  * - 思考块流式 ……………………………… thinking（思考点）
@@ -102,7 +102,7 @@ export function useBotMood(
   })
 
   function toolMood(tool: string): string {
-    if (/search|web|fetch|browse|http|news/i.test(tool)) return 'radar'
+    if (/search|web|fetch|browse|http|news/i.test(tool)) return 'searching'
     return 'working'
   }
 

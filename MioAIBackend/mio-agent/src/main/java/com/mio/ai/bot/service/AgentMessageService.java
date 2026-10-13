@@ -26,8 +26,6 @@ public interface AgentMessageService {
     /** 按会话取出全部消息（seq 升序） */
     List<AgentMessageDO> listByConversation(String conversationId);
 
-    /** 每个智能体最近一条 assistant 行（左轨空闲情绪 = 最新会话收尾状态的持久化来源） */
-    List<AgentMessageDO> listLatestAssistantPerAgent(Long userId);
 
     /** 删除会话的全部消息（会话删除时级联，含版本归档） */
     void deleteByConversation(String conversationId);

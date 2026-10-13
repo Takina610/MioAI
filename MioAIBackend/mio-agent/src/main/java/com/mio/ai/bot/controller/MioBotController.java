@@ -572,28 +572,6 @@ public class MioBotController {
      * 会话执行状态在后端（ACTIVE_CHATS），刷新/切页后前端内存态清空——
      * 侧边栏据此轮询补齐，执行动画跨刷新保持，不再依赖"点开会话触发接管"才出现。
      */
-    /**
-     * 每个智能体最近一轮的收尾状态（左轨空闲情绪数据源）：以最新会话为准——
-     * endedAt 为收尾时间，stopped 标记被用户中断的轮次。
-     */
-    @GetMapping("/bot/agent-latest-turns")
-    public BaseResponse<List<java.util.Map<String, Object>>> agentLatestTurns(jakarta.servlet.http.HttpServletRequest httpRequest) {
-        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
-        if (userId == null) {
-            return ResultUtils.success(List.of());
-        }
-        List<java.util.Map<String, Object>> turns = new ArrayList<>();
-        for (AgentMessageDO row : agentMessageService.listLatestAssistantPerAgent(userId)) {
-            java.util.Map<String, Object> item = new java.util.LinkedHashMap<>();
-            item.put("agentId", row.getAgentId());
-            item.put("endedAt", row.getCreateTime() != null ? row.getCreateTime().getTime() : null);
-            String blocks = row.getBlocks();
-            item.put("stopped", blocks != null && blocks.contains("\"type\":\"stopped\""));
-            turns.add(item);
-        }
-        return ResultUtils.success(turns);
-    }
-
     @GetMapping("/bot/active-chats")
     public BaseResponse<List<java.util.Map<String, Object>>> activeChats(jakarta.servlet.http.HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));

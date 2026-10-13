@@ -35,7 +35,7 @@
         <!-- 当前智能体/群聊的编辑入口（原左轨开关位置）：智能体→编辑弹窗，群聊→编辑群聊 -->
         <button
           v-if="canEditAgent"
-          class="personalize-btn"
+          class="edit-agent-btn"
           title="编辑智能体"
           aria-label="编辑智能体"
           @click="emit('edit-agent')"
@@ -239,6 +239,7 @@ defineExpose({ checkListFilled, scrollToTop })
       animation: peek-logo-in 0.22s ease 0.24s backwards;
     }
 
+    // 个性化按钮隐藏；编辑按钮保留（悬浮预览也要能进入修改）
     .personalize-btn {
       display: none;
     }
@@ -288,7 +289,8 @@ defineExpose({ checkListFilled, scrollToTop })
       text-overflow: ellipsis;
     }
 
-    .personalize-btn {
+    .personalize-btn,
+    .edit-agent-btn {
       flex-shrink: 0;
       width: 28px;
       height: 28px;
