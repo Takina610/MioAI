@@ -68,6 +68,14 @@ public class AgentMessageServiceImpl implements AgentMessageService {
     }
 
     @Override
+    public List<AgentMessageDO> listLatestAssistantPerAgent(Long userId) {
+        if (userId == null) {
+            return List.of();
+        }
+        return agentMessageMapper.selectLatestAssistantPerAgent(userId);
+    }
+
+    @Override
     public void deleteByConversation(String conversationId) {
         QueryWrapper<AgentMessageDO> wrapper = new QueryWrapper<>();
         wrapper.eq("conversation_id", conversationId);

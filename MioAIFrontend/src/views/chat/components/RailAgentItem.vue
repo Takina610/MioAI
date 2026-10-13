@@ -23,6 +23,7 @@
         v-else-if="agent.type === 2"
         :members="agent.members ?? []"
         :size="expanded ? 38 : 42"
+        :state="groupState"
       />
       <a-avatar v-else :size="expanded ? 34 : 38" :src="agent.avatar">
         {{ agent.name?.charAt(0)?.toUpperCase() }}
@@ -52,7 +53,7 @@ import { computed } from 'vue'
 import BotIcon from '@/components/bot-icon/BotIcon.vue'
 import GroupAvatar from '@/components/GroupAvatar.vue'
 import { HolderOutlined, PushpinFilled, PushpinOutlined } from '@ant-design/icons-vue'
-import { agentActivityStates } from '../composables/useAgentActivity'
+import { railMoodStates } from '../composables/useAgentActivity'
 import type { BotIconConfig } from '@/components/bot-icon/types'
 import type { Agent } from '@/types'
 
@@ -64,6 +65,8 @@ const props = defineProps<{
   icon?: BotIconConfig | null
   /** 排序模式：暂停点击导航与图钉，整项变为拖拽手柄 */
   sorting?: boolean
+  /** 群聊绑定状态（执行中全体成员小脸同步；空闲不传，成员保持各自散列情绪） */
+  groupState?: string
 }>()
 
 const emit = defineEmits<{
@@ -84,10 +87,11 @@ function idleMood(id: number): string {
   return MOODS[hash % MOODS.length]
 }
 
-/** 执行中绑定会话实时状态（思考/工具/作答……与聊天页宠物同一套状态词汇）；
- *  多会话并发取最新会话（活动仓内裁决）；空闲回退按 id 散列的固定情绪 */
+/** 左轨最终情绪：执行中绑定会话实时状态（思考/工具/作答……与聊天页宠物同一套状态词汇，
+ *  多会话并发取最新）；空闲以最新会话收尾状态为准（celebrate→idle→bored→drowsy→sleeping 递进）；
+ *  从无会话记录的智能体回退按 id 散列的固定情绪 */
 const mood = computed(() =>
-  agentActivityStates.value.get(props.agent.id) ?? idleMood(props.agent.id)
+  railMoodStates.value.get(props.agent.id) ?? idleMood(props.agent.id)
 )
 </script>
 

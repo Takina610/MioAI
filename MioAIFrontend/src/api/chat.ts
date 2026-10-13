@@ -173,6 +173,18 @@ export const getActiveTurns = async (): Promise<ActiveTurnInfo[]> => {
   return Array.isArray(result) ? result : []
 }
 
+/** 每个智能体最近一轮的收尾状态（左轨空闲情绪数据源：空闲时以最新会话为准） */
+export interface AgentLatestTurnInfo {
+  agentId: number
+  endedAt?: number
+  stopped?: boolean
+}
+
+export const getAgentLatestTurns = async (): Promise<AgentLatestTurnInfo[]> => {
+  const result = await request.get<AgentLatestTurnInfo[]>('/bot/agent-latest-turns', { skipErrorMessage: true } as never)
+  return Array.isArray(result) ? result : []
+}
+
 /** 中断正在执行的会话轮次：后端置停止标记并打断引擎，已流出的部分过程落库后回 stopped 事件 */
 export const stopChat = async (chatId: string): Promise<boolean> => {
   const result = await request.post<boolean>('/bot/stop', null, {

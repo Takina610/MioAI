@@ -41,6 +41,8 @@ const props = withDefaults(defineProps<{
   members: GroupAvatarMember[]
   /** 容器边长（px），格子等分 */
   size?: number
+  /** 群聊绑定状态（非空时全体成员小脸切到该状态，如群会话执行中） */
+  state?: string
 }>(), {
   size: 40
 })
@@ -81,6 +83,8 @@ const MOODS = ['happy', 'curious', 'playful', 'proud', 'surprised', 'thinking',
   'listening', 'excited', 'shy', 'bored', 'drowsy', 'laughing', 'sad', 'confused', 'celebrate']
 
 function moodOf(id: number): string {
+  // 群聊绑定状态优先：群会话执行中全体成员小脸同步（活动仓下发）
+  if (props.state) return props.state
   const hash = (Math.imul(id, 2654435761) ^ (id << 7) ^ (id >>> 3)) >>> 0
   return MOODS[hash % MOODS.length]
 }

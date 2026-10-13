@@ -40,6 +40,7 @@
         >
           <template #item="{ element }">
             <RailAgentItem
+            :group-state="element.type === 2 ? agentExecutingStates.get(element.id) : undefined"
               :agent="element"
               :expanded="expanded"
               :current-agent-id="currentAgentId"
@@ -52,6 +53,7 @@
         </draggable>
         <div v-if="!sortMode" class="rail-drag-zone">
           <RailAgentItem
+            :group-state="element.type === 2 ? agentExecutingStates.get(element.id) : undefined"
             v-for="element in pinnedAgents"
             :key="element.id"
             :agent="element"
@@ -78,6 +80,7 @@
         >
           <template #item="{ element }">
             <RailAgentItem
+            :group-state="element.type === 2 ? agentExecutingStates.get(element.id) : undefined"
               :agent="element"
               :expanded="expanded"
               :current-agent-id="currentAgentId"
@@ -90,6 +93,7 @@
         </draggable>
         <div v-if="!sortMode" class="rail-drag-zone">
           <RailAgentItem
+            :group-state="element.type === 2 ? agentExecutingStates.get(element.id) : undefined"
             v-for="element in normalAgents"
             :key="element.id"
             :agent="element"
@@ -119,6 +123,7 @@ import { computed, ref, watch } from 'vue'
 import { DragOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons-vue'
 import draggable from 'vuedraggable'
 import RailAgentItem from './RailAgentItem.vue'
+import { agentExecutingStates } from '../composables/useAgentActivity'
 import { parseBotIcon, type BotIconConfig } from '@/components/bot-icon/types'
 import type { Agent } from '@/types'
 
