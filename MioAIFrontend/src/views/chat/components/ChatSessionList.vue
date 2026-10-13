@@ -21,6 +21,7 @@
               :size="14"
               class="chat-item-spinner"
             />
+            <PushpinFilled v-if="chat.pinned" class="chat-item-pin" />
             <span class="chat-item-title-text">{{ chat.title }}</span>
           </div>
           <div class="chat-item-time">{{ formatTime(chat.updateTime) }}</div>
@@ -35,6 +36,9 @@
           </a-button>
             <template #overlay>
               <a-menu>
+                <a-menu-item key="pin" @click="openMenuKey = ''; emit('pin', chat.id, !chat.pinned)">
+                  <PushpinOutlined /> {{ chat.pinned ? '取消置顶' : '置顶' }}
+                </a-menu-item>
                 <a-menu-item key="share" @click="openMenuKey = ''; emit('share', chat.id)">
                   <ShareAltOutlined /> 分享对话
                 </a-menu-item>
@@ -59,7 +63,9 @@ import RoseFourLoader from '@/components/RoseFourLoader.vue'
 import {
   MoreOutlined,
   DeleteOutlined,
-  ShareAltOutlined
+  ShareAltOutlined,
+  PushpinOutlined,
+  PushpinFilled
 } from '@ant-design/icons-vue'
 
 defineProps<{
@@ -74,6 +80,7 @@ const emit = defineEmits<{
   (e: 'select', conversationId: string): void
   (e: 'share', conversationId: string): void
   (e: 'delete', conversationId: string): void
+  (e: 'pin', conversationId: string, pinned: boolean): void
   (e: 'load-more'): void
 }>()
 
@@ -210,6 +217,13 @@ defineExpose({ checkListFilled, scrollToTop, closeMenus })
 
         .chat-item-spinner {
           flex-shrink: 0;
+        }
+
+        // 置顶图钉：主色小标
+        .chat-item-pin {
+          flex-shrink: 0;
+          font-size: 11px;
+          color: $primary-color;
         }
 
         .chat-item-title-text {

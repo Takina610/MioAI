@@ -27,4 +27,7 @@ public interface ChatHistoryRepository {
     Page<ChatConversationDO> getChatsPage(Long userId, Long agentId, long current, long size, String keyword);
 
     ChatConversationDO getChatByConversationId(String conversationId);
+
+    /** 更新会话置顶标记（pinned 0/1） */
+    void updatePinned(Long id, int pinned);
 }

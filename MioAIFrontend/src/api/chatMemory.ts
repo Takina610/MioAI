@@ -40,6 +40,15 @@ export function deleteChat(conversationId: string): Promise<boolean> {
   })
 }
 
+/** 置顶/取消置顶会话：置顶会话排在列表最前 */
+export function pinChat(conversationId: string, pinned: boolean): Promise<boolean> {
+  return request({
+    url: `/memory/pinChat/${conversationId}`,
+    method: 'post',
+    params: { pinned }
+  })
+}
+
 export function getConversation(conversationId: string): Promise<ChatConversation> {
   return request({
     url: `/memory/getConversation/${conversationId}`,

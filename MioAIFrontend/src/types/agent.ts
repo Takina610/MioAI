@@ -28,6 +28,8 @@ export interface Agent {
   status: number
   statusDesc?: string
   isPublic: number
+  /** 置顶（0-否 1-是）：智能体左轨置顶分组 */
+  pinned?: number
   usageCount: number
   version?: string
   createTime: string

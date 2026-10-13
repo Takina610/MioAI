@@ -97,6 +97,24 @@ export function rollbackAgentVersion(agentId: number, versionId: number): Promis
   })
 }
 
+/** 置顶/取消置顶智能体（左轨置顶分组） */
+export function pinAgent(id: number, pinned: boolean): Promise<boolean> {
+  return request({
+    url: `/agents/${id}/pin`,
+    method: 'post',
+    params: { pinned }
+  })
+}
+
+/** 智能体左轨拖动排序：按最终顺序重写 sort_order */
+export function reorderAgents(orderedIds: number[]): Promise<boolean> {
+  return request({
+    url: '/agents/reorder',
+    method: 'post',
+    data: { orderedIds }
+  })
+}
+
 /** 从广场模板复制为我的草稿智能体，返回新智能体ID */
 export function forkAgent(templateId: number): Promise<number> {
   return request({

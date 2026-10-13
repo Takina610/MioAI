@@ -64,6 +64,16 @@ public class Agent implements Serializable {
     private Integer isPublic;
 
     /**
+     * 置顶（0-否 1-是）：智能体左轨置顶分组
+     */
+    private Integer pinned;
+
+    /**
+     * 手动排序序号（同置顶分组内小在前；左轨长按拖动排序维护）
+     */
+    private Long sortOrder;
+
+    /**
      * 使用次数
      */
     private Integer usageCount;

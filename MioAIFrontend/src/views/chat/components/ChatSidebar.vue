@@ -73,6 +73,7 @@
           @select="emit('select', $event)"
           @share="emit('share', $event)"
           @delete="emit('delete', $event)"
+          @pin="(id: string, pinned: boolean) => emit('pin', id, pinned)"
           @load-more="emit('load-more')"
         />
       </div>
@@ -161,6 +162,7 @@ const emit = defineEmits<{
   (e: 'search'): void
   (e: 'share', conversationId: string): void
   (e: 'delete', conversationId: string): void
+  (e: 'pin', conversationId: string, pinned: boolean): void
   (e: 'load-more'): void
   (e: 'login'): void
   (e: 'personalize'): void

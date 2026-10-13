@@ -12,19 +12,30 @@
     <div class="palette">
       <div class="palette-input-row">
         <SearchOutlined class="palette-search-icon" />
+        <!-- 类别筛选模式：作用域胶囊（退格清空时一并退出） -->
+        <button
+          v-if="scope"
+          class="palette-scope-chip"
+          :title="'退出 ' + scopeLabel(scope)"
+          @click="exitScope"
+        >
+          {{ scopeLabel(scope) }}
+          <CloseOutlined class="chip-x" />
+        </button>
         <input
           ref="inputRef"
           v-model="keyword"
           class="palette-input"
-          placeholder="搜索会话"
+          :placeholder="slashMode ? '选择类别…' : '搜索会话、智能体、页面、设置，输入 / 筛选类别'"
           spellcheck="false"
+          @keydown="onInputKeydown"
         />
         <button class="palette-close" aria-label="关闭" @click="close()">
           <CloseOutlined />
         </button>
       </div>
 
-      <div class="palette-tabs">
+      <div v-if="!slashMode && !scope" class="palette-tabs">
         <button
           v-for="tab in tabs"
           :key="tab.key"
@@ -53,8 +64,11 @@
             >
               <img v-if="row.avatar" :src="row.avatar" alt="" class="row-avatar" />
               <component v-else :is="row.icon" class="row-icon" />
-              <span class="row-title">
-                <HighlightText :text="row.title" :indices="row.matchIndices" />
+              <span class="row-main">
+                <span class="row-title">
+                  <HighlightText :text="row.title" :indices="row.matchIndices" />
+                </span>
+                <span v-if="row.desc" class="row-desc">{{ row.desc }}</span>
               </span>
               <span v-if="row.category" class="row-category">{{ row.category }}</span>
               <EnterOutlined class="row-enter" />
@@ -84,6 +98,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
 import Fuse, { type IFuseOptions } from 'fuse.js'
 import { useUserStore } from '@/store/user'
 import { getChatIdsPage } from '@/api/chatMemory'
@@ -97,14 +112,27 @@ import {
   EnterOutlined,
   MessageOutlined,
   PlusCircleOutlined,
-  RobotOutlined
+  RobotOutlined,
+  FileTextOutlined,
+  SettingOutlined,
+  HomeOutlined,
+  AppstoreOutlined,
+  ToolOutlined,
+  DatabaseOutlined,
+  ReadOutlined,
+  ThunderboltOutlined,
+  BarChartOutlined,
+  UserOutlined,
+  HighlightOutlined,
+  LogoutOutlined
 } from '@ant-design/icons-vue'
 
 type TabKey = 'all' | 'chat' | 'agent'
+type ScopeKey = 'chat' | 'agent' | 'page' | 'setting'
 
-/** fuse 索引条目：名称 + 分类（会话/智能体）双键可搜 */
+/** fuse 索引条目：名称 + 分类双键可搜（页面/设置静态条目共用同一索引） */
 interface SearchItem {
-  kind: 'session' | 'agent'
+  kind: 'session' | 'agent' | 'page' | 'setting'
   id: string
   title: string
   category: string
@@ -114,7 +142,7 @@ interface SearchItem {
  * fuse 参数（scripts/fuse-tune.mjs 以真实数据调参定版）：
  * threshold 0.4 为甜点——"Dokcer"（转置）可命中 Docker、"Reds"（缺字母）命中 Redis 且居首，
  * 0.3 漏转置词、0.5 出现明显噪音；ignoreLocation 让中英文都不受位置惩罚；
- * 名称 0.7 / 分类 0.3，分类词（"会话"/"智能体"）可直达对应类型，纯分类平局按原序（最近使用序）
+ * 名称 0.7 / 分类 0.3，分类词（"会话"/"页面"）可直达对应类型，纯分类平局按原序（最近使用序）
  */
 const FUSE_OPTIONS: IFuseOptions<SearchItem> = {
   includeScore: true,
@@ -134,6 +162,7 @@ interface PaletteRow {
   icon?: Component
   avatar?: string
   title: string
+  desc?: string
   category?: string
   /** fuse 命中区间（title，闭区间），供高亮渲染 */
   matchIndices?: Array<[number, number]>
@@ -163,6 +192,7 @@ const emit = defineEmits<{
   (e: 'open-dashboard'): void
 }>()
 
+const router = useRouter()
 const userStore = useUserStore()
 
 const tabs: Array<{ key: TabKey; label: string }> = [
@@ -170,6 +200,92 @@ const tabs: Array<{ key: TabKey; label: string }> = [
   { key: 'chat', label: '会话' },
   { key: 'agent', label: '智能体' }
 ]
+
+// ---------- "/" 类别筛选（命令面板范式）：输入 / 选类别，选定后类别内搜索 ----------
+const SCOPE_CATEGORIES: Array<{ key: ScopeKey; label: string; desc: string; icon: Component }> = [
+  { key: 'chat', label: '会话', desc: '在对话历史中搜索', icon: MessageOutlined },
+  { key: 'agent', label: '智能体', desc: '打开并搜索你的智能体', icon: RobotOutlined },
+  { key: 'page', label: '页面', desc: '搜索并快速打开页面', icon: FileTextOutlined },
+  { key: 'setting', label: '设置', desc: '更改应用设置', icon: SettingOutlined }
+]
+
+const scope = ref<ScopeKey | null>(null)
+const slashMode = computed(() => !scope.value && keyword.value.startsWith('/'))
+
+function scopeLabel(key: ScopeKey): string {
+  return SCOPE_CATEGORIES.find(c => c.key === key)?.label ?? ''
+}
+
+function enterScope(key: ScopeKey): void {
+  scope.value = key
+  keyword.value = ''
+  activeIndex.value = 0
+}
+
+function exitScope(): void {
+  scope.value = null
+  keyword.value = ''
+}
+
+/** 类别卡（slash 模式）：按 / 后文本即时过滤 */
+const slashCategories = computed(() => {
+  const text = keyword.value.slice(1).trim()
+  if (!text) return SCOPE_CATEGORIES
+  return SCOPE_CATEGORIES.filter(c => c.label.includes(text))
+})
+
+// ---------- 静态条目：页面与设置（登录态与角色过滤） ----------
+interface StaticEntry {
+  key: string
+  title: string
+  desc: string
+  icon: Component
+  visible: () => boolean
+  activate: () => void
+}
+
+const STATIC_PAGES: StaticEntry[] = [
+  { key: 'home', title: '首页', desc: '回到 MioAI 首页', icon: HomeOutlined, visible: () => true,
+    activate: () => { close(); router.push('/') } },
+  { key: 'agent-market', title: '智能体广场', desc: '浏览公开智能体模板', icon: AppstoreOutlined, visible: () => true,
+    activate: () => { close(); emit('open-dashboard'); router.push('/dashboard/agent-market') } },
+  { key: 'agent', title: '我的智能体', desc: '管理与配置你的智能体', icon: RobotOutlined, visible: () => userStore.isLoggedIn,
+    activate: () => { close(); router.push('/dashboard/agent') } },
+  { key: 'mcp-market', title: 'MCP 广场', desc: '浏览公开 MCP 服务', icon: AppstoreOutlined, visible: () => userStore.isLoggedIn,
+    activate: () => { close(); router.push('/dashboard/mcp-market') } },
+  { key: 'mcp', title: '我的 MCP', desc: '管理 MCP 服务配置', icon: ToolOutlined, visible: () => userStore.isLoggedIn,
+    activate: () => { close(); router.push('/dashboard/mcp') } },
+  { key: 'public-knowledge', title: '公共知识库', desc: '全站共享的知识库', icon: ReadOutlined, visible: () => true,
+    activate: () => { close(); router.push('/dashboard/public-knowledge') } },
+  { key: 'knowledge', title: '我的知识库', desc: '管理你的知识库与文档', icon: DatabaseOutlined, visible: () => userStore.isLoggedIn,
+    activate: () => { close(); router.push('/dashboard/knowledge') } },
+  { key: 'skill-market', title: '技能广场', desc: '浏览可安装技能', icon: AppstoreOutlined, visible: () => userStore.isLoggedIn,
+    activate: () => { close(); router.push('/dashboard/skill-market') } },
+  { key: 'skill', title: '我的技能', desc: '管理已安装技能', icon: ThunderboltOutlined, visible: () => userStore.isLoggedIn,
+    activate: () => { close(); router.push('/dashboard/skill') } },
+  { key: 'usage', title: '使用记录', desc: '用量与调用日志', icon: BarChartOutlined, visible: () => userStore.isLoggedIn,
+    activate: () => { close(); router.push('/dashboard/usage') } },
+  { key: 'admin-user', title: '用户管理', desc: '管理站点用户', icon: UserOutlined, visible: () => userStore.userInfo?.userRole === 'admin',
+    activate: () => { close(); router.push('/admin/user') } }
+]
+
+const STATIC_SETTINGS: StaticEntry[] = [
+  { key: 'profile', title: '个人中心', desc: '账号资料与安全', icon: UserOutlined, visible: () => userStore.isLoggedIn,
+    activate: () => { close(); router.push('/dashboard/profile') } },
+  { key: 'personalize', title: '个性化设置', desc: '定制你的 MioBot 人设与图标', icon: HighlightOutlined, visible: () => userStore.isLoggedIn,
+    activate: () => { close(); router.push('/chat/1?personalize=1') } },
+  { key: 'logout', title: '退出登录', desc: '结束当前登录态', icon: LogoutOutlined, visible: () => userStore.isLoggedIn,
+    activate: async () => {
+      close()
+      await userStore.logout()
+      window.location.reload()
+    } }
+]
+
+const staticRows = computed(() => ({
+  pages: STATIC_PAGES.filter(p => p.visible()),
+  settings: STATIC_SETTINGS.filter(s => s.visible())
+}))
 
 const inputRef = ref<HTMLInputElement | null>(null)
 const bodyRef = ref<HTMLElement | null>(null)
@@ -207,7 +323,9 @@ async function fetchIndex(): Promise<void> {
 
 const fuseItems = computed<SearchItem[]>(() => [
   ...allSessions.value.map(s => ({ kind: 'session' as const, id: s.id, title: s.title, category: '会话' })),
-  ...allAgents.value.map(a => ({ kind: 'agent' as const, id: String(a.id), title: a.name, category: '智能体' }))
+  ...allAgents.value.map(a => ({ kind: 'agent' as const, id: String(a.id), title: a.name, category: '智能体' })),
+  ...staticRows.value.pages.map(p => ({ kind: 'page' as const, id: p.key, title: p.title, category: '页面' })),
+  ...staticRows.value.settings.map(s => ({ kind: 'setting' as const, id: s.key, title: s.title, category: '设置' }))
 ])
 
 const fuse = computed(() => new Fuse(fuseItems.value, FUSE_OPTIONS))
@@ -253,6 +371,76 @@ const sections = computed<PaletteSection[]>(() => {
     }
   })
 
+  const staticRow = (entry: StaticEntry, indices?: Array<[number, number]>): PaletteRow => ({
+    key: `static_${entry.key}`,
+    index: counter++,
+    icon: entry.icon,
+    title: entry.title,
+    desc: entry.desc,
+    matchIndices: indices,
+    activate: entry.activate
+  })
+
+  const staticById = (kind: 'page' | 'setting', id: string) =>
+    (kind === 'page' ? STATIC_PAGES : STATIC_SETTINGS).find(e => e.key === id && e.visible())
+
+  /** "/" 类别筛选：类别卡片（点击/回车进入该类别搜索） */
+  if (slashMode.value) {
+    result.push({
+      key: 'categories',
+      title: '选择类别',
+      rows: slashCategories.value.map(c => ({
+        key: `cat_${c.key}`,
+        index: counter++,
+        icon: c.icon,
+        title: c.label,
+        desc: c.desc,
+        activate: () => enterScope(c.key)
+      })),
+      empty: '没有匹配的类别'
+    })
+    return result
+  }
+
+  /** 类别内搜索：只渲染所选类别的结果 */
+  if (scope.value) {
+    const kw = keyword.value.trim()
+    if (scope.value === 'chat') {
+      const rows = kw
+        ? matched.value.filter(m => m.item.kind === 'session')
+            .map(m => sessionRow({ id: m.item.id, title: m.item.title } as ChatSession, m.indices))
+        : props.recent.slice(0, 12).map(c => sessionRow(c))
+      result.push({
+        key: 'chats',
+        title: '会话',
+        rows,
+        empty: userStore.isLoggedIn ? '未找到相关会话' : '登录后可搜索历史会话'
+      })
+    } else if (scope.value === 'agent') {
+      const rows = kw
+        ? matched.value.filter(m => m.item.kind === 'agent')
+            .map(m => agentRow({ id: Number(m.item.id), name: m.item.title } as Agent, m.indices))
+        : allAgents.value.slice(0, 12).map(a => agentRow(a))
+      result.push({
+        key: 'agents',
+        title: '智能体',
+        rows,
+        empty: !userStore.isLoggedIn ? '登录后可搜索智能体' : '未找到相关智能体'
+      })
+    } else {
+      const kind = scope.value === 'page' ? 'page' : 'setting'
+      const label = scope.value === 'page' ? '页面' : '设置'
+      const rows = (kw
+        ? matched.value.filter(m => m.item.kind === kind)
+            .map(m => staticById(kind, m.item.id))
+            .filter((e): e is StaticEntry => !!e)
+        : staticRows.value[kind === 'page' ? 'pages' : 'settings'])
+        .map(e => staticRow(e, kw ? matched.value.find(m => m.item.id === e.key)?.indices : undefined))
+      result.push({ key: `${kind}s`, title: label, rows, empty: `未找到相关${label}` })
+    }
+    return result
+  }
+
   if (!keyword.value.trim()) {
     const recent = props.recent.slice(0, 8)
     if (activeTab.value !== 'agent') {
@@ -261,6 +449,13 @@ const sections = computed<PaletteSection[]>(() => {
         title: '最近使用',
         rows: recent.map(c => sessionRow(c)),
         empty: userStore.isLoggedIn ? (recent.length ? undefined : '暂无历史会话') : '登录后可搜索历史会话'
+      })
+    }
+    if (activeTab.value === 'all') {
+      result.push({
+        key: 'pages',
+        title: '页面',
+        rows: staticRows.value.pages.slice(0, 4).map(e => staticRow(e))
       })
     }
   } else {
@@ -287,6 +482,22 @@ const sections = computed<PaletteSection[]>(() => {
           ? '登录后可搜索智能体'
           : (searchLoading.value || rows.length ? undefined : '未找到相关智能体')
       })
+    }
+    const pageRows = matched.value
+      .filter(m => m.item.kind === 'page')
+      .map(m => staticById('page', m.item.id))
+      .filter((e): e is StaticEntry => !!e)
+      .map(e => staticRow(e))
+    if (pageRows.length) {
+      result.push({ key: 'pages', title: '页面', rows: pageRows })
+    }
+    const settingRows = matched.value
+      .filter(m => m.item.kind === 'setting')
+      .map(m => staticById('setting', m.item.id))
+      .filter((e): e is StaticEntry => !!e)
+      .map(e => staticRow(e))
+    if (settingRows.length) {
+      result.push({ key: 'settings', title: '设置', rows: settingRows })
     }
   }
 
@@ -342,6 +553,14 @@ function switchTab(key: TabKey): void {
   activeTab.value = key
 }
 
+/** 输入框内的按键：类别模式下退格清空时退出作用域 */
+function onInputKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Backspace' && !keyword.value && scope.value) {
+    e.preventDefault()
+    exitScope()
+  }
+}
+
 function onKeydown(e: KeyboardEvent): void {
   if (!props.visible) return
   if (e.key === 'ArrowDown') {
@@ -379,6 +598,7 @@ function close(): void {
 watch(() => props.visible, (visible) => {
   if (visible) {
     keyword.value = ''
+    scope.value = null
     activeTab.value = 'all'
     activeIndex.value = 0
     nextTick(() => inputRef.value?.focus())
@@ -412,6 +632,32 @@ watch([keyword, activeTab], () => {
     align-items: center;
     gap: 10px;
     padding: 16px 20px;
+
+    // 类别作用域胶囊：当前搜索类别（点击退出）
+    .palette-scope-chip {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+      padding: 3px 10px;
+      border: none;
+      border-radius: 999px;
+      background: rgba($primary-color, 0.12);
+      color: $primary-color;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+
+      &:hover {
+        background: rgba($primary-color, 0.2);
+      }
+
+      .chip-x {
+        font-size: 9px;
+        opacity: 0.7;
+      }
+    }
 
     .palette-search-icon {
       font-size: 16px;
@@ -576,8 +822,16 @@ watch([keyword, activeTab], () => {
       flex-shrink: 0;
     }
 
-    .row-title {
+    // 标题+描述双行（页面/设置/类别卡带描述；会话/智能体只有标题）
+    .row-main {
       flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .row-title {
       min-width: 0;
       white-space: nowrap;
       overflow: hidden;
@@ -592,6 +846,14 @@ watch([keyword, activeTab], () => {
         border-radius: 2px;
         padding: 0 1px;
       }
+    }
+
+    .row-desc {
+      font-size: 12px;
+      color: #8c8a82;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .row-category {

@@ -114,6 +114,21 @@ public class ChatMemoryController {
     /**
      * 校验会话归属，防止任意用户读取/删除他人会话
      */
+    /**
+     * 置顶/取消置顶会话（仅会话所有者）：置顶会话排在列表最前（pinned 倒序组内按更新时间）
+     */
+    @PostMapping("/pinChat/{chatId}")
+    @LogInfo
+    public BaseResponse<Boolean> pinChat(@PathVariable String chatId,
+                                         @RequestParam(defaultValue = "true") boolean pinned,
+                                         HttpServletRequest request) {
+        Long userId = redisComponent.getUserId(request.getHeader("token"));
+        checkChatOwner(chatId, userId);
+        ChatConversationDO conversation = chatHistoryRepository.getChatByConversationId(chatId);
+        chatHistoryRepository.updatePinned(conversation.getId(), pinned ? 1 : 0);
+        return ResultUtils.success(true);
+    }
+
     private void checkChatOwner(String chatId, Long userId) {
         ChatConversationDO conversation = chatHistoryRepository.getChatByConversationId(chatId);
         if (conversation == null) {

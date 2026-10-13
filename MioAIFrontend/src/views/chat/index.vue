@@ -16,11 +16,14 @@
       @select="handleRailSelect"
       @create-group="groupModalVisible = true"
       @toggle-expanded="agentRailExpanded = !agentRailExpanded"
+      @toggle-pin="handleRailTogglePin"
+      @reorder="handleRailReorder"
     />
     <ChatSidebar
       ref="sidebarRef"
       :rail-visible="agentRailVisible"
       @toggle-rail="agentRailVisible = !agentRailVisible"
+      @pin="handleSessionPin"
       :agent-info="agentInfo"
       :can-personalize="userStore.isLoggedIn && agentInfo?.type === 0"
       :chat-list="chatList"
@@ -184,7 +187,8 @@
 import { ref, computed, onMounted, onUnmounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getAgentDetail, queryAgents } from '@/api/agent'
+import { getAgentDetail, queryAgents, pinAgent, reorderAgents } from '@/api/agent'
+import { pinChat } from '@/api/chatMemory'
 import { useUserStore } from '@/store/user'
 import type { Agent, AttachmentItem, ChatMessage, ContextUsageData, MessageBlock, PendingAttachment, SubagentPanelTarget } from '@/types'
 import { isImageName } from './attachmentUtils'
@@ -300,6 +304,39 @@ function handleRailSelect(targetAgentId: number): void {
 function handleGroupCreated(groupAgentId: number): void {
   loadMyAgents()
   router.push(`/chat/${groupAgentId}`)
+}
+
+/** 左轨图钉：本地乐观切换并移到对应分组顶部，落库失败回读服务端顺序 */
+function handleRailTogglePin(agent: Agent): void {
+  const pinned = agent.pinned !== 1
+  const next = myAgents.value.map(a => (a.id === agent.id ? { ...a, pinned: pinned ? 1 : 0 } : a))
+  myAgents.value = [...next.filter(a => a.pinned === 1), ...next.filter(a => a.pinned !== 1)]
+  pinAgent(agent.id, pinned).catch(() => loadMyAgents())
+}
+
+/** 左轨拖动排序：本地按新顺序重排，落库失败回读 */
+function handleRailReorder(orderedIds: number[]): void {
+  if (orderedIds.join() === myAgents.value.map(a => a.id).join()) return
+  const byId = new Map(myAgents.value.map(a => [a.id, a]))
+  myAgents.value = orderedIds.map(id => byId.get(id)).filter((a): a is Agent => !!a)
+  reorderAgents(orderedIds).catch(() => loadMyAgents())
+}
+
+/** 会话置顶：本地乐观移动（置顶到最前 / 取消回到普通组顶部），落库失败回读 */
+function handleSessionPin(conversationId: string, pinned: boolean): void {
+  const list = [...chatList.value]
+  const idx = list.findIndex(c => c.id === conversationId)
+  if (idx < 0) return
+  const [item] = list.splice(idx, 1)
+  const updated = { ...item, pinned: pinned ? 1 : 0 }
+  if (pinned) {
+    list.unshift(updated)
+  } else {
+    const pinnedCount = list.filter(c => c.pinned === 1).length
+    list.splice(pinnedCount, 0, updated)
+  }
+  chatList.value = list
+  pinChat(conversationId, pinned).catch(() => loadSessions())
 }
 
 function handleSearchSelectAgent(targetAgentId: number): void {
@@ -523,6 +560,18 @@ watch(
     if (id) {
       agentId.value = Number(id)
       loadAgentInfo()
+    }
+  },
+  { immediate: true }
+)
+
+// 搜索面板"个性化设置"条目跳转携带：进入 MioBot 页（详情加载完成）即打开个性化弹窗
+watch(
+  [() => route.query.personalize, agentInfo],
+  ([p, info]) => {
+    if (p === '1' && userStore.isLoggedIn && info?.type === 0) {
+      personalizeVisible.value = true
+      router.replace({ query: {} })
     }
   },
   { immediate: true }

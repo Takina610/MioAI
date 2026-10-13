@@ -76,6 +76,11 @@ public class AgentVO implements Serializable {
     private Integer isPublic;
 
     /**
+     * 置顶（0-否 1-是）：智能体左轨置顶分组
+     */
+    private Integer pinned;
+
+    /**
      * 使用次数
      */
     private Integer usageCount;

@@ -42,7 +42,8 @@ export function useChatSessions(options: {
         id: item.conversationId,
         title: item.title || '新对话',
         updateTime: item.updateTime ? new Date(item.updateTime) : new Date(),
-        hasMessage: true
+        hasMessage: true,
+        pinned: item.pinned ?? 0
       }))
 
       chatList.value = isLoadMore ? [...chatList.value, ...newChats] : newChats

@@ -156,7 +156,7 @@
         <div v-if="seg.kind === 'text' && groupMode" class="group-own-row">
           <div class="group-own-head">
             <span v-if="groupName" class="group-own-name">{{ groupName }}</span>
-            <GroupAvatar v-if="groupMembers?.length" class="group-own-avatar" :members="groupMembers" :size="26" :live="true" />
+            <GroupAvatar v-if="groupMembers?.length" class="group-own-avatar" :members="groupMembers" :size="26" />
           </div>
           <div class="group-own-bubble">
             <MarkdownView :content="seg.text" />

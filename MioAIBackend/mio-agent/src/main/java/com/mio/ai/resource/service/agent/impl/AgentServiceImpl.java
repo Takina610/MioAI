@@ -294,11 +294,55 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         wrapper.like(StringUtils.isNotBlank(request.getName()), Agent::getName, request.getName())
                 .eq(request.getUserId() != null, Agent::getUserId, request.getUserId())
                 .ne(Agent::getType, AgentTypeEnum.GENERAL.getCode())
+                // 置顶分组在前，组内按手动排序，未排序项按最近更新回退
+                .orderByDesc(Agent::getPinned)
+                .orderByAsc(Agent::getSortOrder)
                 .orderByDesc(Agent::getUpdateTime);
         Page<Agent> agentPage = this.page(page, wrapper);
         Page<AgentVO> voPage = new Page<>(agentPage.getCurrent(), agentPage.getSize(), agentPage.getTotal());
         voPage.setRecords(agentPage.getRecords().stream().map(this::convertToVO).toList());
         return voPage;
+    }
+
+    @Override
+    public boolean pinAgent(Long id, Long userId, boolean pinned) {
+        Agent agent = checkAgentOwner(id, userId);
+        // 移到目标分组顶部：sort_order = 该分组当前最小值 - 1
+        Agent top = this.getOne(new LambdaQueryWrapper<Agent>()
+                .eq(Agent::getUserId, userId)
+                .eq(Agent::getPinned, pinned ? 1 : 0)
+                .orderByAsc(Agent::getSortOrder)
+                .last("LIMIT 1"), false);
+        long nextSort = (top == null || top.getSortOrder() == null ? 0L : top.getSortOrder()) - 1;
+        Agent row = new Agent();
+        row.setId(agent.getId());
+        row.setPinned(pinned ? 1 : 0);
+        row.setSortOrder(nextSort);
+        return this.updateById(row);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean reorderAgents(Long userId, List<Long> orderedIds) {
+        if (orderedIds == null || orderedIds.isEmpty()) {
+            return true;
+        }
+        // 只重排本人名下的智能体；最小字段更新，不触碰 update_time
+        java.util.Set<Long> mine = this.list(new LambdaQueryWrapper<Agent>()
+                        .eq(Agent::getUserId, userId)
+                        .in(Agent::getId, orderedIds))
+                .stream().map(Agent::getId).collect(java.util.stream.Collectors.toSet());
+        for (int i = 0; i < orderedIds.size(); i++) {
+            Long id = orderedIds.get(i);
+            if (!mine.contains(id)) {
+                continue;
+            }
+            Agent row = new Agent();
+            row.setId(id);
+            row.setSortOrder((long) i);
+            this.updateById(row);
+        }
+        return true;
     }
 
     @Override

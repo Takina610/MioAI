@@ -37,6 +37,16 @@ public interface AgentService extends IService<Agent> {
     Page<AgentVO> queryAgents(AgentQueryRequest request);
 
     /**
+     * 置顶/取消置顶智能体（仅所有者）：置顶项移到置顶分组顶部
+     */
+    boolean pinAgent(Long id, Long userId, boolean pinned);
+
+    /**
+     * 手动排序（仅所有者的智能体参与）：按左轨拖动后的最终顺序重写 sort_order
+     */
+    boolean reorderAgents(Long userId, java.util.List<Long> orderedIds);
+
+    /**
      * 广场列表：自定义公开智能体 + MioBot 槽位。
      * MioBot 按当前用户装配——登录用户已发布自己的 MioBot（agent_user_config.is_public=1）
      * 时显示自己的（带个性化覆盖与本人署名，置顶），否则不显示；游客显示官方内置 MioBot。

@@ -348,6 +348,8 @@ export interface ChatSession {
   title: string
   updateTime: Date
   hasMessage: boolean
+  /** 置顶（服务端排序置顶组在前） */
+  pinned?: number
 }
 
 /** 子代理面板的定位键：消息 id + 显示版本 + Agent 块键（id 优先，无 id 回退块下标） */

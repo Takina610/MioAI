@@ -47,6 +47,25 @@ public class AgentController {
     @Resource
     private com.mio.ai.resource.service.agent.AgentGroupService agentGroupService;
 
+    /** 置顶/取消置顶智能体（左轨置顶分组） */
+    @PostMapping("/{id:\\d+}/pin")
+    @CacheEvict(value = "agents", allEntries = true)
+    public BaseResponse<Boolean> pinAgent(@PathVariable Long id,
+                                          @RequestParam(defaultValue = "true") boolean pinned,
+                                          HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        return ResultUtils.success(agentService.pinAgent(id, userId, pinned));
+    }
+
+    /** 智能体左轨拖动排序：按最终顺序重写 sort_order */
+    @PostMapping("/reorder")
+    public BaseResponse<Boolean> reorderAgents(
+            @jakarta.validation.Valid @RequestBody com.mio.ai.resource.model.dto.agent.AgentReorderRequest request,
+            HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        return ResultUtils.success(agentService.reorderAgents(userId, request.getOrderedIds()));
+    }
+
     @Resource
     private AgentUserConfigService agentUserConfigService;
 

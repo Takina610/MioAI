@@ -42,6 +42,11 @@ public class ChatConversationDO {
     private String title;
 
     /**
+     * 置顶（0-否 1-是）：置顶会话排在列表最前
+     */
+    private Integer pinned;
+
+    /**
      * 创建时间
      */
     private Date createTime;

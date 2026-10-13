@@ -1,6 +1,7 @@
 <template>
-  <!-- 智能体左轨：与悬浮胶囊左缘融合（相接侧圆角清零，融合样式由页面 .rail-open 统一驱动）。
-       默认 64px 图标窄轨，底部加号展开为 240px 信息面板（左 icon、右上名称、右下描述） -->
+  <!-- 智能体左轨：与悬浮胶囊左缘融合（融合样式由页面 .rail-open 统一驱动）。
+       默认 64px 图标窄轨，底部加号展开为 240px 信息面板（左 icon、右上名称、右下描述）。
+       置顶分组在前（组内可长按拖动排序），hover 浮现图钉按钮 -->
   <aside class="agent-rail" :class="{ hidden: !visible, expanded }">
     <div class="rail-capsule">
       <button class="rail-btn rail-create" title="创建群聊" aria-label="创建群聊" @click="emit('create-group')">
@@ -9,37 +10,52 @@
       </button>
 
       <div class="rail-list">
-        <button
-          v-for="agent in agents"
-          :key="agent.id"
-          class="rail-agent"
-          :class="{ active: agent.id === currentAgentId }"
-          :title="agent.name"
-          :aria-label="agent.name"
-          @click="emit('select', agent.id)"
+        <div v-if="pinnedAgents.length && expanded" class="rail-group-label">置顶</div>
+        <draggable
+          v-model="pinnedAgents"
+          :animation="220"
+          :delay="260"
+          item-key="id"
+          class="rail-drag-zone"
+          ghost-class="rail-ghost"
+          chosen-class="rail-chosen"
+          drag-class="rail-dragging"
+          @end="emitReorder"
         >
-          <span class="agent-icon-wrap">
-            <BotIcon
-              v-if="iconByAgent.get(agent.id)"
-              :shape="iconByAgent.get(agent.id)!.shape"
-              :fill="iconByAgent.get(agent.id)!.fill"
-              :size="expanded ? 34 : 38"
+          <template #item="{ element }">
+            <RailAgentItem
+              :agent="element"
+              :expanded="expanded"
+              :current-agent-id="currentAgentId"
+              :icon="iconByAgent.get(element.id)"
+              @open="emit('select', $event)"
+              @toggle-pin="emit('toggle-pin', $event)"
             />
-            <GroupAvatar
-              v-else-if="agent.type === 2"
-              :members="agent.members ?? []"
-              :size="expanded ? 38 : 42"
-              :live="true"
+          </template>
+        </draggable>
+        <div v-if="pinnedAgents.length && normalAgents.length && expanded" class="rail-group-divider" />
+        <draggable
+          v-model="normalAgents"
+          :animation="220"
+          :delay="260"
+          item-key="id"
+          class="rail-drag-zone"
+          ghost-class="rail-ghost"
+          chosen-class="rail-chosen"
+          drag-class="rail-dragging"
+          @end="emitReorder"
+        >
+          <template #item="{ element }">
+            <RailAgentItem
+              :agent="element"
+              :expanded="expanded"
+              :current-agent-id="currentAgentId"
+              :icon="iconByAgent.get(element.id)"
+              @open="emit('select', $event)"
+              @toggle-pin="emit('toggle-pin', $event)"
             />
-            <a-avatar v-else :size="expanded ? 34 : 38" :src="agent.avatar">
-              {{ agent.name?.charAt(0)?.toUpperCase() }}
-            </a-avatar>
-          </span>
-          <span v-if="expanded" class="agent-meta">
-            <span class="agent-name">{{ agent.name }}</span>
-            <span v-if="agent.description" class="agent-desc">{{ agent.description }}</span>
-          </span>
-        </button>
+          </template>
+        </draggable>
       </div>
 
       <button
@@ -55,19 +71,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { PlusOutlined, TeamOutlined } from '@ant-design/icons-vue'
-import BotIcon from '@/components/bot-icon/BotIcon.vue'
-import GroupAvatar from '@/components/GroupAvatar.vue'
+import draggable from 'vuedraggable'
+import RailAgentItem from './RailAgentItem.vue'
 import { parseBotIcon, type BotIconConfig } from '@/components/bot-icon/types'
 import type { Agent } from '@/types'
 
 const props = defineProps<{
-  /** 我的智能体（自定义 + 群聊， updateTime 倒序） */
+  /** 我的智能体（自定义 + 群聊，服务端已按 置顶→手动序→更新时间 排序） */
   agents: Agent[]
   /** 当前对话的智能体 id（高亮锚点） */
   currentAgentId: number
-  /** 轨道是否展示（登录 + 自身开关 + 会话胶囊未收起） */
+  /** 轨道是否展示（登录 + 自身开关 + 会话胶囊未收起/peek） */
   visible: boolean
   /** 信息面板模式（true = 240px 宽轨带名称/描述） */
   expanded: boolean
@@ -77,9 +93,13 @@ const emit = defineEmits<{
   (e: 'select', agentId: number): void
   (e: 'create-group'): void
   (e: 'toggle-expanded'): void
+  /** 图钉切换（父级乐观更新本地 + 落库） */
+  (e: 'toggle-pin', agent: Agent): void
+  /** 拖动结束后的完整顺序（置顶组在前；父级本地重排 + 落库） */
+  (e: 'reorder', orderedIds: number[]): void
 }>()
 
-/** agent.icon JSON → BotIconConfig（缺失/非法回退头像，群聊回退群图标） */
+/** agent.icon JSON → BotIconConfig（缺失/非法回退头像，群聊回退群头像） */
 const iconByAgent = computed(() => {
   const map = new Map<number, BotIconConfig | null>()
   for (const agent of props.agents) {
@@ -87,6 +107,21 @@ const iconByAgent = computed(() => {
   }
   return map
 })
+
+// 拖拽分组：本地数组随 props 重建（拖动中由 vuedraggable 接管，结束后上抛新顺序）
+const pinnedAgents = ref<Agent[]>([])
+const normalAgents = ref<Agent[]>([])
+
+function syncFromProps(): void {
+  pinnedAgents.value = props.agents.filter(a => a.pinned === 1)
+  normalAgents.value = props.agents.filter(a => a.pinned !== 1)
+}
+
+watch(() => props.agents, syncFromProps, { immediate: true, deep: true })
+
+function emitReorder(): void {
+  emit('reorder', [...pinnedAgents.value, ...normalAgents.value].map(a => a.id))
+}
 </script>
 
 <style lang="scss" scoped>
@@ -139,16 +174,20 @@ const iconByAgent = computed(() => {
   height: 42px;
   margin: 8px 8px 0;
   border: 1px solid rgba($primary-color, 0.45);
-  border-radius: 10px;
-  background: linear-gradient(135deg, rgba($primary-color, 0.1) 0%, rgba($primary-color, 0.05) 100%);
+  // 大圆角胶囊；悬浮毛玻璃
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.4);
   color: $primary-color;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.2s, box-shadow 0.2s, backdrop-filter 0.2s;
 
   &:hover {
-    background: linear-gradient(135deg, rgba($primary-color, 0.18) 0%, rgba($primary-color, 0.1) 100%);
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 6px 18px rgba(20, 20, 19, 0.12);
   }
 
   .rail-btn-icon {
@@ -163,7 +202,7 @@ const iconByAgent = computed(() => {
 
 .agent-rail.expanded .rail-create {
   justify-content: flex-start;
-  padding: 0 14px;
+  padding: 0 16px;
 }
 
 .rail-list {
@@ -171,72 +210,38 @@ const iconByAgent = computed(() => {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
   padding: 10px 8px;
 }
 
-.rail-agent {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px;
-  border: 1px solid transparent;
-  border-radius: 12px;
-  background: transparent;
-  cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
-
-  &:hover {
-    background: rgba($primary-color, 0.08);
-  }
-
-  &.active {
-    background: rgba($primary-color, 0.12);
-    border-color: rgba($primary-color, 0.4);
-  }
-
-  .agent-icon-wrap {
-    flex-shrink: 0;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .agent-meta {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    text-align: left;
-  }
-
-  .agent-name {
-    font-size: 13px;
-    font-weight: 600;
-    color: #141413;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .agent-desc {
-    font-size: 11px;
-    line-height: 1.4;
-    color: #8c8a82;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
+.rail-group-label {
+  padding: 2px 6px 6px;
+  font-size: 11px;
+  color: #8c8a82;
 }
 
-// 窄轨：整钮居中只留图标
-.agent-rail:not(.expanded) .rail-agent {
-  justify-content: center;
-  padding: 6px 0;
+.rail-group-divider {
+  height: 1px;
+  margin: 8px 10px;
+  background: #e8e6dc;
+}
+
+.rail-drag-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+// 拖拽态：占位虚影与拾起项
+.rail-ghost {
+  opacity: 0.35;
+}
+
+.rail-chosen {
+  cursor: grabbing;
+}
+
+.rail-dragging {
+  box-shadow: 0 10px 28px rgba(20, 20, 19, 0.22);
 }
 
 .rail-expand {
@@ -244,7 +249,7 @@ const iconByAgent = computed(() => {
   margin: 0 8px 8px;
   height: 38px;
   border: none;
-  border-radius: 10px;
+  border-radius: 999px;
   background: transparent;
   color: #8c8a82;
   cursor: pointer;

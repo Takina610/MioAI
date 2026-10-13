@@ -70,8 +70,17 @@ public class ChatHistoryRepositoryImpl implements ChatHistoryRepository {
         queryWrapper.eq("user_id", userId)
                 .eq("agent_id", agentId)
                 .like(keyword != null && !keyword.isBlank(), "title", keyword)
+                .orderByDesc("pinned")
                 .orderByDesc("update_time");
         return chatConversationDOMapper.selectPage(new Page<>(current, size), queryWrapper);
+    }
+
+    @Override
+    public void updatePinned(Long id, int pinned) {
+        ChatConversationDO row = new ChatConversationDO();
+        row.setId(id);
+        row.setPinned(pinned);
+        chatConversationDOMapper.updateById(row);
     }
 
     @Override
