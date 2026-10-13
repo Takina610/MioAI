@@ -176,8 +176,8 @@ public class MioBotController {
                 if (memberRows.isEmpty()) {
                     throw new BusinessException(ErrorCode.PARAMS_ERROR, "该群聊没有可用成员");
                 }
-                List<com.mio.ai.bot.agent.GroupCoordinator.MemberAgent> members = memberRows.stream()
-                        .map(a -> new com.mio.ai.bot.agent.GroupCoordinator.MemberAgent(
+                List<com.mio.ai.framework.zagent.subagent.MemberLauncher.MemberAgent> members = memberRows.stream()
+                        .map(a -> new com.mio.ai.framework.zagent.subagent.MemberLauncher.MemberAgent(
                                 a.getId(), a.getName(),
                                 a.getDescription() == null ? "" : a.getDescription(),
                                 a.getSystemPrompt(), a.getIcon()))

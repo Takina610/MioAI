@@ -1,5 +1,6 @@
 package com.mio.ai.bot.agent;
 
+import com.mio.ai.framework.zagent.subagent.MemberLauncher.MemberAgent;
 import com.mio.ai.resource.model.entity.Agent;
 
 import java.util.List;
@@ -13,7 +14,7 @@ public final class GroupPrompts {
     private GroupPrompts() {
     }
 
-    public static String orchestrator(Agent group, List<GroupCoordinator.MemberAgent> members) {        StringBuilder roster = new StringBuilder();
+    public static String orchestrator(Agent group, List<MemberAgent> members) {        StringBuilder roster = new StringBuilder();
         for (GroupCoordinator.MemberAgent member : members) {
             String desc = member.description() == null || member.description().isBlank()
                     ? "（无描述，按名称判断擅长领域）" : member.description().strip();

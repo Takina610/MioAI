@@ -76,12 +76,12 @@ public final class Subagents implements SubagentLauncher {
     public Result launch(String subagentType, String description, String prompt, boolean background) {
         // 群聊会话：成员名命中走成员路径；群内不提供内置档案（成员是平等的，没有隐藏子代理）
         if (memberLauncher != null) {
-            MemberLauncher.MemberPlan plan = memberLauncher.prepare(subagentType, prompt, runContext.fs());
-            if (plan == null) {
+            MemberLauncher.MemberAgent member = memberLauncher.resolve(subagentType);
+            if (member == null) {
                 throw new IllegalStateException("subagent_type 必须使用系统提示成员名单里的成员名原文，收到: "
                         + subagentType);
             }
-            return launchPlan(plan, description, prompt, background);
+            return launchMember(member, description, prompt, background);
         }
         AgentProfiles.Profile profile = AgentProfiles.resolve(subagentType);
         String agentId = "agent_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
@@ -104,39 +104,53 @@ public final class Subagents implements SubagentLauncher {
                 outcome.toolUseCount(), outcome.tokens(), System.currentTimeMillis() - startedAt, null);
     }
 
-    /** 群成员委派：前台阻塞/后台任务两种结构，成员执行以平等消息呈现（presenter） */
-    private Result launchPlan(MemberLauncher.MemberPlan plan, String description, String prompt,
-                              boolean background) {
+    /**
+     * 群成员委派：前台阻塞/后台任务两种结构，成员执行以平等消息呈现（presenter）。
+     * "正在输入"指示在重装配（MCP/知识库/技能，可能网络往返）之前下发——用户不用
+     * 盯着空白等装配；装配失败转为成员失败态，与执行失败同一路径收尾。
+     */
+    private Result launchMember(MemberLauncher.MemberAgent member, String description, String prompt,
+                                boolean background) {
         String agentId = "agent_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         long startedAt = System.currentTimeMillis();
         if (background) {
             var task = runContext.tasks().register(runContext.chatId(), "agent",
-                    description == null ? plan.name() : description);
+                    description == null ? member.name() : description);
             POOL.execute(() -> {
                 task.runnerThread = Thread.currentThread();
-                if (memberPresenter != null) {
-                    memberPresenter.started(agentId, plan);
-                }
-                Outcome outcome = runPlan(plan, agentId, prompt);
+                Outcome outcome = runMemberWithPresence(member, agentId, prompt);
                 runContext.tasks().complete(task, outcome.failed(), 0, outcome.content());
-                if (memberPresenter != null) {
-                    memberPresenter.finished(agentId, outcome.failed());
-                }
             });
-            return new Result(agentId, plan.name(), prompt,
-                    "Agent launched in background (" + plan.name() + "). You will be notified when it "
+            return new Result(agentId, member.name(), prompt,
+                    "Agent launched in background (" + member.name() + "). You will be notified when it "
                             + "completes; use TaskOutput with task_id \"" + task.id + "\" to wait for it.",
                     0, 0, 0, task.id);
         }
+        Outcome outcome = runMemberWithPresence(member, agentId, prompt);
+        return new Result(agentId, member.name(), prompt, outcome.content(),
+                outcome.toolUseCount(), outcome.tokens(), System.currentTimeMillis() - startedAt, null);
+    }
+
+    /** 成员执行全周期：started → 装配 → 运行 → finished（装配失败也走 finished(failed)） */
+    private Outcome runMemberWithPresence(MemberLauncher.MemberAgent member, String agentId, String prompt) {
         if (memberPresenter != null) {
-            memberPresenter.started(agentId, plan);
+            memberPresenter.started(agentId, member.id(), member.name(), member.icon());
+        }
+        MemberLauncher.MemberPlan plan;
+        try {
+            plan = memberLauncher.prepare(member, prompt, runContext.fs());
+        } catch (Exception e) {
+            log.warn("群成员装配失败 ({}): {}", member.name(), e.getMessage());
+            if (memberPresenter != null) {
+                memberPresenter.finished(agentId, true);
+            }
+            return new Outcome("(Member preparation failed: " + e.getMessage() + ")", 0, 0, true);
         }
         Outcome outcome = runPlan(plan, agentId, prompt);
         if (memberPresenter != null) {
             memberPresenter.finished(agentId, outcome.failed());
         }
-        return new Result(agentId, plan.name(), prompt, outcome.content(),
-                outcome.toolUseCount(), outcome.tokens(), System.currentTimeMillis() - startedAt, null);
+        return outcome;
     }
 
     private record Outcome(String content, int toolUseCount, long tokens, boolean failed) {
@@ -170,8 +184,10 @@ public final class Subagents implements SubagentLauncher {
                               String knowledgeContext, String skillsContext, String agentId, String prompt,
                               AgentEvents childEvents) {
         ConversationState childState = new ConversationState();
+        // 子代理/群成员注册表不含 render_ui：不注入结构化 UI 决策段，避免诱导无效工具调用
         ContextBuilder childContext = new ContextBuilder(
-                systemPrompt, knowledgeContext, skillsContext, runContext.fs(), modelName);
+                systemPrompt, knowledgeContext, skillsContext, runContext.fs(), modelName,
+                null, false);
         AgentEngine child = new AgentEngine(chatModel, config, reasoningEffort, childContext,
                 childState, runContext.chatId() + "/" + agentId, childEvents, runContext.tasks());
         ToolRegistry childRegistry = toolsetFactory.build(runContext.chatId(), childState,

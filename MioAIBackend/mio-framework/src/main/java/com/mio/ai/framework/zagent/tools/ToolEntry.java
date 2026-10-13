@@ -51,6 +51,16 @@ public final class ToolEntry {
         return new ToolEntry(name, description, inputSchema, false, false, false, timeoutMs, wrap(handler));
     }
 
+    /**
+     * 重量级但并发安全的编排工具（子代理/群成员委派）：每次调用运行独立子运行时，
+     * 相互不共享可变状态，可并行（zcode Agent 工具同语义）。共享的只有事件通道与
+     * 沙箱会话——通道加锁、沙箱命令串行化由其自身保证。
+     */
+    public static ToolEntry ofConcurrent(String name, String description, String inputSchema,
+                                         long timeoutMs, StringHandler handler) {
+        return new ToolEntry(name, description, inputSchema, true, true, false, timeoutMs, wrap(handler));
+    }
+
     /** 只读但联网（可并行，无需审批） */
     public static ToolEntry ofReadOnly(String name, String description, String inputSchema, StringHandler handler) {
         return new ToolEntry(name, description, inputSchema, true, true, false, 60_000, wrap(handler));

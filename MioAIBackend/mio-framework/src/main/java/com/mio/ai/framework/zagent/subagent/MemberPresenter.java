@@ -6,8 +6,8 @@ package com.mio.ai.framework.zagent.subagent;
  */
 public interface MemberPresenter {
 
-    /** 成员开始执行（前端出"正在输入"态） */
-    void started(String agentId, MemberLauncher.MemberPlan plan);
+    /** 成员开始执行（前端出"正在输入"态；在资源装配前调用，指示即时可见） */
+    void started(String agentId, long memberId, String name, String icon);
 
     /** 成员回答增量（成员正文直接外流给用户） */
     void delta(String agentId, String delta);

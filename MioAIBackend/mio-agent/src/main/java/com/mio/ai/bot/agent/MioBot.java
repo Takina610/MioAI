@@ -685,8 +685,8 @@ public class MioBot {
      */
     private final class GroupMemberPresenter implements com.mio.ai.framework.zagent.subagent.MemberPresenter {
         @Override
-        public void started(String agentId, com.mio.ai.framework.zagent.subagent.MemberLauncher.MemberPlan plan) {
-            channel.memberStart(agentId, plan.memberId(), plan.name(), plan.icon());
+        public void started(String agentId, long memberId, String name, String icon) {
+            channel.memberStart(agentId, memberId, name, icon);
         }
 
         @Override

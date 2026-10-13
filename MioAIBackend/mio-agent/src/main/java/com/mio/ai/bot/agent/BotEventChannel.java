@@ -115,7 +115,7 @@ public class BotEventChannel {
     }
 
     /** Agent 产出文件：追加附件展示块并推送事件（前端渲染为可下载附件） */
-    public void attachments(List<Map<String, Object>> items) {
+    public synchronized void attachments(List<Map<String, Object>> items) {
         if (items == null || items.isEmpty()) {
             return;
         }
@@ -128,18 +128,22 @@ public class BotEventChannel {
         emit(SseChunk.attachments(items).fields());
     }
 
-    public void thinkingDelta(String delta) {
+    // displayBlocks 的并发约定：Agent 工具并行化后，成员/子代理镜像事件从并行池线程
+    // 进入（member*/tool*），而 WIP 落库/收尾在轮次线程——所有块读写方法一律 synchronized
+    // （锁 this，emit 另持 emitLock，获取顺序恒为 this→emitLock，无反向路径）。
+
+    public synchronized void thinkingDelta(String delta) {
         appendDisplayText("thinking", delta);
         emit(SseChunk.delta("thinking", delta).fields());
     }
 
-    public void answerDelta(String delta) {
+    public synchronized void answerDelta(String delta) {
         closeOpenThinking();
         appendDisplayText("text", delta);
         emit(SseChunk.delta("answer", delta).fields());
     }
 
-    public void toolUse(String id, String tool) {
+    public synchronized void toolUse(String id, String tool) {
         // 群聊：Agent 工具行不呈现（成员委派由 member 块承载，成员与群主平等显示）
         if (suppressAgentToolRows && "Agent".equals(tool)) {
             return;
@@ -161,7 +165,11 @@ public class BotEventChannel {
         emit(SseChunk.toolUse(id, tool, desc).fields());
     }
 
-    public void toolArgs(String id, String delta) {
+    public synchronized void toolArgs(String id, String delta) {
+        // 群聊：Agent 工具调用块整体不呈现（含参数流），成员委派由 member 块承载
+        if (suppressAgentToolRows && isAgentToolCall(id)) {
+            return;
+        }
         // 优先按 id 配对；无 id 的兼容端点则落到最后一个 running 工具块
         Map<String, Object> target = null;
         if (id != null && !id.isBlank()) {
@@ -188,12 +196,25 @@ public class BotEventChannel {
         emit(SseChunk.toolArgs(id, delta).fields());
     }
 
+    /** 群聊下按 id 判断是否为 Agent 工具的参数流（其 tool_use 块已被抑制，无块可配对） */
+    private boolean isAgentToolCall(String id) {
+        if (id == null || id.isBlank()) {
+            return false;
+        }
+        for (Map<String, Object> b : displayBlocks) {
+            if ("tool".equals(b.get("type")) && id.equals(b.get("id"))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /**
      * 工具结果：块内保留全量（供水合重建请求历史，超长截头），前端事件发预览。
      * Agent 工具（子代理）例外：其结果是右侧子代理面板的内容主体
      * （最终报告 + agentId/usage 页脚），预览截断会让面板流式期间缺报告，故与落库同量级下发。
      */
-    public void toolResult(String id, String tool, String content) {
+    public synchronized void toolResult(String id, String tool, String content) {
         // 群聊：Agent 工具结果不呈现（成员回答已在 member 块流式外流）
         if (suppressAgentToolRows && "Agent".equals(tool)) {
             return;
@@ -216,7 +237,7 @@ public class BotEventChannel {
      * 中断收尾：把未配对完成的 running 工具块标记为中断结果。
      * 兜底收束后调用——防止本轮结束时仍有悬挂的"执行中"工具块（前端转圈、落库后刷新仍显示执行中）。
      */
-    public void abortRunningTools() {
+    public synchronized void abortRunningTools() {
         for (Map<String, Object> block : displayBlocks) {
             if ("tool".equals(block.get("type")) && !"running".equals(block.get("status"))) {
                 continue;
@@ -246,7 +267,7 @@ public class BotEventChannel {
     // ---------- 群聊成员消息块（成员与群主平等显示，不经过子代理工具行） ----------
 
     /** 成员开始执行：追加 member 块（running，前端出"正在输入"态） */
-    public void memberStart(String id, long memberId, String name, String icon) {
+    public synchronized void memberStart(String id, long memberId, String name, String icon) {
         closeOpenThinking();
         Map<String, Object> block = new LinkedHashMap<>();
         block.put("type", "member");
@@ -263,7 +284,7 @@ public class BotEventChannel {
     }
 
     /** 成员回答增量：按块 id 追加文本并下发事件 */
-    public void memberDelta(String id, String delta) {
+    public synchronized void memberDelta(String id, String delta) {
         if (delta == null || delta.isEmpty()) {
             return;
         }
@@ -275,7 +296,7 @@ public class BotEventChannel {
     }
 
     /** 成员结束：块状态收尾（failed=true 时前端按失败呈现） */
-    public void memberDone(String id, boolean failed) {
+    public synchronized void memberDone(String id, boolean failed) {
         Map<String, Object> target = findMemberBlock(id);
         if (target != null) {
             target.put("status", "done");
@@ -324,7 +345,7 @@ public class BotEventChannel {
      * render_ui targetId 原位更新寻址；返回分配的 id（工具回执带 id，模型后续可更新）。
      * 水合器只回放 text/tool 块——UI 数据进模型上下文走 render_ui 的工具调用参数，不双算。
      */
-    public String uiBlock(Map<String, Object> payload) {
+    public synchronized String uiBlock(Map<String, Object> payload) {
         closeOpenThinking();
         Map<String, Object> block = new LinkedHashMap<>();
         block.put("type", "ui");
@@ -342,7 +363,7 @@ public class BotEventChannel {
      * （同轮调整，随 WIP 增量落库）；再查历史行——定位后整行写回（与 /bot/ui-state
      * 同款路径），不新增消息。找不到目标返回 false（回执告知模型改为新建）。
      */
-    public boolean uiBlockReplace(String targetId, Map<String, Object> payload) {
+    public synchronized boolean uiBlockReplace(String targetId, Map<String, Object> payload) {
         closeOpenThinking();
         for (int i = 0; i < displayBlocks.size(); i++) {
             Map<String, Object> b = displayBlocks.get(i);
@@ -413,7 +434,7 @@ public class BotEventChannel {
      * 按回答文本中出现的文件名过滤分组；引用行插到展示块最前（前端固定置顶渲染）。
      * 相关度分数无法可靠区分"真相关"与"弱相似噪声"（实测闲聊也能命中 0.7+），引用行为是更诚实的"使用"信号。
      */
-    public void emitKbCitations(List<Map<String, Object>> groups) {
+    public synchronized void emitKbCitations(List<Map<String, Object>> groups) {
         if (groups == null || groups.isEmpty()) {
             return;
         }
@@ -460,7 +481,7 @@ public class BotEventChannel {
     }
 
     /** 向用户提问：追加问答展示块并推送事件（答题走 /bot/answer） */
-    public void question(String id, List<Map<String, Object>> questions) {
+    public synchronized void question(String id, List<Map<String, Object>> questions) {
         closeOpenThinking();
         Map<String, Object> block = new LinkedHashMap<>();
         block.put("type", "question");
@@ -472,7 +493,7 @@ public class BotEventChannel {
     }
 
     /** 用户已作答：锁定问答块并广播（多端同步） */
-    public void questionAnswered(String id, List<Map<String, Object>> answers) {
+    public synchronized void questionAnswered(String id, List<Map<String, Object>> answers) {
         for (int i = displayBlocks.size() - 1; i >= 0; i--) {
             Map<String, Object> b = displayBlocks.get(i);
             if ("question".equals(b.get("type")) && id.equals(b.get("id"))) {
@@ -511,7 +532,7 @@ public class BotEventChannel {
      * （随本轮持久化，刷新后仍显示"已停止"；水合器跳过未知块类型，不影响下一轮上下文）。
      * 须在 persistDisplay 之前调用。
      */
-    public void stopped() {
+    public synchronized void stopped() {
         Map<String, Object> block = new LinkedHashMap<>();
         block.put("type", "stopped");
         displayBlocks.add(block);
@@ -564,7 +585,7 @@ public class BotEventChannel {
     }
 
     /** 模型步结束：把已流出的展示块刷进 WIP 行（崩溃最多丢最后一个进行中的步） */
-    public void flushAssistantWip() {
+    public synchronized void flushAssistantWip() {
         Long rowId = wipRowId;
         if (rowId == null) {
             return;
@@ -606,7 +627,7 @@ public class BotEventChannel {
         }
     }
 
-    private void flushAssistantWipWithId(long rowId) {
+    private synchronized void flushAssistantWipWithId(long rowId) {
         try {
             String planJson = displayPlan == null || displayPlan.isEmpty()
                     ? null : JacksonUtil.writeValueAsString(displayPlan);
@@ -621,7 +642,7 @@ public class BotEventChannel {
         return persistDisplay(role, text, durationMs, null);
     }
 
-    public boolean persistDisplay(String role, String text, Long durationMs, Long groupSeq) {
+    public synchronized boolean persistDisplay(String role, String text, Long durationMs, Long groupSeq) {
         if (agentMessageService == null || userId == null) {
             return false;
         }
@@ -670,7 +691,7 @@ public class BotEventChannel {
     }
 
     /** 已流出的工具调用参数（按 id 查工具块；无 id/子代理镜像的调用可能为 null） */
-    String toolArgsOf(String id) {
+    synchronized String toolArgsOf(String id) {
         if (id == null || id.isBlank()) {
             return null;
         }
@@ -740,7 +761,7 @@ public class BotEventChannel {
     }
 
     /** 配对收尾工具块；Read 命中沙箱 skills/&lt;id&gt;/SKILL.md 时把该块升级为技能行（返回技能名，无则 null） */
-    private String completeDisplayTool(String id, String tool, String result) {
+    private synchronized String completeDisplayTool(String id, String tool, String result) {
         for (int i = displayBlocks.size() - 1; i >= 0; i--) {
             Map<String, Object> b = displayBlocks.get(i);
             if (!"tool".equals(b.get("type")) || !"running".equals(b.get("status"))) {
@@ -794,7 +815,7 @@ public class BotEventChannel {
     }
 
     /** 展示块文本增量：合并同类末块（与前端渲染逻辑同构） */
-    private void appendDisplayText(String type, String delta) {
+    private synchronized void appendDisplayText(String type, String delta) {
         if (!displayBlocks.isEmpty()) {
             Map<String, Object> last = displayBlocks.get(displayBlocks.size() - 1);
             if (type.equals(last.get("type"))) {
@@ -812,7 +833,7 @@ public class BotEventChannel {
     }
 
     /** 思考块收尾：换块/落库时把进行中的思考块记上时长（前端展示"思考 · 持续了X秒"） */
-    private void closeOpenThinking() {
+    private synchronized void closeOpenThinking() {
         if (displayBlocks.isEmpty()) {
             return;
         }

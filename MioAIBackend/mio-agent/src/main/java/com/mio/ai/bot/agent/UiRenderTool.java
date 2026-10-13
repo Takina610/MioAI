@@ -25,11 +25,13 @@ final class UiRenderTool {
 
     private static final String DESCRIPTION = """
             Render interactive UI blocks (cards, chart, table, tasks, form, actions, status, timeline, quote, \
-            metric, choice, accordion, math, image, image_list, image_gallery, figure) inline in your chat answer, \
-            above your closing text. Use it proactively: whenever your answer contains a multi-stage plan, a comparison \
-            of options, numeric data worth visualizing, or real images from image_search, render it with this tool \
-            instead of Markdown headings and tables. To update a block you rendered earlier, pass its targetId \
-            (ids are listed in every render result) — the block updates in place instead of duplicating.""";
+            metric, choice, accordion, math, image, image_list, image_gallery, figure) inline in your chat answer \
+            at the position where you emit them. Use it proactively: whenever your answer contains a multi-stage \
+            plan, a comparison of options, numeric data worth visualizing, or real images from image_search, render \
+            it with this tool instead of Markdown headings and tables. To update a block you rendered earlier, pass \
+            its targetId (ids are listed in every render result) — the block updates in place instead of duplicating. \
+            Position note: kind=actions is an exception — it always displays at the very BOTTOM of the message, \
+            below all your text, so refer to its buttons as below/bottom (下方的按钮), never above.""";
 
     /**
      * inputSchema 只约束 JSON 层（类型/枚举/上限），逐字段语义校验在 {@link UiBlockValidator}——
@@ -45,7 +47,7 @@ final class UiRenderTool {
             "type":"array",
             "minItems":1,
             "maxItems":8,
-            "description":"Ordered UI blocks rendered inline in your answer, above your closing text.",
+            "description":"Ordered UI blocks rendered inline in your answer at the position you emit them (kind=actions always displays at the very bottom, below all text).",
             "items":{
             "type":"object",
             "properties":{
@@ -157,7 +159,7 @@ final class UiRenderTool {
             "actions":{
             "type":"array",
             "maxItems":6,
-            "description":"kind=actions: buttons that each send their prompt as the user's next message",
+            "description":"kind=actions: buttons that each send their prompt as the user's next message. Always rendered at the very bottom of the message, below all text — refer to them as 下方的按钮 (the buttons below).",
             "items":{
             "type":"object",
             "properties":{
@@ -337,9 +339,10 @@ final class UiRenderTool {
         if (!updated.isEmpty()) {
             ack.append(" Updated in place: ").append(String.join(", ", updated)).append('.');
         }
-        ack.append(" They render inline above your closing text; write the closing text next without repeating "
-                + "their content. Block ids are stable — to revise a block in a later turn, pass its id as "
-                + "targetId instead of rendering a duplicate.");
+        ack.append(" They render at the position you emitted them (actions blocks always display at the very "
+                + "bottom of the message, below all text — tell the user 点下方按钮/the buttons below, never above); "
+                + "write the closing text next without repeating their content. Block ids are stable — to revise a "
+                + "block in a later turn, pass its id as targetId instead of rendering a duplicate.");
         if (!skipped.isEmpty()) {
             ack.append(" Skipped invalid: ").append(String.join("; ", skipped)).append('.');
         }

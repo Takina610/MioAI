@@ -24,7 +24,8 @@ final class AgentTool {
                 "subagent_type":{"type":"string","description":"The type of specialized agent to use for this task"},
                 "run_in_background":{"type":"boolean","description":"Set to true to run this agent in the background."}},
                 "required":["description","prompt"]}""";
-        return ToolEntry.ofMutable("Agent", AGENT_HEADER, schema, 0, this::execute);
+        // 并发编排工具：多个委派相互独立，可并行执行（群聊并行委派多个成员不叠加等待）
+        return ToolEntry.ofConcurrent("Agent", AGENT_HEADER, schema, 0, this::execute);
     }
 
     String execute(com.fasterxml.jackson.databind.JsonNode input, ToolContext ctx) {

@@ -29,6 +29,8 @@ public final class ContextBuilder {
     private final String modelName;
     /** 记忆归属智能体（null = 不注入记忆：游客或子代理） */
     private final Long memoryAgentId;
+    /** 是否注入结构化 UI 决策段（子代理/群成员没有 render_ui 工具，注入只会诱导无效调用） */
+    private final boolean uiRenderingSection;
 
     public ContextBuilder(String customSystemPrompt, String knowledgeContext, SandboxFs fs, String modelName) {
         this(customSystemPrompt, knowledgeContext, null, fs, modelName, null);
@@ -41,12 +43,18 @@ public final class ContextBuilder {
 
     public ContextBuilder(String customSystemPrompt, String knowledgeContext, String skillsContext,
                           SandboxFs fs, String modelName, Long memoryAgentId) {
+        this(customSystemPrompt, knowledgeContext, skillsContext, fs, modelName, memoryAgentId, true);
+    }
+
+    public ContextBuilder(String customSystemPrompt, String knowledgeContext, String skillsContext,
+                          SandboxFs fs, String modelName, Long memoryAgentId, boolean uiRenderingSection) {
         this.customSystemPrompt = customSystemPrompt;
         this.knowledgeContext = knowledgeContext;
         this.skillsContext = skillsContext;
         this.fs = fs;
         this.modelName = modelName;
         this.memoryAgentId = memoryAgentId;
+        this.uiRenderingSection = uiRenderingSection;
     }
 
     public Built build() {
@@ -58,8 +66,11 @@ public final class ContextBuilder {
             systemMessages.add(new SystemMessage(SystemPrompts.IDENTITY));
             systemMessages.add(new SystemMessage(dynamicBody()));
         }
-        // 动态 UI 决策规则独立成段：自定义智能体替换身份/动态段后依然生效
-        systemMessages.add(new SystemMessage(SystemPrompts.UI_RENDERING));
+        // 动态 UI 决策规则独立成段：自定义智能体替换身份/动态段后依然生效；
+        // 子代理/群成员的注册表没有 render_ui，注入只会诱导无效工具调用
+        if (uiRenderingSection) {
+            systemMessages.add(new SystemMessage(SystemPrompts.UI_RENDERING));
+        }
 
         List<String> attachments = new ArrayList<>();
         String userContext = buildUserContext();

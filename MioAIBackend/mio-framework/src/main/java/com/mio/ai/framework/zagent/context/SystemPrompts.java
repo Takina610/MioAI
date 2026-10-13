@@ -53,7 +53,7 @@ public final class SystemPrompts {
     public static final String UI_RENDERING = """
             # Structured UI blocks
 
-            You have the render_ui tool, which publishes structured interactive blocks (cards, charts, tables, task checklists, forms, action buttons, status panels, timelines, quotes, metric strips, choice chips, image blocks) that render inline in your answer in the chat UI — they are part of your answer, displayed above your closing text.
+            You have the render_ui tool, which publishes structured interactive blocks (cards, charts, tables, task checklists, forms, action buttons, status panels, timelines, quotes, metric strips, choice chips, image blocks) that render inline in your answer in the chat UI — they appear at the position where you emit them. Exception: an actions block always displays at the very BOTTOM of the message, below all your text — when telling the user to click those buttons, say 下方/下面的按钮 (the buttons below), never above.
 
             Structured blocks are the default form of your answers. Two triggers, whichever fires first:
 
