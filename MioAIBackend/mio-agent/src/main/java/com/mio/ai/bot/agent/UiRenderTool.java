@@ -25,9 +25,9 @@ final class UiRenderTool {
 
     private static final String DESCRIPTION = """
             Render interactive UI blocks (cards, chart, table, tasks, form, actions, status, timeline, quote, \
-            metric, choice, image, image_list, image_gallery, figure) inline in your chat answer, above your \
-            closing text. Use it proactively: whenever your answer contains a multi-stage plan, a comparison of \
-            options, numeric data worth visualizing, or real images from image_search, render it with this tool \
+            metric, choice, accordion, math, image, image_list, image_gallery, figure) inline in your chat answer, \
+            above your closing text. Use it proactively: whenever your answer contains a multi-stage plan, a comparison \
+            of options, numeric data worth visualizing, or real images from image_search, render it with this tool \
             instead of Markdown headings and tables. To update a block you rendered earlier, pass its targetId \
             (ids are listed in every render result) — the block updates in place instead of duplicating.""";
 
@@ -51,7 +51,7 @@ final class UiRenderTool {
             "properties":{
             "kind":{
             "type":"string",
-            "enum":["cards","chart","table","tasks","form","actions","status","timeline","quote","metric","choice","image","image_list","image_gallery","figure"],
+            "enum":["cards","chart","table","tasks","form","actions","status","timeline","quote","metric","choice","accordion","math","image","image_list","image_gallery","figure"],
             "description":"Block type"
             },
             "targetId":{
@@ -163,7 +163,8 @@ final class UiRenderTool {
             "properties":{
             "label":{"type":"string"},
             "prompt":{"type":"string","description":"Message sent when the button is clicked"},
-            "style":{"type":"string","enum":["primary","default"]}
+            "style":{"type":"string","enum":["primary","default"]},
+            "confirm":{"type":"boolean","description":"Set true for consequential/irreversible actions: the user must confirm before the prompt is sent"}
             },
             "required":["label","prompt"]
             }
@@ -210,6 +211,27 @@ final class UiRenderTool {
             },
             "required":["label"]
             }
+            },
+            "sections":{
+            "type":"array",
+            "maxItems":6,
+            "description":"kind=accordion: collapsible sections",
+            "items":{
+            "type":"object",
+            "properties":{
+            "title":{"type":"string"},
+            "text":{"type":"string","description":"Section body (shown when expanded)"}
+            },
+            "required":["title","text"]
+            }
+            },
+            "tex":{
+            "type":"string",
+            "description":"kind=math: LaTeX source of the formula (KaTeX syntax)"
+            },
+            "display":{
+            "type":"boolean",
+            "description":"kind=math: block display mode (default true; false renders inline style)"
             },
             "image":{
             "type":"object",

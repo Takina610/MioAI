@@ -183,6 +183,10 @@ final class UiExtendedBlockValidator {
                 Map<String, Object> action = new LinkedHashMap<>();
                 action.put("label", label);
                 action.put("prompt", prompt);
+                // 有影响/不可逆语义的按钮标记：前端先弹确认框，用户确认后才把 prompt 发出
+                if (item.path("confirm").asBoolean(false)) {
+                    action.put("confirm", true);
+                }
                 String style = text(item, "style");
                 action.put("style", "primary".equals(style) ? "primary" : "default");
                 actions.add(action);
@@ -327,5 +331,63 @@ final class UiExtendedBlockValidator {
                     + " options each with a non-empty label");
         }
         return options;
+    }
+
+    // ---------- 第三期第二批：accordion / math / actions.confirm ----------
+
+    private static final int ACC_BODY_CAP = 1000;
+
+    static List<Map<String, Object>> validateAccordion(JsonNode raw) {
+        List<Map<String, Object>> sections = new ArrayList<>();
+        if (raw != null && raw.isArray()) {
+            for (JsonNode item : raw) {
+                if (sections.size() >= MAX_OPTIONS || !item.isObject()) {
+                    continue;
+                }
+                String title = text(item, "title");
+                if (title == null) {
+                    continue;
+                }
+                String body = cappedText(item, "text", ACC_BODY_CAP);
+                if (body == null) {
+                    continue;
+                }
+                Map<String, Object> section = new LinkedHashMap<>();
+                section.put("title", title);
+                section.put("text", body);
+                sections.add(section);
+            }
+        }
+        if (sections.size() < 2) {
+            throw new IllegalArgumentException("accordion needs 2-" + MAX_OPTIONS
+                    + " sections each with a non-empty title and text");
+        }
+        return sections;
+    }
+
+    private static final int MATH_TEX_CAP = 2000;
+
+    static Map<String, Object> validateMath(JsonNode raw) {
+        String tex = cappedText(raw, "tex", MATH_TEX_CAP);
+        if (tex == null) {
+            throw new IllegalArgumentException("math needs a non-empty tex string (LaTeX source)");
+        }
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("tex", tex);
+        fields.put("display", !raw.path("display").isBoolean() || raw.path("display").asBoolean());
+        return fields;
+    }
+
+    /** 折叠面板正文/公式源码等长文本字段（TEXT_CAP=200 只够标题类） */
+    private static String cappedText(JsonNode node, String field, int cap) {
+        JsonNode value = node.get(field);
+        if (value == null || value.isNull() || !value.isTextual()) {
+            return null;
+        }
+        String s = value.asText();
+        if (s.isBlank()) {
+            return null;
+        }
+        return s.length() > cap ? s.substring(0, cap) + "…" : s;
     }
 }

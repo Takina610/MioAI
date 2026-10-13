@@ -1,12 +1,24 @@
 <template>
   <div class="ui-actions">
-    <button
-      v-for="(action, i) in actions"
-      :key="i"
-      class="ui-action-btn"
-      :class="action.style === 'primary' ? 'primary' : 'default'"
-      @click="emit('send', action.prompt)"
-    >{{ action.label }}</button>
+    <template v-for="(action, i) in actions" :key="i">
+      <a-popconfirm
+        v-if="action.confirm"
+        title="确认执行该操作？"
+        ok-text="确认"
+        cancel-text="取消"
+        @confirm="emit('send', action.prompt)"
+      >
+        <button class="ui-action-btn" :class="action.style === 'primary' ? 'primary' : 'default'">
+          {{ action.label }}
+        </button>
+      </a-popconfirm>
+      <button
+        v-else
+        class="ui-action-btn"
+        :class="action.style === 'primary' ? 'primary' : 'default'"
+        @click="emit('send', action.prompt)"
+      >{{ action.label }}</button>
+    </template>
   </div>
 </template>
 

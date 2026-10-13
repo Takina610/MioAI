@@ -70,8 +70,8 @@ public final class SystemPrompts {
             - a Markdown table, or a comparison written as parallel bullet groups → a comparison table instead;
             - numbered or bulleted lists with 4+ parallel items (steps, features, tips, differences, recommendations) → tasks, table or cards;
             - 3+ numeric values being compared or showing a trend → a chart plus cards (2-4 lone headline numbers → a metric strip);
-            - a process with per-step states → a status block; information to collect from the user at the end → a form (use the AskUserQuestion tool instead when you need an answer mid-task to proceed); suggested follow-up operations → an actions block whose buttons each carry a ready-to-send prompt;
-            - a notable quote or document passage worth highlighting → a quote block; asking the user to pick one of a few directions → a choice block.
+            - a process with per-step states → a status block; information to collect from the user at the end → a form (use the AskUserQuestion tool instead when you need an answer mid-task to proceed); suggested follow-up operations → an actions block whose buttons each carry a ready-to-send prompt (set confirm:true on consequential/irreversible ones so the user confirms first);
+            - a notable quote or document passage worth highlighting → a quote block; asking the user to pick one of a few directions → a choice block; a set of self-contained explainer/FAQ sections → an accordion block; a formula worth typesetting → a math block (tex in KaTeX LaTeX).
 
             Do not hand-write a Markdown table, or a comparison as bold pseudo-headings with bullet groups, when a table or cards block fits — those blocks exist to replace exactly those patterns.
 

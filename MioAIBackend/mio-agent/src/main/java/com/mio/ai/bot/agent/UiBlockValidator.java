@@ -60,13 +60,15 @@ final class UiBlockValidator {
             case "quote" -> block.putAll(UiExtendedBlockValidator.validateQuote(raw));
             case "metric" -> block.put("items", UiExtendedBlockValidator.validateMetric(raw.get("items")));
             case "choice" -> block.put("options", UiExtendedBlockValidator.validateChoice(raw.get("options")));
+            case "accordion" -> block.put("sections", UiExtendedBlockValidator.validateAccordion(raw.get("sections")));
+            case "math" -> block.putAll(UiExtendedBlockValidator.validateMath(raw));
             case "image" -> block.putAll(UiImageBlockValidator.validateImage(raw, imageResolver));
             case "image_list" -> block.put("items", UiImageBlockValidator.validateImageList(raw, imageResolver));
             case "image_gallery" -> block.put("images", UiImageBlockValidator.validateGallery(raw, imageResolver));
             case "figure" -> block.putAll(UiImageBlockValidator.validateFigure(raw, imageResolver));
             default -> throw new IllegalArgumentException(
                     "unsupported kind '" + kind + "' (supported: cards, chart, table, tasks, form, actions, status, "
-                            + "timeline, quote, metric, choice, image, image_list, image_gallery, figure)");
+                            + "timeline, quote, metric, choice, accordion, math, image, image_list, image_gallery, figure)");
         }
         return block;
     }

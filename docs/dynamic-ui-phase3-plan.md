@@ -9,7 +9,7 @@
 
 评估口径：① 聊天场景真实出现频率 ② 与既有块的能力重叠度 ③ 实现成本（前后端+提示词+测试）④ 弱模型（deepseek-v4.1-flash）能否稳定产出该结构。
 
-### 本期实现（9 项 + chart 增强）
+### 本期实现（12 项 + chart 增强，两批交付）
 
 | 组件 | kind | 结论依据 |
 |---|---|---|
@@ -21,6 +21,9 @@
 | Quote | `quote` | 名言/文档原文引用；成本极低 |
 | Metric | `metric` | KPI 数字条；cards 的紧凑变体，数据类回答高频 |
 | Choice | `choice` | 快速二选一/多选一续聊；actions 的单选语义变体 |
+| Accordion | `accordion` | FAQ/自包含分节长答案；第二批补齐（默认首节展开） |
+| Math | `math` | KaTeX 公式排版（tex/display）；第二批补齐（弱模型实测可产出合法 LaTeX） |
+| Confirm | `actions[].confirm` | 有影响/不可逆操作的确认语义：actions 加 confirm 字段，前端 Popconfirm 确认后才发 prompt；独立块无增量故做成字段 |
 | chart 散点 | `chartType=scatter` | echarts 原生支持，一行分支 |
 
 RichContent：**不新增**。既有 answerSegments 机制已实现"一条消息混合 text+任意已注册 ui 块、模型决定顺序"，再加一层包装块属于重复建模。
@@ -29,11 +32,8 @@ RichContent：**不新增**。既有 answerSegments 机制已实现"一条消息
 
 | 组件 | 暂缓理由 | 启用条件 |
 |---|---|---|
-| Accordion | 长答案折叠有价值，但前端成本中等，出现频率一般 | 长教程场景多起来后 |
-| Feedback | 点赞点踩需要后端存储表+聚合口径，本期无消费方 | 有运营分析需求时 |
-| Math (KaTeX) | 需引入 KaTeX 依赖；数学问答占比待观察 | 数学场景高频时 |
+| Feedback | 点赞点踩需要后端存储表+聚合口径，本期无消费方；做成"发消息式假反馈"违反文案红线 | 有运营分析需求时 |
 | Flowchart (Mermaid) | mermaid 体积大（~1MB），且弱模型产出合法 mermaid 语法不可靠 | 换强模型或做语法校验降级后 |
-| Confirm | 语义上并入 actions（confirm 字段），独立块无增量 | 出现真实 op 白名单操作时 |
 | Log | 无产生日志流的业务场景 | Agent 长任务日志面板立项时 |
 
 ### 不做（重叠/低频/重依赖）
@@ -70,6 +70,26 @@ RichContent：**不新增**。既有 answerSegments 机制已实现"一条消息
 **choice**：`{kind, title?(题干), options:[{label!, prompt?}] ×≤6}` —— 单选胶囊组；点击即发送 prompt（缺省发 label）。与 actions 区别：choice 表达"请用户选一个方向"，actions 表达"预测的下一步操作"；choice 不沉底（inline），actions 沉底。
 
 **chart 散点**：chartType 枚举增加 `scatter`；坐标系 value×value，其余复用。
+
+**accordion**：`{kind, title?, sections:[{title!, text!}] ×≤6}`
+- 默认：首节展开，其余收起。text 上限 1000 字（折叠正文比标题类字段长）。
+- 场景：FAQ、自包含分节的长解释（背景/意义/用法分节）。不适用：步骤带状态（status）、并列要点需要一眼全览（cards/table）。
+- 交互：点击节头展开/收起。
+- 前后端：纯静态内容块，无副作用；后端校验 ≥2 节且 title/text 非空；前端白名单组件渲染。
+- 状态：节数不足整块丢弃回执自纠；无空态（默认首节展开）。
+- 测试：欧拉公式场景实测（背景/意义两节，默认展开一节）✓。
+
+**math**：`{kind, title?, tex!, display?}`
+- 必需 tex（KaTeX LaTeX 源码，上限 2000 字符）；display 默认 true（块级排版）。
+- 场景：公式/不等式/推导排版。不适用：普通代码（Markdown 代码块）、简单算式文字即可。
+- 交互：无（可横向滚动）。
+- 前后端：katex throwOnError:false（坏公式原样显示不炸块）；trust 默认关闭（\href 等危险指令不执行，v-html 安全由 KaTeX 自身转义保证）。
+- 状态：tex 空/超长截断回执；渲染异常退化为原始文本。
+- 测试：欧拉公式实测（`e^{i\pi}+1=0` 与推广式两条，KaTeX 渲染 0 错误）✓。
+
+**actions[].confirm**：actions 按钮对象增加 `confirm?: boolean`
+- 语义：有影响/不可逆操作——前端先弹 Popconfirm（"确认执行该操作？"），用户确认后才把 prompt 作为消息发出；未确认不发送。
+- 安全定位：这是"请求用户确认后执行操作"的前端表达层；真正的业务操作仍受 OP_WHITELIST 空集约束（未注册 op 的按钮在源头丢弃）。
 
 ---
 

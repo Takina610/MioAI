@@ -30,6 +30,8 @@ import UiTimeline from './UiTimeline.vue'
 import UiQuote from './UiQuote.vue'
 import UiMetric from './UiMetric.vue'
 import UiChoice from './UiChoice.vue'
+import UiAccordion from './UiAccordion.vue'
+import UiMath from './UiMath.vue'
 import UiImage from './UiImage.vue'
 import UiImageList from './UiImageList.vue'
 import UiImageGallery from './UiImageGallery.vue'
@@ -53,6 +55,8 @@ const REGISTRY: Record<string, Component> = {
   quote: UiQuote,
   metric: UiMetric,
   choice: UiChoice,
+  accordion: UiAccordion,
+  math: UiMath,
   image: UiImage,
   image_list: UiImageList,
   image_gallery: UiImageGallery,

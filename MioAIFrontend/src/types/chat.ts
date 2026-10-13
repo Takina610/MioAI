@@ -135,7 +135,7 @@ export type MessageBlock =
       v?: number
       /** targetId 原位替换事件标记（历史加载时忽略；流式期据此跨消息按 id 替换） */
       update?: boolean
-      kind: 'cards' | 'chart' | 'table' | 'tasks' | 'form' | 'actions' | 'status' | 'timeline' | 'quote' | 'metric' | 'choice' | 'image' | 'image_list' | 'image_gallery' | 'figure' | (string & {})
+      kind: 'cards' | 'chart' | 'table' | 'tasks' | 'form' | 'actions' | 'status' | 'timeline' | 'quote' | 'metric' | 'choice' | 'accordion' | 'math' | 'image' | 'image_list' | 'image_gallery' | 'figure' | (string & {})
       title?: string
       cards?: UiCardItem[]
       chartType?: 'bar' | 'line' | 'pie' | 'scatter'
@@ -154,6 +154,11 @@ export type MessageBlock =
       author?: string
       source?: string
       options?: UiChoiceOption[]
+      /** kind=accordion：折叠分节 */
+      sections?: UiAccordionSection[]
+      /** kind=math：LaTeX 源码（KaTeX） */
+      tex?: string
+      display?: boolean
       /** kind=image / figure：单图载荷 */
       image?: UiImageMeta
       /** kind=image_gallery：图集 */
@@ -228,6 +233,8 @@ export interface UiActionItem {
   label: string
   prompt: string
   style?: 'primary' | 'default'
+  /** 有影响/不可逆操作：先弹确认框，确认后才发送 prompt */
+  confirm?: boolean
 }
 
 /** 动态 UI 状态步骤（kind=status 载荷，静态进度面板） */
@@ -255,6 +262,12 @@ export interface UiMetricItem {
 export interface UiChoiceOption {
   label: string
   prompt?: string
+}
+
+/** 动态 UI 折叠分节（kind=accordion 载荷） */
+export interface UiAccordionSection {
+  title: string
+  text: string
 }
 
 /**
