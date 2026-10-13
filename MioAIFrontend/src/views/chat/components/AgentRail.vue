@@ -1,13 +1,28 @@
 <template>
   <!-- 智能体左轨：与悬浮胶囊左缘融合（融合样式由页面 .rail-open 统一驱动）。
        默认 64px 图标窄轨，底部加号展开为 240px 信息面板（左 icon、右上名称、右下描述）。
-       置顶分组在前（组内可长按拖动排序），hover 浮现图钉按钮 -->
-  <aside class="agent-rail" :class="{ hidden: !visible, expanded }">
+       排序模式（宽轨顶部按钮切换）：免长按直接拖动，点击与图钉暂停；
+       双栏 peek 时创建按钮下移，给悬浮的会话开关按钮让位 -->
+  <aside class="agent-rail" :class="{ hidden: !visible, expanded, peek }">
     <div class="rail-capsule">
-      <button class="rail-btn rail-create" title="创建群聊" aria-label="创建群聊" @click="emit('create-group')">
-        <TeamOutlined class="rail-btn-icon" />
-        <span v-if="expanded" class="rail-btn-text">创建群聊</span>
-      </button>
+      <div class="rail-top-actions">
+        <button class="rail-btn rail-create" title="创建群聊" aria-label="创建群聊" @click="emit('create-group')">
+          <TeamOutlined class="rail-btn-icon" />
+          <span v-if="expanded" class="rail-btn-text">创建群聊</span>
+        </button>
+        <!-- 排序模式开关：仅信息面板态显示（窄轨无位） -->
+        <button
+          v-if="expanded"
+          class="rail-btn rail-sort"
+          :class="{ active: sortMode }"
+          :title="sortMode ? '退出排序' : '拖动排序'"
+          :aria-label="sortMode ? '退出排序模式' : '进入排序模式'"
+          @click="toggleSortMode"
+        >
+          <DragOutlined class="rail-btn-icon" />
+          <span v-if="expanded" class="rail-btn-text">{{ sortMode ? '完成' : '排序' }}</span>
+        </button>
+      </div>
 
       <div class="rail-list">
         <div v-if="pinnedAgents.length && expanded" class="rail-group-label">置顶</div>
@@ -15,6 +30,7 @@
           v-model="pinnedAgents"
           :animation="220"
           :delay="260"
+          :disabled="!sortMode"
           item-key="id"
           class="rail-drag-zone"
           ghost-class="rail-ghost"
@@ -28,6 +44,7 @@
               :expanded="expanded"
               :current-agent-id="currentAgentId"
               :icon="iconByAgent.get(element.id)"
+              :sorting="sortMode"
               @open="emit('select', $event)"
               @toggle-pin="emit('toggle-pin', $event)"
             />
@@ -38,6 +55,7 @@
           v-model="normalAgents"
           :animation="220"
           :delay="260"
+          :disabled="!sortMode"
           item-key="id"
           class="rail-drag-zone"
           ghost-class="rail-ghost"
@@ -51,6 +69,7 @@
               :expanded="expanded"
               :current-agent-id="currentAgentId"
               :icon="iconByAgent.get(element.id)"
+              :sorting="sortMode"
               @open="emit('select', $event)"
               @toggle-pin="emit('toggle-pin', $event)"
             />
@@ -72,7 +91,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { PlusOutlined, TeamOutlined } from '@ant-design/icons-vue'
+import { DragOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons-vue'
 import draggable from 'vuedraggable'
 import RailAgentItem from './RailAgentItem.vue'
 import { parseBotIcon, type BotIconConfig } from '@/components/bot-icon/types'
@@ -83,10 +102,12 @@ const props = defineProps<{
   agents: Agent[]
   /** 当前对话的智能体 id（高亮锚点） */
   currentAgentId: number
-  /** 轨道是否展示（登录 + 自身开关 + 会话胶囊未收起/peek） */
+  /** 轨道是否展示（相位=都展开 或 悬浮 peek） */
   visible: boolean
   /** 信息面板模式（true = 240px 宽轨带名称/描述） */
   expanded: boolean
+  /** 双栏同时 peek（会话开关按钮悬浮在轨道顶部，创建按钮让位下移） */
+  peek?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -106,6 +127,18 @@ const iconByAgent = computed(() => {
     map.set(agent.id, agent.type === 2 ? null : parseBotIcon(agent.icon))
   }
   return map
+})
+
+/** 排序模式：免长按直接拖动，点击导航与图钉暂停（显式切换，避免长按与点击冲突） */
+const sortMode = ref(false)
+
+function toggleSortMode(): void {
+  sortMode.value = !sortMode.value
+}
+
+// 轨道隐藏/收起时退出排序模式
+watch(() => props.visible, v => {
+  if (!v) sortMode.value = false
 })
 
 // 拖拽分组：本地数组随 props 重建（拖动中由 vuedraggable 接管，结束后上抛新顺序）
@@ -164,15 +197,28 @@ function emitReorder(): void {
     box-shadow: 0 8px 24px rgba(20, 20, 19, 0.05);
     overflow: hidden;
   }
+
+  // 双栏 peek：会话开关按钮悬浮在轨道顶部区域，创建/排序按钮下移让位
+  &.peek .rail-top-actions {
+    margin-top: 60px;
+  }
+}
+
+.rail-top-actions {
+  display: flex;
+  gap: 6px;
+  margin: 8px 8px 0;
+  flex-shrink: 0;
 }
 
 .rail-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   height: 42px;
-  margin: 8px 8px 0;
+  flex: 1;
+  min-width: 0;
   border: 1px solid rgba($primary-color, 0.45);
   // 大圆角胶囊；悬浮毛玻璃
   border-radius: 999px;
@@ -181,6 +227,7 @@ function emitReorder(): void {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  padding: 0 10px;
   transition: background 0.2s, box-shadow 0.2s, backdrop-filter 0.2s;
 
   &:hover {
@@ -191,18 +238,43 @@ function emitReorder(): void {
   }
 
   .rail-btn-icon {
-    font-size: 16px;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+
+  .rail-btn-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 
-// 创建群聊：窄轨为图标按钮，宽轨带文案
-.rail-create {
-  flex-shrink: 0;
+// 窄轨：只留创建按钮（图标态）
+.agent-rail:not(.expanded) .rail-sort {
+  display: none;
 }
 
-.agent-rail.expanded .rail-create {
+.agent-rail:not(.expanded) .rail-create {
+  flex: none;
+  width: 52px;
+  padding: 0;
+}
+
+.agent-rail.expanded .rail-create,
+.agent-rail.expanded .rail-sort {
   justify-content: flex-start;
-  padding: 0 16px;
+  padding: 0 14px;
+}
+
+// 排序模式激活：主色实底点亮
+.rail-sort.active {
+  background: $primary-color;
+  border-color: $primary-color;
+  color: #fff;
+
+  &:hover {
+    background: darken($primary-color, 6%);
+  }
 }
 
 .rail-list {
@@ -211,6 +283,12 @@ function emitReorder(): void {
   display: flex;
   flex-direction: column;
   padding: 10px 8px;
+  // 滚动但不显示滚动条（窄轨空间有限，视觉保持干净）
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 .rail-group-label {

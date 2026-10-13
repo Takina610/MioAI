@@ -154,10 +154,6 @@
     <template v-if="answerSegments.length">
       <template v-for="(seg, si) in answerSegments" :key="`seg-${si}`">
         <div v-if="seg.kind === 'text' && groupMode" class="group-own-row">
-          <div class="group-own-head">
-            <span v-if="groupName" class="group-own-name">{{ groupName }}</span>
-            <GroupAvatar v-if="groupMembers?.length" class="group-own-avatar" :members="groupMembers" :size="26" />
-          </div>
           <div class="group-own-bubble">
             <MarkdownView :content="seg.text" />
           </div>
@@ -216,7 +212,6 @@ import ToolRow from './ToolRow.vue'
 import ResourceRow from './ResourceRow.vue'
 import SkillRow from './SkillRow.vue'
 import MemberBubble from './MemberBubble.vue'
-import GroupAvatar from '@/components/GroupAvatar.vue'
 import UiBlockRenderer from './ui/UiBlockRenderer.vue'
 import { messageAttachmentDisplays } from '../attachmentUtils'
 import { answerQuestion } from '@/api/chat'
@@ -247,12 +242,8 @@ interface Props {
   messageId?: string
   /** 当前显示的版本号（历史版本的块里也能打开子代理面板） */
   version?: number
-  /** 群聊模式：群主正文渲染为右对齐署名气泡，成员消息为左对齐成员气泡 */
+  /** 群聊模式：群主正文渲染为右对齐气泡（与用户消息同款，无署名——成员在左侧带署名） */
   groupMode?: boolean
-  /** 群聊模式下的群名（群主气泡署名） */
-  groupName?: string
-  /** 群聊成员概要（群主行的堆叠群头像，动态呈现） */
-  groupMembers?: import('@/types').AgentMemberBrief[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -953,25 +944,12 @@ function durationSuffix(block: ThinkingBlock): string {
   padding: 0 4px;
 }
 
-// ---------- 群聊模式：群主正文 = 右对齐署名气泡（与用户消息同一气泡语言） ----------
+// ---------- 群聊模式：群主正文 = 右对齐气泡（与用户消息同一气泡语言，无署名） ----------
 .group-own-row {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   margin: 10px 0;
-}
-
-.group-own-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
-}
-
-.group-own-name {
-  font-size: 12px;
-  color: #8c8a82;
-  line-height: 1;
 }
 
 .group-own-bubble {

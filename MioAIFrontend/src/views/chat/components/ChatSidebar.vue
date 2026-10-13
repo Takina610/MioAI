@@ -24,16 +24,15 @@
         >
           <SettingOutlined />
         </button>
-        <!-- 智能体左轨开关（侧栏右上角）：开启态主色点亮 -->
+        <!-- 当前智能体/群聊的编辑入口（原左轨开关位置）：智能体→编辑弹窗，群聊→编辑群聊 -->
         <button
-          v-if="userStore.isLoggedIn"
-          class="personalize-btn rail-toggle-btn"
-          :class="{ active: railVisible }"
-          title="智能体侧边栏"
-          aria-label="切换智能体侧边栏"
-          @click="emit('toggle-rail')"
+          v-if="canEditAgent"
+          class="personalize-btn"
+          title="编辑智能体"
+          aria-label="编辑智能体"
+          @click="emit('edit-agent')"
         >
-          <AppstoreOutlined />
+          <EditOutlined />
         </button>
       </div>
 
@@ -135,7 +134,7 @@ import {
   LogoutOutlined,
   UserOutlined,
   FormOutlined,
-  AppstoreOutlined
+  EditOutlined
 } from '@ant-design/icons-vue'
 
 const props = defineProps<{
@@ -152,8 +151,8 @@ const props = defineProps<{
   peeking: boolean
   enterPanel: () => void
   leavePanel: () => void
-  /** 智能体左轨是否展开（右上角开关的点亮态） */
-  railVisible?: boolean
+  /** 当前智能体可编辑（自定义/群聊且已登录）：显示编辑入口 */
+  canEditAgent?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -166,7 +165,7 @@ const emit = defineEmits<{
   (e: 'load-more'): void
   (e: 'login'): void
   (e: 'personalize'): void
-  (e: 'toggle-rail'): void
+  (e: 'edit-agent'): void
 }>()
 
 const router = useRouter()
@@ -227,8 +226,7 @@ defineExpose({ checkListFilled, scrollToTop })
       animation: peek-logo-in 0.22s ease 0.24s backwards;
     }
 
-    .personalize-btn,
-    .rail-toggle-btn {
+    .personalize-btn {
       display: none;
     }
   }
@@ -296,12 +294,6 @@ defineExpose({ checkListFilled, scrollToTop })
         color: $primary-color;
         background: rgba(42, 161, 169, 0.08);
       }
-    }
-
-    // 左轨开关：开启态主色点亮
-    .rail-toggle-btn.active {
-      color: $primary-color;
-      background: rgba(42, 161, 169, 0.12);
     }
   }
 

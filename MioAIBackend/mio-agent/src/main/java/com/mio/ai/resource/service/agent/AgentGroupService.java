@@ -17,6 +17,9 @@ public interface AgentGroupService extends IService<AgentGroupMember> {
     /** 创建群聊智能体（成员逐个校验归属与类型），返回群智能体ID */
     Long createGroup(AgentGroupCreateRequest request, Long userId);
 
+    /** 编辑群聊（仅所有者）：改名 + 整体替换成员（至少保留 2 个） */
+    boolean updateGroup(com.mio.ai.resource.model.dto.agent.AgentGroupUpdateRequest request, Long userId);
+
     /** 群成员智能体行（按加入顺序；已删除的成员自动滤除） */
     List<Agent> listMembers(Long groupAgentId);
 

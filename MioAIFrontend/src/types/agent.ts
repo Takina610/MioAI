@@ -86,6 +86,13 @@ export interface AgentGroupCreateRequest {
   memberAgentIds: number[]
 }
 
+/** 编辑群聊：改名 + 整体替换成员（至少保留 2 个） */
+export interface AgentGroupUpdateRequest {
+  id: number
+  name: string
+  memberAgentIds: number[]
+}
+
 /** 智能体发布版本快照 */
 export interface AgentVersion {
   id: number

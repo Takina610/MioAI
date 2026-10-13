@@ -1,14 +1,14 @@
 <template>
   <!-- 左轨单个智能体：窄轨图标态 / 宽轨信息态（左 icon、右上名称、右下描述）。
-       hover 浮现图钉按钮（置顶/取消），长按拖动由外层 draggable 接管 -->
+       hover 浮现图钉按钮（置顶/取消）；排序模式下暂停点击与图钉，改为可拖拽手柄 -->
   <div
     class="rail-agent"
-    :class="{ active: agent.id === currentAgentId, pinned: agent.pinned === 1 }"
+    :class="{ active: agent.id === currentAgentId, pinned: agent.pinned === 1, sorting }"
     :title="agent.name"
     role="button"
     tabindex="0"
-    @click="emit('open', agent.id)"
-    @keydown.enter="emit('open', agent.id)"
+    @click="sorting || emit('open', agent.id)"
+    @keydown.enter="sorting || emit('open', agent.id)"
   >
     <span class="agent-icon-wrap">
       <BotIcon
@@ -16,7 +16,7 @@
         :shape="icon.shape"
         :fill="icon.fill"
         :size="expanded ? 34 : 38"
-        :live="true"
+        :live="!sorting"
       />
       <GroupAvatar
         v-else-if="agent.type === 2"
@@ -32,6 +32,7 @@
       <span v-if="agent.description" class="agent-desc">{{ agent.description }}</span>
     </span>
     <button
+      v-if="!sorting"
       class="pin-btn"
       :class="{ pinned: agent.pinned === 1 }"
       :title="agent.pinned === 1 ? '取消置顶' : '置顶'"
@@ -41,13 +42,14 @@
       <PushpinFilled v-if="agent.pinned === 1" />
       <PushpinOutlined v-else />
     </button>
+    <HolderOutlined v-else class="sort-grip" />
   </div>
 </template>
 
 <script setup lang="ts">
 import BotIcon from '@/components/bot-icon/BotIcon.vue'
 import GroupAvatar from '@/components/GroupAvatar.vue'
-import { PushpinFilled, PushpinOutlined } from '@ant-design/icons-vue'
+import { HolderOutlined, PushpinFilled, PushpinOutlined } from '@ant-design/icons-vue'
 import type { BotIconConfig } from '@/components/bot-icon/types'
 import type { Agent } from '@/types'
 
@@ -57,6 +59,8 @@ defineProps<{
   currentAgentId: number
   /** 解析后的 bot-icon 配置（null 时群聊回退群头像、普通回退头像） */
   icon?: BotIconConfig | null
+  /** 排序模式：暂停点击导航与图钉，整项变为拖拽手柄 */
+  sorting?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -75,7 +79,7 @@ const emit = defineEmits<{
   border: 1px solid transparent;
   border-radius: 12px;
   cursor: pointer;
-  // 长按拖动期间不选中文本
+  // 拖动期间不选中文本
   user-select: none;
   transition: background 0.2s, border-color 0.2s;
 
@@ -91,6 +95,25 @@ const emit = defineEmits<{
   &.active {
     background: rgba($primary-color, 0.12);
     border-color: rgba($primary-color, 0.4);
+  }
+
+  // 排序模式：抓取手柄态（虚线描边示意可拖）
+  &.sorting {
+    cursor: grab;
+    border-style: dashed;
+    border-color: rgba($primary-color, 0.35);
+
+    &:hover {
+      background: rgba($primary-color, 0.06);
+    }
+  }
+
+  .sort-grip {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font-size: 11px;
+    color: rgba($primary-color, 0.6);
   }
 
   .agent-icon-wrap {

@@ -1,6 +1,6 @@
 <template>
-  <!-- 群聊堆叠头像：2x2 等大网格。2 个=左右；3 个=左上/右上/左下；4 个=满格；
-       5+ =左上/右上/左下 + 右下省略号。静态渲染（无动画），成员图标缺失回退首字/头像图 -->
+  <!-- 群聊堆叠头像：2x2 等大网格，格子透明（成员图标原样透出）。
+       2 个=左右；3 个=上中+下二；4 个=满格；5+ =左上/右上/左下 + 右下省略号 -->
   <span class="group-avatar" :style="{ width: size + 'px', height: size + 'px' }">
     <span
       v-for="(m, i) in shown"
@@ -51,10 +51,16 @@ const shown = computed(() =>
   props.members.slice(0, overflow.value ? 3 : Math.min(props.members.length, MAX_SHOWN)))
 const overflow = computed(() => props.members.length > MAX_SHOWN)
 
-/** 网格槽位：0=左上 1=右上 2=左下 3=右下；2 个成员时占左/右（垂直居中） */
+/** 网格槽位：2=左右（垂直居中）；3=上中+左下+右下；4/5+=左上/右上/左下/右下 */
 function cellClass(index: number): string {
-  if (props.members.length === 2 && !overflow.value) {
+  if (overflow.value) {
+    return ['ga-l ga-t', 'ga-r ga-t', 'ga-l ga-b'][index] ?? 'ga-l ga-t'
+  }
+  if (props.members.length === 2) {
     return index === 0 ? 'ga-l ga-c' : 'ga-r ga-c'
+  }
+  if (props.members.length === 3) {
+    return ['ga-m ga-t', 'ga-l ga-b', 'ga-r ga-b'][index] ?? 'ga-l ga-t'
   }
   return ['ga-l ga-t', 'ga-r ga-t', 'ga-l ga-b', 'ga-r ga-b'][index] ?? 'ga-l ga-t'
 }
@@ -86,10 +92,12 @@ function iconOf(m: GroupAvatarMember): BotIconConfig | null {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: #fff;
+  // 透明展示：不铺底色，成员图标原样透出（首字/省略号格子自带底色）
+  background: transparent;
 
   &.ga-l { left: 0; }
   &.ga-r { right: 0; }
+  &.ga-m { left: 25%; }
   &.ga-t { top: 0; }
   &.ga-b { bottom: 0; }
 

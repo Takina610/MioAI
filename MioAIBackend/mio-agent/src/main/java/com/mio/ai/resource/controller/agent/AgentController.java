@@ -94,6 +94,16 @@ public class AgentController {
         return ResultUtils.success(id);
     }
 
+    /** 编辑群聊（仅所有者）：改名 + 整体替换成员（至少保留 2 个） */
+    @PutMapping("/group")
+    @CacheEvict(value = "agents", allEntries = true)
+    public BaseResponse<Boolean> updateGroup(
+            @Valid @RequestBody com.mio.ai.resource.model.dto.agent.AgentGroupUpdateRequest request,
+            HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        return ResultUtils.success(agentGroupService.updateGroup(request, userId));
+    }
+
     @PutMapping
     @CacheEvict(value = "agents", allEntries = true)
     public BaseResponse<Boolean> updateAgent(@Valid @RequestBody AgentUpdateRequest request, HttpServletRequest httpRequest) {

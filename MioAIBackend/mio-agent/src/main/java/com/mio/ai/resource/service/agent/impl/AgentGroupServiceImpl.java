@@ -82,6 +82,44 @@ public class AgentGroupServiceImpl extends ServiceImpl<AgentGroupMemberMapper, A
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean updateGroup(com.mio.ai.resource.model.dto.agent.AgentGroupUpdateRequest request, Long userId) {
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
+        }
+        Agent group = agentMapper.selectById(request.getId());
+        if (group == null || !userId.equals(group.getUserId())
+                || !Integer.valueOf(AgentTypeEnum.GROUP.getCode()).equals(group.getType())) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "群聊不存在");
+        }
+        List<Long> memberIds = request.getMemberAgentIds().stream().distinct().toList();
+        if (memberIds.size() < MIN_MEMBERS) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "群聊至少需要保留 " + MIN_MEMBERS + " 个成员");
+        }
+        for (Long memberId : memberIds) {
+            Agent member = agentMapper.selectById(memberId);
+            if (member == null || !userId.equals(member.getUserId())
+                    || !Integer.valueOf(AgentTypeEnum.CUSTOM.getCode()).equals(member.getType())) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, "成员智能体不可用：#" + memberId);
+            }
+        }
+        group.setName(request.getName().strip());
+        agentMapper.updateById(group);
+        this.remove(new LambdaQueryWrapper<AgentGroupMember>()
+                .eq(AgentGroupMember::getGroupAgentId, group.getId()));
+        List<AgentGroupMember> rows = new ArrayList<>();
+        for (Long memberId : memberIds) {
+            AgentGroupMember row = new AgentGroupMember();
+            row.setGroupAgentId(group.getId());
+            row.setMemberAgentId(memberId);
+            row.setCreateTime(new Date());
+            rows.add(row);
+        }
+        this.saveBatch(rows);
+        return true;
+    }
+
+    @Override
     public List<Agent> listMembers(Long groupAgentId) {
         List<AgentGroupMember> rows = this.list(new LambdaQueryWrapper<AgentGroupMember>()
                 .eq(AgentGroupMember::getGroupAgentId, groupAgentId)

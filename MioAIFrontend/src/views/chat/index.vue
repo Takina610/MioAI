@@ -13,6 +13,9 @@
       :current-agent-id="agentId"
       :visible="railOpen || railPeeking"
       :expanded="agentRailExpanded"
+      :peek="railPeeking && sidebarPeeking"
+      @mouseenter="panelEnter"
+      @mouseleave="panelLeave"
       @select="handleRailSelect"
       @create-group="groupModalVisible = true"
       @toggle-expanded="agentRailExpanded = !agentRailExpanded"
@@ -21,8 +24,8 @@
     />
     <ChatSidebar
       ref="sidebarRef"
-      :rail-visible="agentRailVisible"
-      @toggle-rail="agentRailVisible = !agentRailVisible"
+      :can-edit-agent="userStore.isLoggedIn && agentInfo != null && agentInfo.type !== 0"
+      @edit-agent="handleEditCurrentAgent"
       @pin="handleSessionPin"
       :agent-info="agentInfo"
       :can-personalize="userStore.isLoggedIn && agentInfo?.type === 0"
@@ -32,8 +35,8 @@
       :streaming-chat-ids="streamingChatIds"
       :collapsed="sidebarCollapsed"
       :peeking="sidebarPeeking"
-      :enter-panel="sidebarEnterPanel"
-      :leave-panel="sidebarLeavePanel"
+      :enter-panel="panelEnter"
+      :leave-panel="panelLeave"
       @select="selectChat"
       @new-chat="createNewChat"
       @search="searchModalVisible = true"
@@ -49,9 +52,9 @@
         <button
           class="sidebar-toggle"
           aria-label="切换侧边栏"
-          @click="sidebarToggle"
-          @mouseenter="sidebarEnterHandle"
-          @mouseleave="sidebarLeaveHandle"
+          @click="advanceSidebarPhase"
+          @mouseenter="onToggleHover"
+          @mouseleave="onToggleLeave"
         >
           <!-- 侧边栏开关（面板左分栏图标） -->
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
@@ -74,8 +77,6 @@
           :can-modify="userStore.isLoggedIn"
           :chat-id="currentChatId ?? undefined"
           :group-mode="agentInfo?.type === 2"
-          :group-name="agentInfo?.name"
-          :group-members="agentInfo?.members"
           :edit-render-cards="renderEditCards"
           :edit-leaving-keys="leavingEditKeys"
           :edit-ref-setter="setEditCardRef"
@@ -166,6 +167,21 @@
       @success="handleGroupCreated"
     />
 
+    <!-- 编辑当前智能体（会话胶囊右上角设置按钮）：复用智能体编辑弹窗 -->
+    <AgentCreateModal
+      v-model:visible="agentEditVisible"
+      mode="edit"
+      :agent-id="agentId"
+      @success="onCurrentAgentEdited"
+    />
+
+    <!-- 编辑当前群聊：改名 + 移除成员 -->
+    <EditGroupModal
+      v-model:visible="groupEditVisible"
+      :group="agentInfo?.type === 2 ? agentInfo : null"
+      @saved="onCurrentAgentEdited"
+    />
+
     <a-modal
       v-model:open="deleteModalVisible"
       title="⚠️确定删除对话？"
@@ -205,7 +221,8 @@ import ChatPlanPanel from './components/ChatPlanPanel.vue'
 import ChatSearchModal from './components/ChatSearchModal.vue'
 import SubagentPanel from './components/SubagentPanel.vue'
 import AgentPersonalizeModal from '@/components/AgentPersonalizeModal.vue'
-import { useFloatingSidebar } from '@/composables/useFloatingSidebar'
+import AgentCreateModal from '@/components/AgentCreateModal.vue'
+import EditGroupModal from './components/EditGroupModal.vue'
 import { useChatSessions } from './composables/useChatSessions'
 import { useChatMessages, generateConversationId } from './composables/useChatMessages'
 import { useChatStream } from './composables/useChatStream'
@@ -248,34 +265,90 @@ onMounted(async () => {
 const sidebarRef = ref<InstanceType<typeof ChatSidebar> | null>(null)
 const messageListRef = ref<InstanceType<typeof ChatMessageList> | null>(null)
 
-// ---------- 悬浮胶囊侧边栏：收缩按钮在 chat-header，收起后悬浮按钮唤出（peek） ----------
-const {
-  collapsed: sidebarCollapsed,
-  peeking: sidebarPeeking,
-  enterHandle: sidebarEnterHandle,
-  leaveHandle: sidebarLeaveHandle,
-  enterPanel: sidebarEnterPanel,
-  leavePanel: sidebarLeavePanel,
-  toggle: sidebarToggle,
-  closePeek: sidebarClosePeek
-} = useFloatingSidebar()
+// ---------- 侧栏相位：都展示(0) → 仅会话栏(1) → 都收起(2) → 仅会话栏(3) → 循环 ----------
+// 收缩/展开统一由 chat-header 的会话开关按钮管理（聊天侧栏自身不再有独立开关）。
+// 悬浮（开关按钮/左轨/会话胶囊任一区域内）peek 出被收起的部分，离开整个区域才收回
+type SidebarPhase = 0 | 1 | 2 | 3
+const sidebarPhase = ref<SidebarPhase>(0)
+const sidebarPeeking = ref(false)
+const railPeeking = ref(false)
+let sidebarRetractTimer: number | undefined
+
+function clearSidebarRetract(): void {
+  if (sidebarRetractTimer !== undefined) {
+    window.clearTimeout(sidebarRetractTimer)
+    sidebarRetractTimer = undefined
+  }
+}
+
+function scheduleSidebarRetract(): void {
+  clearSidebarRetract()
+  sidebarRetractTimer = window.setTimeout(() => {
+    sidebarPeeking.value = false
+    railPeeking.value = false
+    sidebarRetractTimer = undefined
+  }, 400)
+}
+
+/** 会话胶囊是否收起（相位 2） */
+const sidebarCollapsed = computed(() => sidebarPhase.value === 2)
+
+/** 开关按钮点击：推进相位（游客只有 会话展开↔收起 两态） */
+function advanceSidebarPhase(): void {
+  clearSidebarRetract()
+  sidebarPeeking.value = false
+  railPeeking.value = false
+  if (!userStore.isLoggedIn) {
+    sidebarPhase.value = sidebarPhase.value === 2 ? 0 : 2
+    return
+  }
+  sidebarPhase.value = ((sidebarPhase.value + 1) % 4) as SidebarPhase
+}
+
+/** 悬浮开关按钮：peek 出当前被收起的部分（都收起→双栏 peek；仅左轨收起→左轨 peek） */
+function onToggleHover(): void {
+  if (sidebarPhase.value === 0) return
+  clearSidebarRetract()
+  if (sidebarCollapsed.value) {
+    sidebarPeeking.value = true
+  }
+  if (userStore.isLoggedIn) {
+    railPeeking.value = true
+  }
+}
+
+function onToggleLeave(): void {
+  scheduleSidebarRetract()
+}
+
+/** 悬浮区域（左轨/会话胶囊）：进入保持，离开整体后延时收回 */
+function panelEnter(): void {
+  clearSidebarRetract()
+}
+
+function panelLeave(): void {
+  scheduleSidebarRetract()
+}
+
+/** 选中会话等动作后主动收回 peek */
+function sidebarClosePeek(): void {
+  clearSidebarRetract()
+  sidebarPeeking.value = false
+  railPeeking.value = false
+}
+
+onBeforeUnmount(clearSidebarRetract)
 
 // ---------- 会话搜索命令面板 ----------
 const searchModalVisible = ref(false)
 
 // ---------- 智能体左轨：我的智能体（含群聊）+ 创建群聊入口 ----------
-// 会话胶囊收缩按钮同时收起左轨（railOpen 排除 sidebarCollapsed）；左轨自己的开关在 header 右侧
-const agentRailVisible = ref(true)
 const agentRailExpanded = ref(false)
 const myAgents = ref<Agent[]>([])
 const groupModalVisible = ref(false)
 
-const railOpen = computed(() =>
-  userStore.isLoggedIn && agentRailVisible.value && !sidebarCollapsed.value)
-
-/** 收起态悬浮会话开关（peek）时左轨一起滑出：与展开态同款融合，但作为覆盖层不挤动内容 */
-const railPeeking = computed(() =>
-  userStore.isLoggedIn && agentRailVisible.value && sidebarCollapsed.value && sidebarPeeking.value)
+/** 左轨常驻展示：登录且相位 0（都展开） */
+const railOpen = computed(() => userStore.isLoggedIn && sidebarPhase.value === 0)
 
 /** 群聊候选成员：我的自定义智能体（群聊不可嵌套） */
 const groupCandidates = computed(() => myAgents.value.filter(a => a.type === 1))
@@ -304,6 +377,24 @@ function handleRailSelect(targetAgentId: number): void {
 function handleGroupCreated(groupAgentId: number): void {
   loadMyAgents()
   router.push(`/chat/${groupAgentId}`)
+}
+
+// ---------- 当前智能体/群聊的编辑入口（会话胶囊右上角设置按钮） ----------
+const agentEditVisible = ref(false)
+const groupEditVisible = ref(false)
+
+/** 智能体→复用编辑弹窗；群聊→编辑群聊（改名+移除成员） */
+function handleEditCurrentAgent(): void {
+  if (agentInfo.value?.type === 2) {
+    groupEditVisible.value = true
+  } else {
+    agentEditVisible.value = true
+  }
+}
+
+function onCurrentAgentEdited(): void {
+  loadAgentInfo()
+  loadMyAgents()
 }
 
 /** 左轨图钉：本地乐观切换并移到对应分组顶部，落库失败回读服务端顺序 */

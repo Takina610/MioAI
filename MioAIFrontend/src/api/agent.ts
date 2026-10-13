@@ -5,6 +5,7 @@ import type {
   AgentDetail,
   AgentAddRequest,
   AgentGroupCreateRequest,
+  AgentGroupUpdateRequest,
   AgentUpdateRequest,
   AgentQueryRequest,
   AgentUserConfig,
@@ -26,6 +27,15 @@ export function createAgentGroup(data: AgentGroupCreateRequest): Promise<number>
   return request({
     url: '/agents/group',
     method: 'post',
+    data
+  })
+}
+
+/** 编辑群聊：改名 + 整体替换成员（至少保留 2 个） */
+export function updateAgentGroup(data: AgentGroupUpdateRequest): Promise<boolean> {
+  return request({
+    url: '/agents/group',
+    method: 'put',
     data
   })
 }
