@@ -69,9 +69,13 @@ public class ContextUsageService {
      * @param userId             归属用户（游客 null）
      * @param agentId            智能体（自定义智能体的调用方需先过使用权校验）
      * @param customSystemPrompt 自定义智能体的身份提示词
+     * @param windowOverride     当前模型的上下文窗口（token，&gt;0 生效）：与轮次引擎同源解析，
+     *                           指示器按所选模型如实显示；缺省用配置窗口
      */
-    public Map<String, Object> estimate(String chatId, Long userId, long agentId, String customSystemPrompt) {
+    public Map<String, Object> estimate(String chatId, Long userId, long agentId, String customSystemPrompt,
+                                        long windowOverride) {
         checkOwnership(chatId, userId);
+        long windowTokens = windowOverride > 0 ? windowOverride : contextWindowTokens;
 
         // 会话历史：与轮次水合同一管线（游客/无记录为空历史）
         List<ConversationEntry> entries =
@@ -119,7 +123,7 @@ public class ContextUsageService {
         categories.put("other", otherTokens);
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("windowTokens", contextWindowTokens);
+        result.put("windowTokens", windowTokens);
         result.put("usedTokens", messagesTokens + systemToolsTokens + mcpTokens
                 + systemPromptTokens + skillsTokens + otherTokens);
         result.put("categories", categories);

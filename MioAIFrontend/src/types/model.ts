@@ -35,6 +35,10 @@ export interface ModelEntry {
 export interface FreeModel {
   id: string
   vision: boolean
+  /** 上下文窗口（token，0/缺省=元数据缺失） */
+  contextWindow?: number
+  /** 是否推理模型（false=不支持思考，档位仅"关闭"） */
+  reasoning?: boolean
 }
 
 /** 自定义供应商 */

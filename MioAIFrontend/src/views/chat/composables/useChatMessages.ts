@@ -136,7 +136,8 @@ export function useChatMessages(options: {
           const history = historyFromVersions(row.versions)
           return {
             id: `${conversationId}_${row.seq ?? index}`,
-            role: row.role === 'user' ? 'user' : 'assistant',
+            // system=流程提示行（模型切换等）：不进模型上下文，仅居中展示
+            role: row.role === 'user' ? 'user' as const : row.role === 'system' ? 'system' as const : 'assistant' as const,
             content: textOfBlocks(blocks ?? []),
             createTime: row.createTime ? new Date(row.createTime) : new Date(),
             blocks,

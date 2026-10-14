@@ -344,7 +344,8 @@ export interface ChatMessageUsage {
 
 export interface ChatMessage {
   id: string
-  role: 'user' | 'assistant'
+  /** system=流程提示行（如模型切换），独立于用户/智能体消息居中展示，不进模型上下文 */
+  role: 'user' | 'assistant' | 'system'
   content: string
   createTime: Date
   /** 按时间序的内容块（流式渲染用；历史消息无块时回退渲染 content） */

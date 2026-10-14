@@ -130,7 +130,7 @@
               </template>
             </a-dropdown>
             <a-dropdown
-              v-if="!cancelable"
+              v-if="!cancelable && effortOptions.length"
               :trigger="['click']"
               placement="topLeft"
               :overlay-style="{ userSelect: 'none' }"
@@ -228,8 +228,8 @@ const props = defineProps<{
   loading: boolean
   /** 思考强度（后端返回的该模型支持的档位之一） */
   effort?: string
-  /** 当前模型支持的思考档位（按能力探测，如实渲染） */
-  supportedEfforts?: string[]
+  /** 当前模型支持的思考档位：null/缺省=未解析（兜底档位），[]=该模型不支持任何档位（隐藏选择器） */
+  supportedEfforts?: string[] | null
   /** 待上传卡片渲染列表（含离场动画中的卡，由父级动画组合式维护） */
   renderCards?: PendingAttachment[]
   /** 离场中的键（隐藏 X，防动画期间重复触发） */
@@ -306,8 +306,11 @@ const value = computed({
   set: (v: string) => emit('update:modelValue', v)
 })
 
+// 档位列表如实渲染：未解析（null）才用兜底；解析为空数组 = 该模型不支持思考，选择器隐藏
 const effortOptions = computed(() =>
-  (props.supportedEfforts?.length ? props.supportedEfforts : FALLBACK_EFFORTS)
+  (props.supportedEfforts == null
+    ? FALLBACK_EFFORTS
+    : props.supportedEfforts)
     .map(v => ({ value: v, label: EFFORT_LABELS[v] ?? v }))
     .reverse()
 )

@@ -56,12 +56,26 @@ export const getReasoningEfforts = async (
   return request.get('/bot/efforts', { params, timeout: 120000, skipErrorMessage: true } as never)
 }
 
-/** 会话上下文容量估算（窗口大小 + 按类别近似 token）；失败静默（非关键指标） */
-export const getContextUsage = async (chatId: string, agentId: number): Promise<ContextUsageData> => {
+/** 会话上下文容量估算（窗口大小 + 按类别近似 token）；失败静默（非关键指标）。
+ *  窗口按当前模型解析：自定义模型声明值随请求携带，免费档由后端按 model 查目录 */
+export const getContextUsage = async (
+  chatId: string,
+  agentId: number,
+  model?: { source?: string; model?: string; contextWindow?: number } | null
+): Promise<ContextUsageData> => {
+  const params: Record<string, unknown> = { chatId, agentId }
+  if (model?.source) params.source = model.source
+  if (model?.model) params.model = model.model
+  if (model?.contextWindow && model.contextWindow > 0) params.contextWindow = model.contextWindow
   return request.get<ContextUsageData>('/bot/context-usage', {
-    params: { chatId, agentId },
+    params,
     skipErrorMessage: true
   } as never)
+}
+
+/** 会话内切换对话模型：后端以 system 行落库（居中提示，刷新后保留） */
+export const recordModelSwitch = async (chatId: string, from: string, to: string): Promise<void> => {
+  await request.post('/bot/model-switch', { chatId, from, to }, { skipErrorMessage: true } as never)
 }
 
 /**
@@ -85,6 +99,8 @@ export const chatWithMioBot = (
     modelSelection?: ModelSelection | null
     /** 自定义供应商端点配置（仅存浏览器本地，随请求瞬态经过后端） */
     provider?: { baseUrl: string; apiKey: string; apiFormat: string } | null
+    /** 当前模型上下文窗口（token）：与容量指示同源，后端按此设压缩阈值 */
+    contextWindow?: number
   } = {}
 ): EventSource => {
   const params: ConnectSSEParams = { content, chatId, agentId, token }
@@ -93,6 +109,9 @@ export const chatWithMioBot = (
   }
   if (opts.reasoningEffort) {
     params.reasoningEffort = opts.reasoningEffort
+  }
+  if (opts.contextWindow && opts.contextWindow > 0) {
+    params.contextWindow = opts.contextWindow
   }
   if (opts.groupSeq != null) {
     params.groupSeq = opts.groupSeq

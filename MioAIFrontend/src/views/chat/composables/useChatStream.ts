@@ -130,6 +130,8 @@ export function useChatStream(options: {
     modelSelection?: ModelSelection | null
     /** 自定义供应商端点配置（仅存浏览器本地，随请求瞬态经过后端） */
     provider?: { baseUrl: string; apiKey: string; apiFormat: string } | null
+    /** 当前模型上下文窗口（token）：后端按此设压缩阈值，与容量指示同源 */
+    contextWindow?: number
     /** 已上传到沙箱的附件引用（选中文件时即已上传，发送只引用路径） */
     attachments?: AttachmentItem[]
     /** 输入框 @ / 引用的上下文清单（服务端注入模型上下文 + user 行持久化） */
@@ -238,6 +240,7 @@ export function useChatStream(options: {
       reasoningEffort: opts?.reasoningEffort,
       modelSelection: opts?.modelSelection,
       provider: opts?.provider,
+      contextWindow: opts?.contextWindow,
       groupSeq: opts?.groupSeq,
       attachments: uploaded,
       refs: isCompactCommand ? undefined : opts?.refs

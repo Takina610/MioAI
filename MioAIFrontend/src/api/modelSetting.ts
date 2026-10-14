@@ -6,7 +6,12 @@ export const getFreeCatalog = async (): Promise<{ models: FreeModel[]; default: 
   const res = await request.get<{ models: FreeModel[]; default: string }>('/model/free', { skipErrorMessage: true } as never)
   return {
     models: Array.isArray(res?.models)
-      ? res.models.filter(m => m && typeof m.id === 'string').map(m => ({ id: m.id, vision: !!m.vision }))
+      ? res.models.filter(m => m && typeof m.id === 'string').map(m => ({
+          id: m.id,
+          vision: !!m.vision,
+          ...(Number(m.contextWindow) > 0 ? { contextWindow: Number(m.contextWindow) } : {}),
+          ...(m.reasoning === true ? { reasoning: true } : {})
+        }))
       : [],
     default: typeof res?.default === 'string' ? res.default : ''
   }

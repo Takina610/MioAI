@@ -30,6 +30,8 @@
             @open-subagent="emit('openSubagent', $event)"
             @send-prompt="emit('sendPrompt', $event)"
           />
+          <!-- 流程提示行（如"已从 X 切换至 Y"）：独立于用户/智能体消息，居中弱化展示 -->
+          <div v-else-if="msg.role === 'system'" class="system-note">{{ msg.content }}</div>
           <template v-else-if="editingId !== msg.id">
             <AttachmentCards
               v-if="inputAttachmentsOf(msg).length"
@@ -61,7 +63,7 @@
               @remove-pending="emit('removeEditAtt', $event)"
             />
           </div>
-          <div class="message-actions">
+          <div class="message-actions" v-if="msg.role !== 'system'">
             <!-- 操作行常驻显示（复制/编辑/重生成/版本切换）：仅编辑中隐藏；
                  生成中的最后一条消息还没有完整内容可操作，也隐藏 -->
             <div
@@ -309,6 +311,23 @@ defineExpose({ scrollToBottom, isNearBottom })
       display: flex;
       gap: 16px;
       margin-bottom: 24px;
+
+      // 流程提示行（模型切换等）：居中一行弱化文本，无气泡无操作
+      &.system {
+        justify-content: center;
+        margin-bottom: 14px;
+
+        .message-content {
+          align-items: center;
+        }
+
+        .system-note {
+          padding: 2px 12px;
+          font-size: 12px;
+          color: #8c8a82;
+          user-select: none;
+        }
+      }
 
       &.user {
         flex-direction: row-reverse;

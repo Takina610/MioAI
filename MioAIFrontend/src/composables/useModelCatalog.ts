@@ -1,16 +1,18 @@
 import { ref } from 'vue'
 import { getFreeCatalog } from '@/api/modelSetting'
-import type { ModelEntry, ModelProvider, ModelSelection } from '@/types'
+import type { FreeModel, ModelEntry, ModelProvider, ModelSelection } from '@/types'
 
 /** 本地存储键：自定义供应商与当前选择仅存浏览器本地，不上传任何服务端 */
 const LOCAL_PROVIDERS_KEY = 'mio-model-providers'
 const LOCAL_SELECTION_KEY = 'chat-model-selection'
+/** 会话级模型记忆：chatId → 该会话使用的模型（进会话恢复，输入框不再全局统一） */
+const LOCAL_SESSION_MODELS_KEY = 'mio-chat-session-models'
 
 /**
  * 模型目录共享状态：OpenCode 免费模型（反代目录，纯展示数据）+ 自定义供应商（localStorage）
  * + 当前选择（localStorage）。个人中心与聊天页共用同一份内存态，一处加载处处同步。
  */
-const freeModels = ref<{ id: string; vision: boolean }[]>([])
+const freeModels = ref<FreeModel[]>([])
 const defaultModel = ref('')
 const providers = ref<ModelProvider[]>([])
 const selection = ref<ModelSelection>({ source: 'opencode', providerId: null, model: '' })
@@ -45,6 +47,55 @@ export function readLocalSelection(): ModelSelection | null {
 
 export function writeLocalSelection(next: ModelSelection): void {
   localStorage.setItem(LOCAL_SELECTION_KEY, JSON.stringify(next))
+}
+
+function readSessionModelMap(): Record<string, ModelSelection> {
+  try {
+    const raw = localStorage.getItem(LOCAL_SESSION_MODELS_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+/** 会话记住的模型（无记录回 null：沿用当前选择） */
+export function readSessionModel(chatId: string): ModelSelection | null {
+  if (!chatId) return null
+  const remembered = readSessionModelMap()[chatId]
+  return remembered?.source === 'opencode' || remembered?.source === 'custom' ? remembered : null
+}
+
+/** 记住会话使用的模型（首条消息发送时与切换时写入） */
+export function writeSessionModel(chatId: string, selection: ModelSelection): void {
+  if (!chatId) return
+  const map = readSessionModelMap()
+  map[chatId] = selection
+  try {
+    localStorage.setItem(LOCAL_SESSION_MODELS_KEY, JSON.stringify(map))
+  } catch {
+    // 配额满等异常：会话记忆退化为内存态，不影响对话
+  }
+}
+
+/** 会话删除后清理其模型记忆（防长期累积） */
+export function removeSessionModel(chatId: string): void {
+  if (!chatId) return
+  const map = readSessionModelMap()
+  if (chatId in map) {
+    delete map[chatId]
+    localStorage.setItem(LOCAL_SESSION_MODELS_KEY, JSON.stringify(map))
+  }
+}
+
+/** 模型选择的完整显示名（自定义供应商带供应商名前缀，与切换器/切换提示同口径） */
+export function modelDisplayName(selection: ModelSelection | null | undefined, providerList: ModelProvider[] = providers.value): string {
+  if (!selection?.model) return '默认模型'
+  if (selection.source === 'custom' && selection.providerId != null) {
+    const provider = providerList.find(p => p.id === selection.providerId)
+    return provider ? `${provider.name}/${selection.model}` : selection.model
+  }
+  return selection.model
 }
 
 /** 新增供应商：本地生成 id（时间戳），返回新列表 */
@@ -97,7 +148,7 @@ export function enabledProviderModels(provider: ModelProvider) {
 export function loadModelCatalog(force = false): Promise<void> {
   if (loadPromise && !force) return loadPromise
   loadPromise = (async () => {
-    let models: { id: string; vision: boolean }[] = []
+    let models: FreeModel[] = []
     let def = ''
     try {
       const catalog = await getFreeCatalog()

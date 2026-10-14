@@ -140,6 +140,7 @@ const emit = defineEmits<{
 const smartConfig = ref(true)
 const manualContext = ref(false)
 const manualMaxOutput = ref(false)
+const manualLevels = ref(false)
 // reasoningLevels 恒为数组（保存时为空数组则不落该字段）
 const form = reactive<ModelEntry & { reasoningLevels: string[] }>({ id: '', enabled: true, reasoningLevels: [] })
 
@@ -197,6 +198,7 @@ watch(
     smartConfig.value = !(src?.contextWindow || src?.maxOutputTokens)
     manualContext.value = !!src
     manualMaxOutput.value = !!src
+    manualLevels.value = !!src?.reasoningLevels?.length
     cancelEdit()
   }
 )
@@ -206,6 +208,7 @@ watch(smartConfig, on => {
   if (on) {
     if (!manualContext.value) form.contextWindow = undefined
     if (!manualMaxOutput.value) form.maxOutputTokens = undefined
+    if (!manualLevels.value) form.reasoningLevels = preset.value?.reasoningLevels ?? []
   } else {
     if (form.contextWindow == null && preset.value && !manualContext.value) {
       form.contextWindow = preset.value.contextWindow
@@ -213,6 +216,16 @@ watch(smartConfig, on => {
     if (form.maxOutputTokens == null && preset.value?.maxOutputTokens && !manualMaxOutput.value) {
       form.maxOutputTokens = preset.value.maxOutputTokens
     }
+    if (!form.reasoningLevels.length && preset.value?.reasoningLevels && !manualLevels.value) {
+      form.reasoningLevels = [...preset.value.reasoningLevels]
+    }
+  }
+})
+
+// 模型 ID 变化跟随推荐：非手动字段（含推理等级 chips）实时换成新命中的推荐值
+watch(() => form.id, () => {
+  if (smartConfig.value && !manualLevels.value) {
+    form.reasoningLevels = preset.value?.reasoningLevels ? [...preset.value.reasoningLevels] : []
   }
 })
 
@@ -244,11 +257,13 @@ function cancelEdit(): void {
 /** 提交编辑/新增：去重、去空；编辑原值未变则视为查看而非修改 */
 function commitEdit(): void {
   if (chipEditIndex.value === null) return
+  manualLevels.value = true
   applyLevel(chipEditIndex.value)
 }
 
 function commitAdd(): void {
   if (!adding.value) return
+  manualLevels.value = true
   applyLevel(form.reasoningLevels.length)
 }
 
@@ -269,6 +284,7 @@ function applyLevel(index: number): void {
 }
 
 function removeLevel(index: number): void {
+  manualLevels.value = true
   form.reasoningLevels.splice(index, 1)
 }
 
@@ -279,6 +295,9 @@ function buildEntry(): ModelEntry {
     ...(capWebSearch.value ? ['web_search'] : []),
     ...(capSystemMessage.value ? ['system_message'] : [])
   ]
+  const levels = form.reasoningLevels.length
+    ? [...form.reasoningLevels]
+    : (smartConfig.value && !manualLevels.value ? preset.value?.reasoningLevels : undefined)
   return {
     id: form.id.trim(),
     contextWindow: form.contextWindow
@@ -288,7 +307,7 @@ function buildEntry(): ModelEntry {
     vision: inputImage.value || undefined,
     inputs,
     capabilities,
-    reasoningLevels: form.reasoningLevels.length ? [...form.reasoningLevels] : undefined,
+    reasoningLevels: levels?.length ? [...levels] : undefined,
     enabled: form.enabled !== false
   }
 }
@@ -313,6 +332,7 @@ function resetForm(): void {
   capSystemMessage.value = false
   manualContext.value = false
   manualMaxOutput.value = false
+  manualLevels.value = false
   cancelEdit()
 }
 </script>

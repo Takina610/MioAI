@@ -1,4 +1,5 @@
 import type { ApiFormat, ModelEntry } from '@/types'
+import { matchModelPreset } from './modelPresets'
 
 /**
  * 供应商模板（照搬 ZCode builtin 供应商配置）：
@@ -17,7 +18,19 @@ export interface ProviderTemplate {
   models: ModelEntry[]
 }
 
-const m = (id: string, vision = false): ModelEntry => ({ id, enabled: true, ...(vision ? { vision: true, inputs: ['text', 'image'] } : {}) })
+/** 模板模型条目：官方 ID + 智能匹配的基础数据（上下文/最大输出/推理等级）；
+ *  视觉标记不取预设（规则按族粗判，会误标纯文本模型），只认模板手工标注 */
+const m = (id: string, vision = false): ModelEntry => {
+  const preset = matchModelPreset(id)
+  return {
+    id,
+    enabled: true,
+    ...(vision ? { vision: true, inputs: ['text', 'image'] } : {}),
+    ...(preset?.contextWindow ? { contextWindow: preset.contextWindow } : {}),
+    ...(preset?.maxOutputTokens ? { maxOutputTokens: preset.maxOutputTokens } : {}),
+    ...(preset?.reasoningLevels?.length ? { reasoningLevels: [...preset.reasoningLevels] } : {})
+  }
+}
 
 const GLM_STANDARD: ModelEntry[] = [
   m('GLM-5.3'), m('GLM-5.3-Flash'), m('GLM-5V-Turbo', true), m('GLM-5.1'), m('GLM-5.1-Highspeed'),

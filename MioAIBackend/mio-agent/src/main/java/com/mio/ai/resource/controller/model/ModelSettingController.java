@@ -49,11 +49,16 @@ public class ModelSettingController {
     @Value("${spring.ai.openai.chat.model:}")
     private String engineModel;
 
-    /** OpenCode 免费模型目录（-free 结尾，反代拉取，短缓存）+ 引擎默认模型名 */
+    /** OpenCode 免费模型目录（-free 结尾，反代拉取，短缓存）+ 引擎默认模型名。
+     *  模型条目带上下文窗口与推理标记（反代元数据），聊天页据此渲染档位与容量指示。 */
     @GetMapping("/free")
     public BaseResponse<Map<String, Object>> freeModels() {
         List<Map<String, Object>> models = openCodeModelCatalog.listModels().stream()
-                .map(m -> Map.<String, Object>of("id", m.id(), "vision", m.vision()))
+                .map(m -> Map.<String, Object>of(
+                        "id", m.id(),
+                        "vision", m.vision(),
+                        "contextWindow", m.contextWindow(),
+                        "reasoning", m.reasoning()))
                 .toList();
         return ResultUtils.success(Map.of("models", models, "default", engineModel));
     }

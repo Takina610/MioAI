@@ -139,6 +139,10 @@ public class MioBotController {
     @Autowired
     private com.mio.ai.bot.config.ModelEffortCapabilities modelEffortCapabilities;
 
+    /** OpenCode 免费模型目录（按所选模型解析上下文窗口等元数据） */
+    @Autowired
+    private com.mio.ai.bot.config.OpenCodeModelCatalog openCodeModelCatalog;
+
     /** 正在执行中的会话：chatId → 归属标识（"u:<id>"/"guest:<ip>"），断线重连/双击去重 + 每归属并发上限 */
     private static final java.util.concurrent.ConcurrentHashMap<String, String> ACTIVE_CHATS =
             new java.util.concurrent.ConcurrentHashMap<>();
@@ -233,13 +237,96 @@ public class MioBotController {
     @GetMapping("/bot/context-usage")
     public BaseResponse<Map<String, Object>> contextUsage(@RequestParam @NotBlank String chatId,
                                                           @RequestParam(required = false) Long agentId,
+                                                          @RequestParam(required = false) String source,
+                                                          @RequestParam(required = false) String model,
+                                                          @RequestParam(required = false) Long contextWindow,
                                                           jakarta.servlet.http.HttpServletRequest httpRequest) {
         String token = httpRequest.getHeader("token");
         Long userId = StrUtil.isBlank(token) ? null : redisComponent.getUserId(token);
         long resolvedAgentId = agentId != null ? agentId : MioBot.AGENT_ID;
         String customSystemPrompt = resolvePromptContext(resolvedAgentId, userId).systemPrompt();
-        return ResultUtils.success(
-                contextUsageService.estimate(chatId, userId, resolvedAgentId, customSystemPrompt));
+        return ResultUtils.success(contextUsageService.estimate(chatId, userId, resolvedAgentId,
+                customSystemPrompt, resolveContextWindow(source, model, contextWindow)));
+    }
+
+    /**
+     * 按模型选择解析上下文窗口（容量指示与轮次压缩阈值同源）：
+     * 客户端声明（自定义供应商条目）优先，其次免费档目录元数据，缺省回退配置窗口。
+     */
+    private long resolveContextWindow(String source, String model, Long contextWindow) {
+        if (contextWindow != null && contextWindow > 0) {
+            return contextWindow;
+        }
+        if ("opencode".equals(source) && model != null) {
+            com.mio.ai.bot.config.OpenCodeModelCatalog.FreeModel meta = openCodeModelCatalog.find(model);
+            if (meta != null && meta.contextWindow() > 0) {
+                return meta.contextWindow();
+            }
+        }
+        return agentContextWindowTokens;
+    }
+
+    /**
+     * 记录一次会话内切换对话模型：以 role=system 行落库（居中提示"已从 X 切换至 Y"）。
+     * system 行不进入模型上下文（水合只认 user/assistant），仅作消息流展示与刷新还原。
+     */
+    @PostMapping("/bot/model-switch")
+    public BaseResponse<Boolean> recordModelSwitch(
+            @org.springframework.web.bind.annotation.RequestBody ModelSwitchRequest request,
+            jakarta.servlet.http.HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR, "请先登录");
+        }
+        String chatId = request.getChatId() == null ? "" : request.getChatId().trim();
+        String from = request.getFrom() == null ? "" : request.getFrom().trim();
+        String to = request.getTo() == null ? "" : request.getTo().trim();
+        if (chatId.isEmpty() || from.isEmpty() || to.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数不完整");
+        }
+        ChatConversationDO conversation = chatHistoryRepository.getChatByConversationId(chatId);
+        if (conversation == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "会话不存在");
+        }
+        if (conversation.getUserId() == null || !conversation.getUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限访问该会话");
+        }
+        if (ACTIVE_CHATS.containsKey(chatId)) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "会话正在执行中，请等待本轮完成后再切换模型");
+        }
+        String text = "已从 " + from + " 切换至 " + to;
+        AgentMessageDO row = new AgentMessageDO();
+        row.setConversationId(chatId);
+        row.setAgentId(conversation.getAgentId());
+        row.setUserId(userId);
+        row.setRole("system");
+        row.setBlocks(JacksonUtil.writeValueAsString(List.of(Map.of("type", "text", "text", text))));
+        agentMessageService.append(row);
+        return ResultUtils.success(true);
+    }
+
+    /** 模型切换记录请求体 */
+    public static class ModelSwitchRequest {
+        @NotBlank(message = "chatId 不能为空")
+        private String chatId;
+        @NotBlank(message = "原模型不能为空")
+        @Size(max = 256)
+        private String from;
+        @NotBlank(message = "新模型不能为空")
+        @Size(max = 256)
+        private String to;
+
+        public String getChatId() {
+            return chatId;
+        }
+
+        public String getFrom() {
+            return from;
+        }
+
+        public String getTo() {
+            return to;
+        }
     }
 
     @GetMapping("/bot/chat")
@@ -257,6 +344,7 @@ public class MioBotController {
                            @RequestParam(required = false) @Size(max = 512) String providerApiKey,
                            @RequestParam(required = false) @Size(max = 32) String providerApiFormat,
                            @RequestParam(required = false) String model,
+                           @RequestParam(required = false) Long contextWindow,
                            jakarta.servlet.http.HttpServletRequest httpRequest) {
         Long userId = StrUtil.isBlank(token) ? null : redisComponent.getUserId(token);
         long resolvedAgentId = agentId != null ? agentId : MioBot.AGENT_ID;
@@ -339,8 +427,10 @@ public class MioBotController {
             chatResolution = new com.mio.ai.bot.service.RuntimeChatModelFactory.Resolved(chatModel, engineModelName);
         }
         String chatModelName = chatResolution.resolvedModel();
+        // 压缩阈值与容量指示同源：按本轮实际模型解析窗口（客户端声明 > 免费档目录 > 配置值）
         var engineConfig = new com.mio.ai.framework.zagent.AgentEngineConfig(
-                agentMaxSteps, agentStreamTimeoutSeconds, agentModelRetries, agentContextWindowTokens);
+                agentMaxSteps, agentStreamTimeoutSeconds, agentModelRetries,
+                resolveContextWindow(modelSource, chatModelName, contextWindow));
         MioBot mioBot = new MioBot(chatResolution.model(), toolsetFactory, List.of(mcp.callbacks()), skills,
                 agentUsageLogService, toolCallLogService, userStatsDailyService, skillUsageLogService,
                 agentMessageService, chatFileService, imageSearchService,
