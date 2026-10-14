@@ -1,20 +1,23 @@
 <template>
   <div class="metrics-row">
-    <a-card class="metric-card" v-for="item in cards" :key="item.key" :bordered="false">
-      <a-statistic :title="item.label" :value="item.displayValue">
-        <template #suffix>
-          <span class="metric-unit">{{ item.unit }}</span>
-        </template>
-      </a-statistic>
-      <div class="trend-row">
-        <span class="trend" :class="item.trend >= 0 ? 'up' : 'down'">
-          {{ Math.abs(item.trend).toFixed(1) }}%
-          <ArrowUpOutlined v-if="item.trend >= 0" />
-          <ArrowDownOutlined v-else />
-        </span>
-        <span class="trend-label">同比</span>
+    <div class="metric-card" v-for="item in cards" :key="item.key">
+      <div class="metric-label">{{ item.label }}</div>
+      <div class="metric-value">
+        <span class="value">{{ item.displayValue }}</span>
+        <span class="unit" v-if="item.unit">{{ item.unit }}</span>
       </div>
-    </a-card>
+      <div class="trend-row" v-if="item.trend !== 0">
+        <span class="trend" :class="item.trend > 0 ? 'up' : 'down'">
+          <ArrowUpOutlined v-if="item.trend > 0" />
+          <ArrowDownOutlined v-else />
+          {{ Math.abs(item.trend).toFixed(1) }}%
+        </span>
+        <span class="trend-label">较上周期</span>
+      </div>
+      <div class="trend-row" v-else>
+        <span class="trend-label">与上周期持平</span>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -36,50 +39,60 @@ defineProps<{
 .metrics-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  gap: 14px;
 
   .metric-card {
-    border-radius: 8px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    background: #faf9f5;
+    border: 1px solid #e8e6dc;
+    border-radius: 12px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 
-    :deep(.ant-statistic-title) {
+    .metric-label {
       font-size: 13px;
       color: #6e6b62;
-      margin-bottom: 8px;
     }
 
-    :deep(.ant-statistic-content) {
-      font-size: 28px;
-      font-weight: 600;
-      color: #141413;
-    }
+    .metric-value {
+      display: flex;
+      align-items: baseline;
+      gap: 5px;
 
-    :deep(.ant-statistic-content-suffix) {
-      font-size: 16px;
-      font-weight: 400;
-      color: #6e6b62;
-      margin-left: 4px;
+      .value {
+        font-size: 26px;
+        font-weight: 600;
+        color: #141413;
+        line-height: 1.2;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .unit {
+        font-size: 13px;
+        color: #8c8a82;
+      }
     }
 
     .trend-row {
-      margin-top: 8px;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
+      min-height: 18px;
 
       .trend {
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 500;
         display: inline-flex;
         align-items: center;
         gap: 2px;
 
         &.up {
-          color: #a83a30;
+          color: #c0453a;
         }
 
         &.down {
-          color: #3f8600;
+          color: #4f9e63;
         }
       }
 

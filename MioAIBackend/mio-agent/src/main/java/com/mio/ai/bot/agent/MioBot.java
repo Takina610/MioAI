@@ -63,6 +63,8 @@ public class MioBot {
     private final List<Skill> skills;
     private final AgentUsageLogService agentUsageLogService;
     private final ToolCallLogService toolCallLogService;
+    private final com.mio.ai.resource.service.log.UserStatsDailyService userStatsDailyService;
+    private final com.mio.ai.resource.service.log.SkillUsageLogService skillUsageLogService;
     private final AgentMessageService agentMessageService;
     private final com.mio.ai.bot.service.ChatFileService chatFileService;
     private final com.mio.ai.bot.service.image.ImageSearchService imageSearchService;
@@ -138,6 +140,8 @@ public class MioBot {
                   List<Skill> skills,
                   AgentUsageLogService agentUsageLogService,
                   ToolCallLogService toolCallLogService,
+                  com.mio.ai.resource.service.log.UserStatsDailyService userStatsDailyService,
+                  com.mio.ai.resource.service.log.SkillUsageLogService skillUsageLogService,
                   AgentMessageService agentMessageService,
                   com.mio.ai.bot.service.ChatFileService chatFileService,
                   com.mio.ai.bot.service.image.ImageSearchService imageSearchService,
@@ -156,6 +160,8 @@ public class MioBot {
         this.skills = skills == null ? List.of() : skills;
         this.agentUsageLogService = agentUsageLogService;
         this.toolCallLogService = toolCallLogService;
+        this.userStatsDailyService = userStatsDailyService;
+        this.skillUsageLogService = skillUsageLogService;
         this.agentMessageService = agentMessageService;
         this.chatFileService = chatFileService;
         this.imageSearchService = imageSearchService;
@@ -169,6 +175,11 @@ public class MioBot {
         this.attachments = attachments == null ? List.of() : attachments;
         this.fileTransfer = fileTransfer;
         this.channel = new BotEventChannel(agentMessageService, chatId, userId, agentId);
+        // 技能使用落库：模型读 skills/<id>/ 即视为使用（与前端技能行判定同源，每轮每技能一条）
+        if (skillUsageLogService != null && userId != null) {
+            this.channel.setSkillUseListener((skillId, skillName) ->
+                    skillUsageLogService.record(userId, this.agentId, parseConversationId(), skillId, skillName));
+        }
         // MCP 工具描述表：tool_use 行附带工具描述（前端展示名称与描述，对齐内置工具行）
         Map<String, String> mcpToolDesc = new LinkedHashMap<>();
         for (ToolCallback callback : this.mcpTools) {
@@ -228,6 +239,7 @@ public class MioBot {
         ScheduledFuture<?> heartbeat = HEARTBEAT_SCHEDULER.scheduleAtFixedRate(
                 channel::heartbeat, HEARTBEAT_INTERVAL_SECONDS, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
         ToolRegistry registry = null;
+        AgentEngine engine = null;
         try {
             // MCP 装配失败项在会话开头明说（瞬态提示不落库，重载后不保留）
             if (mcpFailures != null && !mcpFailures.isEmpty()) {
@@ -252,7 +264,7 @@ public class MioBot {
             ContextBuilder contextBuilder = new ContextBuilder(
                     customSystemPrompt, knowledgeContext, skillsContext, runContext.fs(), modelName,
                     userId != null ? agentId : null);
-            AgentEngine engine = new AgentEngine(chatModel, config, reasoningEffort, contextBuilder,
+            engine = new AgentEngine(chatModel, config, reasoningEffort, contextBuilder,
                     state, chatId, events, runContext.tasks());
             // 用户中断：引擎步间/重试等待处检查取消信号，命中即停（不走兜底抢救）
             engine.setCancelSignal(() -> stopped);
@@ -263,9 +275,17 @@ public class MioBot {
                 channel.persistDisplay("user", userPrompt, null, userGroupSeq);
                 runManualCompact(engine, hydrated);
             } else {
+                // 群聊成员用量按成员自身身份落库（agent_usage_log 记成员 agentId + 每日累计），
+                // 群聊统计里"实际调用的智能体"由此可分；回调失败已被框架侧吞掉
+                com.mio.ai.framework.zagent.subagent.MemberUsageListener memberUsageListener =
+                        userId == null ? null
+                                : (memberAgentId, inTok, outTok, durationMs, failed) -> {
+                                    logMemberUsage(memberAgentId, inTok, outTok, failed);
+                                    userStatsDailyService.accumulate(userId, inTok, outTok, 0, 0);
+                                };
                 Subagents launcher = new Subagents(chatModel, config, reasoningEffort,
                         toolsetFactory, runContext, events, modelName, groupCoordinator,
-                        groupCoordinator != null ? new GroupMemberPresenter() : null);
+                        groupCoordinator != null ? new GroupMemberPresenter() : null, memberUsageListener);
                 // 群聊：成员委派以平等消息块呈现，Agent 工具行不进主消息流
                 channel.setSuppressAgentToolRows(groupCoordinator != null);
                 registry = toolsetFactory.build(chatId, state, mcpTools, null, launcher, events, toolHooks);
@@ -303,6 +323,8 @@ public class MioBot {
             }
             channel.finishAssistantWip(persisted);
             channel.usage((int) engine.inputTokens(), (int) engine.outputTokens(), durationMs);
+            // 每日用量累计（贡献图/连续天数/峰值/聊天时长）：正常收尾整轮记一次
+            accumulateDailyStats(engine, durationMs, 1);
             channel.done();
             complete(sseEmitter);
         } catch (Throwable e) {
@@ -321,6 +343,8 @@ public class MioBot {
                 boolean persisted = channel.persistDisplay("assistant", null, System.currentTimeMillis() - startTime);
                 channel.finishAssistantWip(persisted);
                 channel.error("执行出错：" + e.getMessage());
+                // 异常轮次同样消耗了资源：token/耗时按实际值计入每日累计
+                accumulateDailyStats(engine, System.currentTimeMillis() - startTime, 1);
                 complete(sseEmitter);
             }
         } finally {
@@ -642,6 +666,7 @@ public class MioBot {
             usageLog.setAgentId(agentId);
             usageLog.setUserId(userId);
             usageLog.setConversationId(parseConversationId());
+            usageLog.setModel(modelName);
             usageLog.setStatus(1);
             usageLog.setCreateTime(new Date());
             usageLog.setInputTokens((int) Math.max(0, inputDelta));
@@ -756,5 +781,34 @@ public class MioBot {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    /** 每日用量累计（游客跳过，统计失败不影响主流程——service 内部已兜底） */
+    private void accumulateDailyStats(AgentEngine engine, long durationMs, int calls) {
+        if (userStatsDailyService == null || userId == null) {
+            return;
+        }
+        userStatsDailyService.accumulate(userId,
+                engine != null ? engine.inputTokens() : 0,
+                engine != null ? engine.outputTokens() : 0,
+                calls, durationMs);
+    }
+
+    /** 群成员委派用量落库：成员 token 以成员 agentId 记一行（群聊统计按实际调用的智能体拆分） */
+    private void logMemberUsage(long memberAgentId, long inputTokens, long outputTokens, boolean failed) {
+        if (agentUsageLogService == null || userId == null
+                || (inputTokens <= 0 && outputTokens <= 0)) {
+            return;
+        }
+        AgentUsageLog usageLog = new AgentUsageLog();
+        usageLog.setAgentId(memberAgentId);
+        usageLog.setUserId(userId);
+        usageLog.setConversationId(parseConversationId());
+        usageLog.setModel(modelName);
+        usageLog.setStatus(failed ? 0 : 1);
+        usageLog.setCreateTime(new Date());
+        usageLog.setInputTokens((int) Math.min(Integer.MAX_VALUE, Math.max(0, inputTokens)));
+        usageLog.setOutputTokens((int) Math.min(Integer.MAX_VALUE, Math.max(0, outputTokens)));
+        agentUsageLogService.logUsage(usageLog);
     }
 }

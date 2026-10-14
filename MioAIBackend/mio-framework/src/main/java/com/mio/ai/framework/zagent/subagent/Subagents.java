@@ -42,25 +42,35 @@ public final class Subagents implements SubagentLauncher {
     private final MemberLauncher memberLauncher;
     /** 群成员展示回调（null = 沿用子代理镜像呈现） */
     private final MemberPresenter memberPresenter;
+    /** 群成员用量回调（null = 不回收）：成员委派结束后按成员身份上抛 token/耗时 */
+    private final MemberUsageListener memberUsageListener;
 
     public Subagents(ChatModel chatModel, AgentEngineConfig config, String reasoningEffort,
                      ToolsetFactory toolsetFactory, ToolsetFactory.RunContext runContext,
                      AgentEvents parentEvents, String modelName) {
         this(chatModel, config, reasoningEffort, toolsetFactory, runContext, parentEvents, modelName,
-                null, null);
+                null, null, null);
     }
 
     public Subagents(ChatModel chatModel, AgentEngineConfig config, String reasoningEffort,
                      ToolsetFactory toolsetFactory, ToolsetFactory.RunContext runContext,
                      AgentEvents parentEvents, String modelName, MemberLauncher memberLauncher) {
         this(chatModel, config, reasoningEffort, toolsetFactory, runContext, parentEvents, modelName,
-                memberLauncher, null);
+                memberLauncher, null, null);
     }
 
     public Subagents(ChatModel chatModel, AgentEngineConfig config, String reasoningEffort,
                      ToolsetFactory toolsetFactory, ToolsetFactory.RunContext runContext,
                      AgentEvents parentEvents, String modelName, MemberLauncher memberLauncher,
                      MemberPresenter memberPresenter) {
+        this(chatModel, config, reasoningEffort, toolsetFactory, runContext, parentEvents, modelName,
+                memberLauncher, memberPresenter, null);
+    }
+
+    public Subagents(ChatModel chatModel, AgentEngineConfig config, String reasoningEffort,
+                     ToolsetFactory toolsetFactory, ToolsetFactory.RunContext runContext,
+                     AgentEvents parentEvents, String modelName, MemberLauncher memberLauncher,
+                     MemberPresenter memberPresenter, MemberUsageListener memberUsageListener) {
         this.chatModel = chatModel;
         this.config = config;
         this.reasoningEffort = reasoningEffort;
@@ -70,6 +80,7 @@ public final class Subagents implements SubagentLauncher {
         this.modelName = modelName;
         this.memberLauncher = memberLauncher;
         this.memberPresenter = memberPresenter;
+        this.memberUsageListener = memberUsageListener;
     }
 
     @Override
@@ -101,7 +112,7 @@ public final class Subagents implements SubagentLauncher {
         }
         Outcome outcome = runChild(profile, agentId, prompt);
         return new Result(agentId, profile.name(), prompt, outcome.content(),
-                outcome.toolUseCount(), outcome.tokens(), System.currentTimeMillis() - startedAt, null);
+                outcome.toolUseCount(), outcome.totalTokens(), System.currentTimeMillis() - startedAt, null);
     }
 
     /**
@@ -128,7 +139,7 @@ public final class Subagents implements SubagentLauncher {
         }
         Outcome outcome = runMemberWithPresence(member, agentId, prompt);
         return new Result(agentId, member.name(), prompt, outcome.content(),
-                outcome.toolUseCount(), outcome.tokens(), System.currentTimeMillis() - startedAt, null);
+                outcome.toolUseCount(), outcome.totalTokens(), System.currentTimeMillis() - startedAt, null);
     }
 
     /** 成员执行全周期：started → 装配 → 运行 → finished（装配失败也走 finished(failed)） */
@@ -136,6 +147,7 @@ public final class Subagents implements SubagentLauncher {
         if (memberPresenter != null) {
             memberPresenter.started(agentId, member.id(), member.name(), member.icon());
         }
+        long startedAt = System.currentTimeMillis();
         MemberLauncher.MemberPlan plan;
         try {
             plan = memberLauncher.prepare(member, prompt, runContext.fs());
@@ -144,16 +156,35 @@ public final class Subagents implements SubagentLauncher {
             if (memberPresenter != null) {
                 memberPresenter.finished(agentId, true);
             }
-            return new Outcome("(Member preparation failed: " + e.getMessage() + ")", 0, 0, true);
+            notifyMemberUsage(member.id(), 0, 0, System.currentTimeMillis() - startedAt, true);
+            return new Outcome("(Member preparation failed: " + e.getMessage() + ")", 0, 0, 0, true);
         }
         Outcome outcome = runPlan(plan, agentId, prompt);
         if (memberPresenter != null) {
             memberPresenter.finished(agentId, outcome.failed());
         }
+        notifyMemberUsage(member.id(), outcome.inputTokens(), outcome.outputTokens(),
+                System.currentTimeMillis() - startedAt, outcome.failed());
         return outcome;
     }
 
-    private record Outcome(String content, int toolUseCount, long tokens, boolean failed) {
+    private void notifyMemberUsage(long memberAgentId, long inputTokens, long outputTokens,
+                                   long durationMs, boolean failed) {
+        if (memberUsageListener == null) {
+            return;
+        }
+        try {
+            memberUsageListener.onUsage(memberAgentId, inputTokens, outputTokens, durationMs, failed);
+        } catch (Exception e) {
+            log.warn("群成员用量回调失败 ({}): {}", memberAgentId, e.getMessage());
+        }
+    }
+
+    private record Outcome(String content, int toolUseCount, long inputTokens, long outputTokens, boolean failed) {
+
+        private long totalTokens() {
+            return inputTokens + outputTokens;
+        }
     }
 
     /** 群成员运行：成员自己的 MCP 工具/知识库命中/技能清单，全量内置工具面。
@@ -169,7 +200,7 @@ public final class Subagents implements SubagentLauncher {
         Outcome outcome = runEngine(systemPrompt, List.of("*"), plan.mcpTools(),
                 plan.knowledgeContext(), plan.skillsContext(), agentId, prompt, events);
         return new Outcome(outcome.content(), events.toolUseCount.get(),
-                outcome.tokens(), outcome.failed());
+                outcome.inputTokens(), outcome.outputTokens(), outcome.failed());
     }
 
     private Outcome runChild(AgentProfiles.Profile profile, String agentId, String prompt) {
@@ -177,7 +208,7 @@ public final class Subagents implements SubagentLauncher {
         Outcome outcome = runEngine(buildChildSystemPrompt(profile), profile.tools(), runContext.mcpTools(),
                 null, null, agentId, prompt, mirror);
         return new Outcome(outcome.content(), mirror.toolUseCount.get(),
-                outcome.tokens(), outcome.failed());
+                outcome.inputTokens(), outcome.outputTokens(), outcome.failed());
     }
 
     private Outcome runEngine(String systemPrompt, List<String> allowedTools, List<ToolCallback> mcpTools,
@@ -196,11 +227,11 @@ public final class Subagents implements SubagentLauncher {
         try {
             child.runTurn(prompt, true);
             return new Outcome(finalText(childState), 0,
-                    child.inputTokens() + child.outputTokens(), false);
+                    child.inputTokens(), child.outputTokens(), false);
         } catch (Exception e) {
             log.warn("子代理执行失败 ({}): {}", agentId, e.getMessage());
             return new Outcome("(Subagent failed: " + e.getMessage() + ")", 0,
-                    0, true);
+                    0, 0, true);
         } finally {
             childRegistry.shutdown();
         }

@@ -2,17 +2,23 @@
   <div class="rank-list" v-if="items.length > 0">
     <div class="rank-item" v-for="(item, index) in items" :key="item.id">
       <div class="rank-index" :class="{ top: index < 3 }">{{ index + 1 }}</div>
-      <template v-if="showAvatar">
-        <a-avatar v-if="item.avatar" :src="item.avatar" :size="32" class="rank-avatar" />
-        <a-avatar v-else :size="32" class="rank-avatar rank-avatar-default">
-          {{ item.name?.charAt(0)?.toUpperCase() }}
-        </a-avatar>
-      </template>
+      <BotIcon
+        v-if="iconConfig(item)"
+        :shape="iconConfig(item)!.shape"
+        :fill="iconConfig(item)!.fill"
+        :size="28"
+        :live="false"
+        class="rank-bot-icon"
+      />
+      <a-avatar v-else-if="item.avatar" :src="item.avatar" :size="28" class="rank-avatar" />
+      <a-avatar v-else :size="28" class="rank-avatar rank-avatar-default">
+        {{ item.name?.charAt(0)?.toUpperCase() }}
+      </a-avatar>
       <div class="rank-info">
         <div class="rank-name">{{ item.name }}</div>
         <a-progress :percent="item.percent" size="small" :show-info="false" />
       </div>
-      <div class="rank-value">{{ item.value }}</div>
+      <div class="rank-value">{{ formatNumber(item.value) }}</div>
     </div>
   </div>
   <div v-else class="empty-rank">
@@ -21,11 +27,16 @@
 </template>
 
 <script setup lang="ts">
+import BotIcon from '@/components/bot-icon/BotIcon.vue'
+import type { BotIconConfig } from '@/components/bot-icon/types'
+import { formatNumber } from '../composables/format'
+
 withDefaults(defineProps<{
   items: {
     id: number | string
     name: string
     avatar?: string
+    icon?: string | null
     value: number
     percent: number
   }[]
@@ -34,13 +45,35 @@ withDefaults(defineProps<{
 }>(), {
   showAvatar: false
 })
+
+/** bot-icon 配置解析：损坏/缺失配置返回 null 回退头像 */
+function iconConfig(item: { icon?: string | null }): BotIconConfig | null {
+  if (!item.icon) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(item.icon) as Partial<BotIconConfig>
+    if (parsed && typeof parsed.shape === 'string' && parsed.shape) {
+      return parsed as BotIconConfig
+    }
+  } catch {
+    // 非 JSON 配置按无图标处理
+  }
+  return null
+}
 </script>
 
 <style lang="scss" scoped>
+.rank-list {
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 .rank-item {
   display: flex;
   align-items: center;
-  padding: 10px 0;
+  padding: 9px 0;
   border-bottom: 1px solid #ece9de;
 
   &:last-child {
@@ -48,9 +81,9 @@ withDefaults(defineProps<{
   }
 
   .rank-index {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
     background: #ece9de;
     color: #6e6b62;
     display: flex;
@@ -65,6 +98,11 @@ withDefaults(defineProps<{
       background: #2aa1a9;
       color: #fff;
     }
+  }
+
+  .rank-bot-icon {
+    margin-right: 12px;
+    flex-shrink: 0;
   }
 
   .rank-avatar {
@@ -86,6 +124,9 @@ withDefaults(defineProps<{
       font-size: 14px;
       color: #141413;
       margin-bottom: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
   }
 
@@ -95,6 +136,7 @@ withDefaults(defineProps<{
     color: #141413;
     margin-left: 16px;
     flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
   }
 }
 

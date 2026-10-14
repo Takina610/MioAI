@@ -378,7 +378,8 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
     /**
      * 广场的 MioBot 槽位：每个用户都相当于拥有自己的 MioBot。
      * 登录用户发布过自己的 MioBot（配置行 is_public=1）→ 显示自己的（个性化覆盖 + 本人署名，置顶）；
-     * 未发布 → 不占广场位；游客 → 显示官方内置 MioBot。
+     * 未发布/未个性化 → 回退官方内置 MioBot——广场永远有且只有一个 MioBot；
+     * 游客 → 显示官方内置 MioBot。
      */
     private void appendMioBotSlot(List<AgentVO> records, Long userId) {
         Agent builtin = this.getById(MioBot.AGENT_ID);
@@ -396,8 +397,10 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
                 applyUserOverride(slot, builtin.getId(), userId);
                 slot.setUserName(userService.getUserNameById(userId));
             }
-        } else if (Integer.valueOf(1).equals(builtin.getIsPublic())
+        }
+        if (slot == null && Integer.valueOf(1).equals(builtin.getIsPublic())
                 && AgentStatusEnum.PUBLISHED.getCode() == builtin.getStatus()) {
+            // 未发布过个人 MioBot（含游客）：回退官方内置位
             slot = convertToVO(builtin);
         }
         if (slot != null) {

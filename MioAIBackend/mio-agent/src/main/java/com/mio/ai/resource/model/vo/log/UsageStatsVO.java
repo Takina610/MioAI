@@ -66,6 +66,10 @@ public class UsageStatsVO implements Serializable {
         private String id;
         private String name;
         private String avatar;
+        /**
+         * bot-icon 配置 JSON（shape+fill，前端据此渲染真实智能体图标）
+         */
+        private String icon;
         private Number value;
     }
 }

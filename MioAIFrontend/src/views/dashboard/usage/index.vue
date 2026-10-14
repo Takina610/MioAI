@@ -4,29 +4,74 @@
 
     <div class="tabs-header">
       <a-tabs v-model:activeKey="activeTab" class="usage-tabs">
-        <a-tab-pane key="agent" tab="MioBot"></a-tab-pane>
+        <a-tab-pane key="agent" tab="智能体"></a-tab-pane>
         <a-tab-pane key="knowledge" tab="知识库"></a-tab-pane>
         <a-tab-pane key="mcp" tab="MCP"></a-tab-pane>
+        <a-tab-pane key="skill" tab="技能"></a-tab-pane>
       </a-tabs>
     </div>
 
     <div class="page-scroll-content">
-      <a-spin :spinning="loading">
-        <div class="filter-bar">
-          <span class="filter-label">选择时间</span>
-          <a-range-picker
-            v-model:value="dateRange"
-            :presets="datePresets"
-            :placeholder="['开始时间', '结束时间']"
-            format="YYYY-MM-DD HH:mm:ss"
-            show-time
-            @change="fetchStats"
-          />
+      <!-- Token 概览：智能体专属（贡献图 + 五项汇总 + 趋势 + 模型用量） -->
+      <template v-if="activeTab === 'agent'">
+        <a-card title="Token 概览" class="overview-card">
+          <template #extra>
+            <a-radio-group v-model:value="contributionMode" size="small">
+              <a-radio-button value="daily">每日</a-radio-button>
+              <a-radio-button value="weekly">每周</a-radio-button>
+              <a-radio-button value="cumulative">累计</a-radio-button>
+            </a-radio-group>
+          </template>
+          <TokenSummaryChips :summary="contribution?.summary ?? null" />
+          <ContributionGraph :days="contribution?.days ?? []" :mode="contributionMode" />
+        </a-card>
+
+        <!-- 每日 Token 趋势 + 模型/智能体用量 -->
+        <div class="insight-grid">
+          <a-card title="每日 Token 趋势" class="chart-card">
+            <template #extra>
+              <div class="card-toggles">
+                <a-radio-group v-model:value="tokenDimension" size="small">
+                  <a-radio-button value="model">模型</a-radio-button>
+                  <a-radio-button value="agent">智能体</a-radio-button>
+                </a-radio-group>
+                <a-radio-group v-model:value="tokenRange" size="small">
+                  <a-radio-button :value="7">最近7天</a-radio-button>
+                  <a-radio-button :value="30">最近30天</a-radio-button>
+                </a-radio-group>
+              </div>
+            </template>
+            <a-spin :spinning="trendLoading">
+              <TokenTrendChart :series="trend?.series ?? []" />
+            </a-spin>
+          </a-card>
+
+          <a-card :title="tokenDimension === 'model' ? '模型用量' : '智能体用量'" class="chart-card">
+            <ModelUsagePie :series="trend?.series ?? []" />
+          </a-card>
         </div>
 
-        <UsageMetricCards :cards="metricCards" />
+        <!-- 数据画像：智能体 tab 专属（与 Token 概览同属用户级聚合） -->
+        <UsageProfileCard :profile="profile" />
+      </template>
 
-        <div class="charts-row">
+      <!-- Tab 分类统计 -->
+      <a-spin :spinning="loading">
+        <div class="tab-stats">
+          <div class="filter-bar">
+            <span class="filter-label">选择时间</span>
+            <a-range-picker
+              v-model:value="dateRange"
+              :presets="datePresets"
+              :placeholder="['开始时间', '结束时间']"
+              format="YYYY-MM-DD HH:mm:ss"
+              show-time
+              @change="fetchStats"
+            />
+          </div>
+
+          <UsageMetricCards :cards="metricCards" />
+
           <a-card :title="chartTitle" class="chart-card">
             <div class="chart-toolbar">
               <a-radio-group v-model:value="lineMetric" size="small">
@@ -42,16 +87,16 @@
               :color="lineMetricColorMap[lineMetric]"
             />
           </a-card>
-        </div>
 
-        <div class="bottom-row">
-          <a-card :title="pieChartTitle" class="chart-card">
-            <UsageDistPie :data="pieData" />
-          </a-card>
+          <div class="bottom-row">
+            <a-card :title="pieChartTitle" class="chart-card">
+              <UsageDistPie :data="pieData" />
+            </a-card>
 
-          <a-card :title="rankTitle" class="chart-card">
-            <UsageRankList :items="rankList" :show-avatar="activeTab === 'agent'" />
-          </a-card>
+            <a-card :title="rankTitle" class="chart-card">
+              <UsageRankList :items="rankList" :show-avatar="activeTab === 'agent'" />
+            </a-card>
+          </div>
         </div>
       </a-spin>
     </div>
@@ -64,12 +109,18 @@ import UsageMetricCards from './components/UsageMetricCards.vue'
 import UsageTrendChart from './components/UsageTrendChart.vue'
 import UsageDistPie from './components/UsageDistPie.vue'
 import UsageRankList from './components/UsageRankList.vue'
+import TokenSummaryChips from './components/TokenSummaryChips.vue'
+import ContributionGraph from './components/ContributionGraph.vue'
+import TokenTrendChart from './components/TokenTrendChart.vue'
+import ModelUsagePie from './components/ModelUsagePie.vue'
+import UsageProfileCard from './components/UsageProfileCard.vue'
 import {
   useUsageStats,
   metricLabelMap,
   lineMetricColorMap,
   datePresets
 } from './composables/useUsageStats'
+import { useTokenInsights } from './composables/useTokenInsights'
 
 const {
   activeTab,
@@ -86,6 +137,16 @@ const {
   fetchStats,
   lineMetric
 } = useUsageStats()
+
+const {
+  profile,
+  contribution,
+  contributionMode,
+  trend,
+  trendLoading,
+  tokenRange,
+  tokenDimension
+} = useTokenInsights()
 </script>
 
 <style lang="scss" scoped>
@@ -111,12 +172,33 @@ const {
     max-height: 730px;
     flex: 1;
     overflow-y: auto;
-    padding: 24px;
+    padding: 20px 24px 24px;
     background: #f0eee6;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .overview-card {
+    border-radius: 12px;
+
+    :deep(.ant-card-head-title) {
+      font-weight: 600;
+    }
+  }
+
+  .insight-grid {
+    display: grid;
+    grid-template-columns: 3fr 2fr;
+    gap: 16px;
+    align-items: start;
+
+    > :deep(.ant-card) {
+      min-width: 0;
+    }
   }
 
   .filter-bar {
-    margin-bottom: 16px;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -128,11 +210,9 @@ const {
     }
   }
 
-  .charts-row {
-    margin-bottom: 20px;
-  }
-
   .chart-card {
+    border-radius: 12px;
+
     :deep(.ant-card-head-title) {
       font-weight: 600;
     }
@@ -142,14 +222,37 @@ const {
       display: flex;
       justify-content: flex-end;
     }
+
+    :deep(.ant-card-extra) {
+      .card-toggles {
+        display: flex;
+        gap: 8px;
+      }
+    }
+  }
+
+  .tab-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
   }
 
   .bottom-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 16px;
+    align-items: start;
 
-    @media (max-width: 1200px) {
+    > :deep(.ant-card) {
+      min-width: 0;
+    }
+  }
+}
+
+@media (max-width: 1200px) {
+  .usage-page {
+    .insight-grid,
+    .bottom-row {
       grid-template-columns: 1fr;
     }
   }

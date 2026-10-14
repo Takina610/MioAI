@@ -37,7 +37,13 @@ public class UsageStatsServiceImpl implements UsageStatsService {
     private ToolCallLogService toolCallLogService;
 
     @Resource
+    private com.mio.ai.resource.service.log.SkillUsageLogService skillUsageLogService;
+
+    @Resource
     private KnowledgeBaseService knowledgeBaseService;
+
+    @Resource
+    private com.mio.ai.resource.service.log.AgentDisplayResolver agentDisplayResolver;
 
     @Override
     public UsageStatsVO buildStats(String type, LocalDateTime startTime, LocalDateTime endTime, Long userId) {
@@ -59,6 +65,8 @@ public class UsageStatsServiceImpl implements UsageStatsService {
                 return buildKnowledgeStats(startTime, endTime, prevStartTime, prevEndTime, userId);
             case "mcp":
                 return buildMcpStats(startTime, endTime, prevStartTime, prevEndTime, userId);
+            case "skill":
+                return buildSkillStats(startTime, endTime, prevStartTime, prevEndTime, userId);
             default:
                 return null;
         }
@@ -118,14 +126,131 @@ public class UsageStatsServiceImpl implements UsageStatsService {
                 .filter(log -> log.getAgentId() != null)
                 .collect(Collectors.groupingBy(AgentUsageLog::getAgentId, Collectors.counting()));
 
+        // 真实名称/头像/icon 批量解析；群聊智能体不进图表——群聊统计的是实际对话的成员智能体
+        Map<Long, com.mio.ai.resource.service.log.AgentDisplayResolver.Display> agentDisplays =
+                agentDisplayResolver.resolve(agentCallCount.keySet());
         List<UsageStatsVO.NameValue> distribution = agentCallCount.entrySet().stream()
-                .map(e -> buildNameValue(e.getKey(), e.getValue(), this::getAgentNameAvatar))
+                .filter(e -> {
+                    var display = agentDisplays.get(e.getKey());
+                    return display == null || !display.isGroup();
+                })
+                .map(e -> {
+                    UsageStatsVO.NameValue nv = new UsageStatsVO.NameValue();
+                    nv.setId(String.valueOf(e.getKey()));
+                    var display = agentDisplays.get(e.getKey());
+                    if (display != null) {
+                        nv.setName(display.name());
+                        nv.setAvatar(display.avatar());
+                        nv.setIcon(display.icon());
+                    } else {
+                        nv.setName("智能体 " + e.getKey());
+                    }
+                    nv.setValue(e.getValue());
+                    return nv;
+                })
                 .sorted(Comparator.comparingLong((UsageStatsVO.NameValue nv) -> nv.getValue().longValue()).reversed())
                 .collect(Collectors.toList());
         vo.setDistribution(distribution);
         vo.setRank(distribution);
 
         return vo;
+    }
+
+    /** 技能使用统计：技能使用日志聚合（模型读取 skills/<id>/ 视为使用） */
+    private UsageStatsVO buildSkillStats(LocalDateTime startTime, LocalDateTime endTime,
+                                         LocalDateTime prevStartTime, LocalDateTime prevEndTime,
+                                         Long userId) {
+        LambdaQueryWrapper<com.mio.ai.resource.model.entity.SkillUsageLog> wrapper =
+                new LambdaQueryWrapper<>();
+        wrapper.ge(com.mio.ai.resource.model.entity.SkillUsageLog::getCreateTime, startTime)
+                .le(com.mio.ai.resource.model.entity.SkillUsageLog::getCreateTime, endTime);
+        if (userId != null) {
+            wrapper.eq(com.mio.ai.resource.model.entity.SkillUsageLog::getUserId, userId);
+        }
+        List<com.mio.ai.resource.model.entity.SkillUsageLog> logs =
+                skillUsageLogService.list(wrapper);
+
+        LambdaQueryWrapper<com.mio.ai.resource.model.entity.SkillUsageLog> prevWrapper =
+                new LambdaQueryWrapper<>();
+        prevWrapper.ge(com.mio.ai.resource.model.entity.SkillUsageLog::getCreateTime, prevStartTime)
+                .le(com.mio.ai.resource.model.entity.SkillUsageLog::getCreateTime, prevEndTime);
+        if (userId != null) {
+            prevWrapper.eq(com.mio.ai.resource.model.entity.SkillUsageLog::getUserId, userId);
+        }
+        List<com.mio.ai.resource.model.entity.SkillUsageLog> prevLogs = skillUsageLogService.list(prevWrapper);
+
+        UsageStatsVO vo = new UsageStatsVO();
+
+        long skillCount = logs.stream().map(com.mio.ai.resource.model.entity.SkillUsageLog::getSkillId)
+                .filter(Objects::nonNull).distinct().count();
+        long useCount = logs.size();
+        long agentCount = logs.stream().map(com.mio.ai.resource.model.entity.SkillUsageLog::getAgentId)
+                .filter(Objects::nonNull).distinct().count();
+        long avgPerAgent = agentCount == 0 ? 0 : useCount / agentCount;
+
+        long prevSkillCount = prevLogs.stream().map(com.mio.ai.resource.model.entity.SkillUsageLog::getSkillId)
+                .filter(Objects::nonNull).distinct().count();
+        long prevUseCount = prevLogs.size();
+        long prevAgentCount = prevLogs.stream().map(com.mio.ai.resource.model.entity.SkillUsageLog::getAgentId)
+                .filter(Objects::nonNull).distinct().count();
+        long prevAvgPerAgent = prevAgentCount == 0 ? 0 : prevUseCount / prevAgentCount;
+
+        Map<String, UsageStatsVO.MetricValue> metrics = new LinkedHashMap<>();
+        metrics.put("agentCount", buildMetric(skillCount, "个", calcTrend(skillCount, prevSkillCount)));
+        metrics.put("successCount", buildMetric(useCount, "次", calcTrend(useCount, prevUseCount)));
+        metrics.put("tokenCount", buildMetric(agentCount, "个", calcTrend(agentCount, prevAgentCount)));
+        metrics.put("avgTokens", buildMetric(avgPerAgent, "次", calcTrend(avgPerAgent, prevAvgPerAgent)));
+        vo.setMetrics(metrics);
+
+        Map<String, List<UsageStatsVO.TimePoint>> trendMap = buildSkillTrendMap(logs, startTime, endTime);
+        Map<String, List<UsageStatsVO.TimePoint>> prevTrendMap = buildSkillTrendMap(prevLogs, prevStartTime, prevEndTime);
+        vo.setTrendMap(trendMap);
+        vo.setTrend(trendMap.getOrDefault("count", new ArrayList<>()));
+        vo.setPrevTrendMap(prevTrendMap);
+
+        // 分布按 skill_id 聚合：名称优先取日志冗余（技能删除后仍可展示）
+        Map<Long, String> skillNames = logs.stream()
+                .filter(log -> log.getSkillId() != null)
+                .collect(Collectors.toMap(com.mio.ai.resource.model.entity.SkillUsageLog::getSkillId,
+                        log -> log.getSkillName() != null ? log.getSkillName() : "技能 " + log.getSkillId(),
+                        (first, second) -> first));
+        List<UsageStatsVO.NameValue> distribution = logs.stream()
+                .filter(log -> log.getSkillId() != null)
+                .collect(Collectors.groupingBy(com.mio.ai.resource.model.entity.SkillUsageLog::getSkillId,
+                        Collectors.counting()))
+                .entrySet().stream()
+                .map(e -> {
+                    UsageStatsVO.NameValue nv = new UsageStatsVO.NameValue();
+                    nv.setId(String.valueOf(e.getKey()));
+                    nv.setName(skillNames.getOrDefault(e.getKey(), "技能 " + e.getKey()));
+                    nv.setValue(e.getValue());
+                    return nv;
+                })
+                .sorted(Comparator.comparingLong((UsageStatsVO.NameValue nv) -> nv.getValue().longValue()).reversed())
+                .collect(Collectors.toList());
+        vo.setDistribution(distribution);
+        vo.setRank(distribution);
+
+        return vo;
+    }
+
+    private Map<String, List<UsageStatsVO.TimePoint>> buildSkillTrendMap(
+            List<com.mio.ai.resource.model.entity.SkillUsageLog> logs, LocalDateTime startTime, LocalDateTime endTime) {
+        return buildTrendMap(logs, startTime, endTime,
+                com.mio.ai.resource.model.entity.SkillUsageLog::getCreateTime,
+                bucketLogs -> (long) bucketLogs.size(),
+                bucketLogs -> bucketLogs.stream()
+                        .map(com.mio.ai.resource.model.entity.SkillUsageLog::getSkillId)
+                        .filter(Objects::nonNull).distinct().count(),
+                bucketLogs -> bucketLogs.stream()
+                        .map(com.mio.ai.resource.model.entity.SkillUsageLog::getAgentId)
+                        .filter(Objects::nonNull).distinct().count(),
+                bucketLogs -> {
+                    long agents = bucketLogs.stream()
+                            .map(com.mio.ai.resource.model.entity.SkillUsageLog::getAgentId)
+                            .filter(Objects::nonNull).distinct().count();
+                    return agents == 0 ? 0L : (long) bucketLogs.size() / agents;
+                });
     }
 
     private UsageStatsVO buildKnowledgeStats(LocalDateTime startTime, LocalDateTime endTime,
@@ -272,14 +397,6 @@ public class UsageStatsServiceImpl implements UsageStatsService {
                                                    Function<Long, UsageStatsVO.NameValue> resolver) {
         UsageStatsVO.NameValue nv = resolver.apply(id);
         nv.setValue(value);
-        return nv;
-    }
-
-    private UsageStatsVO.NameValue getAgentNameAvatar(Long agentId) {
-        UsageStatsVO.NameValue nv = new UsageStatsVO.NameValue();
-        nv.setId(String.valueOf(agentId));
-        nv.setName(Long.valueOf(1L).equals(agentId) ? "MioBot" : "智能体 " + agentId);
-        nv.setAvatar(null);
         return nv;
     }
 

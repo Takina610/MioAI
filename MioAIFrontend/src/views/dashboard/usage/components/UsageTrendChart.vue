@@ -1,13 +1,23 @@
 <template>
-  <div ref="chartRef" class="chart-container"></div>
+  <div class="chart-wrapper">
+    <VueApexCharts
+      v-if="hasData"
+      type="area"
+      width="100%"
+      height="300"
+      :options="chartOptions"
+      :series="chartSeries"
+    />
+    <div v-else class="chart-empty">暂无数据</div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick } from 'vue'
-import * as echarts from 'echarts'
-import type { EChartsOption } from 'echarts'
+import { computed } from 'vue'
+import VueApexCharts from 'vue3-apexcharts'
+import type { ApexOptions } from 'apexcharts'
 import type { TimePoint } from '@/types'
-import { useEChart } from '@/composables/useEChart'
+import { baseLineChartColors } from '../composables/chartTheme'
 
 const props = withDefaults(defineProps<{
   /** 本周期趋势数据 */
@@ -20,112 +30,118 @@ const props = withDefaults(defineProps<{
   color: '#2aa1a9'
 })
 
-const chartRef = ref<HTMLDivElement | null>(null)
-const { render } = useEChart(chartRef)
+const hasData = computed(() => props.current.length > 0)
 
-const EMPTY_OPTION: EChartsOption = {
-  title: {
-    text: '暂无数据',
-    left: 'center',
-    top: 'center',
-    textStyle: { color: '#8c8a82', fontSize: 16, fontWeight: 'normal' }
+const chartSeries = computed(() => [
+  {
+    name: '本周期',
+    data: props.current.map(point => Number(point.value))
   },
-  xAxis: { type: 'category' as const, data: [] },
-  yAxis: { type: 'value' as const },
-  series: []
-}
-
-function renderChart(): void {
-  if (props.current.length === 0) {
-    render(EMPTY_OPTION)
-    return
+  {
+    name: '上周期',
+    data: props.current.map((_, index) => {
+      const prevPoint = props.prev[index]
+      return prevPoint ? Number(prevPoint.value) : 0
+    })
   }
+])
 
-  const times = props.current.map(p => p.time)
-  const currentValues = props.current.map(p => Number(p.value))
-  const prevValues = times.map((_, index) => {
-    const prevPoint = props.prev[index]
-    return prevPoint ? Number(prevPoint.value) : 0
-  })
-
-  render({
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: 'rgba(255,255,255,0.95)',
-      borderColor: '#e8e6dc',
-      textStyle: { color: '#141413' },
-      formatter: (params: any) => {
-        const index = params[0].dataIndex
-        const time = props.current[index]?.time ?? '-'
-        let html = `<div style="margin-bottom:4px;font-weight:500">${time}</div>`
-        params.forEach((p: any) => {
-          html += `<div style="margin:2px 0">
-            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${p.color};margin-right:6px"></span>
-            <span><strong>${p.value}</strong></span>
-          </div>`
-        })
-        return html
-      }
-    },
-    legend: { top: 0, right: 0, data: ['本周期', '上周期'] },
-    grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
-    xAxis: {
-      type: 'category',
-      boundaryGap: false,
-      data: times,
-      axisLine: { lineStyle: { color: '#e8e6dc' } },
-      axisLabel: { color: '#6e6b62' }
-    },
-    yAxis: {
-      type: 'value',
-      splitLine: { lineStyle: { color: '#ece9de' } },
-      axisLabel: { color: '#6e6b62' }
-    },
-    series: [
-      {
-        name: '本周期',
-        type: 'line',
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 8,
-        showSymbol: false,
-        lineStyle: { width: 3, color: props.color },
-        itemStyle: { color: props.color },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: `${props.color}40` },
-            { offset: 1, color: `${props.color}05` }
-          ])
-        },
-        data: currentValues
-      },
-      {
-        name: '上周期',
-        type: 'line',
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 6,
-        showSymbol: false,
-        lineStyle: { width: 2, color: '#8c8a82', type: 'dashed' },
-        itemStyle: { color: '#8c8a82' },
-        data: prevValues
-      }
-    ]
-  })
-}
-
-watch(() => [props.current, props.prev, props.color], () => {
-  nextTick(renderChart)
-}, { deep: true })
-
-onMounted(() => {
-  nextTick(renderChart)
-})
+const chartOptions = computed<ApexOptions>(() => ({
+  ...(baseLineChartColors() as ApexOptions),
+  colors: [props.color, '#8c8a82'],
+  chart: {
+    ...(baseLineChartColors().chart ?? {}),
+    type: 'area',
+    height: 300
+  },
+  stroke: {
+    curve: 'smooth',
+    width: [2.5, 1.8],
+    dashArray: [0, 5],
+    lineCap: 'round'
+  },
+  fill: {
+    type: 'gradient',
+    gradient: {
+      shadeIntensity: 1,
+      opacityFrom: 0.22,
+      opacityTo: 0.02,
+      stops: [0, 100]
+    }
+  },
+  markers: { size: 0, strokeWidth: 0, hover: { size: 5 } },
+  xaxis: {
+    ...(baseLineChartColors().xaxis ?? {}),
+    categories: props.current.map(point => point.time),
+    tickAmount: 6,
+    labels: {
+      rotate: 0,
+      hideOverlappingLabels: true,
+      style: { colors: '#8c8a82', fontSize: '11px' }
+    }
+  },
+  tooltip: {
+    ...(baseLineChartColors().tooltip ?? {}),
+    custom: ({ dataPointIndex }: { dataPointIndex: number }) => {
+      const point = props.current[dataPointIndex]
+      const currentValue = point ? Number(point.value) : 0
+      const prevPoint = props.prev[dataPointIndex]
+      const prevValue = prevPoint ? Number(prevPoint.value) : 0
+      return `<div class="apex-custom-tooltip">`
+        + `<div class="tooltip-title">${point?.time ?? '-'}</div>`
+        + `<div class="tooltip-row"><span class="dot" style="background:${props.color}"></span>本周期 <b>${currentValue.toLocaleString()}</b></div>`
+        + `<div class="tooltip-row"><span class="dot" style="background:#8c8a82"></span>上周期 <b>${prevValue.toLocaleString()}</b></div>`
+        + `</div>`
+    }
+  }
+}))
 </script>
 
 <style lang="scss" scoped>
-.chart-container {
+.chart-wrapper {
   width: 100%;
-  height: 320px;
+}
+
+.chart-empty {
+  height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8c8a82;
+  font-size: 14px;
+}
+
+:global(.apex-custom-tooltip) {
+  padding: 8px 12px;
+  background: #faf9f5;
+  border: 1px solid #e8e6dc;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(20, 20, 19, 0.08);
+
+  .tooltip-title {
+    font-weight: 500;
+    color: #141413;
+    margin-bottom: 4px;
+  }
+
+  .tooltip-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #6e6b62;
+    font-size: 12px;
+    line-height: 1.7;
+
+    b {
+      color: #141413;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+  }
 }
 </style>

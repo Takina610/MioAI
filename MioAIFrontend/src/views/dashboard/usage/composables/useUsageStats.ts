@@ -2,8 +2,9 @@ import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import dayjs, { type Dayjs } from 'dayjs'
 import { getUsageStats } from '@/api/usageStats'
 import type { UsageStats, MetricValue, TimePoint, NameValue } from '@/types'
+import { formatCompact } from './format'
 
-export type TabKey = 'agent' | 'knowledge' | 'mcp'
+export type TabKey = 'agent' | 'knowledge' | 'mcp' | 'skill'
 export type LineMetric = 'count' | 'agentCount' | 'tokens' | 'avgTokens'
 
 export interface MetricCardItem {
@@ -33,6 +34,12 @@ export const metricLabelMap: Record<TabKey, Record<LineMetric, string>> = {
     agentCount: '使用 MCP 工具数',
     tokens: '成功调用次数',
     avgTokens: '平均执行耗时'
+  },
+  skill: {
+    count: '使用次数',
+    agentCount: '使用技能数',
+    tokens: '涉及智能体数',
+    avgTokens: '平均每智能体使用次数'
   }
 }
 
@@ -54,13 +61,20 @@ const metricCardLabelMap: Record<TabKey, Record<string, string>> = {
     successCount: '调用次数',
     tokenCount: '成功调用次数',
     avgTokens: '平均执行耗时'
+  },
+  skill: {
+    agentCount: '使用技能数',
+    successCount: '使用次数',
+    tokenCount: '涉及智能体数',
+    avgTokens: '平均每智能体使用次数'
   }
 }
 
 const metricCardUnitMap: Record<TabKey, Record<string, string>> = {
   agent: { agentCount: '个', successCount: '次', tokenCount: 'tokens', avgTokens: 'tokens' },
   knowledge: { agentCount: '个', successCount: '次', tokenCount: 'chunks', avgTokens: 'chunks' },
-  mcp: { agentCount: '个', successCount: '次', tokenCount: '次', avgTokens: 'ms' }
+  mcp: { agentCount: '个', successCount: '次', tokenCount: '次', avgTokens: 'ms' },
+  skill: { agentCount: '个', successCount: '次', tokenCount: '个', avgTokens: '次' }
 }
 
 /** 折线图各指标配色 */
@@ -83,19 +97,6 @@ export const datePresets = [
   { label: '最近30天', value: [dayjs().subtract(30, 'day'), dayjs()] }
 ]
 
-function formatNumberWithUnit(value: number): { value: string; unit: string } {
-  if (value >= 1_000_000_000) {
-    return { value: String(Math.round(value / 1_000_000_000)), unit: 'B' }
-  }
-  if (value >= 1_000_000) {
-    return { value: String(Math.round(value / 1_000_000)), unit: 'M' }
-  }
-  if (value >= 1_000) {
-    return { value: String(Math.round(value / 1_000)), unit: 'K' }
-  }
-  return { value: String(value), unit: '' }
-}
-
 /** 使用记录页：统计数据加载与指标卡片组装 */
 export function useUsageStats() {
   const activeTab = ref<TabKey>('agent')
@@ -111,18 +112,20 @@ export function useUsageStats() {
 
   const pieChartTitle = computed(() => {
     const map: Record<TabKey, string> = {
-      agent: 'MioBot 调用次数分布',
+      agent: '智能体调用次数分布',
       knowledge: '知识库检索次数分布',
-      mcp: 'MCP 调用次数分布'
+      mcp: 'MCP 调用次数分布',
+      skill: '技能使用次数分布'
     }
     return map[activeTab.value]
   })
 
   const rankTitle = computed(() => {
     const map: Record<TabKey, string> = {
-      agent: 'MioBot 调用排行榜',
+      agent: '智能体调用排行榜',
       knowledge: '知识库检索排行榜',
-      mcp: 'MCP 调用排行榜'
+      mcp: 'MCP 调用排行榜',
+      skill: '技能使用排行榜'
     }
     return map[activeTab.value]
   })
@@ -133,6 +136,7 @@ export function useUsageStats() {
       id: item.id,
       name: item.name,
       avatar: item.avatar,
+      icon: item.icon,
       value: item.value,
       percent: Math.round((item.value / max) * 100)
     }))
@@ -144,11 +148,10 @@ export function useUsageStats() {
     metricCards.value = ['agentCount', 'successCount', 'tokenCount', 'avgTokens'].map(key => {
       const rawValue = metrics[key]?.value ?? 0
       const isTokenLike = key === 'tokenCount' || key === 'avgTokens'
-      const formatted = isTokenLike ? formatNumberWithUnit(rawValue) : null
       return {
         key,
         label: labels[key],
-        displayValue: formatted ? `${formatted.value}${formatted.unit}` : rawValue,
+        displayValue: isTokenLike ? formatCompact(rawValue) : rawValue,
         unit: units[key],
         trend: metrics[key]?.trend ?? 0
       }

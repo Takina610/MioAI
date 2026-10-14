@@ -35,6 +35,11 @@ public class AgentUsageLog implements Serializable {
     private Long conversationId;
 
     /**
+     * 模型名（本轮会话使用的模型标识；存量行为 NULL，统计时归入"未知模型"）
+     */
+    private String model;
+
+    /**
      * 输入Token数
      */
     private Integer inputTokens;

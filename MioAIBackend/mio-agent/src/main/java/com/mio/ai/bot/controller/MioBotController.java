@@ -88,6 +88,12 @@ public class MioBotController {
     private ToolCallLogService toolCallLogService;
 
     @Autowired
+    private com.mio.ai.resource.service.log.UserStatsDailyService userStatsDailyService;
+
+    @Autowired
+    private com.mio.ai.resource.service.log.SkillUsageLogService skillUsageLogService;
+
+    @Autowired
     private AgentMessageService agentMessageService;
 
     @Autowired
@@ -297,8 +303,8 @@ public class MioBotController {
         var engineConfig = new com.mio.ai.framework.zagent.AgentEngineConfig(
                 agentMaxSteps, agentStreamTimeoutSeconds, agentModelRetries, agentContextWindowTokens);
         MioBot mioBot = new MioBot(chatModel, toolsetFactory, List.of(mcp.callbacks()), skills,
-                agentUsageLogService, toolCallLogService, agentMessageService, chatFileService,
-                imageSearchService,
+                agentUsageLogService, toolCallLogService, userStatsDailyService, skillUsageLogService,
+                agentMessageService, chatFileService, imageSearchService,
                 chatId, userId, resolvedAgentId, customSystemPrompt, engineModelName, effort, engineConfig,
                 fileTransfer, com.mio.ai.bot.model.dto.AttachmentItem.parseList(attachments));
         // 群聊智能体：注入成员协调器（Agent 工具按成员名委派时以成员自身资源运行）

@@ -131,6 +131,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             this.updateById(user);
             log.info("用户 {} 的口令已从 MD5 升级为 BCrypt", userAccount);
         }
+        // 登录发生在令牌签发之前，AOP 切面拿不到身份：发事件由上层模块补记执行日志
+        eventPublisher.publishEvent(new com.mio.ai.user.event.UserLoginEvent(user.getId(), userAccount));
         return this.getLoginUserVO(user);
     }
 
