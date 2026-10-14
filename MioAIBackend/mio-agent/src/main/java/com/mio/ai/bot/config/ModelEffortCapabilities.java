@@ -16,6 +16,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * 按模型探测思考档位能力：上游对各 reasoning_effort 的支持情况并不统一
  * （如 fledge-alpha-free 仅支持 low/high，step-5-preview 的 none 会 400），且
  * 模型元数据不含该信息——这里用 1-token 探测请求实测并按模型缓存，供前端如实渲染档位。
+ * <p>OpenCode 免费档与用户自定义供应商共用同一探测管线：按 (端点, 模型) 分键探测与缓存，
+ * 自定义供应商传入其 BaseURL 与 API Key。
  */
 @Slf4j
 @Component
@@ -35,7 +37,7 @@ public class ModelEffortCapabilities {
     private final String baseUrl;
     private final String apiKey;
 
-    /** 探测结果按模型分键缓存：换模型（重启）即重新探测，互不串档 */
+    /** 探测结果按 (端点, 模型) 分键缓存：换模型/换端点（重启）即重新探测，互不串档 */
     private final Map<String, CachedCapabilities> cacheByModel = new ConcurrentHashMap<>();
     private final Map<String, Object> probeLocks = new ConcurrentHashMap<>();
 
@@ -45,32 +47,38 @@ public class ModelEffortCapabilities {
         this.apiKey = apiKey;
     }
 
-    /** 指定模型支持的档位列表（探测失败回退默认子集，前端对空列表还有自己的兜底） */
+    /** 引擎默认端点指定模型支持的档位列表 */
     public List<String> supportedEfforts(String model) {
-        CachedCapabilities cached = cacheByModel.get(model);
+        return supportedEfforts(baseUrl, apiKey, model);
+    }
+
+    /** 指定端点+模型支持的档位列表（探测失败回退默认子集，前端对空列表还有自己的兜底） */
+    public List<String> supportedEfforts(String endpointBaseUrl, String endpointApiKey, String model) {
+        String cacheKey = endpointBaseUrl + "|" + model;
+        CachedCapabilities cached = cacheByModel.get(cacheKey);
         if (cached != null && System.currentTimeMillis() - cached.at < cached.ttl) {
             return cached.efforts;
         }
-        synchronized (probeLocks.computeIfAbsent(model, k -> new Object())) {
-            cached = cacheByModel.get(model);
+        synchronized (probeLocks.computeIfAbsent(cacheKey, k -> new Object())) {
+            cached = cacheByModel.get(cacheKey);
             if (cached != null && System.currentTimeMillis() - cached.at < cached.ttl) {
                 return cached.efforts;
             }
             // 顺序探测：本地反代是串行吞吐，7 连发并发会把排队请求挤出超时造成假模糊
             List<ProbeResult> results = ALL_EFFORTS.stream()
-                    .map(effort -> probe(model, effort))
+                    .map(effort -> probe(endpointBaseUrl, endpointApiKey, model, effort))
                     .toList();
             // 零星模糊（≤2 档，偶发排队/抖动掐出的假超时）再串行补测一次
             long ambiguous = results.stream().filter(r -> !r.definitive()).count();
             if (ambiguous > 0 && ambiguous <= 2) {
                 results = results.stream()
-                        .map(r -> r.definitive() ? r : probe(model, r.effort()))
+                        .map(r -> r.definitive() ? r : probe(endpointBaseUrl, endpointApiKey, model, r.effort()))
                         .toList();
             }
             // 一个可判定的答案都没有 = 网关不可达/整体异常。此时全量兜底会让用户选到必然 400
             // 的档位（这正是"档位突然变多"事故的根因），改为返回默认子集且不缓存，网关恢复后重新探测
             if (results.stream().noneMatch(ProbeResult::definitive)) {
-                log.warn("思考档位探测不可判定（网关 {} 对 {} 无有效响应），返回默认档位且不缓存", baseUrl, model);
+                log.warn("思考档位探测不可判定（端点 {} 对 {} 无有效响应），返回默认档位且不缓存", endpointBaseUrl, model);
                 return DEFAULT_EFFORTS;
             }
             List<String> supported = results.stream()
@@ -80,7 +88,7 @@ public class ModelEffortCapabilities {
             if (supported.isEmpty()) {
                 // 模型对 reasoning_effort 全部明确拒绝：如实返回空，前端会隐藏/兜底档位选择
                 log.info("模型 {} 明确不支持任何思考档位", model);
-                cacheByModel.put(model, new CachedCapabilities(List.of(), System.currentTimeMillis(), CACHE_TTL_MS));
+                cacheByModel.put(cacheKey, new CachedCapabilities(List.of(), System.currentTimeMillis(), CACHE_TTL_MS));
                 return List.of();
             }
             log.info("模型 {} 支持的思考档位: {}", model, supported);
@@ -88,7 +96,7 @@ public class ModelEffortCapabilities {
             // 缓存缩到 10 分钟让其尽快自愈；全部档位均有判定则按满 TTL 缓存
             boolean partial = results.stream().anyMatch(r -> !r.definitive());
             long ttl = partial ? CACHE_TTL_MS / 6 : CACHE_TTL_MS;
-            cacheByModel.put(model, new CachedCapabilities(supported, System.currentTimeMillis(), ttl));
+            cacheByModel.put(cacheKey, new CachedCapabilities(supported, System.currentTimeMillis(), ttl));
             return supported;
         }
     }
@@ -105,14 +113,14 @@ public class ModelEffortCapabilities {
     private record ProbeResult(String effort, boolean supported, boolean definitive) {
     }
 
-    private ProbeResult probe(String model, String effort) {
+    private ProbeResult probe(String endpointBaseUrl, String endpointApiKey, String model, String effort) {
         String body = JacksonUtil.writeValueAsString(Map.of(
                 "model", model,
                 "messages", List.of(Map.of("role", "user", "content", "1")),
                 "max_tokens", 1,
                 "reasoning_effort", effort));
-        try (HttpResponse resp = HttpRequest.post(baseUrl + "/chat/completions")
-                .header("Authorization", "Bearer " + apiKey)
+        try (HttpResponse resp = HttpRequest.post(endpointBaseUrl + "/chat/completions")
+                .header("Authorization", "Bearer " + endpointApiKey)
                 .header("Content-Type", "application/json")
                 .body(body)
                 .timeout(PROBE_TIMEOUT_MS)

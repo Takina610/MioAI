@@ -91,8 +91,45 @@
                 <PlusOutlined />
               </button>
             </a-tooltip>
-            <!-- 模型切换器（zcode 同款多级菜单）：左列供应商分组、右列该组模型 -->
-                        <a-dropdown
+            <!-- 模型切换器（zcode 同款）：供应商为 hover 子菜单（a-sub-menu），右浮出模型列表 -->
+            <a-dropdown
+              v-if="!cancelable"
+              v-model:open="modelMenuOpen"
+              :trigger="['click']"
+              placement="topLeft"
+              :overlay-style="{ userSelect: 'none' }"
+            >
+              <div class="model-selector" @click.prevent>
+                <ApiOutlined class="model-icon" />
+                <span class="model-label">{{ currentModelLabel }}</span>
+                <DownOutlined class="effort-caret" />
+              </div>
+              <template #overlay>
+                <a-menu
+                  class="model-menu"
+                  :selected-keys="currentModelKey ? [currentModelKey] : []"
+                  :inline-indent="14"
+                  @click="onModelMenuClick"
+                >
+                  <a-sub-menu v-for="g in cascadeGroups" :key="g.key">
+                      <template #title>
+                        <span class="group-label" :class="{ current: g.current }">
+                          {{ g.label }}
+                          <CheckOutlined v-if="g.current" class="group-check" />
+                        </span>
+                      </template>
+                      <a-menu-item v-if="!g.models.length" disabled>该分组暂无可用模型</a-menu-item>
+                      <a-menu-item v-for="m in g.models" :key="m.key" class="model-item">
+                        <span class="model-menu-name">{{ m.id }}</span>
+                        <span v-if="m.vision" class="vision-badge">视觉</span>
+                      </a-menu-item>
+                    </a-sub-menu>
+                  <a-menu-divider />
+                  <a-menu-item key="__manage__" class="manage-item">管理模型</a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
+            <a-dropdown
               v-if="!cancelable"
               :trigger="['click']"
               placement="topLeft"
@@ -167,7 +204,8 @@ import AttachmentCard from './AttachmentCard.vue'
 import ContextUsageIndicator from './ContextUsageIndicator.vue'
 import { createTokenElement } from '../tokenDom'
 import { getAllSessions, type AllSessionItem } from '@/api/chatMemory'
-import type { ChatRefItem, ContextUsageData, KnowledgeBase, McpTool, PendingAttachment, Skill } from '@/types'
+import { isVisionModel } from '@/utils/modelPresets'
+import type { ChatRefItem, ContextUsageData, FreeModel, KnowledgeBase, McpTool, ModelProvider, ModelSelection, PendingAttachment, Skill } from '@/types'
 
 /** 思考档位全量标签（实际渲染哪些档由后端按模型能力返回） */
 const EFFORT_LABELS: Record<string, string> = {
@@ -212,6 +250,12 @@ const props = defineProps<{
   mcpTools?: McpTool[]
   /** 当前会话 id：切换即清空引用；@ 列表排除当前会话（自身上下文已在内） */
   currentChatId?: string
+  /** OpenCode 免费模型目录（反代拉取，-free 档） */
+  freeModels?: FreeModel[]
+  /** 用户自定义供应商（含各自模型条目） */
+  providers?: ModelProvider[]
+  /** 当前对话模型选择 */
+  currentModel?: ModelSelection | null
 }>()
 
 const emit = defineEmits<{
@@ -225,6 +269,10 @@ const emit = defineEmits<{
   (e: 'remove-pending', key: string): void
   (e: 'input-focus'): void
   (e: 'input-blur'): void
+  /** 切换对话模型（OpenCode 免费档 / 自定义供应商模型） */
+  (e: 'select-model', selection: ModelSelection): void
+  /** 打开模型管理弹窗（父级以 antd Modal 呈现个人中心的模型设置） */
+  (e: 'manage-models'): void
 }>()
 
 const userStore = useUserStore()
@@ -274,8 +322,90 @@ function onEffortClick({ key }: { key: string | number }): void {
   emit('update:effort', String(key))
 }
 
-// ---------- 模型切换器：多级菜单（左列分组/右列模型），切换上抛父级联动思考档位 ----------
+// ---------- 模型切换器：供应商 hover 子菜单（a-sub-menu），切换上抛父级联动思考档位 ----------
+const freeModels = computed(() => props.freeModels ?? [])
+const providers = computed(() => props.providers ?? [])
 
+const modelMenuOpen = ref(false)
+
+interface CascadeModel {
+  key: string
+  id: string
+  vision: boolean
+  selection: ModelSelection
+}
+
+const cascadeGroups = computed(() => {
+  interface Group {
+    key: string
+    label: string
+    models: CascadeModel[]
+    current: boolean
+  }
+  const cur = props.currentModel
+  const groups: Group[] = [
+    {
+      key: 'opencode',
+      label: 'OpenCode 免费模型',
+      models: freeModels.value.map(m => ({
+        key: `opencode|${m.id}`,
+        id: m.id,
+        vision: m.vision,
+        selection: { source: 'opencode' as const, providerId: null, model: m.id }
+      })),
+      current: cur?.source === 'opencode'
+    }
+  ]
+  for (const p of providers.value) {
+    groups.push({
+      key: `p_${p.id}`,
+      label: p.name,
+      models: p.models
+        .filter(m => m.enabled !== false)
+        .map(m => ({
+          key: `custom|${p.id}|${m.id}`,
+          id: m.id,
+          vision: isVisionModel(m),
+          selection: { source: 'custom' as const, providerId: p.id, model: m.id }
+        })),
+      current: cur?.source === 'custom' && cur.providerId === p.id
+    })
+  }
+  return groups
+})
+
+const currentModelKey = computed(() => {
+  const cur = props.currentModel
+  if (!cur) return ''
+  return cur.source === 'custom' && cur.providerId != null
+    ? `custom|${cur.providerId}|${cur.model}`
+    : `opencode|${cur.model}`
+})
+
+const currentModelLabel = computed(() => {
+  const cur = props.currentModel
+  if (!cur?.model) return '模型'
+  const provider = cur.source === 'custom'
+    ? providers.value.find(p => p.id === cur.providerId)
+    : undefined
+  const full = provider ? `${provider.name}/${cur.model}` : cur.model
+  return full.length > 32 ? full.slice(0, 31) + '…' : full
+})
+
+function onModelMenuClick({ key }: { key: string | number }): void {
+  if (key === '__manage__') {
+    modelMenuOpen.value = false
+    emit('manage-models')
+    return
+  }
+  const target = cascadeGroups.value
+    .flatMap(g => g.models)
+    .find(m => m.key === String(key))
+  if (target) {
+    modelMenuOpen.value = false
+    emit('select-model', target.selection)
+  }
+}
 
 // ---------- 富文本编辑器（contenteditable）：纯文本编辑 + 内联引用 token ----------
 const editorRef = ref<HTMLElement | null>(null)
@@ -1297,6 +1427,43 @@ function onFileChange(event: Event): void {
         }
       }
 
+      // 模型切换器触发钮：与思考档位同款视觉（图标+文字+下箭头）
+      .model-selector {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        max-width: 260px;
+        padding: 5px 10px;
+        border-radius: 10px;
+        font-size: 13px;
+        color: #5f5d55;
+        cursor: pointer;
+        user-select: none;
+        transition: background 0.2s;
+
+        &:hover {
+          background: #f0ede4;
+        }
+
+        .model-icon {
+          color: $primary-color;
+          font-size: 13px;
+        }
+
+        .model-label {
+          min-width: 0;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .effort-caret {
+          font-size: 10px;
+          color: #8c8a82;
+          flex-shrink: 0;
+        }
+      }
+
       // 取消按钮（编辑模式）：与发送成组靠右
       .cancel-btn {
         margin-right: 8px;
@@ -1406,147 +1573,72 @@ function onFileChange(event: Event): void {
   font-size: 12px;
 }
 
-// zcode 同款多级模型菜单：左列分组（当前组高亮+勾选）、右列该组模型
-.model-cascade {
-  display: flex;
-  width: 380px;
-  min-height: 200px;
-  max-height: 360px;
-  padding: 6px;
-  background: #fff;
+// zcode 同款模型菜单：供应商为 hover 子菜单（antd a-sub-menu 右浮出模型列表）
+.model-menu {
+  min-width: 220px;
+  max-height: 400px;
+  overflow-y: auto;
   border: 1px solid #e8e6dc;
-  border-radius: 14px;
+  border-radius: 12px;
   box-shadow: 0 12px 40px rgba(20, 20, 19, 0.14);
-  overflow: hidden;
 
-  .cascade-left {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    width: 150px;
-    flex-shrink: 0;
-    padding: 4px;
-    border-right: 1px solid #f0ede4;
-    overflow-y: auto;
+  :deep(.ant-menu-item-group-title),
+  :deep(.ant-menu-submenu-title) {
+    user-select: none;
+  }
 
-    .cascade-group {
-      display: flex;
+  :deep(.ant-menu-submenu-title) {
+    .group-label {
+      display: inline-flex;
       align-items: center;
-      justify-content: space-between;
       gap: 6px;
-      padding: 7px 9px;
-      border: none;
-      border-radius: 8px;
-      background: transparent;
-      color: #3d3b35;
-      font-size: 13px;
-      cursor: pointer;
-      text-align: left;
-      transition: background 0.15s;
+      min-width: 0;
+      max-width: 220px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
 
-      .group-label {
-        min-width: 0;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      .group-meta {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        flex-shrink: 0;
-
-        .group-check {
-          color: $primary-color;
-          font-size: 11px;
-        }
-
-        .group-arrow {
-          color: #b0aea5;
-          font-size: 10px;
-        }
-      }
-
-      &:hover {
-        background: #f0ede4;
-      }
-
-      &.active {
-        background: rgba(42, 161, 169, 0.1);
-        color: #141413;
-      }
-    }
-
-    .cascade-manage {
-      margin-top: auto;
-      padding: 7px 9px;
-      border: none;
-      border-top: 1px solid #f0ede4;
-      border-radius: 0;
-      background: transparent;
-      color: #6e6b62;
-      font-size: 13px;
-      text-align: left;
-      cursor: pointer;
-
-      &:hover {
+      .group-check {
         color: $primary-color;
+        font-size: 12px;
+      }
+
+      &.current {
+        color: #141413;
+        font-weight: 500;
       }
     }
   }
 
-  .cascade-right {
-    flex: 1;
-    min-width: 0;
+  :deep(.ant-menu-item.model-item) {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 4px;
-    overflow-y: auto;
+    align-items: center;
 
-    .cascade-model {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 7px 9px;
-      border: none;
-      border-radius: 8px;
-      background: transparent;
-      color: #3d3b35;
-      font-size: 13px;
-      cursor: pointer;
-      text-align: left;
-      transition: background 0.15s;
-
-      &:hover {
-        background: #f0ede4;
-      }
-
-      &.active {
-        background: rgba(42, 161, 169, 0.1);
-        color: #141413;
-      }
-
-      .vision-badge {
-        flex-shrink: 0;
-        padding: 1px 7px;
-        border-radius: 999px;
-        background: rgba(42, 161, 169, 0.12);
-        color: $primary-color;
-        font-size: 11px;
-      }
-
-      .model-check {
-        margin-left: auto;
-      }
+    .model-menu-name {
+      min-width: 0;
+      max-width: 240px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
-    .cascade-empty {
-      padding: 12px 9px;
-      font-size: 12px;
-      color: #8c8a82;
-      user-select: none;
+    .vision-badge {
+      flex-shrink: 0;
+      margin-left: 8px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: rgba(42, 161, 169, 0.12);
+      color: $primary-color;
+      font-size: 11px;
+    }
+  }
+
+  :deep(.ant-menu-item.manage-item) {
+    color: #6e6b62;
+    user-select: none;
+
+    &:hover {
+      color: $primary-color;
     }
   }
 }

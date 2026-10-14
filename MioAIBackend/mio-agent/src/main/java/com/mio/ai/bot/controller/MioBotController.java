@@ -47,6 +47,8 @@ import java.util.Map;
 @RestController
 public class MioBotController {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(MioBotController.class);
+
     /**
      * 敏感词拦截（原各 ChatClient 上的 ChineseSafeGuardAdvisor 收敛到这里）：
      * 命中时以一条完整回复结束，不进入 Agent 循环
@@ -165,10 +167,28 @@ public class MioBotController {
     @Autowired
     private ChatRateLimiter chatRateLimiter;
 
-    /** 当前模型实际支持的思考档位（探测缓存），前端据此如实渲染档位选择器 */
+    @Autowired
+    private com.mio.ai.bot.service.RuntimeChatModelFactory runtimeChatModelFactory;
+
+    /** 当前模型实际支持的思考档位（探测缓存），前端据此如实渲染档位选择器。
+     *  可携模型选择参数：source=custom 时带供应商端点配置（BaseURL/API Key，仅存浏览器本地，
+     *  此处瞬态使用不落库）探测该端点；缺省探测引擎默认端点+模型。 */
     @GetMapping("/bot/efforts")
-    public BaseResponse<Map<String, Object>> efforts() {
-        return ResultUtils.success(Map.of("efforts", modelEffortCapabilities.supportedEfforts(engineModelName)));
+    public BaseResponse<Map<String, Object>> efforts(
+            @RequestParam(required = false) String source,
+            @RequestParam(required = false) String model,
+            @RequestParam(required = false) @Size(max = 512) String providerBaseUrl,
+            @RequestParam(required = false) @Size(max = 512) String providerApiKey,
+            @RequestParam(required = false) @Size(max = 32) String providerApiFormat,
+            jakarta.servlet.http.HttpServletRequest httpRequest) {
+        String targetModel = StrUtil.isBlank(model) ? engineModelName : model;
+        List<String> efforts;
+        if ("custom".equals(source)) {
+            efforts = modelEffortCapabilities.supportedEfforts(providerBaseUrl, providerApiKey, targetModel);
+        } else {
+            efforts = modelEffortCapabilities.supportedEfforts(targetModel);
+        }
+        return ResultUtils.success(Map.of("efforts", efforts));
     }
 
     /**
@@ -232,6 +252,11 @@ public class MioBotController {
                            @RequestParam(required = false) Long groupSeq,
                            @RequestParam(required = false) @Size(max = 4000) String attachments,
                            @RequestParam(required = false) @Size(max = 4000) String refs,
+                           @RequestParam(required = false) String modelSource,
+                           @RequestParam(required = false) @Size(max = 512) String providerBaseUrl,
+                           @RequestParam(required = false) @Size(max = 512) String providerApiKey,
+                           @RequestParam(required = false) @Size(max = 32) String providerApiFormat,
+                           @RequestParam(required = false) String model,
                            jakarta.servlet.http.HttpServletRequest httpRequest) {
         Long userId = StrUtil.isBlank(token) ? null : redisComponent.getUserId(token);
         long resolvedAgentId = agentId != null ? agentId : MioBot.AGENT_ID;
@@ -300,12 +325,26 @@ public class MioBotController {
 
         String effort = reasoningEffort != null && REASONING_EFFORTS.contains(reasoningEffort)
                 ? reasoningEffort : null;
+        // 模型选择：聊天页切换的 OpenCode 免费模型 / 自定义供应商模型。解析失败（游客选了
+        // 自定义/供应商已删）回退引擎默认继续对话，不整轮报错
+        com.mio.ai.bot.service.RuntimeChatModelFactory.Resolved chatResolution;
+        try {
+            var endpoint = "custom".equals(modelSource)
+                    ? new com.mio.ai.bot.service.RuntimeChatModelFactory.ProviderEndpoint(
+                            providerBaseUrl, providerApiKey, providerApiFormat)
+                    : null;
+            chatResolution = runtimeChatModelFactory.resolve(modelSource, endpoint, model);
+        } catch (BusinessException e) {
+            log.info("模型选择解析失败（{}），回退引擎默认: {}", e.getMessage(), chatId);
+            chatResolution = new com.mio.ai.bot.service.RuntimeChatModelFactory.Resolved(chatModel, engineModelName);
+        }
+        String chatModelName = chatResolution.resolvedModel();
         var engineConfig = new com.mio.ai.framework.zagent.AgentEngineConfig(
                 agentMaxSteps, agentStreamTimeoutSeconds, agentModelRetries, agentContextWindowTokens);
-        MioBot mioBot = new MioBot(chatModel, toolsetFactory, List.of(mcp.callbacks()), skills,
+        MioBot mioBot = new MioBot(chatResolution.model(), toolsetFactory, List.of(mcp.callbacks()), skills,
                 agentUsageLogService, toolCallLogService, userStatsDailyService, skillUsageLogService,
                 agentMessageService, chatFileService, imageSearchService,
-                chatId, userId, resolvedAgentId, customSystemPrompt, engineModelName, effort, engineConfig,
+                chatId, userId, resolvedAgentId, customSystemPrompt, chatModelName, effort, engineConfig,
                 fileTransfer, com.mio.ai.bot.model.dto.AttachmentItem.parseList(attachments));
         // 群聊智能体：注入成员协调器（Agent 工具按成员名委派时以成员自身资源运行）
         if (promptContext.coordinator() != null) {

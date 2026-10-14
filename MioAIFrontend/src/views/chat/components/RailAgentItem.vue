@@ -1,6 +1,4 @@
 <template>
-  <!-- 左轨单个智能体：窄轨图标态 / 宽轨信息态（左 icon、右上名称、右下描述）。
-       hover 浮现图钉按钮（置顶/取消）；排序模式下暂停点击与图钉，改为可拖拽手柄 -->
   <div
     class="rail-agent"
     :data-id="agent.id"
@@ -11,6 +9,12 @@
     @click="sorting || emit('open', agent.id)"
     @keydown.enter="sorting || emit('open', agent.id)"
   >
+    <!-- 本组件被 vuedraggable #item 插槽直接渲染，模板必须保持单根——
+         顶层注释会使 dev 构建渲染成 [注释, div] Fragment，vnode.el 解析为文本锚点，
+         vuedraggable 的拖拽上下文挂错节点，拖拽即崩（SortableJS 模块级 dragEl 卡死），
+         说明性注释一律写在根元素内部。
+         左轨单个智能体：窄轨图标态 / 宽轨信息态（左 icon、右上名称、右下描述）。
+         hover 浮现图钉按钮（置顶/取消）；排序模式下暂停点击与图钉，改为可拖拽手柄 -->
     <span class="agent-icon-wrap">
       <BotIcon
         v-if="icon"

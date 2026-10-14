@@ -79,12 +79,7 @@
         <template #title>
           <span>模型设置</span>
         </template>
-        <div class="setting-item">
-          <div class="item-info">
-            <span class="label">AI 模型提供方</span>
-          </div>
-          <ProviderSwitch />
-        </div>
+        <ModelSettings />
       </a-card>
     </div>
 
@@ -104,7 +99,7 @@ import { EditOutlined } from '@ant-design/icons-vue'
 import PageHeader from '../components/PageHeader.vue'
 import PasswordModal from './components/PasswordModal.vue'
 import AvatarCropper from './components/AvatarCropper.vue'
-import ProviderSwitch from './components/ProviderSwitch.vue'
+import ModelSettings from './components/ModelSettings.vue'
 
 interface FormData {
   id: number | null

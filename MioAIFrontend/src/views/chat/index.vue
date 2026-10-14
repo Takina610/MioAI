@@ -121,6 +121,11 @@
           :skills="agentInfo?.skills"
           :mcp-tools="agentInfo?.mcpTools"
           :current-chat-id="currentChatId ?? ''"
+          :free-models="freeModels"
+          :providers="providers"
+          :current-model="currentModel"
+          @select-model="handleSelectModel"
+          @manage-models="manageModelsVisible = true"
           @add-files="handleAddFiles"
           @remove-pending="handleRemovePending"
           @send="handleSend"
@@ -147,6 +152,17 @@
     </Transition>
 
     <AuthModal v-model:visible="authModalVisible" @success="handleAuthSuccess" />
+
+    <!-- 管理模型：内嵌个人中心的模型设置（免费档目录展示 + 供应商增删改/测试/启停） -->
+    <a-modal
+      v-model:open="manageModelsVisible"
+      title="管理模型"
+      :footer="null"
+      :width="720"
+      wrap-class-name="manage-models-modal"
+    >
+      <ModelSettings />
+    </a-modal>
 
     <!-- MioBot 个性化设置（内置智能体按用户独立配置）：保存后重拉详情让开场白/图标即时生效 -->
     <AgentPersonalizeModal
@@ -214,7 +230,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getAgentDetail, queryAgents, pinAgent, reorderAgents, getMyMioBotAgentId } from '@/api/agent'
 import { pinChat } from '@/api/chatMemory'
 import { useUserStore } from '@/store/user'
-import type { Agent, AgentDetail, AttachmentItem, ChatMessage, ChatRefItem, ContextUsageData, MessageBlock, PendingAttachment, SubagentPanelTarget } from '@/types'
+import type { Agent, AgentDetail, AttachmentItem, ChatMessage, ChatRefItem, ContextUsageData, MessageBlock, ModelSelection, PendingAttachment, SubagentPanelTarget } from '@/types'
 import { isImageName } from './attachmentUtils'
 import AuthModal from '@/components/AuthModal.vue'
 import BotPet from '@/components/bot-icon/BotPet.vue'
@@ -240,6 +256,8 @@ import { buildRefMarkerPrefix, parseRefMarkers } from './refMarkers'
 import { usePendingCardAnimations } from './composables/usePendingCardAnimations'
 import { buildSubagentTranscript } from './subagentTranscript'
 import { truncateConversation, getReasoningEfforts, getContextUsage, uploadAttachment, deleteAttachment, getActiveTurns } from '@/api/chat'
+import ModelSettings from '@/views/dashboard/profile/components/ModelSettings.vue'
+import { loadModelCatalog, useModelCatalog, writeLocalSelection } from '@/composables/useModelCatalog'
 import { getBotMessages } from '@/api/botMessages'
 
 const route = useRoute()
@@ -257,20 +275,72 @@ const reasoningEffort = ref<string>(localStorage.getItem('reasoning-effort') || 
 watch(reasoningEffort, v => localStorage.setItem('reasoning-effort', v))
 const supportedEfforts = ref<string[]>([])
 
-onMounted(async () => {
-  try {
-    const res = await getReasoningEfforts()
-    supportedEfforts.value = res.efforts ?? []
-    // 本地记忆的档位该模型不支持（如 medium/none）→ 回退到支持列表里最接近"高"的档
-    if (supportedEfforts.value.length && !supportedEfforts.value.includes(reasoningEffort.value)) {
-      reasoningEffort.value = supportedEfforts.value.includes('high')
-        ? 'high'
-        : supportedEfforts.value[supportedEfforts.value.length - 1]
+// ---------- 对话模型：目录（免费档+自定义供应商）与当前选择（个人中心/聊天页共享一份内存态） ----------
+const { freeModels, providers, selection: currentModel } = useModelCatalog()
+
+/** 自定义供应商端点配置（仅存浏览器本地；随聊天请求瞬态经过后端，不落库） */
+const currentProvider = computed(() => {
+  const cur = currentModel.value
+  if (cur.source !== 'custom' || cur.providerId == null) return null
+  const p = providers.value.find(x => x.id === cur.providerId)
+  return p ? { baseUrl: p.baseUrl, apiKey: p.apiKey, apiFormat: p.apiFormat } : null
+})
+
+/** 按当前模型拉取真实可用的思考档位；本地记忆档位不被支持时回退到最接近"高"的档。
+ *  供应商模型条目声明了推理等级时直接采用（用户显式配置优先），否则走后端探测。 */
+async function refreshSupportedEfforts(selection: ModelSelection): Promise<void> {
+  let declared: string[] = []
+  const provider = selection.source === 'custom' && selection.providerId != null
+    ? providers.value.find(p => p.id === selection.providerId)
+    : undefined
+  if (provider) {
+    const entry = provider.models.find(m => m.id === selection.model)
+    if (entry?.reasoningLevels?.length) {
+      declared = [...entry.reasoningLevels]
     }
-  } catch (e) {
-    console.error('拉取思考档位失败，使用兜底列表', e)
+  }
+  if (declared.length) {
+    supportedEfforts.value = declared
+  } else {
+    try {
+      const res = await getReasoningEfforts(selection, provider
+        ? { baseUrl: provider.baseUrl, apiKey: provider.apiKey, apiFormat: provider.apiFormat }
+        : null)
+      supportedEfforts.value = res.efforts ?? []
+    } catch (e) {
+      console.error('拉取思考档位失败，使用兜底列表', e)
+      supportedEfforts.value = []
+    }
+  }
+  if (supportedEfforts.value.length && !supportedEfforts.value.includes(reasoningEffort.value)) {
+    reasoningEffort.value = supportedEfforts.value.includes('high')
+      ? 'high'
+      : supportedEfforts.value[supportedEfforts.value.length - 1]
+  }
+}
+
+onMounted(async () => {
+  await loadModelCatalog()
+  if (currentModel.value.model) {
+    refreshSupportedEfforts(currentModel.value)
   }
 })
+
+/** 聊天页切换模型：更新共享选择（写服务端+本地镜像），思考档位随之按新模型重新探测 */
+async function handleSelectModel(next: ModelSelection): Promise<void> {
+  if (next.source === currentModel.value.source
+    && next.providerId === currentModel.value.providerId
+    && next.model === currentModel.value.model) {
+    return
+  }
+  currentModel.value = next
+  // 选择仅存浏览器本地
+  writeLocalSelection(next)
+  await refreshSupportedEfforts(next)
+}
+
+// 管理模型弹窗：内嵌个人中心的模型设置（免费档目录展示 + 供应商增删改/测试/启停）
+const manageModelsVisible = ref(false)
 
 const sidebarRef = ref<InstanceType<typeof ChatSidebar> | null>(null)
 const messageListRef = ref<InstanceType<typeof ChatMessageList> | null>(null)
@@ -785,7 +855,7 @@ function handleSend(refs: ChatRefItem[] = []): void {
   if (!content) {
     content = '请基于我引用的上下文继续。'
   }
-  sendMessage(content, { reasoningEffort: reasoningEffort.value, attachments, refs })
+  sendMessage(content, { reasoningEffort: reasoningEffort.value, modelSelection: currentModel.value, provider: currentProvider.value, attachments, refs })
   noteGuestTurn()
   cleanupPendingAttachments()
   inputMessage.value = ''
@@ -796,7 +866,7 @@ function sendFromUi(text: string): void {
   const content = text.trim()
   if (!content || isLoading.value) return
   if (!guestCanSend()) return
-  sendMessage(content, { reasoningEffort: reasoningEffort.value })
+  sendMessage(content, { reasoningEffort: reasoningEffort.value, modelSelection: currentModel.value, provider: currentProvider.value })
   noteGuestTurn()
 }
 
@@ -1098,7 +1168,7 @@ async function handleRegenerate(): Promise<void> {
   }
 
   messagesApi.setChatMessages(chatId, msgs.slice(0, lastUserIndex + 1))
-  sendMessage(content, { skipUserMessage: true, skipUserPersist: true, reasoningEffort: reasoningEffort.value, history, attachments: attachmentsOf(msgs[lastUserIndex]) })
+  sendMessage(content, { skipUserMessage: true, skipUserPersist: true, reasoningEffort: reasoningEffort.value, modelSelection: currentModel.value, provider: currentProvider.value, history, attachments: attachmentsOf(msgs[lastUserIndex]) })
 }
 
 /** 编辑用户消息：截断该消息及其后历史（本地+服务端），以新内容重新发送；旧回复存为版本 */
@@ -1144,7 +1214,7 @@ async function handleEditMessage(index: number, newContent: string, editAttachme
   }
   // 编辑重发保留引用：从标记文本还原引用清单，服务端据此重新注入上下文
   const editRefs = parseRefMarkers(newContent)
-  sendMessage(newContent, { reasoningEffort: reasoningEffort.value, history, groupSeq: groupKey, attachments: finalAttachments, refs: editRefs.length ? editRefs : undefined })
+  sendMessage(newContent, { reasoningEffort: reasoningEffort.value, modelSelection: currentModel.value, provider: currentProvider.value, history, groupSeq: groupKey, attachments: finalAttachments, refs: editRefs.length ? editRefs : undefined })
 }
 
 /** 该消息随发的附件（attachments 输入块）：编辑/重生成重发时沿用原路径 */

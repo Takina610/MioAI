@@ -1,5 +1,5 @@
 import axios, { type AxiosProgressEvent } from 'axios'
-import type { AttachmentItem, ChatMessageRequest, ChatRefItem, ContextUsageData } from '@/types'
+import type { AttachmentItem, ChatMessageRequest, ChatRefItem, ContextUsageData, ModelSelection } from '@/types'
 import request from '@/utils/request'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
@@ -37,10 +37,23 @@ export const connectSSE = (
   return eventSource
 }
 
-/** 当前模型实际支持的思考档位（后端探测上游能力，前端据此如实渲染档位选择器）；
- * 失败静默（前端有兜底档位，不该弹全局错误） */
-export const getReasoningEfforts = async (): Promise<{ efforts: string[] }> => {
-  return request.get('/bot/efforts', { skipErrorMessage: true } as never)
+/** 指定模型实际支持的思考档位（后端按模型能力探测，前端据此如实渲染档位选择器）；
+ * 不带参数=引擎默认模型；source=custom 时探测用户自己的供应商端点。
+ * 冷缓存串行探测较慢（最长约 1 分钟），放宽超时；失败静默（前端有兜底档位） */
+export const getReasoningEfforts = async (
+  selection?: Partial<ModelSelection>,
+  provider?: { baseUrl: string; apiKey: string; apiFormat: string } | null
+): Promise<{ efforts: string[] }> => {
+  const params: Record<string, unknown> = {}
+  if (selection?.source) params.source = selection.source
+  if (selection?.model) params.model = selection.model
+  // 供应商端点配置仅存浏览器本地，随请求瞬态经过后端（不落库）
+  if (selection?.source === 'custom' && provider) {
+    params.providerBaseUrl = provider.baseUrl
+    params.providerApiKey = provider.apiKey
+    params.providerApiFormat = provider.apiFormat
+  }
+  return request.get('/bot/efforts', { params, timeout: 120000, skipErrorMessage: true } as never)
 }
 
 /** 会话上下文容量估算（窗口大小 + 按类别近似 token）；失败静默（非关键指标） */
@@ -55,13 +68,24 @@ export const getContextUsage = async (chatId: string, agentId: number): Promise<
  * 与智能体对话（统一走 MioBot 流式 Agent 引擎，SSE 信封返回全过程）：
  * MioBot（agentId=1，系统内置）与用户自定义智能体共用 /bot/chat。
  * skipUserPersist：重新生成场景，用户消息已在历史中，后端不再重复落库
+ * refs：输入框 @ / 引用的上下文清单（JSON），服务端注入模型上下文并随 user 行持久化
  */
 export const chatWithMioBot = (
   content: string,
   chatId: string,
   agentId: number,
   token: string,
-  opts: { skipUserPersist?: boolean; reasoningEffort?: string; groupSeq?: number; attachments?: AttachmentItem[]; refs?: ChatRefItem[] } = {}
+  opts: {
+    skipUserPersist?: boolean
+    reasoningEffort?: string
+    groupSeq?: number
+    attachments?: AttachmentItem[]
+    refs?: ChatRefItem[]
+    /** 当前对话模型选择（OpenCode 免费档 / 自定义供应商模型），后端按此路由 */
+    modelSelection?: ModelSelection | null
+    /** 自定义供应商端点配置（仅存浏览器本地，随请求瞬态经过后端） */
+    provider?: { baseUrl: string; apiKey: string; apiFormat: string } | null
+  } = {}
 ): EventSource => {
   const params: ConnectSSEParams = { content, chatId, agentId, token }
   if (opts.skipUserPersist) {
@@ -78,6 +102,18 @@ export const chatWithMioBot = (
   }
   if (opts.refs?.length) {
     params.refs = JSON.stringify(opts.refs)
+  }
+  if (opts.modelSelection) {
+    params.modelSource = opts.modelSelection.source
+    if (opts.modelSelection.model) {
+      params.model = opts.modelSelection.model
+    }
+  }
+  if (opts.modelSelection?.source === 'custom' && opts.provider) {
+    // 供应商端点配置仅存浏览器本地，随请求瞬态经过后端（不落库）
+    params.providerBaseUrl = opts.provider.baseUrl
+    params.providerApiKey = opts.provider.apiKey
+    params.providerApiFormat = opts.provider.apiFormat
   }
   return connectSSE('/bot/chat', params)
 }
@@ -212,90 +248,4 @@ export const generateTitle = async (
     console.error('Failed to generate title:', error)
     return null
   }
-}
-
-// 本地大模型（Ollama 直连）
-export interface ChatStreamController {
-  close: () => void
-}
-
-export const chatWithStream = (
-  content: string,
-  chatId: string,
-  agentId: number,
-  token: string,
-  history: Array<{ role: string; content: string }>,
-  onMessage: (data: string) => void,
-  onError: (error: any) => void
-): ChatStreamController => {
-  const provider = localStorage.getItem('ai-model-provider') || 'dashscope'
-
-  if (provider === 'ollama') {
-    const abortController = new AbortController()
-
-    fetch('http://localhost:11434/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: localStorage.getItem('ollama-model') || 'deepseek-r1:1.5b',
-        messages: history,
-        stream: true
-      }),
-      signal: abortController.signal
-    }).then(async (response) => {
-      if (!response.ok) {
-        const errText = await response.text().catch(() => 'Ollama 请求失败')
-        onError(new Error(errText))
-        return
-      }
-      if (!response.body) {
-        onError(new Error('无响应体'))
-        return
-      }
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let lineBuffer = ''
-
-      const handleLine = (line: string): void => {
-        if (!line.trim()) return
-        try {
-          const data = JSON.parse(line)
-          if (data.message?.content) {
-            onMessage(data.message.content)
-          }
-          if (data.done) {
-            onMessage('[DONE]')
-          }
-        } catch {
-          // 忽略解析失败的行
-        }
-      }
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        lineBuffer += decoder.decode(value, { stream: true })
-        const lines = lineBuffer.split('\n')
-        // 最后一段可能被 TCP 分包截断，留到下一轮拼接，避免丢 token
-        lineBuffer = lines.pop() ?? ''
-
-        for (const line of lines) {
-          handleLine(line)
-        }
-      }
-      if (lineBuffer) {
-        handleLine(lineBuffer)
-      }
-    }).catch(onError)
-
-    return { close: () => abortController.abort() }
-  }
-
-  const es = chatWithMioBot(content, chatId, agentId, token)
-  es.onmessage = (event: MessageEvent) => {
-    onMessage(event.data)
-  }
-  es.onerror = onError
-
-  return { close: () => es.close() }
 }

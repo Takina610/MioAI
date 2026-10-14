@@ -2,7 +2,7 @@ import { nextTick, type Ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
-import { chatWithMioBot, chatWithStream, isChatActive, reconnectChatStream, stopChat } from '@/api/chat'
+import { chatWithMioBot, isChatActive, reconnectChatStream, stopChat } from '@/api/chat'
 import { getBotMessages, type BotMessageRow } from '@/api/botMessages'
 import { beginTurn, endTurn, observeTurn } from './useAgentActivity'
 import { historyFromVersions } from './useChatMessages'
@@ -13,6 +13,7 @@ import type {
   KbContextGroup,
   McpContextServer,
   MessageBlock,
+  ModelSelection,
   PlanStep,
   QuestionAnswer,
   QuestionItem,
@@ -41,7 +42,7 @@ const RECOVERY_POLL_INTERVAL_MS = 4000
 const RECOVERY_MAX_WAIT_MS = 600000
 
 /**
- * 消息发送与流式接收：智能体 SSE（ZCode 风格事件流）与本地 Ollama 直连两种通道。
+ * 消息发送与流式接收：智能体 SSE（ZCode 风格事件流）单通道。
  * <p>事件按到达顺序写入消息的内容块（blocks）：文本/思考增量合并到同类末块、
  * tool_use 追加工具块、tool_args 流式补参数、tool_result 按 id 配对收尾——
  * 渲染时顺着块顺序显示，过程信息不再堆在回答上方。
@@ -63,9 +64,6 @@ export function useChatStream(options: {
   const router = useRouter()
   const userStore = useUserStore()
   const { messagesApi } = options
-
-  let activeStream: { close: () => void } | null = null
-  let currentStreamChatId = ''
 
   /**
    * 每会话独立 SSE 流：多会话并发执行时互不干扰——向会话 B 发消息不再杀掉
@@ -128,6 +126,10 @@ export function useChatStream(options: {
     skipUserPersist?: boolean
     /** 思考强度（none/low/medium/high 等），透传到模型 */
     reasoningEffort?: string
+    /** 当前对话模型选择（OpenCode 免费档 / 自定义供应商模型），后端按此路由 */
+    modelSelection?: ModelSelection | null
+    /** 自定义供应商端点配置（仅存浏览器本地，随请求瞬态经过后端） */
+    provider?: { baseUrl: string; apiKey: string; apiFormat: string } | null
     /** 已上传到沙箱的附件引用（选中文件时即已上传，发送只引用路径） */
     attachments?: AttachmentItem[]
     /** 输入框 @ / 引用的上下文清单（服务端注入模型上下文 + user 行持久化） */
@@ -174,7 +176,7 @@ export function useChatStream(options: {
     // 引用清单：/compact 是压缩指令本身（后端落库时自持 compact 引用块），其余透传
     const isCompactCommand = content.trim().startsWith('/compact')
     const refs = isCompactCommand
-      ? [{ type: 'compact' } as ChatRefItem]
+      ? [...(opts?.refs ?? []).filter(r => r.type !== 'compact'), { type: 'compact' } as ChatRefItem]
       : opts?.refs ?? []
 
     const existingMessages = messagesApi.getChatMessages(chatId)
@@ -224,52 +226,6 @@ export function useChatStream(options: {
 
     const token: string = localStorage.getItem('token') || ''
 
-    // 本地大模型：Ollama 直连（仅正文流）
-    const provider = localStorage.getItem('ai-model-provider') || 'dashscope'
-    if (provider === 'ollama') {
-      if (uploaded.length) {
-        message.info('本地模型暂不支持读取附件，仅发送文字')
-      }
-      if (activeStream) {
-        activeStream.close()
-        activeStream = null
-      }
-      currentStreamChatId = chatId
-
-      const history = chatMessages
-        .filter(m => m.role === 'user' || (m.role === 'assistant' && m.content))
-        .map(m => ({ role: m.role, content: m.content }))
-
-      activeStream = chatWithStream(
-        content,
-        chatId,
-        options.agentId.value,
-        token,
-        history,
-        (rawData) => {
-          if (currentStreamChatId !== chatId) return
-          if (rawData && rawData !== '[DONE]') {
-            patchMessage(chatId, aiMessageIndex, (msg) => appendTextDelta(msg, rawData))
-            followIfCurrent(chatId)
-          }
-          if (rawData === '[DONE]') {
-            messagesApi.setLoading(chatId, false)
-            activeStream = null
-            currentStreamChatId = ''
-          }
-        },
-        (error) => {
-          console.error('Ollama 错误:', error)
-          handleEmptyOrPartial(chatId, aiMessageIndex)
-          message.error('本地模型连接失败，请启动 Ollama 或在「个人设置」切换回在线模型')
-          messagesApi.setLoading(chatId, false)
-          activeStream = null
-          currentStreamChatId = ''
-        }
-      )
-      return
-    }
-
     // 同一会话残留的旧流先关（防重复）；其他会话的后台流保持不动
     closeChatStream(chatId)
 
@@ -280,6 +236,8 @@ export function useChatStream(options: {
     const es = chatWithMioBot(content, chatId, options.agentId.value, token, {
       skipUserPersist: opts?.skipUserPersist ?? false,
       reasoningEffort: opts?.reasoningEffort,
+      modelSelection: opts?.modelSelection,
+      provider: opts?.provider,
       groupSeq: opts?.groupSeq,
       attachments: uploaded,
       refs: isCompactCommand ? undefined : opts?.refs
@@ -1086,11 +1044,6 @@ export function useChatStream(options: {
     }
     recoveryCleanups.clear()
     recoveringChatIds.clear()
-    if (activeStream) {
-      activeStream.close()
-      activeStream = null
-      currentStreamChatId = ''
-    }
   }
 
   return { sendMessage, prepareChatId, cleanup, recoverPendingTurn, stopTurn }

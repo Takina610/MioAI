@@ -5,6 +5,7 @@ import App from './App.vue'
 import router from './router'
 import pinia from './store'
 import { useUserStore } from './store/user'
+import { setupModalLeaveGuard } from './utils/modalLeaveGuard'
 import './styles/global.scss'
 
 const app = createApp(App)
@@ -12,6 +13,7 @@ const app = createApp(App)
 app.use(Antd)
 app.use(router)
 app.use(pinia)
+setupModalLeaveGuard()
 
 // 挂载前向服务端校验本地 token（服务端重启会使 token 全部失效），
 // 失效则降级游客，避免页面带失效 token 发请求导致各处 40100 报错
