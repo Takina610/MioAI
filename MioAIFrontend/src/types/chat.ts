@@ -75,6 +75,22 @@ export interface QuestionAnswer {
 }
 
 /**
+ * 输入框 @ / 引用的上下文项：随消息发送，服务端据此注入模型上下文
+ * （会话转录/点名知识库检索/技能与 MCP 提醒），并随 user 行持久化还原 chips。
+ */
+export interface ChatRefItem {
+  type: 'session' | 'kb' | 'skill' | 'mcp' | 'compact'
+  /** session：被引用会话 id */
+  id?: string
+  /** 展示名（会话标题/库名/技能名/服务名） */
+  name?: string
+  /** session 归属智能体名（chip 灰字后缀） */
+  agentName?: string
+  /** kb：知识库 id */
+  kbId?: number
+}
+
+/**
  * 消息内按时间序排列的内容块（ZCode 风格：文本/思考/工具顺着流式顺序显示，
  * 不再把过程信息堆在回答上方）。
  */
@@ -138,6 +154,16 @@ export type MessageBlock =
   | {
       /** 用户主动中断标记（持久化行尾；加载历史时转为消息 stopped 态，不参与渲染） */
       type: 'stopped'
+    }
+  | {
+      /** 输入框 @ / 引用的上下文清单（随 user 行持久化，刷新后 chips 原样还原） */
+      type: 'refs'
+      items: ChatRefItem[]
+    }
+  | {
+      /** 上下文压缩边界（自动/手动压缩产生）：一行收折消息，展开看摘要全文 */
+      type: 'compact'
+      text: string
     }
   | {
       /** 动态 UI 块（render_ui 工具产出，协议 v=1）：与 text 块按时间序混合渲染进回答区 */

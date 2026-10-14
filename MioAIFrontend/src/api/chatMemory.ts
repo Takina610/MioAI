@@ -55,3 +55,22 @@ export function getConversation(conversationId: string): Promise<ChatConversatio
     method: 'get'
   })
 }
+
+/** 跨智能体的最近会话（输入框 @ 引用数据源）：附带归属智能体名/类型 */
+export interface AllSessionItem {
+  conversationId: string
+  title?: string
+  agentId?: number
+  agentName?: string
+  agentType?: number
+  updateTime?: string
+}
+
+export function getAllSessions(limit: number = 200): Promise<AllSessionItem[]> {
+  return request({
+    url: '/memory/allSessions',
+    method: 'get',
+    params: { limit },
+    skipErrorMessage: true
+  } as never)
+}

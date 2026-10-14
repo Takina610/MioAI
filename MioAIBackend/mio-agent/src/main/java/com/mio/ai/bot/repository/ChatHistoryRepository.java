@@ -30,4 +30,7 @@ public interface ChatHistoryRepository {
 
     /** 更新会话置顶标记（pinned 0/1） */
     void updatePinned(Long id, int pinned);
+
+    /** 用户跨智能体的最近会话（按更新时间倒序，输入框 @ 引用数据源） */
+    List<ChatConversationDO> listRecentByUser(Long userId, int limit);
 }

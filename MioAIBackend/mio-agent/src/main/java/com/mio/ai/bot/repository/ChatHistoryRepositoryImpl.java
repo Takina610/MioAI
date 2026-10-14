@@ -89,4 +89,13 @@ public class ChatHistoryRepositoryImpl implements ChatHistoryRepository {
         queryWrapper.eq("conversation_id", conversationId);
         return chatConversationDOMapper.selectOne(queryWrapper);
     }
+
+    @Override
+    public List<ChatConversationDO> listRecentByUser(Long userId, int limit) {
+        QueryWrapper<ChatConversationDO> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("user_id", userId)
+                .orderByDesc("update_time")
+                .last("limit " + Math.max(1, limit));
+        return chatConversationDOMapper.selectList(queryWrapper);
+    }
 }

@@ -41,7 +41,12 @@ public final class ConversationHydrator {
                 continue;
             }
             if ("user".equals(row.role())) {
-                entries.add(ConversationEntry.user(joinText(blocks)));
+                String text = joinText(blocks);
+                // 空行（如压缩指令行只带标记块）与斜杠指令行（/compact ...）不是对话内容，不进请求历史
+                String stripped = text.strip();
+                if (!stripped.isEmpty() && !stripped.startsWith("/compact")) {
+                    entries.add(ConversationEntry.user(text));
+                }
             } else if ("assistant".equals(row.role())) {
                 hydrateAssistantRow(blocks, entries, idSeq);
                 idSeq += 100;

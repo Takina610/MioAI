@@ -45,6 +45,8 @@ public final class ChatTitles {
             return null;
         }
         String cleaned = raw.strip()
+                // 输入框引用标记（[#会话名](#sess_x) 等）不是标题内容，整段剥除
+                .replaceAll("\\[[^\\]]*\\]\\(\\#(?:sess|kb|skill|mcp)_[^)]*\\)", "")
                 .replaceAll("^[#>\\s]+", "")
                 .replaceAll("[*_~`]+", "")
                 .replaceAll("^[\"'“”‘’]+|[\"'“”‘’]+$", "")

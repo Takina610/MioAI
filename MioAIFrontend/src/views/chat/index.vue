@@ -117,6 +117,10 @@
           :leaving-keys="leavingKeys"
           :ref-setter="setCardRef"
           :context-usage="contextUsage"
+          :knowledge-bases="agentInfo?.knowledgeBases"
+          :skills="agentInfo?.skills"
+          :mcp-tools="agentInfo?.mcpTools"
+          :current-chat-id="currentChatId ?? ''"
           @add-files="handleAddFiles"
           @remove-pending="handleRemovePending"
           @send="handleSend"
@@ -210,7 +214,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getAgentDetail, queryAgents, pinAgent, reorderAgents, getMyMioBotAgentId } from '@/api/agent'
 import { pinChat } from '@/api/chatMemory'
 import { useUserStore } from '@/store/user'
-import type { Agent, AttachmentItem, ChatMessage, ContextUsageData, MessageBlock, PendingAttachment, SubagentPanelTarget } from '@/types'
+import type { Agent, AgentDetail, AttachmentItem, ChatMessage, ChatRefItem, ContextUsageData, MessageBlock, PendingAttachment, SubagentPanelTarget } from '@/types'
 import { isImageName } from './attachmentUtils'
 import AuthModal from '@/components/AuthModal.vue'
 import BotPet from '@/components/bot-icon/BotPet.vue'
@@ -232,6 +236,7 @@ import { useChatMessages, generateConversationId } from './composables/useChatMe
 import { useChatStream } from './composables/useChatStream'
 import { useBotMood } from './composables/useBotMood'
 import { endTurn, syncBackendTurns } from './composables/useAgentActivity'
+import { buildRefMarkerPrefix, parseRefMarkers } from './refMarkers'
 import { usePendingCardAnimations } from './composables/usePendingCardAnimations'
 import { buildSubagentTranscript } from './subagentTranscript'
 import { truncateConversation, getReasoningEfforts, getContextUsage, uploadAttachment, deleteAttachment, getActiveTurns } from '@/api/chat'
@@ -242,7 +247,7 @@ const router = useRouter()
 const userStore = useUserStore()
 
 const agentId = ref<number>(0)
-const agentInfo = ref<Agent | null>(null)
+const agentInfo = ref<AgentDetail | null>(null)
 const authModalVisible = ref<boolean>(false)
 const personalizeVisible = ref<boolean>(false)
 const inputMessage = ref<string>('')
@@ -746,9 +751,14 @@ function selectChat(conversationId: string): void {
   loadMessages(conversationId)
 }
 
-function handleSend(): void {
-  const content = inputMessage.value.trim()
-  if (!content || isLoading.value) return
+function handleSend(refs: ChatRefItem[] = []): void {
+  let content = inputMessage.value.trim()
+  const hasCompact = refs.some(r => r.type === 'compact')
+  // Compact token 优先编排为压缩指令；随附文字作为压缩后的追问一并携带
+  if (hasCompact) {
+    content = content ? `/compact ${content}` : '/compact'
+  }
+  if ((!content && !refs.length) || isLoading.value) return
 
   // 游客仅 MioBot 可直接对话（自定义智能体引导登录），且累计只能发送两条，之后强制登录
   if (!guestCanSend()) return
@@ -765,7 +775,17 @@ function handleSend(): void {
     .filter(p => p.status === 'done' && p.item)
     .map(p => p.item as AttachmentItem)
 
-  sendMessage(content, { reasoningEffort: reasoningEffort.value, attachments })
+  // 引用编排为标记前缀（zcode 同构）：消息文本本身携带 [#名](#sess_id) 等标记，
+  // 前端渲染成彩色 token，复制/编辑/持久化的都是标记文本
+  const markerPrefix = buildRefMarkerPrefix(refs)
+  if (markerPrefix) {
+    content = content ? `${markerPrefix} ${content}` : markerPrefix
+  }
+  // 仅引用无文本：给模型一句基于引用材料继续的明确指令
+  if (!content) {
+    content = '请基于我引用的上下文继续。'
+  }
+  sendMessage(content, { reasoningEffort: reasoningEffort.value, attachments, refs })
   noteGuestTurn()
   cleanupPendingAttachments()
   inputMessage.value = ''
@@ -1122,7 +1142,9 @@ async function handleEditMessage(index: number, newContent: string, editAttachme
       deleteAttachment(a.path).catch(() => {})
     }
   }
-  sendMessage(newContent, { reasoningEffort: reasoningEffort.value, history, groupSeq: groupKey, attachments: finalAttachments })
+  // 编辑重发保留引用：从标记文本还原引用清单，服务端据此重新注入上下文
+  const editRefs = parseRefMarkers(newContent)
+  sendMessage(newContent, { reasoningEffort: reasoningEffort.value, history, groupSeq: groupKey, attachments: finalAttachments, refs: editRefs.length ? editRefs : undefined })
 }
 
 /** 该消息随发的附件（attachments 输入块）：编辑/重生成重发时沿用原路径 */

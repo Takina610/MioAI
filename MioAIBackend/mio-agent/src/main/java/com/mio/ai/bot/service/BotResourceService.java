@@ -133,6 +133,31 @@ public class BotResourceService {
             log.error("知识库检索失败, agentId={}", agentId, e);
             return KnowledgeBuild.empty();
         }
+        return toKnowledgeBuild(agentId, userId, query, outcome, startTime);
+    }
+
+    /**
+     * 按用户显式引用的知识库集合检索（输入框 @ 引用）：与绑定检索同构的注入文本与命中摘要。
+     * 失败降级为空，不阻断对话。
+     */
+    public KnowledgeBuild buildKnowledgeForKbs(java.util.Collection<Long> kbIds, Long userId, String query) {
+        if (kbIds == null || kbIds.isEmpty()) {
+            return KnowledgeBuild.empty();
+        }
+        long startTime = System.currentTimeMillis();
+        RetrievalOutcome outcome;
+        try {
+            outcome = knowledgeRetrievalService.retrieveDetailed(kbIds, query, com.mio.ai.framework.rag.RetrievalConfig.defaults());
+        } catch (Exception e) {
+            log.error("引用知识库检索失败, kbIds={}", kbIds, e);
+            return KnowledgeBuild.empty();
+        }
+        return toKnowledgeBuild(null, userId, query, outcome, startTime);
+    }
+
+    /** 命中结果 → 注入文本 + 分组摘要 + 检索日志（buildKnowledge/buildKnowledgeForKbs 共用） */
+    private KnowledgeBuild toKnowledgeBuild(Long agentId, Long userId, String query,
+                                            RetrievalOutcome outcome, long startTime) {
         List<KnowledgeRetrievalResult> results = outcome.results();
         if (results.isEmpty()) {
             return KnowledgeBuild.empty();

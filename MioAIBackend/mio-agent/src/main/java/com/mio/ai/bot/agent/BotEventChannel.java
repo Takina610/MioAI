@@ -66,11 +66,17 @@ public class BotEventChannel {
     // 本轮用户附件（MioBot 注入）：随 user 行持久化为展示块
     private volatile List<com.mio.ai.bot.model.dto.AttachmentItem> userAttachments;
 
+    // 本轮用户引用清单（MioBot 注入）：随 user 行持久化为 refs 展示块（前端 chips 还原）
+    private volatile List<Map<String, Object>> userRefs;
+
     // MCP 工具描述表（MioBot 注入）：tool_use 块附带描述，前端工具行展示名称与描述
     private volatile Map<String, String> mcpToolDesc = Map.of();
 
     // 技能名表（skillId → 名称，MioBot 注入）：工具读取 skills/<id>/ 文件时在工具行标注来源技能
     private volatile Map<String, String> skillNames = Map.of();
+
+    // 技能使用落库回调（skillId, skillName，MioBot 注入）：命中技能清单时触发，每轮每技能至多一次
+    private volatile java.util.function.BiConsumer<Long, String> skillUseListener;
 
     // 本轮已展示过技能行的技能（channel 与轮次同生命周期）：同一技能只展示一次，重复读取保持普通工具行
     private final java.util.Set<String> emittedSkills = java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -99,6 +105,11 @@ public class BotEventChannel {
         this.userAttachments = items;
     }
 
+    /** 本轮用户引用清单（@ / 引用的会话、知识库、技能、MCP 或压缩指令） */
+    public void setUserRefs(List<Map<String, Object>> refs) {
+        this.userRefs = refs;
+    }
+
     /** MCP 工具描述表（注册名 → 描述，MioBot 构造时注入）：tool_use 行据此展示工具描述 */
     public void setMcpToolDesc(Map<String, String> mcpToolDesc) {
         this.mcpToolDesc = mcpToolDesc == null ? Map.of() : mcpToolDesc;
@@ -107,6 +118,11 @@ public class BotEventChannel {
     /** 技能名表（skillId → 名称，MioBot 构造时注入）：工具行据此标注技能来源 */
     public void setSkillNames(Map<String, String> skillNames) {
         this.skillNames = skillNames == null ? Map.of() : skillNames;
+    }
+
+    /** 技能使用落库回调注入（产品侧持久化技能使用日志，skillId → skillName） */
+    public void setSkillUseListener(java.util.function.BiConsumer<Long, String> skillUseListener) {
+        this.skillUseListener = skillUseListener;
     }
 
     /** 群聊模式（MioBot 轮次开始时注入）：抑制 Agent 工具行，成员委派改走 member 块 */
@@ -543,8 +559,12 @@ public class BotEventChannel {
         emit(SseChunk.content("error", message).fields());
     }
 
-    /** 压缩边界行：水合时据此作废更早历史并以摘要续接（zcode compact boundary 对位） */
+    /**
+     * 压缩边界行：水合时据此作废更早历史并以摘要续接（zcode compact boundary 对位）。
+     * 同时下发 compact 事件——前端把压缩作为独立消息类型收折展示（自动/手动压缩同形）。
+     */
     public void persistCompact(String summary) {
+        emit(SseChunk.content("compact", summary == null ? "" : summary).fields());
         if (agentMessageService == null || userId == null) {
             return;
         }
@@ -637,6 +657,11 @@ public class BotEventChannel {
         }
     }
 
+    /** 本轮是否已有展示块（压缩轮次无输出时跳过 assistant 行落库，避免空行） */
+    public synchronized boolean hasDisplayBlocks() {
+        return !displayBlocks.isEmpty();
+    }
+
     /** 展示持久化：完整 blocks/plan/duration 落 agent_message（游客不落库）。返回是否落库成功 */
     public boolean persistDisplay(String role, String text, Long durationMs) {
         return persistDisplay(role, text, durationMs, null);
@@ -670,6 +695,13 @@ public class BotEventChannel {
                     attachBlock.put("side", "input");
                     attachBlock.put("items", itemMaps);
                     blocks.add(attachBlock);
+                }
+                List<Map<String, Object>> refs = userRefs;
+                if ("user".equals(role) && refs != null && !refs.isEmpty()) {
+                    Map<String, Object> refsBlock = new LinkedHashMap<>();
+                    refsBlock.put("type", "refs");
+                    refsBlock.put("items", refs);
+                    blocks.add(refsBlock);
                 }
                 row.setBlocks(JacksonUtil.writeValueAsString(blocks));
             } else {
@@ -808,10 +840,26 @@ public class BotEventChannel {
                 block.put("type", "skill_use");
                 block.put("name", name);
                 block.put("content", content);
+                notifySkillUse(matcher.group(1), name);
                 return name;
             }
         }
         return null;
+    }
+
+    /** 技能使用落库回调：读命中即触发（回调异常不影响 SSE 流与展示） */
+    private void notifySkillUse(String skillId, String skillName) {
+        java.util.function.BiConsumer<Long, String> listener = this.skillUseListener;
+        if (listener == null) {
+            return;
+        }
+        try {
+            listener.accept(Long.valueOf(skillId), skillName);
+        } catch (NumberFormatException ignored) {
+            // 技能路径非数字编号（不应发生），跳过
+        } catch (Exception e) {
+            log.debug("技能使用回调执行失败: {}", e.getMessage());
+        }
     }
 
     /** 展示块文本增量：合并同类末块（与前端渲染逻辑同构） */

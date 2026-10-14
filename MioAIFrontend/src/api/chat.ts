@@ -1,5 +1,5 @@
 import axios, { type AxiosProgressEvent } from 'axios'
-import type { AttachmentItem, ChatMessageRequest, ContextUsageData } from '@/types'
+import type { AttachmentItem, ChatMessageRequest, ChatRefItem, ContextUsageData } from '@/types'
 import request from '@/utils/request'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
@@ -61,7 +61,7 @@ export const chatWithMioBot = (
   chatId: string,
   agentId: number,
   token: string,
-  opts: { skipUserPersist?: boolean; reasoningEffort?: string; groupSeq?: number; attachments?: AttachmentItem[] } = {}
+  opts: { skipUserPersist?: boolean; reasoningEffort?: string; groupSeq?: number; attachments?: AttachmentItem[]; refs?: ChatRefItem[] } = {}
 ): EventSource => {
   const params: ConnectSSEParams = { content, chatId, agentId, token }
   if (opts.skipUserPersist) {
@@ -75,6 +75,9 @@ export const chatWithMioBot = (
   }
   if (opts.attachments?.length) {
     params.attachments = JSON.stringify(opts.attachments)
+  }
+  if (opts.refs?.length) {
+    params.refs = JSON.stringify(opts.refs)
   }
   return connectSSE('/bot/chat', params)
 }

@@ -9,6 +9,7 @@ import { historyFromVersions } from './useChatMessages'
 import type {
   AttachmentItem,
   ChatMessage,
+  ChatRefItem,
   KbContextGroup,
   McpContextServer,
   MessageBlock,
@@ -129,6 +130,8 @@ export function useChatStream(options: {
     reasoningEffort?: string
     /** 已上传到沙箱的附件引用（选中文件时即已上传，发送只引用路径） */
     attachments?: AttachmentItem[]
+    /** 输入框 @ / 引用的上下文清单（服务端注入模型上下文 + user 行持久化） */
+    refs?: ChatRefItem[]
     /** 编辑/重新生成时被替换掉的旧回复版本（挂到新回复上供 <n/n> 切换） */
     history?: ChatMessage[]
     /** 编辑重发：本轮版本组锚（沿用被编辑轮次，后端据此持久化版本组） */
@@ -168,8 +171,20 @@ export function useChatStream(options: {
     freshChatIds.delete(chatId)
 
     const uploaded = opts?.attachments ?? []
+    // 引用清单：/compact 是压缩指令本身（后端落库时自持 compact 引用块），其余透传
+    const isCompactCommand = content.trim().startsWith('/compact')
+    const refs = isCompactCommand
+      ? [{ type: 'compact' } as ChatRefItem]
+      : opts?.refs ?? []
 
     const existingMessages = messagesApi.getChatMessages(chatId)
+    const userBlocks: MessageBlock[] = []
+    if (uploaded.length) {
+      userBlocks.push({ type: 'attachments', side: 'input', items: uploaded })
+    }
+    if (refs.length) {
+      userBlocks.push({ type: 'refs', items: refs })
+    }
     const chatMessages = skipUserMessage
       ? [...existingMessages]
       : [...existingMessages, {
@@ -177,15 +192,7 @@ export function useChatStream(options: {
           role: 'user' as const,
           content,
           createTime: new Date(),
-          ...(uploaded.length
-            ? {
-                blocks: [{
-                  type: 'attachments' as const,
-                  side: 'input' as const,
-                  items: uploaded
-                }]
-              }
-            : {})
+          ...(userBlocks.length ? { blocks: userBlocks } : {})
         }]
     const aiMessageIndex = chatMessages.length
     messagesApi.setChatMessages(chatId, chatMessages)
@@ -274,7 +281,8 @@ export function useChatStream(options: {
       skipUserPersist: opts?.skipUserPersist ?? false,
       reasoningEffort: opts?.reasoningEffort,
       groupSeq: opts?.groupSeq,
-      attachments: uploaded
+      attachments: uploaded,
+      refs: isCompactCommand ? undefined : opts?.refs
     })
 
     // 断点续播：服务端为执行中的回合缓冲了全部事件（seq 递增），
@@ -629,6 +637,12 @@ export function useChatStream(options: {
       case 'skill_context': {
         const blocks = [...(msg.blocks ?? [])]
         blocks.push({ type: 'skill', skills: (parsed.skills ?? []) as SkillContextItem[] })
+        return { ...msg, blocks }
+      }
+      case 'compact': {
+        // 上下文压缩边界（自动/手动压缩同形）：独立消息行，展开看摘要全文
+        const blocks = [...closeOpenThinking(msg.blocks)]
+        blocks.push({ type: 'compact', text: String(parsed.content ?? '') })
         return { ...msg, blocks }
       }
       case 'usage':

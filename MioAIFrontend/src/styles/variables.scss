@@ -21,6 +21,13 @@ $border-radius: 8px;
 $shadow-light: 0 2px 8px rgba(0, 0, 0, 0.08);
 $shadow-medium: 0 4px 16px rgba(0, 0, 0, 0.12);
 
+/* 输入框/消息内引用 token 的分类色（zcode 式：每类引用一色，压缩指令为命令灰） */
+$token-session: #2aa1a9;   // 会话：主青绿
+$token-kb: #4f9e63;        // 知识库：叶绿
+$token-skill: #8b6fd6;     // 技能：紫
+$token-mcp: #d98f45;       // MCP 服务：暖橙
+$token-compact: #8c8a82;   // 压缩指令：暖灰
+
 $font-size-base: 14px;
 $font-size-lg: 16px;
 $font-size-xl: 18px;

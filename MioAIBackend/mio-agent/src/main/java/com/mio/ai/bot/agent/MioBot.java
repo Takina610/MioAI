@@ -99,6 +99,12 @@ public class MioBot {
     /** 本轮知识库检索命中摘要（控制器注入）：回答实际引用时在收尾落引用行 */
     private volatile List<Map<String, Object>> kbGroups;
 
+    /** 输入框引用上下文（控制器注入）：注入本轮模型提示词的引用材料正文 */
+    private volatile String refsContext;
+
+    /** 输入框引用清单（控制器注入）：随 user 行持久化为展示块（前端 chips 还原） */
+    private volatile List<Map<String, Object>> userRefs;
+
     /** 群聊协调器（控制器注入，普通会话为 null）：Agent 工具的 subagent_type 命中成员名时以成员自身配置运行 */
     private volatile GroupCoordinator groupCoordinator;
 
@@ -108,6 +114,14 @@ public class MioBot {
 
     public void setUserGroupSeq(Long userGroupSeq) {
         this.userGroupSeq = userGroupSeq;
+    }
+
+    public void setRefsContext(String refsContext) {
+        this.refsContext = refsContext;
+    }
+
+    public void setUserRefs(List<Map<String, Object>> userRefs) {
+        this.userRefs = userRefs;
     }
 
     public void setMcpFailures(List<String> mcpFailures) {
@@ -243,7 +257,10 @@ public class MioBot {
             // 用户中断：引擎步间/重试等待处检查取消信号，命中即停（不走兜底抢救）
             engine.setCancelSignal(() -> stopped);
 
-            if ("/compact".equals(userPrompt.strip())) {
+            if (userPrompt.strip().startsWith("/compact")) {
+                // 压缩指令也是一条消息：user 行落库（带 compact 引用块，前端渲染为 Compact token）
+                channel.setUserRefs(List.of(java.util.Map.of("type", "compact")));
+                channel.persistDisplay("user", userPrompt, null, userGroupSeq);
                 runManualCompact(engine, hydrated);
             } else {
                 Subagents launcher = new Subagents(chatModel, config, reasoningEffort,
@@ -263,6 +280,7 @@ public class MioBot {
                 boolean appendUserEntry = persistUserMessage || state.entries().isEmpty();
                 if (persistUserMessage) {
                     channel.setUserAttachments(attachments);
+                    channel.setUserRefs(userRefs);
                     channel.persistDisplay("user", userPrompt, null, userGroupSeq);
                 }
                 // WIP 行：轮次开始即落库，此后每个模型步增量刷新（进程崩溃后过程可恢复）
@@ -278,7 +296,11 @@ public class MioBot {
             channel.abortRunningTools();
             // 知识库引用行：回答实际引用了检索片段才出现（引用驱动的"使用"信号，弱相似噪声不显示）
             channel.emitKbCitations(kbGroups);
-            boolean persisted = channel.persistDisplay("assistant", null, durationMs);
+            // 压缩轮次可能无任何展示输出（compact 事件行是独立落库的）：跳过空 assistant 行
+            boolean persisted = true;
+            if (channel.hasDisplayBlocks()) {
+                persisted = channel.persistDisplay("assistant", null, durationMs);
+            }
             channel.finishAssistantWip(persisted);
             channel.usage((int) engine.inputTokens(), (int) engine.outputTokens(), durationMs);
             channel.done();
@@ -374,15 +396,15 @@ public class MioBot {
         }
     }
 
-    /** /compact：手动压缩（zcode executeManualCompact 对位），完成后以简短说明收尾 */
+    /** /compact：手动压缩（zcode executeManualCompact 对位）。压缩事件本身是独立的消息行（compact 块），无需附文 */
     private void runManualCompact(AgentEngine engine, ConversationHydrator.Hydrated hydrated) {
         if (hydrated.entries().size() < 4) {
-            channel.answerDelta("The conversation is short enough; nothing to compact yet.");
+            channel.answerDelta("会话内容还很少，暂时无需压缩。");
             return;
         }
         String summary = engine.compactNow();
         if (summary == null) {
-            channel.answerDelta("Compaction skipped: not enough conversation history to summarize.");
+            channel.answerDelta("上下文内容还不足以生成摘要，已跳过本次压缩。");
         }
     }
 
@@ -404,9 +426,13 @@ public class MioBot {
             "动漫|漫画|动画|角色|主角|人物|明星|景点|地标|旅游|旅行|风景|城市|外观|长什么样|照片|图集|手办|"
                     + "anime|manga|character|landmark|travel|scenic|destination|photos?");
 
-    /** 模型可见的用户输入：附件以 system-reminder 注入（路径 + 产出目录约定），展示正文保持原样 */
+    /** 模型可见的用户输入：附件/引用上下文以 system-reminder 注入（路径+材料正文），展示正文保持原样 */
     private String buildModelPrompt(String userPrompt, SandboxFs fs) {
         StringBuilder sb = new StringBuilder(userPrompt);
+        String refs = refsContext;
+        if (refs != null && !refs.isBlank()) {
+            sb.append("\n\n<system-reminder>\n").append(refs).append("\n</system-reminder>");
+        }
         if (!attachments.isEmpty() && fs != null && fileTransfer != null && fileTransfer.available()) {
             sb.append("\n\n<system-reminder>\n# 用户附件\n用户随本条消息上传了文件（上传已在对话外完成，"
                     + "文件就在沙箱工作区——不存在任何上传工具，不要尝试上传/下载，直接用文件工具读取）：\n");
@@ -592,8 +618,8 @@ public class MioBot {
 
         @Override
         public void compacted(String summary) {
+            // 压缩边界是独立消息行（compact 块，前端收折展示），不再附加说明文字
             channel.persistCompact(summary);
-            channel.answerDelta("\n\n[上下文已自动压缩：更早的对话已折叠为摘要，当前任务不受影响]\n\n");
         }
 
         @Override

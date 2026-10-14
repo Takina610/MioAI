@@ -21,6 +21,20 @@
       <CaretRightOutlined :rotate="processExpanded ? 90 : 0" class="caret-icon" />
     </div>
 
+    <!-- 上下文压缩边界（自动/手动压缩同形）：独立收折行，展开看摘要全文 -->
+    <div v-for="(block, ci) in compactBlocks" :key="`compact-${ci}`" class="compact-row">
+      <button type="button" class="compact-head" @click="toggleCompact(ci)">
+        <CompressOutlined class="compact-icon" />
+        <span>上下文已压缩</span>
+        <CaretRightOutlined :rotate="expandedCompacts.has(ci) ? 90 : 0" class="caret-icon" />
+      </button>
+      <CollapseTransition :open="expandedCompacts.has(ci)">
+        <div v-if="expandedCompacts.has(ci)" class="compact-summary">
+          <MarkdownView :content="block.text" />
+        </div>
+      </CollapseTransition>
+    </div>
+
     <!-- 群聊：知识库引用行固定置顶 -->
     <template v-if="groupMode">
       <ResourceRow
@@ -180,6 +194,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import {
   CaretRightOutlined,
   CheckCircleOutlined,
+  CompressOutlined,
   StopOutlined
 } from '@ant-design/icons-vue'
 import MarkdownView from '@/components/MarkdownView.vue'
@@ -306,11 +321,27 @@ onUnmounted(() => {
 const lastNonTextIndex = computed(() => {
   for (let i = props.blocks.length - 1; i >= 0; i--) {
     const type = props.blocks[i].type
+    // compact 是独立状态行（置顶渲染），不参与"过程/正文"边界判定
     if (type !== 'text' && type !== 'attachments' && type !== 'kb' && type !== 'retry'
-      && type !== 'ui' && type !== 'member') return i
+      && type !== 'ui' && type !== 'member' && type !== 'compact') return i
   }
   return -1
 })
+
+/** 上下文压缩边界块（自动/手动压缩产生）：置顶收折行渲染，展开看摘要全文 */
+const compactBlocks = computed(() =>
+  props.blocks.filter((b): b is Extract<MessageBlock, { type: 'compact' }> => b.type === 'compact')
+)
+const expandedCompacts = ref<Set<number>>(new Set())
+function toggleCompact(index: number): void {
+  const next = new Set(expandedCompacts.value)
+  if (next.has(index)) {
+    next.delete(index)
+  } else {
+    next.add(index)
+  }
+  expandedCompacts.value = next
+}
 
 const processBlocks = computed(() => {
   if (props.groupMode || lastNonTextIndex.value < 0) return []
@@ -318,7 +349,7 @@ const processBlocks = computed(() => {
   for (let i = 0; i <= lastNonTextIndex.value; i++) {
     const block = props.blocks[i]
     if (block.type === 'attachments' || block.type === 'kb' || block.type === 'member'
-      || isMirroredToolBlock(block)) continue
+      || block.type === 'compact' || isMirroredToolBlock(block)) continue
     // render_ui 的工具行不进过程区：其成品是回答区的 ui 块，过程行重复且只有原始 JSON
     if (block.type === 'tool' && block.tool === 'render_ui') continue
     // ui 块是回答内容：永不进过程区，全部按原序并入回答区（answerSegments）
@@ -574,6 +605,54 @@ function isActiveThinking(index: number): boolean {
   }
   100% {
     background-position: 100% 0;
+  }
+}
+
+// 上下文压缩边界行：收折状态行（与已完成行同语言），展开显示摘要全文
+.compact-row {
+  display: flex;
+  flex-direction: column;
+
+  .compact-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: fit-content;
+    padding: 4px 8px;
+    margin: 0 -8px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    font-size: 13px;
+    color: #5f5d55;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s;
+
+    &:hover {
+      background: #f0ede4;
+    }
+
+    .compact-icon {
+      font-size: 13px;
+      color: $primary-color;
+    }
+
+    .caret-icon {
+      font-size: 11px;
+    }
+  }
+
+  .compact-summary {
+    padding: 8px 12px;
+    margin: 4px 0 0;
+    border-left: 2px solid rgba($primary-color, 0.35);
+    background: rgba(42, 161, 169, 0.04);
+    border-radius: 0 10px 10px 0;
+    font-size: 13px;
+    color: #5f5d55;
+    max-height: 320px;
+    overflow-y: auto;
   }
 }
 

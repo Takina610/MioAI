@@ -37,7 +37,13 @@
               variant="card"
               class="msg-attachments"
             />
-            <MarkdownView class="message-text" :content="msg.content" />
+            <!-- 用户消息正文：引用标记（[#名](#sess_id) / /compact 等）本就在文本内，
+                 渲染为「纯文本 + 类型化 token」混排（不走 markdown）；
+                 旧数据无标记但有 refs 块时兜底渲染 token 组 -->
+            <div v-if="msg.content || refsOf(msg).length" class="message-text user-msg-body">
+              <RefTokenText v-if="msg.content" class="bubble-text" :content="msg.content" />
+              <RefChips v-else-if="refsOf(msg).length" class="bubble-refs" :items="refsOf(msg)" />
+            </div>
           </template>
           <div v-else class="message-edit" @keydown.esc="cancelEdit">
             <ChatInput
@@ -62,13 +68,13 @@
               class="copy-area"
               v-show="editingId !== msg.id && !(isLoading && index === messages.length - 1)"
             >
-              <a-tooltip :title="copiedMessageId === msg.id ? '已复制' : '复制'">
+              <a-tooltip v-if="displayOf(msg).content" :title="copiedMessageId === msg.id ? '已复制' : '复制'">
                 <a-button type="text" size="small" class="copy-btn" :class="{ 'copied': copiedMessageId === msg.id }" @click="copyMessage(displayOf(msg).content, msg.id)">
                   <CheckOutlined v-if="copiedMessageId === msg.id" />
                   <CopyOutlined v-else />
                 </a-button>
               </a-tooltip>
-              <a-tooltip v-if="canModify && msg.role === 'user'" title="编辑">
+              <a-tooltip v-if="canModify && msg.role === 'user' && !isCompactRequest(msg)" title="编辑">
                 <a-button type="text" size="small" class="copy-btn" @click="startEdit(msg, index)">
                   <EditOutlined />
                 </a-button>
@@ -106,6 +112,9 @@ import MarkdownView from '@/components/MarkdownView.vue'
 import MioBotMessage from './MioBotMessage.vue'
 import ChatInput from './ChatInput.vue'
 import AttachmentCards from './AttachmentCards.vue'
+import RefChips from './RefChips.vue'
+import RefTokenText from './RefTokenText.vue'
+import type { ChatRefItem } from '@/types'
 
 const props = defineProps<{
   messages: ChatMessage[]
@@ -200,6 +209,18 @@ function inputAttachmentsOf(msg: ChatMessage): AttachmentDisplay[] {
       .filter(b => b.side === 'input')
       .flatMap(b => b.items)
   )
+}
+
+/** 用户消息随发的引用清单（refs 输入块） */
+function refsOf(msg: ChatMessage): ChatRefItem[] {
+  return (msg.blocks ?? [])
+    .filter((b): b is Extract<MessageBlock, { type: 'refs' }> => b.type === 'refs')
+    .flatMap(b => b.items)
+}
+
+/** /compact 压缩指令消息：正文由 RefTokenText 渲染为 command token；复制/编辑按钮隐藏 */
+function isCompactRequest(msg: ChatMessage): boolean {
+  return msg.role === 'user' && msg.content.trim().startsWith('/compact')
 }
 
 function cancelEdit(): void {
@@ -299,6 +320,67 @@ defineExpose({ scrollToBottom, isNearBottom })
           .msg-attachments {
             justify-content: flex-end;
             margin-bottom: 8px;
+          }
+        }
+
+        // 用户气泡：引用 token 与文字同一行连续排列（zcode 式，token 即消息文本的一部分，
+        // 不分行分组）；文字过长时在自身块内换行
+        .user-msg-body {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: baseline;
+          column-gap: 8px;
+          max-width: 70%;
+          padding: 10px 14px;
+          border-radius: 12px;
+          background: #ece9de;
+          color: #141413;
+          font-size: 14px;
+          line-height: 1.6;
+          word-break: break-word;
+
+          .bubble-refs {
+            display: inline-flex;
+            max-width: 100%;
+          }
+
+          .bubble-text {
+            flex: 1 1 auto;
+            min-width: 0;
+
+            :deep(.md-view > .md-block:first-child),
+            :deep(.md-block:first-child) {
+              margin-top: 0;
+            }
+
+            :deep(.md-view > .md-block:last-child),
+            :deep(.md-block:last-child) {
+              margin-bottom: 0;
+            }
+          }
+
+          :deep(code) {
+            background: rgba(20, 20, 19, 0.08);
+          }
+
+          :deep(pre.md-code) {
+            background: rgba(20, 20, 19, 0.05);
+            border-color: transparent;
+
+            code {
+              color: #141413;
+            }
+          }
+
+          :deep(a) {
+            color: $primary-color;
+            text-decoration: underline;
+          }
+
+          :deep(blockquote) {
+            background: rgba(20, 20, 19, 0.05);
+            color: #5f5d55;
+            border-left-color: #b0aea5;
           }
         }
       }
@@ -418,35 +500,6 @@ defineExpose({ scrollToBottom, isNearBottom })
           }
         }
 
-      }
-
-      &.user .message-text {
-        background: #ece9de;
-        color: #141413;
-
-        :deep(code) {
-          background: rgba(20, 20, 19, 0.08);
-        }
-
-        :deep(pre.md-code) {
-          background: rgba(20, 20, 19, 0.05);
-          border-color: transparent;
-
-          code {
-            color: #141413;
-          }
-        }
-
-        :deep(a) {
-          color: $primary-color;
-          text-decoration: underline;
-        }
-
-        :deep(blockquote) {
-          background: rgba(20, 20, 19, 0.05);
-          color: #5f5d55;
-          border-left-color: #b0aea5;
-        }
       }
 
       &.assistant .message-text {

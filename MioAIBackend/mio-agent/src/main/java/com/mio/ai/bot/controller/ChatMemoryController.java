@@ -37,6 +37,9 @@ public class ChatMemoryController {
     @Autowired
     com.mio.ai.bot.service.ChatCascadeDeleteService chatCascadeDeleteService;
 
+    @Autowired
+    com.mio.ai.resource.service.agent.AgentService agentService;
+
 
     /**
      * 获取会话列表
@@ -127,6 +130,51 @@ public class ChatMemoryController {
         ChatConversationDO conversation = chatHistoryRepository.getChatByConversationId(chatId);
         chatHistoryRepository.updatePinned(conversation.getId(), pinned ? 1 : 0);
         return ResultUtils.success(true);
+    }
+
+    /**
+     * 跨智能体的最近会话（输入框 @ 引用数据源）：全量会话按更新时间倒序，
+     * 附带归属智能体名/类型供引用列表展示。仅返回本人会话。
+     */
+    @GetMapping("/allSessions")
+    @LogInfo
+    public BaseResponse<List<java.util.Map<String, Object>>> allSessions(
+            @RequestParam(defaultValue = "200") int limit,
+            HttpServletRequest request) {
+        Long userId = redisComponent.getUserId(request.getHeader("token"));
+        if (userId == null) {
+            return ResultUtils.success(new java.util.ArrayList<>());
+        }
+        List<ChatConversationDO> chats = chatHistoryRepository.listRecentByUser(userId, Math.min(Math.max(limit, 1), 500));
+        java.util.Map<Long, com.mio.ai.resource.model.entity.Agent> agentById = new java.util.HashMap<>();
+        try {
+            java.util.Set<Long> agentIds = chats.stream()
+                    .map(ChatConversationDO::getAgentId)
+                    .filter(java.util.Objects::nonNull)
+                    .collect(java.util.stream.Collectors.toSet());
+            if (!agentIds.isEmpty()) {
+                for (com.mio.ai.resource.model.entity.Agent agent : agentService.listByIds(agentIds)) {
+                    agentById.put(agent.getId(), agent);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("批量查询会话归属智能体失败: {}", e.getMessage());
+        }
+        List<java.util.Map<String, Object>> rows = new java.util.ArrayList<>();
+        for (ChatConversationDO chat : chats) {
+            java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+            row.put("conversationId", chat.getConversationId());
+            row.put("title", chat.getTitle());
+            row.put("agentId", chat.getAgentId());
+            row.put("updateTime", chat.getUpdateTime());
+            com.mio.ai.resource.model.entity.Agent agent = agentById.get(chat.getAgentId());
+            if (agent != null) {
+                row.put("agentName", agent.getName());
+                row.put("agentType", agent.getType());
+            }
+            rows.add(row);
+        }
+        return ResultUtils.success(rows);
     }
 
     private void checkChatOwner(String chatId, Long userId) {
