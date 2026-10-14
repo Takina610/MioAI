@@ -19,6 +19,7 @@ import java.util.Map;
  *  kb_context  知识库引用摘要   {groups:[{kbId, kbName, hits:[{fileName, snippet, score}]}]}（回合收尾按回答实际引用的文件过滤后落库，可展开看片段）
  *  ui_block    动态UI块        {block:{type:'ui',id,v,kind,...}}（render_ui 工具语义校验通过后下发，前端渲染进回答区；随展示块落库/回放，刷新后原样恢复）
  *  notice      系统提示         {content}（瞬态不落库，如 MCP 工具本轮装配失败）
+ *  auth_required 要求登录       {content}（游客体验额度用尽，前端弹登录框）
  *  usage       用量尾块        {inputTokens, outputTokens, durationMs}
  *  done        结束标记        {}
  *  stopped     用户主动中断     {}（部分过程已落库，前端状态行显示"已停止"）
@@ -130,6 +131,11 @@ public record SseChunk(Map<String, Object> fields) {
     /** 系统提示（瞬态不落库）：本轮资源装配状态等用户须知，如 MCP 工具连接失败 */
     public static SseChunk notice(String content) {
         return content("notice", content);
+    }
+
+    /** 要求登录（游客体验额度用尽等）：前端弹登录框继续 */
+    public static SseChunk authRequired(String content) {
+        return content("auth_required", content);
     }
 
     /** 知识库引用摘要（落库）：回答实际引用的检索命中，按知识库分组（hits 已截断为可读摘要） */

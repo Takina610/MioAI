@@ -218,6 +218,11 @@ function goProfile(): void {
 async function handleLogout(): Promise<void> {
   await userStore.logout()
   message.success('已退出登录')
+  // 仅内置 MioBot 页（id=1）退出后可停留游客视角，其余页面直接回首页
+  if (props.agentInfo && props.agentInfo.id !== 1) {
+    window.location.href = '/'
+    return
+  }
   window.location.reload()
 }
 

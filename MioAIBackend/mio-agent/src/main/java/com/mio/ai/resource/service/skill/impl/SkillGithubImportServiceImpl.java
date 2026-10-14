@@ -178,6 +178,8 @@ public class SkillGithubImportServiceImpl implements SkillGithubImportService {
                 + "/tree/" + branch + (skillDir.isEmpty() ? "" : "/" + skillDir), 500));
         skill.setStatus(SkillStatusEnum.ACTIVE.getCode());
         skill.setInstalled(0);
+        // GitHub 引入默认公开（可随时在技能管理页设回私有）
+        skill.setIsPublic(1);
         skillMapper.insert(skill);
 
         GithubSkillVO vo = new GithubSkillVO();
@@ -281,6 +283,8 @@ public class SkillGithubImportServiceImpl implements SkillGithubImportService {
             exist.setSourceUrl(SkillMdSupport.truncate("https://github.com/" + owner + "/" + repo
                     + "/tree/" + branch + (skillDir.isEmpty() ? "" : "/" + skillDir), 500));
             exist.setStatus(SkillStatusEnum.ACTIVE.getCode());
+            // GitHub 来源默认公开（与预导入登记一致，可随时设回私有）
+            exist.setIsPublic(1);
         }
         fetchContent(exist);
         exist.setInstalled(1);

@@ -278,6 +278,11 @@ const STATIC_SETTINGS: StaticEntry[] = [
     activate: async () => {
       close()
       await userStore.logout()
+      // 仅内置 MioBot 页（id=1）退出后可停留游客视角，其余页面直接回首页
+      if (props.agentId !== 1) {
+        window.location.href = '/'
+        return
+      }
       window.location.reload()
     } }
 ]

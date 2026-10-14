@@ -56,6 +56,8 @@ export function useChatStream(options: {
   /** 流式期间的贴底跟随：用户已滚离底部时不应拉动滚动条（由页面实现判断） */
   followStream: () => void
   scrollToChatListTop: () => void
+  /** 后端要求登录（auth_required 事件，如游客额度用尽）：页面弹登录框 */
+  onAuthRequired?: () => void
 }) {
   const router = useRouter()
   const userStore = useUserStore()
@@ -366,6 +368,18 @@ export function useChatStream(options: {
       // 不再重连，交给 onerror 走落库还原
       if (parsed.type === 'replay_unavailable' || parsed.type === 'superseded') {
         stream.reconnectAttempts = 0
+        return
+      }
+      // 要求登录（游客额度用尽）：撤掉空占位回复，提示并弹登录框，回合就此结束
+      if (parsed.type === 'auth_required') {
+        disarmStreamWatchdog(chatId)
+        messagesApi.setChatMessages(
+          chatId,
+          messagesApi.getChatMessages(chatId).filter((_, i) => i !== aiMessageIndex)
+        )
+        message.warning(String(parsed.content ?? '游客体验额度已用完，请登录后继续'))
+        options.onAuthRequired?.()
+        finishStream()
         return
       }
 

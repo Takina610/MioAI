@@ -157,6 +157,16 @@ public class AgentController {
         return ResultUtils.success(page);
     }
 
+    /**
+     * 当前用户的专属 MioBot（不存在则补建）：登录用户从内置 MioBot 页（/chat/1）
+     * 进入时据此跳转到自己的 MioBot
+     */
+    @GetMapping("/my-mio-bot")
+    public BaseResponse<Long> myMioBot(HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        return ResultUtils.success(agentService.ensurePersonalMioBot(userId));
+    }
+
     @PostMapping("/{agentId:\\d+}/publish")
     @CacheEvict(value = "agents", allEntries = true)
     public BaseResponse<String> publishAgent(

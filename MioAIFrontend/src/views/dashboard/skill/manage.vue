@@ -82,11 +82,7 @@
                     <FileTextOutlined />
                     <span>{{ (skill.files?.length || 0) + 1 }} 文件</span>
                   </span>
-                  <span
-                    v-if="!skill.repoOwner && skill.installed === 1"
-                    class="public-toggle"
-                    @click.stop
-                  >
+                  <span class="public-toggle" @click.stop>
                     <a-switch
                       size="small"
                       :checked="skill.isPublic === 1"

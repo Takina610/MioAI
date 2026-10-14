@@ -5,7 +5,7 @@ import { addAgentMcp, removeAgentMcpByMcpId } from '@/api/agentMcp'
 import { addAgentSkill, removeAgentSkillBySkillId } from '@/api/agentSkill'
 import { getPublicKnowledgeBases, queryKnowledgeBases, queryDocuments, type Document } from '@/api/knowledgeBase'
 import { getPublicMcpTools, queryMcpTools } from '@/api/mcpTool'
-import { querySkills } from '@/api/skill'
+import { getPlazaSkills, installPlazaSkill, installSkill, querySkills } from '@/api/skill'
 import { parseMcpTools } from '@/utils/mcpTool'
 import type { AgentDetail, KnowledgeBase, McpTool, Skill } from '@/types'
 
@@ -25,6 +25,7 @@ export function useAgentResources(agentId: number, agentDetail: Ref<AgentDetail 
   const customKnowledgeBases = ref<KnowledgeBase[]>([])
   const publicMcpTools = ref<McpTool[]>([])
   const customMcpTools = ref<McpTool[]>([])
+  const publicSkills = ref<Skill[]>([])
   const customSkills = ref<Skill[]>([])
   const selectedKnowledgeIds = ref<number[]>([])
   const selectedMcpIds = ref<number[]>([])
@@ -85,12 +86,28 @@ export function useAgentResources(agentId: number, agentDetail: Ref<AgentDetail 
 
   async function fetchSkills(): Promise<void> {
     try {
-      const res = await querySkills({ current: 1, pageSize: 100 })
-      // 未安装的技能没有内容，不进入绑定候选
-      customSkills.value = (res.records || []).filter(skill => skill.installed === 1)
+      const [plazaRes, mineRes] = await Promise.all([
+        getPlazaSkills({ current: 1, size: 100 }),
+        querySkills({ current: 1, pageSize: 100 })
+      ])
+      publicSkills.value = plazaRes.records || []
+      customSkills.value = mineRes.records || []
     } catch (e) {
       console.error(e)
     }
+  }
+
+  /** 已拥有判定（与后端同规则）：GitHub 来源按仓库坐标，自导入按名称 */
+  function findOwnedCopy(plaza: Skill): Skill | undefined {
+    if (plaza.repoOwner) {
+      const base = (p?: string) => (p || '').split('/').pop() || ''
+      return customSkills.value.find(s =>
+        s.repoOwner === plaza.repoOwner &&
+        s.repoName === plaza.repoName &&
+        base(s.skillPath) === base(plaza.skillPath))
+    }
+    const name = plaza.name?.toLowerCase()
+    return customSkills.value.find(s => s.name?.toLowerCase() === name)
   }
 
   async function fetchKnowledgeDocuments(kbId: number, scope: DocScope): Promise<void> {
@@ -205,7 +222,24 @@ export function useAgentResources(agentId: number, agentDetail: Ref<AgentDetail 
     addSkillLoading.value = true
     try {
       await Promise.all(
-        selectedSkillIds.value.map(skillId => addAgentSkill({ agentId, skillId, enabled: 1 }))
+        selectedSkillIds.value.map(async skillId => {
+          const mine = customSkills.value.find(s => s.id === skillId)
+          if (!mine) {
+            // 广场技能：已拥有则绑自己的副本，否则先安装一份副本再绑
+            const plaza = publicSkills.value.find(s => s.id === skillId)
+            if (!plaza) {
+              throw new Error('skill not found')
+            }
+            const owned = plaza.owned ? findOwnedCopy(plaza) : undefined
+            skillId = owned ? owned.id : (await installPlazaSkill(skillId)).id
+          }
+          // 未安装的技能（GitHub 引入仅登记）先安装拿到内容，再绑定
+          const target = customSkills.value.find(s => s.id === skillId)
+          if (target && target.installed !== 1) {
+            await installSkill(skillId)
+          }
+          return addAgentSkill({ agentId, skillId, enabled: 1 })
+        })
       )
       message.success('添加成功')
       skillDrawerVisible.value = false
@@ -240,6 +274,7 @@ export function useAgentResources(agentId: number, agentDetail: Ref<AgentDetail 
     customKnowledgeBases,
     publicMcpTools,
     customMcpTools,
+    publicSkills,
     customSkills,
     selectedKnowledgeIds,
     selectedMcpIds,

@@ -48,4 +48,24 @@ public class ChatRateLimiter {
             log.warn("对话限流检查异常，放行本次请求: {}, {}", ownerKey, e.getMessage());
         }
     }
+
+    /**
+     * 游客累计轮数配额：同一游客标识生命周期内最多 limitTotal 轮，超出必须登录。
+     * 允许时才消耗配额（计数 +1）；Redis 异常放行不阻断主流程
+     *
+     * @return true = 本次轮次允许
+     */
+    public boolean tryGuestTurn(String ownerKey, int limitTotal) {
+        String key = "mio:chat-guest-turns:" + ownerKey;
+        try {
+            Long count = stringRedisTemplate.opsForValue().increment(key);
+            if (count != null && count == 1) {
+                stringRedisTemplate.expire(key, Duration.ofDays(30));
+            }
+            return count == null || count <= limitTotal;
+        } catch (Exception e) {
+            log.warn("游客配额检查异常，放行本次请求: {}, {}", ownerKey, e.getMessage());
+            return true;
+        }
+    }
 }

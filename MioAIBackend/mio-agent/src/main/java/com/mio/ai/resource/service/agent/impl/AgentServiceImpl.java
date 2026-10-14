@@ -174,9 +174,12 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         if (agent == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "智能体不存在");
         }
-        // 内置智能体（user_id 为空，如 MioBot）与通用型智能体不可删除
+        // 内置智能体（user_id 为空，如 MioBot）与通用型智能体不可删除；个人专属 MioBot 同样不可删除
         if (agent.getUserId() == null || Objects.equals(agent.getType(), AgentTypeEnum.GENERAL.getCode())) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "内置智能体不可删除");
+        }
+        if (Objects.equals(agent.getType(), AgentTypeEnum.MIOBOT.getCode())) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "MioBot 不可删除");
         }
         if (!agent.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限删除该智能体");
@@ -293,6 +296,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         LambdaQueryWrapper<Agent> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(StringUtils.isNotBlank(request.getName()), Agent::getName, request.getName())
                 .eq(request.getUserId() != null, Agent::getUserId, request.getUserId())
+                .eq(request.getType() != null, Agent::getType, request.getType())
                 .ne(Agent::getType, AgentTypeEnum.GENERAL.getCode())
                 // 置顶分组在前，组内按手动排序，未排序项按最近更新回退
                 .orderByDesc(Agent::getPinned)
@@ -349,16 +353,24 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
     public Page<AgentVO> getPublicAgents(long current, long size, Long userId) {
         Page<Agent> page = new Page<>(current, size);
         LambdaQueryWrapper<Agent> wrapper = new LambdaQueryWrapper<>();
-        // 内置智能体不进公共查询：广场的 MioBot 槽位按当前用户单独装配
+        // 内置智能体不进公共查询：广场的 MioBot 槽位按当前用户单独装配；
+        // 个人专属 MioBot（type=3）同样不进广场
         wrapper.eq(Agent::getIsPublic, 1)
                 .eq(Agent::getStatus, AgentStatusEnum.PUBLISHED.getCode())
                 .isNotNull(Agent::getUserId)
+                .ne(Agent::getType, AgentTypeEnum.MIOBOT.getCode())
                 .orderByDesc(Agent::getCreateTime);
         Page<Agent> agentPage = this.page(page, wrapper);
+        Agent builtin = this.getById(MioBot.AGENT_ID);
+        // 官方 MioBot 槽位独占该名字：用户自建的同名智能体不再作为第二个 MioBot 出现
+        String officialName = builtin != null && builtin.getName() != null ? builtin.getName() : "";
         Page<AgentVO> voPage = new Page<>(agentPage.getCurrent(), agentPage.getSize(), agentPage.getTotal());
         List<AgentVO> records = new ArrayList<>();
         appendMioBotSlot(records, userId);
-        agentPage.getRecords().forEach(a -> records.add(convertToVO(a)));
+        agentPage.getRecords().stream()
+                .filter(a -> !officialName.equals(a.getName()))
+                .map(this::convertToVO)
+                .forEach(records::add);
         voPage.setRecords(records);
         return voPage;
     }
@@ -776,5 +788,46 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限操作该智能体");
         }
         return agent;
+    }
+
+    /**
+     * 每个用户一份专属 MioBot（type=3）：注册时创建；历史用户/误删场景在下次调用时补建。
+     * 初始配置复制内置 MioBot（id=1），行为一致且可自由编辑
+     */
+    @Override
+    public Long ensurePersonalMioBot(Long userId) {
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
+        }
+        Agent existing = this.getOne(new LambdaQueryWrapper<Agent>()
+                .eq(Agent::getUserId, userId)
+                .eq(Agent::getType, AgentTypeEnum.MIOBOT.getCode())
+                .orderByDesc(Agent::getId)
+                .last("LIMIT 1"), false);
+        if (existing != null) {
+            return existing.getId();
+        }
+        Agent builtin = this.getById(MioBot.AGENT_ID);
+        if (builtin == null) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "内置 MioBot 不存在，无法创建个人 MioBot");
+        }
+        Agent copy = new Agent();
+        copy.setUserId(userId);
+        copy.setName(builtin.getName());
+        copy.setDescription(builtin.getDescription());
+        copy.setType(AgentTypeEnum.MIOBOT.getCode());
+        copy.setStatus(AgentStatusEnum.PUBLISHED.getCode());
+        copy.setIsPublic(0);
+        copy.setUsageCount(0);
+        copy.setVersion(builtin.getVersion());
+        // 用户在内置 MioBot 上保存过的个性化（人设/图标）带入副本，体验连续
+        com.mio.ai.resource.model.entity.AgentUserConfig override =
+                agentUserConfigService.getOverride(userId, MioBot.AGENT_ID);
+        copy.setSystemPrompt(override != null && override.getSystemPrompt() != null
+                && !override.getSystemPrompt().isBlank() ? override.getSystemPrompt() : builtin.getSystemPrompt());
+        copy.setIcon(override != null && override.getIcon() != null ? override.getIcon() : builtin.getIcon());
+        this.save(copy);
+        LOGGER.info("为用户 {} 创建个人 MioBot, agentId={}", userId, copy.getId());
+        return copy.getId();
     }
 }

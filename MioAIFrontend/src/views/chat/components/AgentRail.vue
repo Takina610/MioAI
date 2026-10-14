@@ -104,6 +104,25 @@
             @toggle-pin="emit('toggle-pin', $event)"
           />
         </div>
+
+        <!-- 群聊独立区块（不入"我的智能体"排序）：按服务端顺序静态展示，不参与拖动排序 -->
+        <template v-if="groups?.length">
+          <div v-if="expanded" class="rail-group-label">群聊</div>
+          <div v-else class="rail-group-divider" />
+          <div class="rail-drag-zone">
+            <RailAgentItem
+              v-for="element in groups"
+              :key="element.id"
+              :group-state="agentExecutingStates.get(element.id)"
+              :agent="element"
+              :expanded="expanded"
+              :current-agent-id="currentAgentId"
+              :icon="iconByAgent.get(element.id)"
+              @open="emit('select', $event)"
+              @toggle-pin="emit('toggle-pin', $event)"
+            />
+          </div>
+        </template>
       </div>
 
       <button
@@ -128,8 +147,10 @@ import { parseBotIcon, type BotIconConfig } from '@/components/bot-icon/types'
 import type { Agent } from '@/types'
 
 const props = defineProps<{
-  /** 我的智能体（自定义 + 群聊，服务端已按 置顶→手动序→更新时间 排序） */
+  /** 我的智能体（自定义 + 专属 MioBot，不含群聊；服务端已按 置顶→手动序→更新时间 排序） */
   agents: Agent[]
+  /** 群聊独立区块（type=2），不参与"我的智能体"的置顶与拖动排序 */
+  groups?: Agent[]
   /** 当前对话的智能体 id（高亮锚点） */
   currentAgentId: number
   /** 轨道是否展示（相位=都展开 或 悬浮 peek） */
@@ -155,7 +176,7 @@ const emit = defineEmits<{
 /** agent.icon JSON → BotIconConfig（缺失/非法回退头像，群聊回退群头像） */
 const iconByAgent = computed(() => {
   const map = new Map<number, BotIconConfig | null>()
-  for (const agent of props.agents) {
+  for (const agent of [...props.agents, ...(props.groups ?? [])]) {
     map.set(agent.id, agent.type === 2 ? null : parseBotIcon(agent.icon))
   }
   return map

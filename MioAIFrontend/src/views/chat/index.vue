@@ -9,7 +9,8 @@
     }"
   >
     <AgentRail
-      :agents="myAgents"
+      :agents="railSoloAgents"
+      :groups="railGroupAgents"
       :current-agent-id="agentId"
       :visible="railOpen || railPeeking"
       :expanded="agentRailExpanded"
@@ -206,7 +207,7 @@
 import { ref, computed, onMounted, onUnmounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getAgentDetail, queryAgents, pinAgent, reorderAgents } from '@/api/agent'
+import { getAgentDetail, queryAgents, pinAgent, reorderAgents, getMyMioBotAgentId } from '@/api/agent'
 import { pinChat } from '@/api/chatMemory'
 import { useUserStore } from '@/store/user'
 import type { Agent, AttachmentItem, ChatMessage, ContextUsageData, MessageBlock, PendingAttachment, SubagentPanelTarget } from '@/types'
@@ -346,10 +347,14 @@ onBeforeUnmount(clearSidebarRetract)
 // ---------- 会话搜索命令面板 ----------
 const searchModalVisible = ref(false)
 
-// ---------- 智能体左轨：我的智能体（含群聊）+ 创建群聊入口 ----------
+// ---------- 智能体左轨：我的智能体（不含群聊）+ 群聊独立区块 + 创建群聊入口 ----------
 const agentRailExpanded = ref(false)
 const myAgents = ref<Agent[]>([])
 const groupModalVisible = ref(false)
+
+/** 左轨"我的智能体"：自定义 + 专属 MioBot，群聊独立区块展示 */
+const railSoloAgents = computed(() => myAgents.value.filter(a => a.type !== 2))
+const railGroupAgents = computed(() => myAgents.value.filter(a => a.type === 2))
 
 /** 左轨常驻展示：登录且相位 0（都展开） */
 const railOpen = computed(() => userStore.isLoggedIn && sidebarPhase.value === 0)
@@ -499,7 +504,11 @@ const streamApi = useChatStream({
   updateTitle: updateChatTitleWithTypewriter,
   scrollToBottom,
   followStream,
-  scrollToChatListTop
+  scrollToChatListTop,
+  // 后端游客配额用尽（auth_required 事件）：撤掉占位回复并弹登录框
+  onAuthRequired: () => {
+    authModalVisible.value = true
+  }
 })
 const { sendMessage, prepareChatId, cleanup: cleanupStream, stopTurn } = streamApi
 
@@ -741,11 +750,8 @@ function handleSend(): void {
   const content = inputMessage.value.trim()
   if (!content || isLoading.value) return
 
-  // 游客仅 MioBot 可直接对话，自定义智能体引导登录
-  if (agentId.value !== 1 && !userStore.isLoggedIn) {
-    authModalVisible.value = true
-    return
-  }
+  // 游客仅 MioBot 可直接对话（自定义智能体引导登录），且累计只能发送两条，之后强制登录
+  if (!guestCanSend()) return
 
   // 附件在选中时已上传；仍在途的门控等待，失败的单卡跳过并提示
   if (pendingAttachments.value.some(p => p.status === 'uploading')) {
@@ -760,6 +766,7 @@ function handleSend(): void {
     .map(p => p.item as AttachmentItem)
 
   sendMessage(content, { reasoningEffort: reasoningEffort.value, attachments })
+  noteGuestTurn()
   cleanupPendingAttachments()
   inputMessage.value = ''
 }
@@ -768,11 +775,36 @@ function handleSend(): void {
 function sendFromUi(text: string): void {
   const content = text.trim()
   if (!content || isLoading.value) return
-  if (agentId.value !== 1 && !userStore.isLoggedIn) {
-    authModalVisible.value = true
-    return
-  }
+  if (!guestCanSend()) return
   sendMessage(content, { reasoningEffort: reasoningEffort.value })
+  noteGuestTurn()
+}
+
+// ---------- 游客对话限制：仅 MioBot（内置 id=1）可聊，累计两条后强制登录 ----------
+const MIOBOT_AGENT_ID = 1
+const GUEST_TURN_LIMIT = 2
+const GUEST_TURN_KEY = 'guest-turn-count'
+const guestTurnCount = ref(Number(localStorage.getItem(GUEST_TURN_KEY) || '0'))
+
+/** 游客发送门禁：额度用尽弹登录框；登录用户/自定义智能体沿用原登录引导 */
+function guestCanSend(): boolean {
+  if (userStore.isLoggedIn) return true
+  if (agentId.value !== MIOBOT_AGENT_ID) {
+    authModalVisible.value = true
+    return false
+  }
+  if (guestTurnCount.value >= GUEST_TURN_LIMIT) {
+    message.warning(`游客最多可发送 ${GUEST_TURN_LIMIT} 条消息，登录后继续对话`)
+    authModalVisible.value = true
+    return false
+  }
+  return true
+}
+
+function noteGuestTurn(): void {
+  if (userStore.isLoggedIn) return
+  guestTurnCount.value += 1
+  localStorage.setItem(GUEST_TURN_KEY, String(guestTurnCount.value))
 }
 
 /** 停止按钮：中断当前会话正在执行的轮次（后端停止引擎，界面由 stopped 事件/恢复轮询收尾） */
@@ -1125,8 +1157,45 @@ function handleKeyboardShortcut(e: KeyboardEvent): void {
 }
 
 function handleAuthSuccess(): void {
+  // 在内置 MioBot 页登录：直接转到该用户的专属 MioBot（补建失败再原地刷新）
+  if (agentId.value === MIOBOT_AGENT_ID && tryRedirectToMyMioBot()) return
   window.location.reload()
 }
+
+// ---------- 登录用户访问内置 MioBot 页（/chat/1）→ 跳转自己的专属 MioBot ----------
+let mioBotRedirecting = false
+
+/** 发起跳转；返回 true 表示跳转已在途或已开始（调用方不应再做其他收尾） */
+function tryRedirectToMyMioBot(): boolean {
+  if (mioBotRedirecting) return true
+  if (!userStore.isLoggedIn || agentId.value !== MIOBOT_AGENT_ID) return false
+  mioBotRedirecting = true
+  getMyMioBotAgentId()
+    .then(ownId => {
+      if (ownId && ownId !== MIOBOT_AGENT_ID) {
+        window.location.href = `/chat/${ownId}`
+        return
+      }
+      // 补建异常/无个人 MioBot：复位标志，交给调用方兜底
+      mioBotRedirecting = false
+      if (agentId.value === MIOBOT_AGENT_ID) window.location.reload()
+    })
+    .catch(() => {
+      // 补建失败（网络/后端异常）：复位标志并原地刷新回到确定状态
+      mioBotRedirecting = false
+      if (agentId.value === MIOBOT_AGENT_ID) window.location.reload()
+    })
+  return true
+}
+
+// 登录态就绪（含刷新后恢复登录）且停留在 /chat/1 时补跳；与 handleAuthSuccess 由标志去重
+watch(
+  () => [userStore.isLoggedIn, agentId.value],
+  ([loggedIn, id]) => {
+    if (loggedIn && id === MIOBOT_AGENT_ID) tryRedirectToMyMioBot()
+  },
+  { immediate: true }
+)
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyboardShortcut)

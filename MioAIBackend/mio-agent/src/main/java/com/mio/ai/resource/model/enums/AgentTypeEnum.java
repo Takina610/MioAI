@@ -13,7 +13,9 @@ public enum AgentTypeEnum {
     GENERAL(0, "内置智能体"),
     CUSTOM(1, "自定义智能体"),
     /** 多个成员智能体的集合：对话时由调度中枢按任务委派成员执行 */
-    GROUP(2, "群聊智能体");
+    GROUP(2, "群聊智能体"),
+    /** 注册时为每个用户创建的专属 MioBot 副本（行为同内置 MioBot，可编辑不可删除） */
+    MIOBOT(3, "个人MioBot");
 
     private final int code;
     private final String desc;

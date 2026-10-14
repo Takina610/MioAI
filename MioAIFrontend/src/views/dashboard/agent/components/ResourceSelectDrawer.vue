@@ -19,6 +19,7 @@
           <template v-for="item in tab.items" :key="item.id">
             <slot :item="item" />
           </template>
+          <div v-if="!tab.items.length" class="drawer-empty">暂无可选内容</div>
         </div>
       </a-tab-pane>
     </a-tabs>
@@ -33,7 +34,7 @@
 </template>
 
 <script setup lang="ts" generic="T extends { id: number }">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 
 export interface ResourceTab<T> {
@@ -42,7 +43,7 @@ export interface ResourceTab<T> {
   items: T[]
 }
 
-defineProps<{
+const props = defineProps<{
   open: boolean
   title: string
   createLabel: string
@@ -61,7 +62,19 @@ defineSlots<{
   default(props: { item: T }): void
 }>()
 
-const activeTab = ref('public')
+// 默认激活第一个 tab（技能抽屉只有 key='skills' 一个 tab，写死 'public' 会导致内容面板永远空白）
+const activeTab = ref('')
+
+watch(
+  () => props.tabs,
+  tabs => {
+    if (!tabs.length) return
+    if (!tabs.some(t => t.key === activeTab.value)) {
+      activeTab.value = tabs[0].key
+    }
+  },
+  { immediate: true, deep: true }
+)
 </script>
 
 <style lang="scss" scoped>
@@ -69,6 +82,13 @@ const activeTab = ref('public')
   display: flex;
   flex-direction: column;
   gap: 8px;
+
+  .drawer-empty {
+    padding: 24px 0;
+    text-align: center;
+    font-size: 13px;
+    color: #8c8a82;
+  }
 }
 
 .cancel-btn {

@@ -134,8 +134,8 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill> implements
         LambdaQueryWrapper<Skill> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Skill::getStatus, SkillStatusEnum.ACTIVE.getCode())
                 .eq(Skill::getInstalled, 1)
-                // GitHub 来源天然公开；自导入技能需本人显式公开
-                .and(w -> w.eq(Skill::getIsPublic, 1).or().isNotNull(Skill::getRepoOwner))
+                // 进广场统一以 is_public 为准：GitHub 引入默认公开，也可显式设回私有
+                .eq(Skill::getIsPublic, 1)
                 .orderByDesc(Skill::getUpdateTime);
         Page<Skill> page = this.page(new Page<>(safeCurrent, safePageSize), wrapper);
 
@@ -171,12 +171,7 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill> implements
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "技能不存在");
         }
         checkOwner(skill, userId);
-        if (StrUtil.isNotBlank(skill.getRepoOwner())) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "GitHub 来源技能本身公开，无需设置");
-        }
-        if (!Integer.valueOf(1).equals(skill.getInstalled())) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "技能未安装，没有可分享的内容");
-        }
+        // 任何来源（GitHub 引入/自导入）、任何安装状态都可以自由设置是否公开
         skill.setIsPublic(isPublic ? 1 : 0);
         skill.setUpdateTime(new Date());
         this.updateById(skill);
@@ -193,9 +188,8 @@ public class SkillServiceImpl extends ServiceImpl<SkillMapper, Skill> implements
         if (!Integer.valueOf(1).equals(source.getStatus()) || !Integer.valueOf(1).equals(source.getInstalled())) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "该技能不可安装");
         }
-        boolean repoSourced = StrUtil.isNotBlank(source.getRepoOwner());
-        // 防止凭 id 摸取未公开的自导入技能
-        if (!repoSourced && !Integer.valueOf(1).equals(source.getIsPublic())) {
+        // 广场只陈列 is_public=1 的技能，防止凭 id 摸取未公开技能
+        if (!Integer.valueOf(1).equals(source.getIsPublic())) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "该技能未公开");
         }
         Set<String> ownedRepoKeys = new HashSet<>();

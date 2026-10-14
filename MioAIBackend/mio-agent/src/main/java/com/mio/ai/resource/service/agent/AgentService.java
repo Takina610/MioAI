@@ -72,4 +72,10 @@ public interface AgentService extends IService<Agent> {
      * 从广场模板复制一份为当前用户的草稿智能体（含可读的资源绑定），返回新智能体ID
      */
     Long forkAgent(Long templateId, Long userId);
+
+    /**
+     * 确保当前用户拥有专属 MioBot（type=3）：注册时创建；已被历史数据遗漏（含误删）时补建。
+     * 返回该 MioBot 的智能体 ID
+     */
+    Long ensurePersonalMioBot(Long userId);
 }

@@ -54,6 +54,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     @Autowired
     RedisComponent redisComponent;
 
+    @Autowired
+    org.springframework.context.ApplicationEventPublisher eventPublisher;
+
     /**
      * 用户注册
      *
@@ -96,6 +99,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         if (!saveResult) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "注册失败，数据库错误");
         }
+        // 注册后初始化（如创建专属 MioBot）由上层模块监听完成，失败不影响账号本身
+        eventPublisher.publishEvent(new com.mio.ai.user.event.UserRegisteredEvent(user.getId()));
         return user.getId();
     }
 

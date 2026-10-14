@@ -77,6 +77,14 @@ export function queryAgents(data: AgentQueryRequest): Promise<PageResponse<Agent
   })
 }
 
+/** 当前用户的专属 MioBot（不存在则补建），返回智能体 ID */
+export function getMyMioBotAgentId(): Promise<number> {
+  return request({
+    url: '/agents/my-mio-bot',
+    method: 'get'
+  })
+}
+
 export function getPublicAgents(params?: { current?: number; size?: number }): Promise<PageResponse<Agent>> {
   return request({
     url: '/agents/market',

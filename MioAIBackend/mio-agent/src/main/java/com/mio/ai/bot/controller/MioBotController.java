@@ -152,6 +152,10 @@ public class MioBotController {
     @org.springframework.beans.factory.annotation.Value("${mio.ai.chat.turns-per-minute:10}")
     private int turnsPerMinute;
 
+    /** 游客累计可发送的对话轮数（按 IP 记账），超出必须登录 */
+    @org.springframework.beans.factory.annotation.Value("${mio.ai.chat.guest-max-turns:2}")
+    private int guestMaxTurns;
+
     @Autowired
     private ChatRateLimiter chatRateLimiter;
 
@@ -225,6 +229,12 @@ public class MioBotController {
         Long userId = StrUtil.isBlank(token) ? null : redisComponent.getUserId(token);
         long resolvedAgentId = agentId != null ? agentId : MioBot.AGENT_ID;
         String ownerKey = userId != null ? "u:" + userId : "guest:" + clientIp(httpRequest);
+
+        // 游客累计配额：超出必须登录（拒绝发生在占用 chatId 之前）
+        if (userId == null && !chatRateLimiter.tryGuestTurn(ownerKey, guestMaxTurns)) {
+            return emitAuthRequiredReply("游客最多可发送 " + guestMaxTurns
+                    + " 条消息，登录后可继续对话");
+        }
 
         // 频率窗口与并发上限：游客敞口最大，一并约束（拒绝发生在占用 chatId 之前）
         try {
@@ -698,6 +708,25 @@ public class MioBotController {
         })) {
             SseStreams.sendTyped(emitter, SseChunk.content("error",
                     "系统繁忙：当前对话任务数已达上限，请稍后重试。").fields(), 1);
+            try {
+                emitter.complete();
+            } catch (IllegalStateException ignored) {
+            }
+        }
+        return emitter;
+    }
+
+    /** 要求登录的单条提示（auth_required + done）：前端撤掉占位回复并弹登录框 */
+    private SseEmitter emitAuthRequiredReply(String notice) {
+        SseEmitter emitter = new SseEmitter(SseStreams.CHAT_TIMEOUT_MS);
+        if (!com.mio.ai.bot.agent.TurnExecutors.execute(() -> {
+            SseStreams.sendTyped(emitter, SseChunk.authRequired(notice).fields(), 1);
+            SseStreams.sendTyped(emitter, SseChunk.done().fields(), 2);
+            try {
+                emitter.complete();
+            } catch (IllegalStateException ignored) {
+            }
+        })) {
             try {
                 emitter.complete();
             } catch (IllegalStateException ignored) {

@@ -134,8 +134,9 @@ async function fetchAgents(): Promise<void> {
   if (!userStore.isLoggedIn) return
   loading.value = true
   try {
-    const res: PageResponse<Agent> = await queryAgents({ current: 1, pageSize: 100, type: 1 })
-    agentList.value = res.records || []
+    // 群聊是成员智能体的集合而非应用，不在"我的智能体"展示
+    const res: PageResponse<Agent> = await queryAgents({ current: 1, pageSize: 100 })
+    agentList.value = (res.records || []).filter(agent => agent.type !== 2)
   } catch (e) {
     console.error(e)
   } finally {

@@ -239,7 +239,7 @@
           :icon="ThunderboltOutlined"
           :name="skill.name"
           :description="skill.description"
-          :count="(skill.files?.length || 0) + 1"
+          :count="skill.files?.length ? skill.files.length + 1 : 0"
           :count-icon="FileTextOutlined"
           @select="toggleSkillSelection(skill.id)"
           @remove="handleRemoveSkill(skill.id)"
@@ -299,6 +299,7 @@ const {
   customKnowledgeBases,
   publicMcpTools,
   customMcpTools,
+  publicSkills,
   customSkills,
   selectedKnowledgeIds,
   selectedMcpIds,
@@ -334,7 +335,8 @@ const mcpTabs = computed(() => [
 ])
 
 const skillTabs = computed(() => [
-  { key: 'skills', label: '技能', items: customSkills.value }
+  { key: 'public', label: '技能广场', items: publicSkills.value },
+  { key: 'custom', label: '我的技能', items: customSkills.value }
 ])
 
 function handleEditSuccess(): void {
