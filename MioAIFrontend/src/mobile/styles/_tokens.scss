@@ -1,0 +1,48 @@
+/**
+ * 移动端样式令牌与 mixin（样式侧单一事实来源）。
+ *
+ * 断点切换机制：JS 依据 matchMedia 在 <html> 上维护 `is-compact` / `is-mobile`
+ * / `is-tablet` / `is-narrow` / `is-touch` 标记（见 ../useIsMobile.ts）。
+ * mobile 层样式统一以 `html.is-mobile` 这类前缀书写而不写 `@media`：
+ *  1. 与组件 scoped 样式同处一个样式块时（partial 被组件 @import），
+ *     `html.is-mobile .foo` 的特异性高于组件内 `.foo[data-v-hash]`，
+ *     覆盖无需 !important 竞争；
+ *  2. 断点只在 breakpoints.ts 定义一次，不会与媒体查询字面量漂移。
+ *
+ * 例外：纯数值栅格（图表/指标卡列数）继续用 @media，因为它们是"随宽度连续变化"
+ * 的排版而非"两种外壳形态"。
+ */
+
+/** 与 breakpoints.ts 对齐 */
+$bp-compact: 480px;
+$bp-mobile: 768px;
+$bp-tablet: 960px;
+$bp-narrow: 1200px;
+
+/* ---------- 安全区（iOS 刘海 / 底部横条） ---------- */
+
+/// 贴底元素的内边距（输入栏、悬浮操作条）
+@mixin safe-area-bottom($base: 0px) {
+  padding-bottom: calc(#{$base} + env(safe-area-inset-bottom, 0px));
+}
+
+/// 左右安全区（横屏刘海）
+@mixin safe-area-inline($base: 0px) {
+  padding-left: calc(#{$base} + env(safe-area-inset-left, 0px));
+  padding-right: calc(#{$base} + env(safe-area-inset-right, 0px));
+}
+
+/* ---------- 触屏可用性 ---------- */
+
+/// 触控目标最小尺寸（移动端按 40px 舒适值）
+@mixin touch-target($size: 40px) {
+  min-width: $size;
+  min-height: $size;
+}
+
+/// 横向滚动容器：小屏表格/图表/代码块的统一逃生通道
+@mixin scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}

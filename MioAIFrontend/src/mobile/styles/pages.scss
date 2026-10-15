@@ -1,0 +1,212 @@
+/**
+ * 首页 / 分享页 / 错误页 / 全局组件的移动端布局。
+ */
+
+/* ============================================================
+   首页
+   ============================================================ */
+
+html.is-mobile {
+  .home-page .hero-title {
+    // 桌面 clamp 下限 42px 在 360px 视口会撑破：手机上按视口缩放
+    font-size: clamp(30px, 9.5vw, 44px);
+    line-height: 1.18;
+  }
+
+  .home-page .hero-sub {
+    margin-top: 18px;
+    font-size: 15px;
+  }
+
+  .home-page .hero-actions {
+    margin-top: 28px;
+    gap: 10px;
+  }
+
+  .home-page .hm-btn {
+    padding: 11px 22px;
+    font-size: 15px;
+  }
+
+  // 特性区块：标题与引言纵向排列、卡片单列
+  .home-page .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .home-page .section-head .section-lead {
+    max-width: 100%;
+    text-align: left;
+  }
+
+  .home-page .grid {
+    grid-template-columns: 1fr;
+  }
+
+  // 特性卡片：去掉桌面悬浮位移（触屏无 hover，位移只会造成抖动）
+  .home-page .card {
+    transform: none;
+  }
+
+  // 页脚：品牌区独占整行，链接两列
+  .home-page .footer-top {
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+
+    .footer-brand {
+      grid-column: 1 / -1;
+    }
+  }
+}
+
+// 首页横幅：≤640px 换行（文案独占一行排在动作按钮下方）
+html.is-tight .home-page .hero-banner {
+  flex-wrap: wrap;
+
+  .banner-text {
+    flex-basis: 100%;
+    order: 3;
+  }
+}
+
+html.is-tight .home-page .hero-sub .sub-break {
+  display: none;
+}
+
+/* ============================================================
+   首页头部：≤900px 顶栏链接折叠为菜单按钮（原先只是整体隐藏，移动端无任何入口）
+   ============================================================ */
+
+html.is-tablet {
+  .home-page .nav {
+    display: none !important;
+  }
+
+  .home-page .nav-toggle {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    color: $text-dark;
+    font-size: 17px;
+    background: transparent;
+
+    &:active {
+      background: rgba(20, 20, 19, 0.06);
+    }
+  }
+}
+
+// 头像旁昵称：小屏让位给菜单按钮
+html.is-compact {
+  .home-page .user-info .user-name {
+    display: none !important;
+  }
+
+  .home-page .header-inner {
+    gap: 16px;
+  }
+}
+
+/* ============================================================
+   分享页：文章式阅读，收窄留白让正文更宽
+   ============================================================ */
+
+html.is-mobile {
+  .share-page {
+    padding: 20px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .share-page .card-header {
+    padding: 20px 20px 16px;
+  }
+
+  .share-page .card-header .conversation-title {
+    font-size: 18px;
+    line-height: 1.35;
+  }
+
+  .share-page .card-header .conversation-meta {
+    font-size: 12px;
+  }
+
+  .share-page .card-divider {
+    margin: 0 20px;
+  }
+
+  .share-page .card-content {
+    padding: 0;
+  }
+
+  .share-page .action-buttons .text-btn {
+    height: 36px;
+    padding: 0 18px;
+    font-size: 14px;
+  }
+
+  // 分享页内嵌的消息列表：收紧两侧留白（桌面 24px 在手机上占比过大）
+  .share-page .chat-messages {
+    padding: 16px 12px;
+  }
+
+  .share-page .chat-messages .messages-wrapper .message {
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .share-page .chat-messages .messages-wrapper .message.user .user-msg-body {
+    max-width: 86%;
+  }
+}
+
+/* ============================================================
+   错误页：底部安全区（避免按钮贴住 iOS 横条）
+   ============================================================ */
+
+html.is-mobile {
+  .not-found,
+  .forbidden {
+    min-height: 100dvh;
+    padding: 24px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+
+    .content .logo {
+      width: 64px;
+      height: 64px;
+      margin-bottom: 18px;
+    }
+
+    .content .actions {
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+  }
+}
+
+/* ============================================================
+   全局组件：表单弹窗内的栅格与超宽内容
+   ============================================================ */
+
+html.is-mobile {
+  // 知识库弹窗的分块预设三列 → 两列
+  .ant-modal .preset-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  // 机器人图标设计器形状四列 → 三列
+  .ant-modal .shape-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  // 弹窗内的说明性宽浮层（500px 示例提示）不超过视口
+  .ant-modal .ant-tooltip {
+    max-width: calc(100vw - 40px);
+  }
+
+  // 文件预览抽屉：内容区留白收窄
+  .ant-drawer .preview-container {
+    padding: 8px;
+  }
+}

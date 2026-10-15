@@ -1,0 +1,243 @@
+/**
+ * 控制台（dashboard）移动端布局。
+ *
+ * 覆盖：列表卡片操作条已由 base.scss 常显化，这里处理页内栅格、固定宽度筛选栏、
+ * 编辑页的两栏/固定最小宽栅格、统计页的图表与排名、个人中心的头像/表单分栏。
+ */
+
+/* ============================================================
+   通用：页内区块与卡片
+   ============================================================ */
+
+html.is-mobile {
+  .dashboard-layout .dash-section {
+    padding: 16px;
+  }
+
+  .dashboard-layout .dash-card {
+    padding: 16px;
+  }
+
+  // 卡片操作条在触屏已改常规流（base.scss），这里让按钮自适应排布
+  .dashboard-layout .dash-card .card-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+
+    // 按内容宽度增长、空间不足时折行（4 按钮的卡片会排成两行，仍比强行等分可读）
+    .action-btn {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    // 「更多」按钮桌面为 36×36 方形，且带 rotate: 90deg（把 ⋯ 转成竖排 ⋮）。
+    // 不能参与拉伸：拉宽后旋转 90° 会渲染成数十像素高的竖条（卡片布局错乱的真因）
+    .more-btn {
+      flex: 0 0 36px;
+    }
+  }
+}
+
+/* ============================================================
+   编辑页：桌面是 repeat(auto-fit, minmax(420px, 1fr))，420px 下限在手机上
+   强制单列但仍会溢出内部定宽内容 → 放开下限
+   ============================================================ */
+
+html.is-mobile {
+  .dashboard-layout .edit-sections,
+  .dashboard-layout .edit-layout {
+    gap: 14px;
+  }
+
+  .dashboard-layout .resource-grid,
+  .dashboard-layout .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  // 知识库分块预设：桌面三列，窄屏两列
+  .dashboard-layout .preset-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  // 分块参数滑杆行：数值输入不被挤压
+  .dashboard-layout .slider-head {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+}
+
+/* ============================================================
+   MCP 编辑/详情：固定 14/10 双栏 → 单列
+   ============================================================ */
+
+html.is-mobile {
+  .dashboard-layout .ant-row > .ant-col-14,
+  .dashboard-layout .ant-row > .ant-col-10,
+  .dashboard-layout .ant-row > .ant-col-6,
+  .dashboard-layout .ant-row > .ant-col-18 {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+}
+
+/* ============================================================
+   技能管理：筛选栏固定宽度且不换行
+   ============================================================ */
+
+html.is-mobile {
+  .dashboard-layout .skill-toolbar {
+    flex-wrap: wrap;
+    gap: 10px;
+
+    .filter-repo,
+    .filter-installed,
+    .filter-search {
+      min-width: 0;
+      width: 100%;
+      flex: 1 1 100%;
+    }
+
+    :deep(.ant-radio-group) {
+      width: 100%;
+      display: flex;
+
+      .ant-radio-button-wrapper {
+        min-width: 0;
+        flex: 1;
+        text-align: center;
+      }
+    }
+  }
+}
+
+/* ============================================================
+   命中测试（相似度检索）：固定宽参数与行内评分列在窄屏挤压正文
+   ============================================================ */
+
+html.is-mobile {
+  .dashboard-layout .similarity-search .composer-bar {
+    row-gap: 10px;
+
+    .param-number,
+    .threshold-slider {
+      width: 100%;
+    }
+  }
+
+  // 命中行：评分改为行首（阅读顺序），正文独占整行
+  .dashboard-layout .similarity-search .hit-row {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .dashboard-layout .similarity-search .hit-score {
+    width: auto;
+    min-width: 0;
+    order: -1;
+  }
+
+  .dashboard-layout .similarity-search .hit-main {
+    flex: 1 1 100%;
+  }
+}
+
+/* ============================================================
+   使用记录：图表与排行
+   ============================================================ */
+
+html.is-mobile {
+  // 页内滚动区固定 max-height 730px：小屏让它按视口自适应
+  .dashboard-layout .usage-page .page-scroll-content {
+    max-height: none;
+    padding: 16px 14px 24px;
+  }
+
+  // 分布/环形图：图例改纵向堆叠（桌面 46% 定宽 + 右侧图例在窄屏挤压）
+  .dashboard-layout .dist-wrapper {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .dashboard-layout .dist-wrapper .donut-box {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
+  .dashboard-layout .dist-wrapper .dist-legend {
+    width: 100%;
+    max-height: 220px;
+  }
+
+  // 贡献热力图：12 个月 53 列网格，按容器等分后每格不足 2px 不可辨认，
+  // 改为按格宽出横向滚动（滚动条由 global.scss 统一）
+  .dashboard-layout .contribution .calendar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .dashboard-layout .contribution .calendar .grid,
+  .dashboard-layout .contribution .calendar .month-labels {
+    // 53 列 × 14px 格 + 3px 间距 ≈ 900px 的实际可读宽度
+    grid-template-columns: repeat(53, 14px) !important;
+    min-width: max-content;
+  }
+}
+
+/* 指标卡/汇总标签：既有 1200/768 断点保留（纯栅格随宽度连续变化） */
+
+/* 指标卡：≤1200px 两列由组件内的宽度断点处理；≤768px 的移动端单列在此 */
+html.is-mobile .dashboard-layout .metrics-row {
+  grid-template-columns: 1fr;
+}
+
+/* ============================================================
+   个人中心：桌面 6/18 分栏 → 纵向单列
+   ============================================================ */
+
+html.is-mobile {
+  .dashboard-layout .profile-content {
+    padding: 16px 14px 24px;
+  }
+
+  // 表单两列 → 单列
+  .dashboard-layout .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  // 头像裁剪：桌面左右并排（240px 预览 + 裁剪区 480px 高）→ 纵向
+  .dashboard-layout .crop-container {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .dashboard-layout .crop-preview {
+    width: 100%;
+  }
+
+  .dashboard-layout .crop-preview .preview-box {
+    width: 160px;
+    height: 160px;
+  }
+
+  .dashboard-layout .crop-area {
+    min-height: 320px;
+  }
+
+  // 供应商模板选择：两列 → 单列
+  .dashboard-layout .template-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   知识库详情/公共详情：元信息窄条
+   ============================================================ */
+
+html.is-mobile {
+  .dashboard-layout .meta-list {
+    max-width: 100%;
+  }
+
+  .dashboard-layout .chunk-content {
+    max-height: 200px;
+  }
+}

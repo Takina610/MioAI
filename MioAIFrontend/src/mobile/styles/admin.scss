@@ -1,0 +1,129 @@
+/**
+ * 管理后台移动端布局。
+ *
+ * 覆盖：筛选栏（最多 9 个定宽控件）、表格（未声明 scroll.x 的页给最小宽度 +
+ * 横向滚动）、统计页图表栅格、抽屉内表单与列表。
+ * 表格的横向滚动与分页居中在 base.scss 已处理，此处只做页面级排布。
+ */
+
+/* ============================================================
+   筛选栏：桌面定宽控件（160/260px）在窄屏换行；改为两列均分更好用
+   ============================================================ */
+
+html.is-mobile {
+  .admin-layout .adm-filter-bar {
+    gap: 8px;
+
+    .adm-filter-item {
+      width: calc(50% - 4px);
+      min-width: 0;
+    }
+
+    .adm-filter-search {
+      width: 100%;
+    }
+
+    // 查询按钮独占整行，避免与半宽控件挤在一格
+    > .ant-btn-primary {
+      width: 100%;
+    }
+  }
+
+  // 页头：标题与新增按钮竖排
+  .admin-layout .adm-page-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .admin-layout .adm-page-title {
+    font-size: 18px;
+  }
+
+  // 统计条：窄屏两列
+  .admin-layout .adm-stat-strip {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+
+    .adm-stat-card {
+      padding: 12px 14px;
+
+      .adm-stat-value {
+        font-size: 19px;
+      }
+    }
+  }
+
+  // 图表栅格：460px 下限在手机上强制单列，间距收窄
+  .admin-layout .adm-chart-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .admin-layout .adm-chart-card,
+  .admin-layout .adm-table-card {
+    padding: 14px;
+  }
+}
+
+/* ============================================================
+   使用统计页：图表与筛选
+   ============================================================ */
+
+// 桌面双栏（3fr 2fr）与 1fr 1fr 在 ≤960px 收为单列
+html.is-tablet .admin-layout .usage-admin-page {
+  .insight-grid,
+  .bottom-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+html.is-mobile {
+  .admin-layout .usage-admin-page .filter-bar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+
+    .ant-picker,
+    .ant-input-number {
+      flex: 1 1 100%;
+      width: 100%;
+    }
+  }
+
+  // 分布/环形图：图例纵向堆叠
+  .admin-layout .dist-wrapper {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .admin-layout .dist-wrapper .donut-box {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
+  .admin-layout .dist-wrapper .dist-legend {
+    width: 100%;
+    max-height: 220px;
+  }
+}
+
+/* ============================================================
+   抽屉内：表单与列表（表格已在 base.scss 处理）
+   ============================================================ */
+
+html.is-mobile {
+  .admin-layout .adm-drawer .ant-form-item-label {
+    white-space: normal;
+  }
+}
+
+/* ============================================================
+   可视化图表容器：桌面固定高度在手机上偏高，统一收一档
+   ============================================================ */
+
+html.is-mobile {
+  .admin-layout .ant-card .apexcharts-canvas,
+  .dashboard-layout .ant-card .apexcharts-canvas {
+    max-width: 100%;
+    overflow: hidden;
+  }
+}

@@ -259,11 +259,6 @@ watch(activeTab, tab => {
     align-items: start;
   }
 
-  @media (max-width: 960px) {
-    .insight-grid,
-    .bottom-row {
-      grid-template-columns: 1fr;
-    }
-  }
+  // ≤960px 单列见 mobile/styles/admin.scss
 }
 </style>

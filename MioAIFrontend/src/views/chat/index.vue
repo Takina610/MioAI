@@ -5,7 +5,9 @@
       'sidebar-collapsed': sidebarCollapsed,
       'rail-open': railOpen,
       'rail-peek': railPeeking,
-      'rail-wide': (railOpen || railPeeking) && agentRailExpanded
+      'rail-wide': (railOpen || railPeeking) && agentRailExpanded,
+      'is-mobile-shell': isMobile,
+      'mobile-drawer-open': mobileDrawerOpen
     }"
   >
     <AgentRail
@@ -47,6 +49,7 @@
       @load-more="loadSessions(true)"
       @login="authModalVisible = true"
       @personalize="personalizeVisible = true"
+      @agents="mobileAgentsVisible = true"
     />
 
     <div class="main-container">
@@ -54,7 +57,7 @@
         <button
           class="sidebar-toggle"
           aria-label="切换侧边栏"
-          @click="advanceSidebarPhase"
+          @click="onToggleClick"
           @mouseenter="onToggleHover"
           @mouseleave="onToggleLeave"
         >
@@ -220,6 +223,19 @@
     >
       <p style="color: #6e6b62;">确定要删除该对话吗？删除后将无法恢复。</p>
     </a-modal>
+
+    <!-- 移动端：侧栏抽屉遮罩（点击关闭）+ 智能体切换抽屉（补位桌面左轨） -->
+    <MobileScrim v-if="mobileDrawerOpen || mobileAgentsVisible" @close="closeMobileOverlays" />
+    <MobileAgentDrawer
+      :visible="mobileAgentsVisible"
+      :agents="railSoloAgents"
+      :groups="railGroupAgents"
+      :current-agent-id="agentId"
+      @close="mobileAgentsVisible = false"
+      @select="handleMobileAgentSelect"
+      @create-group="mobileAgentsVisible = false; groupModalVisible = true"
+      @toggle-pin="handleRailTogglePin"
+    />
   </div>
 </template>
 
@@ -234,6 +250,9 @@ import type { Agent, AgentDetail, AttachmentItem, ChatMessage, ChatRefItem, Cont
 import { isImageName } from './attachmentUtils'
 import AuthModal from '@/components/AuthModal.vue'
 import BotPet from '@/components/bot-icon/BotPet.vue'
+import MobileScrim from '@/mobile/MobileScrim.vue'
+import MobileAgentDrawer from '@/mobile/components/MobileAgentDrawer.vue'
+import { useIsMobile } from '@/mobile/useIsMobile'
 import { DEFAULT_BOT_ICON, parseBotIcon } from '@/components/bot-icon/types'
 import type { BotIconConfig } from '@/components/bot-icon/types'
 import ChatSidebar from './components/ChatSidebar.vue'
@@ -402,12 +421,22 @@ const messageListRef = ref<InstanceType<typeof ChatMessageList> | null>(null)
 
 // ---------- 侧栏相位：都展示(0) → 仅会话栏(1) → 都收起(2) → 仅会话栏(3) → 循环 ----------
 // 收缩/展开统一由 chat-header 的会话开关按钮管理（聊天侧栏自身不再有独立开关）。
-// 悬浮（开关按钮/左轨/会话胶囊任一区域内）peek 出被收起的部分，离开整个区域才收回
+// 悬浮（开关按钮/左轨/会话胶囊任一区域内）peek 出被收起的部分，离开整个区域才收回。
+// 移动端（≤768px）无 hover：形态收敛为"会话抽屉 + 智能体抽屉"，由本页统一协调。
 type SidebarPhase = 0 | 1 | 2 | 3
 const sidebarPhase = ref<SidebarPhase>(0)
 const sidebarPeeking = ref(false)
 const railPeeking = ref(false)
 let sidebarRetractTimer: number | undefined
+
+const { isMobile } = useIsMobile()
+
+/** 移动端抽屉状态（会话栏 / 智能体切换，互斥） */
+const mobileDrawerVisible = ref(false)
+const mobileAgentsVisible = ref(false)
+
+/** 任一移动端浮层展开：驱动遮罩、滚动锁与布局类名 */
+const mobileDrawerOpen = computed(() => isMobile.value && mobileDrawerVisible.value)
 
 function clearSidebarRetract(): void {
   if (sidebarRetractTimer !== undefined) {
@@ -425,10 +454,22 @@ function scheduleSidebarRetract(): void {
   }, 400)
 }
 
-/** 会话胶囊是否收起（相位 2） */
-const sidebarCollapsed = computed(() => sidebarPhase.value === 2)
+/** 会话胶囊是否收起：桌面按相位 2，移动端按抽屉是否展开 */
+const sidebarCollapsed = computed(() =>
+  isMobile.value ? !mobileDrawerVisible.value : sidebarPhase.value === 2
+)
 
-/** 开关按钮点击：推进相位（游客只有 会话展开↔收起 两态） */
+/** 开关按钮点击：移动端开合会话抽屉；桌面推进相位（游客只有 展开↔收起 两态） */
+function onToggleClick(): void {
+  if (isMobile.value) {
+    mobileAgentsVisible.value = false
+    mobileDrawerVisible.value = !mobileDrawerVisible.value
+    return
+  }
+  advanceSidebarPhase()
+}
+
+/** 开关按钮点击（桌面）：推进相位 */
 function advanceSidebarPhase(): void {
   clearSidebarRetract()
   sidebarPeeking.value = false
@@ -442,37 +483,67 @@ function advanceSidebarPhase(): void {
 
 /** 悬浮开关按钮：peek 出当前被收起的部分（都收起→双栏 peek；仅左轨收起→左轨 peek） */
 function onToggleHover(): void {
+  if (isMobile.value || !userStore.isLoggedIn) return
   if (sidebarPhase.value === 0) return
   clearSidebarRetract()
   if (sidebarCollapsed.value) {
     sidebarPeeking.value = true
   }
-  if (userStore.isLoggedIn) {
-    railPeeking.value = true
-  }
+  railPeeking.value = true
 }
 
 function onToggleLeave(): void {
+  if (isMobile.value) return
   scheduleSidebarRetract()
 }
 
 /** 悬浮区域（左轨/会话胶囊）：进入保持，离开整体后延时收回 */
 function panelEnter(): void {
+  if (isMobile.value) return
   clearSidebarRetract()
 }
 
 function panelLeave(): void {
+  if (isMobile.value) return
   scheduleSidebarRetract()
 }
 
-/** 选中会话等动作后主动收回 peek */
+/** 选中会话等动作后主动收回 peek（移动端同时收起抽屉） */
 function sidebarClosePeek(): void {
   clearSidebarRetract()
   sidebarPeeking.value = false
   railPeeking.value = false
+  mobileDrawerVisible.value = false
 }
 
-onBeforeUnmount(clearSidebarRetract)
+/** 关闭移动端全部浮层 */
+function closeMobileOverlays(): void {
+  mobileDrawerVisible.value = false
+  mobileAgentsVisible.value = false
+}
+
+// 两个抽屉互斥：智能体抽屉打开时会话抽屉让位（它们宽高一致，重叠会互相遮挡）
+watch(mobileAgentsVisible, open => {
+  if (open) mobileDrawerVisible.value = false
+})
+
+// 切页即收：智能体抽屉点选后会跳转，抽屉留在原位会挡住新会话
+watch(() => route.fullPath, closeMobileOverlays)
+
+// 移动端浮层展开时锁定背景滚动（触摸滑动不穿透到消息区）
+watch(() => mobileDrawerOpen.value || mobileAgentsVisible.value, open => {
+  document.body.style.overflow = open && isMobile.value ? 'hidden' : ''
+})
+
+// Esc 关闭移动端浮层
+function onMobileKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') closeMobileOverlays()
+}
+
+onBeforeUnmount(() => {
+  clearSidebarRetract()
+  document.body.style.overflow = ''
+})
 
 // ---------- 会话搜索命令面板 ----------
 const searchModalVisible = ref(false)
@@ -486,8 +557,8 @@ const groupModalVisible = ref(false)
 const railSoloAgents = computed(() => myAgents.value.filter(a => a.type !== 2))
 const railGroupAgents = computed(() => myAgents.value.filter(a => a.type === 2))
 
-/** 左轨常驻展示：登录且相位 0（都展开） */
-const railOpen = computed(() => userStore.isLoggedIn && sidebarPhase.value === 0)
+/** 左轨常驻展示：登录且相位 0（都展开）。移动端左轨整体隐藏，恒不展示 */
+const railOpen = computed(() => !isMobile.value && userStore.isLoggedIn && sidebarPhase.value === 0)
 
 /** 群聊候选成员：我的自定义智能体（群聊不可嵌套） */
 const groupCandidates = computed(() => myAgents.value.filter(a => a.type === 1))
@@ -511,6 +582,12 @@ function handleRailSelect(targetAgentId: number): void {
   } else {
     router.push(`/chat/${targetAgentId}`)
   }
+}
+
+/** 移动端智能体抽屉点选：先收抽屉（覆盖层不跟随路由过渡），再走同一套导航 */
+function handleMobileAgentSelect(targetAgentId: number): void {
+  mobileAgentsVisible.value = false
+  handleRailSelect(targetAgentId)
 }
 
 function handleGroupCreated(groupAgentId: number): void {
@@ -1403,6 +1480,7 @@ watch(
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyboardShortcut)
+  window.addEventListener('keydown', onMobileKeydown)
   loadMyAgents()
 })
 
@@ -1410,6 +1488,7 @@ watch(() => userStore.isLoggedIn, () => loadMyAgents())
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyboardShortcut)
+  window.removeEventListener('keydown', onMobileKeydown)
   if (streamingPollTimer !== undefined) {
     window.clearInterval(streamingPollTimer)
     streamingPollTimer = undefined
@@ -1496,15 +1575,8 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 768px) {
-  // 窄屏：侧边栏始终以覆盖层出现，内容不再让位
-  .main-container,
-  .sidebar-collapsed .main-container,
-  .rail-open .main-container,
-  .rail-open.rail-wide .main-container {
-    margin-left: 12px;
-  }
-}
+// 移动端（满宽内容区、侧栏抽屉化、左轨隐藏、子智能体面板全屏）见 mobile/styles/shell.scss
+// 与 mobile/styles/chat.scss（按 html.is-mobile 标记生效，断点定义在 mobile/breakpoints.ts）
 
 .chat-header {
   height: 64px;
@@ -1579,7 +1651,7 @@ onBeforeUnmount(() => {
   position: relative;
 }
 
-// 左下角常驻机器人（不与居中的输入框争位；窄屏让位隐藏）
+// 左下角常驻机器人：避开输入框与消息区（窄屏与移动端隐藏，见下方注释与 mobile 层）
 .chat-pet {
   position: absolute;
   left: 16px;
@@ -1587,11 +1659,7 @@ onBeforeUnmount(() => {
   z-index: 5;
 }
 
-@media (max-width: 900px) {
-  .chat-pet {
-    display: none;
-  }
-}
+// 窄屏与移动端隐藏桌面宠物，见 mobile/styles/chat.scss（按 html.is-tablet 标记生效）
 
 // 子智能体面板外壳：宽度驱动的抽屉（0↔最终宽）。聊天区随宽度变化逐帧推移，
 // 面板本体保持定宽由外壳裁切，内容不回流；无 transform，入场/退场结束时聊天区

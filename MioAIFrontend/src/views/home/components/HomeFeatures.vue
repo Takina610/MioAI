@@ -105,16 +105,6 @@ const features: Feature[] = [
     color: var(--hm-text-2);
     max-width: 320px;
     text-align: right;
-
-    @media (max-width: 768px) {
-      text-align: left;
-    }
-  }
-
-  @media (max-width: 768px) {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
   }
 }
 
@@ -122,10 +112,6 @@ const features: Feature[] = [
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 20px;
-
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-  }
 }
 
 .card {

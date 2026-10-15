@@ -1,0 +1,246 @@
+/**
+ * 对话页移动端布局。
+ *
+ * 覆盖：消息区留白与气泡宽度、输入区（编辑器/工具栏/模型与档位选择器）、
+ * 子智能体面板（改为全屏覆盖）、会话搜索命令面板高度、触控尺寸。
+ * 外壳（满宽内容区、侧栏抽屉化、左轨隐藏）见 shell.scss。
+ *
+ * !important 说明：本文件是"独立的移动端覆盖层"，被覆盖对象是组件 scoped 样式
+ * （编译为多级后代选择器 `.a .b .c[data-v-hash]`，特异性 4~6 类），且其 <style>
+ * 由异步 chunk 在运行时后注入、源码顺序不可控。要让覆盖层确定生效，
+ * 对**组件已声明过的几何/排版属性**统一用 !important；不针对颜色与新增属性。
+ */
+
+/* ============================================================
+   消息区
+   ============================================================ */
+
+html.is-mobile {
+  // 两侧留白收紧：横向空间都留给正文
+  .chat-layout .chat-container .chat-messages {
+    padding: 16px 12px !important;
+  }
+
+  .chat-layout .chat-container .chat-messages .messages-wrapper .message {
+    gap: 10px !important;
+    margin-bottom: 18px !important;
+  }
+
+  // 用户气泡：桌面 70% 在手机上换行过碎
+  .chat-layout .chat-container .chat-messages .messages-wrapper .message.user .user-msg-body {
+    max-width: 86% !important;
+  }
+
+  // 群聊群主气泡同理（该气泡在消息组件内，与用户气泡同级处理）
+  .chat-layout .chat-container .chat-messages .messages-wrapper .message .group-own-bubble {
+    max-width: 86% !important;
+  }
+
+  // 消息操作行：扩大触控目标
+  .chat-layout .chat-container .chat-messages .messages-wrapper .message .message-actions .copy-btn {
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  // 消息内编辑框：嵌入态输入器不再沿用桌面最大宽
+  .chat-layout .chat-container .chat-messages .messages-wrapper .message-edit {
+    max-width: 100% !important;
+  }
+
+  // 消息内 Markdown 正文：桌面字号偏小，手机上调至 15px 提升可读性
+  .chat-layout .chat-container .chat-messages .messages-wrapper .message .markdown-body {
+    font-size: 15px;
+  }
+}
+
+/* ============================================================
+   输入区
+   ============================================================ */
+
+html.is-mobile {
+  .chat-layout .chat-container .chat-center-area {
+    padding: 12px !important;
+  }
+
+  .chat-layout .chat-container .chat-center-area.has-messages {
+    padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .chat-layout .chat-container .chat-center-area .welcome-section {
+    margin-bottom: 20px !important;
+  }
+
+  .chat-layout .chat-container .chat-center-area .welcome-section .welcome-title {
+    // 桌面 nowrap：手机视口窄，问候语会被两侧裁掉，改为换行并居中
+    white-space: normal !important;
+    text-align: center;
+    line-height: 1.4;
+    font-size: 20px !important;
+  }
+
+  // 输入框圆角与阴影收一档（手机屏幕小，16px 圆角偏夸张）
+  .chat-layout .chat-container .chat-input-container {
+    border-radius: 14px !important;
+  }
+
+  // 编辑器：16px 起（iOS 聚焦不放大页面），高度上限略收
+  .chat-layout .chat-container .chat-input-container .input-main {
+    padding: 12px 14px 4px !important;
+  }
+
+  .chat-layout .chat-container .chat-input-container .input-main .chat-editor {
+    font-size: 16px !important;
+    max-height: 148px !important;
+  }
+
+  // 工具栏：留白收窄，模型选择器限宽让位给发送键
+  .chat-layout .chat-container .chat-input-container .input-toolbar {
+    padding: 6px 8px 8px 10px !important;
+    gap: 6px !important;
+    min-width: 0;
+  }
+
+  .chat-layout .chat-container .chat-input-container .model-selector {
+    max-width: 36vw !important;
+    padding: 5px 8px !important;
+    min-height: 32px;
+  }
+
+  .chat-layout .chat-container .chat-input-container .effort-selector {
+    padding: 5px 8px !important;
+    min-height: 32px;
+    flex-shrink: 0;
+  }
+
+  // 触控目标放大
+  .chat-layout .chat-container .chat-input-container .attach-btn {
+    width: 36px !important;
+    height: 36px !important;
+    flex-shrink: 0;
+  }
+
+  .chat-layout .chat-container .chat-input-container .send-btn {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+    flex-shrink: 0;
+  }
+
+  .chat-layout .chat-container .chat-input-container .ctx-ring-btn {
+    width: 36px !important;
+    height: 36px !important;
+    margin-right: 2px !important;
+    flex-shrink: 0;
+  }
+
+  .chat-layout .chat-container .chat-input-container .cancel-btn,
+  .chat-layout .chat-container .chat-input-container .send-pill {
+    height: 36px !important;
+  }
+
+  // 引用/@ 菜单：不超过视口且可滚动
+  .chat-layout .chat-container .chat-input-container .mention-menu {
+    max-height: 46vh !important;
+    overflow-y: auto;
+  }
+}
+
+/* ============================================================
+   子智能体面板：桌面是右侧定宽抽屉（clamp 下限 360px，手机上会把聊天区压没），
+   移动端改为全屏覆盖层
+   ============================================================ */
+
+html.is-mobile .chat-layout .subagent-drawer {
+  position: fixed !important;
+  inset: 0;
+  z-index: 80;
+  width: 100% !important;
+  height: 100dvh !important;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+/* ============================================================
+   会话搜索命令面板：结果区固定 400px，小屏/横屏收窄
+   ============================================================ */
+
+html.is-mobile .chat-search-modal .palette .palette-body {
+  height: auto !important;
+  min-height: 180px;
+  max-height: calc(100dvh - 240px);
+}
+
+html.is-mobile .chat-search-modal .palette .palette-footer {
+  display: none !important;
+}
+
+/* ============================================================
+   模型选择/视觉相关的小组件
+   ============================================================ */
+
+// 图片列表：窄屏由横排改纵排（96px 定宽缩略图横排会挤出容器）
+html.is-mobile .chat-layout .ui-image-list .ui-img-row {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* ============================================================
+   头部：标题让位（移动端两侧按钮已占满）
+   ============================================================ */
+
+html.is-mobile {
+  .chat-layout .chat-header .header-title-wrap .chat-title {
+    font-size: 15px !important;
+  }
+
+  .chat-layout .chat-header .header-title-wrap .chat-subtitle {
+    display: none !important;
+  }
+}
+
+/* ============================================================
+   会话抽屉内部：触控目标放大（桌面按钮按鼠标精度设计，28~30px 在手指下偏小）
+   ============================================================ */
+
+html.is-mobile .chat-layout .sidebar {
+  // 顶部个性化/编辑按钮
+  .sidebar-top .personalize-btn,
+  .sidebar-top .edit-agent-btn {
+    width: 36px !important;
+    height: 36px !important;
+  }
+
+  // 会话行操作按钮
+  .chat-list .chat-item-more {
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  // 会话行本身加高，便于点按
+  .chat-list .chat-item {
+    padding: 12px !important;
+  }
+
+  // 快捷键提示（Ctrl+P/K）在触屏上无意义，去掉以腾出横向空间
+  .sidebar-actions .shortcut-hint {
+    display: none !important;
+  }
+}
+
+/* ============================================================
+   桌面常驻宠物：窄屏隐藏（会与输入区/消息区争位）
+   ============================================================ */
+
+html.is-tablet .chat-layout .chat-pet {
+  display: none;
+}
+
+/* ============================================================
+   上下文容量面板：320px 定宽在窄屏贴边
+   ============================================================ */
+
+html.is-mobile .ctx-panel {
+  width: min(84vw, 320px) !important;
+}

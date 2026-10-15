@@ -449,6 +449,11 @@ public class MioBotController {
         // 引用上下文：注入本轮模型提示词 + 随 user 行持久化引用清单（刷新后 chips 原样还原）
         mioBot.setRefsContext(refsBuild.context());
         mioBot.setUserRefs(refsBuild.items());
+        // 免费档自愈：本轮用免费模型时，模型服务侧故障即视为目录陈旧，失效 Redis 目录并重取。
+        // 判定同时看 source 与模型名后缀（old client 可能不带 source，但免费档模型名必带 -free）
+        mioBot.setFreeCatalogModel("opencode".equals(modelSource)
+                || (chatModelName != null && chatModelName.endsWith("-free")));
+        mioBot.setCatalogInvalidator(openCodeModelCatalog::invalidate);
         // 任务真正结束（含异常）时解除会话占用与轮次登记
         mioBot.setOnFinish(() -> {
             ACTIVE_CHATS.remove(chatId);

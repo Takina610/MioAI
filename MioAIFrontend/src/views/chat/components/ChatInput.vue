@@ -121,7 +121,6 @@
                       <a-menu-item v-if="!g.models.length" disabled>该分组暂无可用模型</a-menu-item>
                       <a-menu-item v-for="m in g.models" :key="m.key" class="model-item">
                         <span class="model-menu-name">{{ m.id }}</span>
-                        <span v-if="m.vision" class="vision-badge">视觉</span>
                       </a-menu-item>
                     </a-sub-menu>
                   <a-menu-divider />
@@ -204,7 +203,6 @@ import AttachmentCard from './AttachmentCard.vue'
 import ContextUsageIndicator from './ContextUsageIndicator.vue'
 import { createTokenElement } from '../tokenDom'
 import { getAllSessions, type AllSessionItem } from '@/api/chatMemory'
-import { isVisionModel } from '@/utils/modelPresets'
 import type { ChatRefItem, ContextUsageData, FreeModel, KnowledgeBase, McpTool, ModelProvider, ModelSelection, PendingAttachment, Skill } from '@/types'
 
 /** 思考档位全量标签（实际渲染哪些档由后端按模型能力返回） */
@@ -334,7 +332,6 @@ const modelMenuOpen = ref(false)
 interface CascadeModel {
   key: string
   id: string
-  vision: boolean
   selection: ModelSelection
 }
 
@@ -353,7 +350,6 @@ const cascadeGroups = computed(() => {
       models: freeModels.value.map(m => ({
         key: `opencode|${m.id}`,
         id: m.id,
-        vision: m.vision,
         selection: { source: 'opencode' as const, providerId: null, model: m.id }
       })),
       current: cur?.source === 'opencode'
@@ -368,7 +364,6 @@ const cascadeGroups = computed(() => {
         .map(m => ({
           key: `custom|${p.id}|${m.id}`,
           id: m.id,
-          vision: isVisionModel(m),
           selection: { source: 'custom' as const, providerId: p.id, model: m.id }
         })),
       current: cur?.source === 'custom' && cur.providerId === p.id
@@ -1624,16 +1619,6 @@ function onFileChange(event: Event): void {
       overflow: hidden;
       text-overflow: ellipsis;
     }
-
-    .vision-badge {
-      flex-shrink: 0;
-      margin-left: 8px;
-      padding: 1px 7px;
-      border-radius: 999px;
-      background: rgba(42, 161, 169, 0.12);
-      color: $primary-color;
-      font-size: 11px;
-    }
   }
 
   :deep(.ant-menu-item.manage-item) {
@@ -1646,49 +1631,6 @@ function onFileChange(event: Event): void {
   }
 }
 
-@media (max-width: 768px) {
-  .chat-center-area {
-    padding: 16px;
-
-    .welcome-section {
-      gap: 12px;
-
-      .welcome-title {
-        font-size: 20px;
-      }
-    }
-
-    .chat-input-wrapper {
-      .chat-input-container {
-        .input-main {
-          padding: 12px 14px 4px;
-
-          .chat-editor {
-            font-size: 14px;
-          }
-        }
-
-        .send-btn {
-          width: 32px;
-          height: 32px;
-          min-width: 32px;
-
-          :deep(.anticon) {
-            font-size: 14px;
-          }
-        }
-      }
-    }
-  }
-}
-
-@media (max-width: 480px) {
-  .chat-center-area {
-    .welcome-section {
-      .welcome-title {
-        font-size: 20px;
-      }
-    }
-  }
-}
+// 移动端（≤768/480px）的输入区尺寸、触控目标与安全区见
+// mobile/styles/chat.scss（按 html.is-mobile 标记生效，断点定义在 mobile/breakpoints.ts）
 </style>

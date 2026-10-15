@@ -89,6 +89,44 @@ public class MioBot {
     /** 用户主动中断标记：stop() 置位，引擎取消信号据此熔断步循环 */
     private volatile boolean stopped;
 
+    /**
+     * 本轮是否使用免费档模型（控制器注入）：免费档出现模型服务侧故障时，
+     * 说明 <b>免费模型目录</b>可能已陈旧（模型被上游下线/改名），需要失效重建。
+     * 自定义供应商模型与目录无关，不触发。
+     */
+    private volatile boolean freeCatalogModel;
+
+    /** 免费模型目录失效动作（控制器注入，缺省空操作）：保持本类与目录实现解耦 */
+    private volatile Runnable catalogInvalidator = () -> {
+    };
+
+    public void setFreeCatalogModel(boolean freeCatalogModel) {
+        this.freeCatalogModel = freeCatalogModel;
+    }
+
+    public void setCatalogInvalidator(Runnable catalogInvalidator) {
+        this.catalogInvalidator = catalogInvalidator == null ? () -> {
+        } : catalogInvalidator;
+    }
+
+    /**
+     * 模型服务侧故障处理（非用户取消、非上下文超限）：
+     * 免费档模型失效缓存目录并异步重取最新列表覆盖。
+     * 多轮并发出错时目录层自带冷却，重复调用无副作用。
+     */
+    private void onModelFailure(String reason) {
+        if (!freeCatalogModel) {
+            return;
+        }
+        log.warn("免费档模型服务侧故障（{}），失效免费模型目录并重取, chatId={}, model={}",
+                reason, chatId, modelName);
+        try {
+            catalogInvalidator.run();
+        } catch (Throwable ignored) {
+            // 目录自愈失败不影响对话轮次收尾
+        }
+    }
+
     /** 轮次执行线程：stop() 据此打断模型流/工具等待 */
     private volatile Thread turnThread;
 
@@ -268,6 +306,9 @@ public class MioBot {
                     state, chatId, events, runContext.tasks());
             // 用户中断：引擎步间/重试等待处检查取消信号，命中即停（不走兜底抢救）
             engine.setCancelSignal(() -> stopped);
+            // 模型服务侧故障自愈：免费档模型出错说明目录可能已陈旧（模型被上游下线/改名），
+            // 失效 Redis 目录并异步重取；自定义供应商模型、用户取消、上下文超限都不触发
+            engine.setModelFailureListener(this::onModelFailure);
 
             if (userPrompt.strip().startsWith("/compact")) {
                 // 压缩指令也是一条消息：user 行落库（带 compact 引用块，前端渲染为 Compact token）

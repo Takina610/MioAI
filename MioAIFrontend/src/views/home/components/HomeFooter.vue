@@ -71,14 +71,6 @@ const groups: FooterGroup[] = [
   display: grid;
   grid-template-columns: 1.6fr repeat(3, 1fr);
   gap: 40px;
-
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr 1fr;
-
-    .footer-brand {
-      grid-column: 1 / -1;
-    }
-  }
 }
 
 .footer-brand {

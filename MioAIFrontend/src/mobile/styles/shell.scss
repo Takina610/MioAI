@@ -1,0 +1,151 @@
+/**
+ * 外壳移动端布局（对话页 / 控制台 / 管理后台共用）。
+ *
+ * 形态转换：
+ * - 内容区由"胶囊卡片内嵌"改为满宽（手机横向空间全部留给内容）；
+ * - 侧栏由"常驻/悬浮 peek"改为覆盖式抽屉 + 半透明遮罩；
+ * - 高度单位由 100vh 换 100dvh，避免移动浏览器地址栏遮挡底部输入区；
+ * - 左轨（智能体纵列）隐藏，其职能由控制台/会话抽屉内的入口承担。
+ *
+ * 特异性说明：本文件为全局样式（main.ts 引入），选择器以 `html.is-mobile` 起头，
+ * 对组件 scoped 规则（`.x[data-v-hash]`）天然高一档（多一个元素 + 一个类）。
+ * 仅当桌面规则本身是多类状态矩阵（如 `.rail-open.rail-wide .main-container`）
+ * 或第三方内联样式（抽屉宽度）时用 !important——这些属性在移动端只有唯一答案。
+ */
+
+/* ============================================================
+   三个外壳的公共骨架
+   ============================================================ */
+
+html.is-mobile {
+  .chat-layout,
+  .dashboard-layout,
+  .admin-layout {
+    // 动态视口高度：地址栏收放时内容区跟随，底部输入区不被遮挡
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  // 内容区满宽：去掉胶囊出血位与圆角（桌面有 4 套相位外边距，移动端只有一个答案）
+  .chat-layout .main-container,
+  .dashboard-layout .main-container,
+  .admin-layout .admin-container {
+    margin: 0 !important;
+    border: none;
+    border-radius: 0;
+  }
+}
+
+// 顶部栏：高度略收、横向留白收窄
+html.is-mobile {
+  .chat-header,
+  .dashboard-layout .header,
+  .admin-layout .header {
+    height: 56px;
+    min-height: 56px;
+    padding: 0 12px;
+  }
+
+  // 头部开合按钮触控尺寸（需高于抽屉：抽屉 66，此按钮保持可点以收起）
+  .chat-header .sidebar-toggle,
+  .dashboard-layout .sidebar-toggle,
+  .admin-layout .sidebar-toggle {
+    min-width: 40px;
+    min-height: 40px;
+    z-index: 70;
+  }
+}
+
+/* ============================================================
+   侧栏 → 抽屉
+   ============================================================ */
+
+html.is-mobile {
+  // 抽屉宽度按视口取（不再用桌面固定 304/244px）：窄屏九成宽，留边缘提示可关闭
+  .chat-layout .sidebar,
+  .dashboard-layout .sidebar,
+  .admin-layout .sidebar {
+    width: min(88vw, 340px);
+    // 高于遮罩（65），低于头部按钮（70）
+    z-index: 66;
+  }
+
+  // 抽屉本体投影加深：与内容区形成前后层次
+  .chat-layout .sidebar .sidebar-capsule,
+  .dashboard-layout .sidebar .sidebar-capsule,
+  .admin-layout .sidebar .sidebar-capsule {
+    box-shadow: 0 16px 44px rgba(20, 20, 19, 0.18);
+  }
+
+  // 抽屉展开时头部内容右移，让开顶栏开合按钮：
+  // 按钮位于胶囊左上角（视口 x 12~52）且 z-index 高于抽屉，不缩进会被按钮压住 logo/头像。
+  // 与桌面 peek 态同款处理（内容缩进 + 组件既有 padding-left 过渡动画）。
+  .chat-layout .sidebar:not(.collapsed) .sidebar-top,
+  .dashboard-layout .sidebar:not(.collapsed) .sidebar-top,
+  .admin-layout .sidebar:not(.collapsed) .sidebar-top {
+    padding-left: 64px !important;
+  }
+}
+
+/* ============================================================
+   左轨：移动端整体隐藏（会话抽屉内已有智能体入口）
+   ============================================================ */
+
+html.is-mobile .agent-rail {
+  display: none;
+}
+
+/* ============================================================
+   头部右侧：管理后台入口窄屏只留图标
+   ============================================================ */
+
+html.is-mobile .dashboard-layout .admin-btns .admin-btn {
+  padding: 8px 10px;
+
+  .btn-text {
+    display: none;
+  }
+
+  .btn-icon {
+    opacity: 1;
+    font-size: 16px;
+  }
+}
+
+/* ============================================================
+   控制台 / 管理后台：内页头部与内容留白
+   ============================================================ */
+
+html.is-mobile {
+  .dashboard-layout .dash-page-header .header-content,
+  .admin-layout .dash-page-header .header-content {
+    padding: 12px 16px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .dashboard-layout .dash-page-header h2,
+  .admin-layout .dash-page-header h2 {
+    font-size: 18px;
+    white-space: normal;
+  }
+
+  .dashboard-layout .dash-page-content {
+    padding: 16px 14px 24px;
+  }
+
+  .admin-layout .admin-content {
+    padding: 16px 14px calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+
+  // 内页头部右侧操作按钮组：窄屏换行铺满，不再挤压标题
+  .dashboard-layout .dash-page-header .header-right,
+  .admin-layout .dash-page-header .header-right {
+    flex-shrink: 1;
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}

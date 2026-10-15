@@ -1,5 +1,5 @@
 <template>
-  <div class="admin-layout" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+  <div class="admin-layout" :class="{ 'sidebar-collapsed': sidebarCollapsed, 'drawer-open': drawerOpen }">
     <DashboardSidebar
       :collapsed="sidebarCollapsed"
       :peeking="sidebarPeeking"
@@ -20,6 +20,8 @@
         <router-view />
       </main>
     </div>
+
+    <MobileScrim v-if="drawerOpen" @close="closeDrawer" />
   </div>
 </template>
 
@@ -29,7 +31,8 @@ import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import DashboardSidebar from '@/views/dashboard/components/DashboardSidebar.vue'
 import DashboardHeader from '@/views/dashboard/components/DashboardHeader.vue'
-import { useFloatingSidebar } from '@/composables/useFloatingSidebar'
+import MobileScrim from '@/mobile/MobileScrim.vue'
+import { useShellSidebar } from '@/mobile/useShellSidebar'
 import { adminMenuGroups } from './composables/useAdminMenu'
 import { useUserStore } from '@/store/user'
 
@@ -42,20 +45,24 @@ if (userStore.userInfo?.userRole !== 'admin') {
   router.replace('/403')
 }
 
-// 与控制台同款悬浮胶囊侧边栏：Header 收缩按钮切换，收起后悬浮唤出（peek）
+// 与控制台同款外壳侧栏：桌面悬浮胶囊（收缩按钮 + 悬浮 peek），移动端覆盖式抽屉
 const {
+  isMobile,
   collapsed: sidebarCollapsed,
   peeking: sidebarPeeking,
+  drawerOpen,
   enterHandle: sidebarEnterHandle,
   leaveHandle: sidebarLeaveHandle,
   enterPanel: sidebarEnterPanel,
   leavePanel: sidebarLeavePanel,
-  toggle: sidebarToggle
-} = useFloatingSidebar()
+  toggle: sidebarToggle,
+  closeDrawer
+} = useShellSidebar()
 
 onBeforeUnmount(() => {
-  // 离开管理后台恢复侧边栏展开态，避免控制台继承收起状态
-  if (sidebarCollapsed.value) {
+  // 移动端退出抽屉，桌面恢复侧栏展开态，避免控制台继承收起状态
+  closeDrawer()
+  if (!isMobile.value && sidebarCollapsed.value) {
     sidebarToggle()
   }
 })
@@ -87,13 +94,6 @@ onBeforeUnmount(() => {
 
 .admin-layout.sidebar-collapsed .admin-container {
   margin-left: 12px;
-}
-
-@media (max-width: 768px) {
-  .admin-container,
-  .admin-layout.sidebar-collapsed .admin-container {
-    margin-left: 12px;
-  }
 }
 
 .admin-content {

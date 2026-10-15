@@ -93,6 +93,14 @@ public final class AgentEngine {
         this.modelRunner.setCancelSignal(signal);
     }
 
+    /**
+     * 注入模型服务侧故障回调（非用户取消、非上下文超限）：
+     * 上层据此做模型目录失效等自愈动作；抢救收束同样上报（同一上游故障会连遇两次）。
+     */
+    public void setModelFailureListener(java.util.function.Consumer<String> listener) {
+        this.modelRunner.setModelFailureListener(listener);
+    }
+
     public long inputTokens() {
         return inputTokens;
     }

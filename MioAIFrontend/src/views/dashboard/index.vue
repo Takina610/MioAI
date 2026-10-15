@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard-layout" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+  <div class="dashboard-layout" :class="{ 'sidebar-collapsed': sidebarCollapsed, 'drawer-open': drawerOpen }">
     <DashboardSidebar
       :collapsed="sidebarCollapsed"
       :peeking="sidebarPeeking"
@@ -24,6 +24,7 @@
       </main>
     </div>
 
+    <MobileScrim v-if="drawerOpen" @close="closeDrawer" />
     <AuthModal v-model:visible="authModalVisible" @success="handleAuthSuccess" />
   </div>
 </template>
@@ -31,20 +32,23 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import AuthModal from '@/components/AuthModal.vue'
+import MobileScrim from '@/mobile/MobileScrim.vue'
 import DashboardSidebar from './components/DashboardSidebar.vue'
 import DashboardHeader from './components/DashboardHeader.vue'
-import { useFloatingSidebar } from '@/composables/useFloatingSidebar'
+import { useShellSidebar } from '@/mobile/useShellSidebar'
 
-// 悬浮胶囊侧边栏：Header 上的收缩按钮切换，收起后悬浮按钮唤出（peek）
+// 外壳侧栏：桌面为悬浮胶囊（收缩按钮切换 + 悬浮 peek），移动端为覆盖式抽屉
 const {
   collapsed: sidebarCollapsed,
   peeking: sidebarPeeking,
+  drawerOpen,
   enterHandle: sidebarEnterHandle,
   leaveHandle: sidebarLeaveHandle,
   enterPanel: sidebarEnterPanel,
   leavePanel: sidebarLeavePanel,
-  toggle: sidebarToggle
-} = useFloatingSidebar()
+  toggle: sidebarToggle,
+  closeDrawer
+} = useShellSidebar()
 
 const authModalVisible = ref(false)
 
@@ -80,14 +84,6 @@ function handleAuthSuccess(): void {
 
 .sidebar-collapsed .main-container {
   margin-left: 12px;
-}
-
-@media (max-width: 768px) {
-  // 窄屏：侧边栏始终以覆盖层出现，内容不再让位
-  .main-container,
-  .sidebar-collapsed .main-container {
-    margin-left: 12px;
-  }
 }
 
 .content {

@@ -110,9 +110,5 @@ defineProps<{
   }
 }
 
-@media (max-width: 768px) {
-  .metrics-row {
-    grid-template-columns: 1fr;
-  }
-}
+// ≤768px 的移动端单列见 mobile/styles/dashboard.scss
 </style>

@@ -450,10 +450,6 @@ function emitReorder(): void {
   }
 }
 
-@media (max-width: 768px) {
-  // 窄屏：轨道不出场（会话胶囊本就以覆盖层出现，无让位语义）
-  .agent-rail {
-    display: none;
-  }
-}
+// 移动端（≤768px）左轨整体隐藏，职能由智能体切换抽屉承担：
+// 见 mobile/styles/shell.scss 与 mobile/components/MobileAgentDrawer.vue
 </style>

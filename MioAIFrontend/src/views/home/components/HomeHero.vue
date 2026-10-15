@@ -82,10 +82,6 @@ function scrollToFeatures(): void {
 
   .sub-break {
     display: inline;
-
-    @media (max-width: 640px) {
-      display: none;
-    }
   }
 }
 
@@ -158,14 +154,6 @@ function scrollToFeatures(): void {
     }
   }
 
-  @media (max-width: 640px) {
-    flex-wrap: wrap;
-
-    .banner-text {
-      flex-basis: 100%;
-      order: 3;
-    }
-  }
 }
 
 /* 载入错落 */

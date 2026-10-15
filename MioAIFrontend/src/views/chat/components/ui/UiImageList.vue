@@ -58,10 +58,6 @@ const items = computed<UiImageMeta[]>(() =>
   border: 1px solid $border-warm-subtle;
   border-radius: 8px;
 
-  @media (max-width: 560px) {
-    flex-direction: column;
-  }
-
   :deep(.ant-image) {
     flex-shrink: 0;
     border-radius: 6px;

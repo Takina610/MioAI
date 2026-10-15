@@ -1,0 +1,21 @@
+/**
+ * 移动端样式入口：main.ts 引入一次即可。
+ *
+ * 分层（全部为全局样式，按 `html.is-mobile` / `html.is-touch` 标记限定）：
+ *  - tokens    断点常量与 mixin
+ *  - base      跨模块共性：触屏兜底、antd 收敛、表格滚动、安全区
+ *  - shell     三个外壳（对话/控制台/管理后台）骨架
+ *  - chat      对话页
+ *  - dashboard 控制台内页
+ *  - admin     管理后台内页
+ *  - pages     首页/分享页/错误页/全局组件
+ *
+ * 组件内的移动端规则一律写进本层，不再散落到各 .vue 的 <style> 里。
+ */
+@import './styles/tokens';
+@import './styles/base';
+@import './styles/shell';
+@import './styles/chat';
+@import './styles/dashboard';
+@import './styles/admin';
+@import './styles/pages';

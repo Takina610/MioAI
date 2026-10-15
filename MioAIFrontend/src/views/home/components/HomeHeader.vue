@@ -14,6 +14,15 @@
       </nav>
 
       <div class="header-right">
+        <button
+          v-if="isTablet"
+          type="button"
+          class="nav-toggle"
+          aria-label="打开导航菜单"
+          @click="navOpen = true"
+        >
+          <MenuOutlined />
+        </button>
         <template v-if="userStore.isLoggedIn">
           <a-dropdown :trigger="['hover']" overlay-class-name="hm-user-menu">
             <div class="user-info">
@@ -43,17 +52,27 @@
         </template>
       </div>
     </div>
+
+    <!-- 移动端导航抽屉：≤900px 顶栏链接整体隐藏后的唯一入口 -->
+    <HomeNavDrawer :visible="navOpen" @close="navOpen = false" />
   </header>
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { SettingOutlined, UserOutlined, LogoutOutlined } from '@ant-design/icons-vue'
+import { SettingOutlined, UserOutlined, LogoutOutlined, MenuOutlined } from '@ant-design/icons-vue'
 import { useUserStore } from '@/store/user'
 import { message } from 'ant-design-vue'
+import HomeNavDrawer from '@/mobile/components/HomeNavDrawer.vue'
+import { useIsMobile } from '@/mobile/useIsMobile'
 
 const router = useRouter()
 const userStore = useUserStore()
+const { isTablet } = useIsMobile()
+
+/** 移动端导航抽屉开合 */
+const navOpen = ref(false)
 
 function refreshPage(): void {
   window.location.reload()
@@ -119,10 +138,11 @@ async function handleLogout(): Promise<void> {
       opacity: 1;
     }
   }
+}
 
-  @media (max-width: 900px) {
-    display: none;
-  }
+/* 移动端导航按钮：平时不渲染（v-if），样式见 mobile/styles/pages.scss */
+.nav-toggle {
+  display: none;
 }
 
 .header-right {
@@ -155,10 +175,6 @@ async function handleLogout(): Promise<void> {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-
-    @media (max-width: 480px) {
-      display: none;
-    }
   }
 }
 

@@ -284,35 +284,6 @@ function goToChat(): void {
   }
 }
 
-@media (max-width: 768px) {
-  .share-page {
-    padding: 20px 16px 24px;
-  }
-
-  .card-header {
-    padding: 20px 20px 16px;
-
-    .conversation-title {
-      font-size: 18px;
-    }
-
-    .conversation-meta {
-      font-size: 12px;
-    }
-  }
-
-  .card-divider {
-    margin: 0 20px;
-  }
-
-  .card-content {
-    padding: 0;
-  }
-
-  .action-buttons .text-btn {
-    height: 36px;
-    padding: 0 18px;
-    font-size: 14px;
-  }
-}
+// 移动端（≤768px）的页边距、卡片头部与内嵌消息列表留白见
+// mobile/styles/pages.scss（按 html.is-mobile 标记生效，断点定义在 mobile/breakpoints.ts）
 </style>

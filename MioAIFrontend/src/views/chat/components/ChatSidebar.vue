@@ -69,6 +69,12 @@
             <RobotOutlined />
             <span class="btn-text">智能体广场</span>
           </a-button>
+
+          <!-- 移动端专用：左轨（智能体纵列）已隐藏，改由此入口打开智能体切换抽屉 -->
+          <a-button class="app-square-btn agents-btn" @click="emit('agents')">
+            <AppstoreOutlined />
+            <span class="btn-text">切换智能体</span>
+          </a-button>
         </div>
 
         <ChatSessionList
@@ -144,7 +150,8 @@ import {
   LogoutOutlined,
   UserOutlined,
   FormOutlined,
-  EditOutlined
+  EditOutlined,
+  AppstoreOutlined
 } from '@ant-design/icons-vue'
 
 const props = defineProps<{
@@ -176,6 +183,8 @@ const emit = defineEmits<{
   (e: 'login'): void
   (e: 'personalize'): void
   (e: 'edit-agent'): void
+  /** 打开智能体切换抽屉（仅移动端渲染入口） */
+  (e: 'agents'): void
 }>()
 
 const router = useRouter()

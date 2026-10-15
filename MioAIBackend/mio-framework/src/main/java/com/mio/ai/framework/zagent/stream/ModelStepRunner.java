@@ -44,8 +44,40 @@ public final class ModelStepRunner {
     /** 轮次取消信号（用户中断）：每次尝试前与重试等待前检查，命中即停，不再重发/退避 */
     private volatile java.util.function.BooleanSupplier cancelSignal = () -> false;
 
+    /**
+     * 模型服务侧故障回调（非用户取消、非上下文超限）：判定为"模型服务自身问题"时触发，
+     * 供上层做模型目录失效等自愈动作。重试期间的每次失败都会上报（上游故障可早发现）。
+     */
+    private volatile java.util.function.Consumer<String> modelFailureListener = reason -> {
+    };
+
     public void setCancelSignal(java.util.function.BooleanSupplier signal) {
         this.cancelSignal = signal;
+    }
+
+    /** 注入模型服务故障回调（reason 为分类原因，如 upstream-stream-error / http-404） */
+    public void setModelFailureListener(java.util.function.Consumer<String> listener) {
+        this.modelFailureListener = listener == null ? reason -> {
+        } : listener;
+    }
+
+    /** 上报模型服务侧故障：回调异常内部吞掉，绝不影响轮次收尾 */
+    private void notifyModelFailure(String reason) {
+        try {
+            modelFailureListener.accept(reason);
+        } catch (Throwable ignored) {
+            // 自愈动作失败不影响对话轮次
+        }
+    }
+
+    /**
+     * 失败分类：自研协议适配器（Anthropic/Responses）以裸 IllegalStateException
+     * 抛出上游错误，不经 openai-java SDK 的异常分支——先按其文本形态补判，
+     * 未命中再走常规分类。
+     */
+    private static StreamFailureClassifier.Classification classifyError(Throwable error) {
+        StreamFailureClassifier.Classification vendor = StreamFailureClassifier.classifyVendorError(error);
+        return vendor != null ? vendor : StreamFailureClassifier.classify(error);
     }
 
     public ModelStepRunner(ChatModel chatModel, long streamTimeoutSeconds, String reasoningEffort,
@@ -82,20 +114,30 @@ public final class ModelStepRunner {
                 StepResult result = finishStep(collector, events);
                 // 空补全（零文本+零工具+零用量）：多半是上游静默故障，作废本轮再试一次；
                 // 已有可见输出或重试额度用尽则原样返回，由引擎的兜底收束接力
-                if (isEmptyCompletion(result) && !collector.hasEmitted()
-                        && emptyCompletionRetries < EMPTY_COMPLETION_MAX_RETRIES) {
-                    emptyCompletionRetries++;
-                    log.warn("模型流零输出（无文本/工具/用量），作废重试, attempt={}", attempt);
-                    attempt--;
-                    continue;
+                if (isEmptyCompletion(result) && !collector.hasEmitted()) {
+                    // 静默零输出是上游故障的强信号（模型可能已下线）：上报自愈钩子
+                    if (!cancelSignal.getAsBoolean()) {
+                        notifyModelFailure("empty-completion");
+                    }
+                    if (emptyCompletionRetries < EMPTY_COMPLETION_MAX_RETRIES) {
+                        emptyCompletionRetries++;
+                        log.warn("模型流零输出（无文本/工具/用量），作废重试, attempt={}", attempt);
+                        attempt--;
+                        continue;
+                    }
                 }
                 return result;
             } catch (Throwable error) {
                 lastStepTextEmitted = collector.hasEmittedText();
-                StreamFailureClassifier.Classification failure = StreamFailureClassifier.classify(error);
+                StreamFailureClassifier.Classification failure = classifyError(error);
                 boolean canRetry = failure.retryable()
                         && !collector.hasEmitted()
                         && attempt <= modelRetries;
+                // 模型服务侧故障（非用户取消、非上下文超限）上报自愈钩子：
+                // 上游可能已把该模型下线/改名，目录需要重建
+                if (failure.modelSide() && !cancelSignal.getAsBoolean()) {
+                    notifyModelFailure(failure.reason());
+                }
                 if (!canRetry) {
                     throw error;
                 }
