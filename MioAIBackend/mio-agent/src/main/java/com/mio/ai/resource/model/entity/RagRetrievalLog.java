@@ -33,6 +33,12 @@ public class RagRetrievalLog implements Serializable {
      */
     private Long kbId;
 
+    /** 会话ID（群聊检索为空） */
+    private String conversationId;
+
+    /** 本轮对话模型（未指定为空） */
+    private String model;
+
     /**
      * 查询内容
      */

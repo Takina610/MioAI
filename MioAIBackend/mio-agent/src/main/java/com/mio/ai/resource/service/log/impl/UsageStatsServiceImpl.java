@@ -47,6 +47,11 @@ public class UsageStatsServiceImpl implements UsageStatsService {
 
     @Override
     public UsageStatsVO buildStats(String type, LocalDateTime startTime, LocalDateTime endTime, Long userId) {
+        return buildStats(type, startTime, endTime, userId, null);
+    }
+
+    @Override
+    public UsageStatsVO buildStats(String type, LocalDateTime startTime, LocalDateTime endTime, Long userId, Long agentId) {
         if (startTime == null) {
             startTime = LocalDateTime.now().minusDays(7);
         }
@@ -60,7 +65,7 @@ public class UsageStatsServiceImpl implements UsageStatsService {
 
         switch (type) {
             case "agent":
-                return buildAgentStats(startTime, endTime, prevStartTime, prevEndTime, userId);
+                return buildAgentStats(startTime, endTime, prevStartTime, prevEndTime, userId, agentId);
             case "knowledge":
                 return buildKnowledgeStats(startTime, endTime, prevStartTime, prevEndTime, userId);
             case "mcp":
@@ -74,12 +79,15 @@ public class UsageStatsServiceImpl implements UsageStatsService {
 
     private UsageStatsVO buildAgentStats(LocalDateTime startTime, LocalDateTime endTime,
                                          LocalDateTime prevStartTime, LocalDateTime prevEndTime,
-                                         Long userId) {
+                                         Long userId, Long agentId) {
         LambdaQueryWrapper<AgentUsageLog> wrapper = new LambdaQueryWrapper<>();
         wrapper.ge(AgentUsageLog::getCreateTime, startTime)
                 .le(AgentUsageLog::getCreateTime, endTime);
         if (userId != null) {
             wrapper.eq(AgentUsageLog::getUserId, userId);
+        }
+        if (agentId != null) {
+            wrapper.eq(com.mio.ai.resource.model.entity.AgentUsageLog::getAgentId, agentId);
         }
         List<AgentUsageLog> logs = agentUsageLogService.list(wrapper);
 

@@ -208,11 +208,10 @@ public class UserInsightServiceImpl implements UserInsightService {
         summary.setCurrentStreak(0);
         summary.setLongestStreak(0);
         vo.setSummary(summary);
-        if (userId == null) {
-            return vo;
-        }
-
-        List<UserStatsDaily> rows = userStatsDailyService.listByUser(userId);
+        // userId 为空 = 全用户聚合（管理端使用统计）
+        List<UserStatsDaily> rows = userId == null
+                ? userStatsDailyService.list()
+                : userStatsDailyService.listByUser(userId);
         int targetYear = year != null ? year : LocalDate.now().getYear();
         TreeSet<LocalDate> activeDates = new TreeSet<>();
         for (UserStatsDaily row : rows) {
@@ -247,15 +246,12 @@ public class UserInsightServiceImpl implements UserInsightService {
         TokenTrendVO vo = new TokenTrendVO();
         vo.setDimension("agent".equals(dimension) ? "agent" : "model");
         vo.setSeries(new ArrayList<>());
-        if (userId == null) {
-            return vo;
-        }
 
         int rangeDays = days == null ? 7 : Math.max(1, Math.min(365, days));
         LocalDate today = LocalDate.now();
         LocalDate start = today.minusDays(rangeDays - 1L);
 
-        List<AgentUsageLog> logs = listUserUsageLogs(userId, start);
+        List<AgentUsageLog> logs = listUsageLogs(userId, start);
         // key → (date → [tokens, calls])；key 为模型名或智能体ID。
         // 模型维度只统计已记录模型名的日志（模型字段上线前的老数据不回填、不猜测）
         if (!"agent".equals(vo.getDimension())) {
@@ -361,11 +357,14 @@ public class UserInsightServiceImpl implements UserInsightService {
                 .eq(AgentUsageLog::getUserId, userId));
     }
 
-    private List<AgentUsageLog> listUserUsageLogs(Long userId, LocalDate start) {
+    private List<AgentUsageLog> listUsageLogs(Long userId, LocalDate start) {
         Date startDate = Date.from(start.atStartOfDay(ZoneId.systemDefault()).toInstant());
-        return agentUsageLogService.list(new LambdaQueryWrapper<AgentUsageLog>()
-                .eq(AgentUsageLog::getUserId, userId)
-                .ge(AgentUsageLog::getCreateTime, startDate));
+        LambdaQueryWrapper<AgentUsageLog> wrapper = new LambdaQueryWrapper<AgentUsageLog>()
+                .ge(AgentUsageLog::getCreateTime, startDate);
+        if (userId != null) {
+            wrapper.eq(AgentUsageLog::getUserId, userId);
+        }
+        return agentUsageLogService.list(wrapper);
     }
 
     /** 当前连续天数：今天未活跃从昨天回数（今天还没聊不该清零连击） */

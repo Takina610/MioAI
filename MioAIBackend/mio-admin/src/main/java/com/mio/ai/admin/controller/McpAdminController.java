@@ -4,6 +4,7 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.mio.ai.admin.model.dto.McpAdminCreateRequest;
 import com.mio.ai.admin.model.dto.McpAdminUpdateRequest;
 import com.mio.ai.common.aop.annotation.AuthCheck;
 import com.mio.ai.common.aop.annotation.LogInfo;
@@ -12,18 +13,22 @@ import com.mio.ai.common.constant.UserConstant;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.exception.ThrowUtils;
 import com.mio.ai.common.utils.ResultUtils;
+import com.mio.ai.resource.model.dto.mcptool.McpToolAddRequest;
 import com.mio.ai.resource.model.dto.mcptool.McpToolQueryRequest;
 import com.mio.ai.resource.model.entity.McpTool;
 import com.mio.ai.resource.model.enums.McpToolStatusEnum;
 import com.mio.ai.resource.model.vo.mcp.McpToolVO;
 import com.mio.ai.resource.service.mcp.McpToolService;
+import com.mio.ai.user.utils.RedisComponent;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 管理员 MCP 工具管理接口
@@ -36,6 +41,37 @@ public class McpAdminController {
 
     @Resource
     private McpToolService mcpToolService;
+
+    @Resource
+    private RedisComponent redisComponent;
+
+    @Resource
+    private com.mio.ai.user.service.UserService userService;
+
+    /**
+     * 创建 MCP 工具：复用用户侧添加链路（配置结构校验 + stdio 守卫），归属当前管理员
+     */
+    @PostMapping
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @LogInfo
+    public BaseResponse<Long> createMcp(@Valid @RequestBody McpAdminCreateRequest request,
+                                        HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        McpToolAddRequest addRequest = new McpToolAddRequest();
+        addRequest.setName(request.getName());
+        addRequest.setDescription(request.getDescription());
+        addRequest.setConfig(request.getConfig());
+        // tool_info 列非空：未提供时存空数组 JSON
+        addRequest.setToolInfo(request.getToolInfo() != null ? request.getToolInfo() : "[]");
+        Long id = mcpToolService.addMcpTool(addRequest, userId);
+        if (request.getIsPublic() != null && request.getIsPublic() == 1) {
+            McpTool update = new McpTool();
+            update.setId(id);
+            update.setIsPublic(1);
+            mcpToolService.updateById(update);
+        }
+        return ResultUtils.success(id);
+    }
 
     /**
      * 分页查询 MCP 工具列表（管理员）
@@ -56,18 +92,29 @@ public class McpAdminController {
         if (request.getStatus() != null) {
             queryWrapper.eq("status", request.getStatus());
         }
+        if (request.getStatusList() != null && !request.getStatusList().isEmpty()) {
+            queryWrapper.in("status", request.getStatusList());
+        }
+        if (StrUtil.isNotBlank(request.getOwnerName())) {
+            List<Long> ownerIds = userService.list(new QueryWrapper<com.mio.ai.user.model.entity.User>()
+                    .like("user_name", request.getOwnerName())).stream().map(com.mio.ai.user.model.entity.User::getId).toList();
+            queryWrapper.in(ownerIds.isEmpty(), "user_id", List.of(-1L));
+            queryWrapper.in(!ownerIds.isEmpty(), "user_id", ownerIds);
+        }
         if (request.getIsPublic() != null) {
             queryWrapper.eq("is_public", request.getIsPublic());
         }
         queryWrapper.orderByDesc("update_time");
 
         Page<McpTool> mcpPage = mcpToolService.page(new Page<>(current, size), queryWrapper);
+        Map<Long, String> ownerNames = resolveOwnerNames(mcpPage.getRecords().stream().map(McpTool::getUserId).toList());
         Page<McpToolVO> voPage = new Page<>(mcpPage.getCurrent(), mcpPage.getSize(), mcpPage.getTotal());
         List<McpToolVO> voList = mcpPage.getRecords().stream().map(mcp -> {
             McpToolVO vo = new McpToolVO();
             BeanUtil.copyProperties(mcp, vo);
             McpToolStatusEnum statusEnum = McpToolStatusEnum.getByCode(mcp.getStatus());
             vo.setStatusDesc(statusEnum != null ? statusEnum.getDesc() : "未知");
+            vo.setUserName(ownerNames.get(mcp.getUserId()));
             return vo;
         }).toList();
         voPage.setRecords(voList);
@@ -112,6 +159,12 @@ public class McpAdminController {
         if (request.getIsPublic() != null) {
             update.setIsPublic(request.getIsPublic());
         }
+        if (request.getConfig() != null) {
+            update.setConfig(request.getConfig());
+        }
+        if (request.getToolInfo() != null) {
+            update.setToolInfo(request.getToolInfo());
+        }
         boolean result = mcpToolService.updateById(update);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "更新失败");
         return ResultUtils.success(true);
@@ -133,4 +186,16 @@ public class McpAdminController {
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "删除失败");
         return ResultUtils.success(true);
     }
+
+    /** 归属用户名批量解析（owner 列展示） */
+    private Map<Long, String> resolveOwnerNames(List<Long> userIds) {
+        List<Long> ids = userIds.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> names = new java.util.HashMap<>();
+        userService.listByIds(ids).forEach(u -> names.put(u.getId(), u.getUserName()));
+        return names;
+    }
 }
+

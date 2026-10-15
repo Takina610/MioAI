@@ -62,8 +62,8 @@ const menuGroups: MenuGroup[] = [
 ]
 
 /** 根据当前路由计算激活的菜单 key（支持子路径前缀匹配） */
-function resolveActiveKey(path: string): string {
-  for (const group of menuGroups) {
+function resolveActiveKey(path: string, groups: MenuGroup[] = menuGroups): string {
+  for (const group of groups) {
     for (const item of group.items) {
       if (path === item.path || path.startsWith(`${item.path}/`)) {
         return item.key
@@ -73,15 +73,16 @@ function resolveActiveKey(path: string): string {
   return ''
 }
 
-export function useDashboardMenu() {
+export function useDashboardMenu(customGroups?: MenuGroup[]) {
   const route = useRoute()
   const router = useRouter()
   const currentKey = ref('')
+  const activeGroups = customGroups ?? menuGroups
 
   watch(
     () => route.path,
     (path) => {
-      currentKey.value = resolveActiveKey(path)
+      currentKey.value = resolveActiveKey(path, activeGroups)
     },
     { immediate: true }
   )
@@ -91,5 +92,5 @@ export function useDashboardMenu() {
     router.push(item.path)
   }
 
-  return { menuGroups, currentKey, navigateTo }
+  return { menuGroups: activeGroups, currentKey, navigateTo }
 }

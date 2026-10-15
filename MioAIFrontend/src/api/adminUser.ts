@@ -9,6 +9,8 @@ export interface UserAdminVO {
   userProfile: string
   userRole: string
   createTime: string
+  /** 1 正常 / 0 停用 */
+  status?: number
 }
 
 export interface UserAdminQueryRequest {
@@ -29,11 +31,34 @@ export interface UserAdminUpdateRequest {
   userProfile?: string
   userRole?: string
   userAvatar?: string
+  /** 账号修改走后端唯一性校验 */
+  userAccount?: string
+  /** 非空即重置密码（明文，后端 BCrypt 加密） */
+  userPassword?: string
+  /** 1 正常 / 0 停用（停用后禁止登录） */
+  status?: number
+}
+
+export interface UserAdminCreateRequest {
+  userAccount: string
+  userPassword: string
+  userName?: string
+  userProfile?: string
+  userRole?: string
+  userAvatar?: string
 }
 
 export function searchUsers(data: UserAdminQueryRequest): Promise<PageResponse<UserAdminVO>> {
   return request({
     url: '/admin/users/search',
+    method: 'post',
+    data
+  })
+}
+
+export function createUser(data: UserAdminCreateRequest): Promise<number> {
+  return request({
+    url: '/admin/users',
     method: 'post',
     data
   })

@@ -1,0 +1,164 @@
+/* 管理后台共享样式：layout.vue 引入，全后台通用（adm- 前缀防冲突） */
+
+.adm-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.adm-page-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+
+  .adm-page-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: $text-dark;
+  }
+
+  .adm-page-desc {
+    font-size: 13px;
+    color: $text-muted;
+  }
+}
+
+.adm-stat-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+
+  .adm-stat-card {
+    background: $bg-ivory;
+    border: 1px solid $border-warm-subtle;
+    border-radius: 10px;
+    padding: 14px 18px;
+
+    .adm-stat-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: $text-dark;
+      line-height: 1.3;
+    }
+
+    .adm-stat-label {
+      font-size: 12px;
+      color: $text-muted;
+      margin-top: 2px;
+    }
+  }
+}
+
+.adm-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+
+  .adm-filter-item {
+    width: 160px;
+  }
+
+  .adm-filter-search {
+    width: 260px;
+  }
+}
+
+.adm-table-card {
+  background: $bg-ivory;
+  border: 1px solid $border-warm-subtle;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.adm-chart-card {
+  background: $bg-ivory;
+  border: 1px solid $border-warm-subtle;
+  border-radius: 12px;
+  padding: 16px 18px;
+  align-items: start;
+
+  .adm-chart-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+
+    .adm-chart-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: $text-dark;
+    }
+  }
+}
+
+.adm-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+  gap: 16px;
+}
+
+.adm-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: $text-secondary;
+
+  &::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: $border-warm;
+    flex-shrink: 0;
+  }
+
+  &.is-success::before {
+    background: $primary-color;
+  }
+
+  &.is-danger::before {
+    background: $danger-color;
+  }
+
+  &.is-pulse::before {
+    animation: adm-pulse 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes adm-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.adm-cell-primary {
+  color: $text-dark;
+  font-weight: 500;
+}
+
+.adm-cell-muted {
+  color: $text-muted;
+  font-size: 12px;
+}
+
+.adm-id-chip {
+  font-size: 12px;
+  color: $text-muted;
+  background: rgba(42, 161, 169, 0.08);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.adm-pagination {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}

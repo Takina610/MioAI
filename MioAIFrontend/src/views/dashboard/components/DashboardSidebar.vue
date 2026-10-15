@@ -77,6 +77,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useUserStore } from '@/store/user'
 import { useDashboardMenu } from '../composables/useDashboardMenu'
+import type { MenuGroup } from '../composables/useDashboardMenu'
 import {
   HomeOutlined,
   UserOutlined,
@@ -89,6 +90,8 @@ const props = defineProps<{
   peeking: boolean
   enterPanel: () => void
   leavePanel: () => void
+  /** 注入自定义菜单组（管理后台复用同款侧边栏时传入），缺省为控制台菜单 */
+  menuGroups?: MenuGroup[]
 }>()
 
 const emit = defineEmits<{
@@ -98,7 +101,7 @@ const emit = defineEmits<{
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
-const { menuGroups, currentKey, navigateTo } = useDashboardMenu()
+const { menuGroups, currentKey, navigateTo } = useDashboardMenu(props.menuGroups)
 
 // 面板收起（含 peek 收回）时关闭挂在 body 上的用户菜单浮层
 const userMenuOpen = ref(false)

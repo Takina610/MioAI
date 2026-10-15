@@ -32,6 +32,8 @@ export interface SkillQueryRequest {
   name?: string
   status?: number
   userId?: number
+  statusList?: number[]
+  ownerName?: string
 }
 
 export interface GithubSkill {

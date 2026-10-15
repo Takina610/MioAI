@@ -29,12 +29,34 @@ public class UsageStatsAdminController {
     public BaseResponse<UsageStatsVO> getAdminStats(
             @PathVariable String type,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
-            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime) {
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime,
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) Long agentId) {
 
-        UsageStatsVO stats = usageStatsService.buildStats(type, startTime, endTime, null);
+        UsageStatsVO stats = usageStatsService.buildStats(type, startTime, endTime, userId, agentId);
         if (stats == null) {
             return (BaseResponse<UsageStatsVO>) ResultUtils.error(400, "不支持的统计类型");
         }
         return ResultUtils.success(stats);
     }
+
+    /** 全用户日历热力图（管理端使用统计） */
+    @GetMapping("/contribution")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<com.mio.ai.resource.model.vo.log.ContributionVO> getAdminContribution(
+            @RequestParam(required = false) Integer year) {
+        return ResultUtils.success(userInsightService.buildContribution(null, year));
+    }
+
+    /** 全用户 Token 趋势：模型/智能体维度（管理端使用统计） */
+    @GetMapping("/token-trend")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<com.mio.ai.resource.model.vo.log.TokenTrendVO> getAdminTokenTrend(
+            @RequestParam(required = false) Integer days,
+            @RequestParam(required = false) String dimension) {
+        return ResultUtils.success(userInsightService.buildTokenTrend(null, days, dimension));
+    }
+
+    @Resource
+    private com.mio.ai.resource.service.log.UserInsightService userInsightService;
 }

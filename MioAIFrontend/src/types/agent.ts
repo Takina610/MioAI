@@ -77,6 +77,11 @@ export interface AgentQueryRequest extends PaginationParams {
   status?: number
   isPublic?: number
   userId?: number
+  /** 管理端多选筛选 */
+  statusList?: number[]
+  typeList?: number[]
+  /** 按归属用户名模糊 */
+  ownerName?: string
 }
 
 /** 创建群聊智能体：群本体只有名称/描述，能力来自成员智能体集合（type=2） */

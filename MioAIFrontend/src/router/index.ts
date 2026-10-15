@@ -160,13 +160,37 @@ const routes: RouteRecordRaw[] = [
     path: '/admin',
     component: () => import('@/views/admin/layout.vue'),
     meta: { title: '管理后台', requiresAuth: true, requiresAdmin: true },
-    redirect: '/admin/user',
+    redirect: '/admin/overview',
     children: [
+      {
+        path: 'overview',
+        name: 'AdminOverview',
+        component: () => import('@/views/admin/overview/index.vue'),
+        meta: { title: '管理总览', requiresAuth: true, requiresAdmin: true }
+      },
       {
         path: 'user',
         name: 'AdminUser',
         component: () => import('@/views/admin/user/index.vue'),
         meta: { title: '用户管理', requiresAuth: true, requiresAdmin: true }
+      },
+      {
+        path: 'conversation',
+        name: 'AdminConversation',
+        component: () => import('@/views/admin/conversation/index.vue'),
+        meta: { title: '会话管理', requiresAuth: true, requiresAdmin: true }
+      },
+      {
+        path: 'logs',
+        name: 'AdminLogs',
+        component: () => import('@/views/admin/logs/index.vue'),
+        meta: { title: '日志审计', requiresAuth: true, requiresAdmin: true }
+      },
+      {
+        path: 'runtime',
+        name: 'AdminRuntime',
+        component: () => import('@/views/admin/runtime/index.vue'),
+        meta: { title: '运行数据', requiresAuth: true, requiresAdmin: true }
       },
       {
         path: 'agent',
@@ -196,7 +220,7 @@ const routes: RouteRecordRaw[] = [
         path: 'usage',
         name: 'AdminUsage',
         component: () => import('@/views/admin/usage/index.vue'),
-        meta: { title: '使用记录管理', requiresAuth: true, requiresAdmin: true }
+        meta: { title: '使用统计', requiresAuth: true, requiresAdmin: true }
       }
     ]
   },

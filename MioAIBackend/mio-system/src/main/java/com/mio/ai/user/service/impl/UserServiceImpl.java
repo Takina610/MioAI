@@ -125,6 +125,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             log.info("user login failed, userAccount cannot match userPassword");
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户不存在或者密码错误");
         }
+        // 停用账号禁止登录
+        if (user.getStatus() != null && user.getStatus() == 0) {
+            throw new BusinessException(ErrorCode.FORBIDDEN_ERROR, "账号已被停用，请联系管理员");
+        }
         // 3. 历史口令平滑升级：MD5 口令在首次登录成功后自动改存为 BCrypt
         if (!isBcryptHash(user.getUserPassword())) {
             user.setUserPassword(getEncryptPassword(userPassword));

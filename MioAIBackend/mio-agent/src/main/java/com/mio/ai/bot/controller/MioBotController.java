@@ -11,6 +11,7 @@ import com.mio.ai.bot.service.AgentMessageService;
 import com.mio.ai.bot.service.BotResourceService;
 import com.mio.ai.bot.util.SseStreams;
 import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.constant.UserConstant;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.utils.JacksonUtil;
@@ -396,11 +397,11 @@ public class MioBotController {
         }
 
         BotResourceService.McpAssembly mcp = botResourceService.assembleMcpTools(resolvedAgentId);
-        BotResourceService.KnowledgeBuild knowledge = botResourceService.buildKnowledge(resolvedAgentId, userId, content);
+        BotResourceService.KnowledgeBuild knowledge = botResourceService.buildKnowledge(resolvedAgentId, userId, content, chatId, model);
         List<Skill> skills = botResourceService.assembleSkills(resolvedAgentId);
 
         // 输入框 @ // 引用的上下文：会话转录/点名知识库检索并入知识上下文，技能与 MCP 以提醒注入
-        RefsBuild refsBuild = buildRefs(refs, userId, content);
+        RefsBuild refsBuild = buildRefs(refs, userId, content, chatId, model);
         if (!refsBuild.kbGroups().isEmpty()) {
             List<Map<String, Object>> mergedGroups = new ArrayList<>(knowledge.groups());
             mergedGroups.addAll(refsBuild.kbGroups());
@@ -478,7 +479,7 @@ public class MioBotController {
      * kb → 按显式库集合检索（与绑定检索同构）；skill/mcp → 点名提醒（技能经沙箱按需读取）。
      * 会话归属不符/已删除时保留引用项（chips 照常展示）但注入处注明不可用。
      */
-    private RefsBuild buildRefs(String refsJson, Long userId, String query) {
+    private RefsBuild buildRefs(String refsJson, Long userId, String query, String conversationId, String model) {
         if (refsJson == null || refsJson.isBlank()) {
             return RefsBuild.empty();
         }
@@ -550,7 +551,7 @@ public class MioBotController {
         List<Map<String, Object>> kbGroups = new ArrayList<>();
         if (!kbIds.isEmpty()) {
             BotResourceService.KnowledgeBuild kbBuild =
-                    botResourceService.buildKnowledgeForKbs(kbIds, userId, query);
+                    botResourceService.buildKnowledgeForKbs(kbIds, userId, query, conversationId, model);
             kbGroups = kbBuild.groups();
             if (!kbBuild.context().isEmpty()) {
                 kbContext = kbBuild.context();
@@ -683,13 +684,17 @@ public class MioBotController {
     public BaseResponse<List<Map<String, Object>>> getMessages(
             @PathVariable @NotBlank String conversationId,
             jakarta.servlet.http.HttpServletRequest httpRequest) {
-        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        String tokenHeader = httpRequest.getHeader("token");
+        Long userId = redisComponent.getUserId(tokenHeader);
+        // 管理员可查看任意会话（管理后台"聊天界面查看"）
+        com.mio.ai.user.model.vo.LoginUserVO login = redisComponent.getUserInfoByToken(tokenHeader);
+        boolean isAdmin = login != null && UserConstant.ADMIN_ROLE.equals(login.getUserRole());
         com.mio.ai.bot.model.entity.ChatConversationDO conversation =
                 chatHistoryRepository.getChatByConversationId(conversationId);
         if (conversation == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "会话不存在");
         }
-        if (conversation.getUserId() == null || !conversation.getUserId().equals(userId)) {
+        if (!isAdmin && (conversation.getUserId() == null || !conversation.getUserId().equals(userId))) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限访问该会话");
         }
 

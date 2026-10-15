@@ -54,7 +54,7 @@ public final class GroupCoordinator implements MemberLauncher {
     @Override
     public MemberPlan prepare(MemberAgent member, String taskPrompt, SandboxFs fs) {
         List<ToolCallback> mcpTools = List.of(resources.assembleMcpTools(member.id()).callbacks());
-        String knowledge = resources.buildKnowledge(member.id(), userId, taskPrompt).context();
+        String knowledge = resources.buildKnowledge(member.id(), userId, taskPrompt, null, null).context();
         String skills = SkillRuntime.materialize(resources.assembleSkills(member.id()), fs);
         return new MemberPlan(member.id(), member.name(), member.description(), member.systemPrompt(),
                 member.icon(), mcpTools, knowledge, skills);

@@ -7,6 +7,17 @@ export interface SkillAdminUpdateRequest {
   name?: string
   description?: string
   status?: number
+  isPublic?: number
+  content?: string
+  sourceUrl?: string
+}
+
+export interface SkillAdminCreateRequest {
+  name: string
+  description?: string
+  content?: string
+  isPublic?: number
+  status?: number
 }
 
 export function searchSkills(data: SkillQueryRequest): Promise<PageResponse<Skill>> {
@@ -36,5 +47,13 @@ export function deleteSkill(id: number): Promise<boolean> {
   return request({
     url: `/admin/skills/${id}`,
     method: 'delete'
+  })
+}
+
+export function createSkill(data: SkillAdminCreateRequest): Promise<number> {
+  return request({
+    url: '/admin/skills',
+    method: 'post',
+    data
   })
 }

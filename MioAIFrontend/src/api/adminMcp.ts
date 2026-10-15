@@ -8,6 +8,16 @@ export interface McpAdminUpdateRequest {
   description?: string
   status?: number
   isPublic?: number
+  config?: string
+  toolInfo?: string
+}
+
+export interface McpAdminCreateRequest {
+  name: string
+  description?: string
+  config?: string
+  toolInfo?: string
+  isPublic?: number
 }
 
 export function searchMcpTools(data: McpToolQueryRequest & { name?: string }): Promise<PageResponse<McpTool>> {
@@ -37,5 +47,13 @@ export function deleteMcpTool(id: number): Promise<boolean> {
   return request({
     url: `/admin/mcp/${id}`,
     method: 'delete'
+  })
+}
+
+export function createMcpTool(data: McpAdminCreateRequest): Promise<number> {
+  return request({
+    url: '/admin/mcp',
+    method: 'post',
+    data
   })
 }

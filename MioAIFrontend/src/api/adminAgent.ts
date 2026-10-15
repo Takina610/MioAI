@@ -9,6 +9,21 @@ export interface AgentAdminUpdateRequest {
   systemPrompt?: string
   status?: number
   isPublic?: number
+  avatar?: string
+  icon?: string
+  /** 1 智能体 / 2 群聊 */
+  type?: number
+}
+
+export interface AgentAdminCreateRequest {
+  name: string
+  description?: string
+  avatar?: string
+  icon?: string
+  systemPrompt?: string
+  type?: number
+  status?: number
+  isPublic?: number
 }
 
 export function searchAgents(data: AgentQueryRequest): Promise<PageResponse<Agent>> {
@@ -38,5 +53,13 @@ export function deleteAgent(id: number): Promise<boolean> {
   return request({
     url: `/admin/agents/${id}`,
     method: 'delete'
+  })
+}
+
+export function createAgent(data: AgentAdminCreateRequest): Promise<number> {
+  return request({
+    url: '/admin/agents',
+    method: 'post',
+    data
   })
 }

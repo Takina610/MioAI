@@ -24,6 +24,12 @@ public class McpToolQueryRequest extends PageRequest implements Serializable {
      */
     private Integer status;
 
+    /** 管理端多选状态过滤 */
+    private java.util.List<Integer> statusList;
+
+    /** 管理端按归属用户名模糊过滤 */
+    private String ownerName;
+
     /**
      * 是否公开
      */

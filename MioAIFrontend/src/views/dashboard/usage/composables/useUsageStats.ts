@@ -4,6 +4,12 @@ import { getUsageStats } from '@/api/usageStats'
 import type { UsageStats, MetricValue, TimePoint, NameValue } from '@/types'
 import { formatCompact } from './format'
 
+/** 统计数据获取器：管理后台注入 admin 数据源（全用户 + 附加筛选） */
+export type UsageStatsFetcher = (
+  type: TabKey,
+  params: { startTime: string; endTime: string }
+) => Promise<UsageStats>
+
 export type TabKey = 'agent' | 'knowledge' | 'mcp' | 'skill'
 export type LineMetric = 'count' | 'agentCount' | 'tokens' | 'avgTokens'
 
@@ -98,7 +104,8 @@ export const datePresets = [
 ]
 
 /** 使用记录页：统计数据加载与指标卡片组装 */
-export function useUsageStats() {
+export function useUsageStats(fetcher?: UsageStatsFetcher) {
+  const statsApi = fetcher ?? getUsageStats
   const activeTab = ref<TabKey>('agent')
   const dateRange = ref<[Dayjs, Dayjs]>([dayjs().subtract(7, 'day'), dayjs()])
   const lineMetric = ref<LineMetric>('agentCount')
@@ -164,7 +171,7 @@ export function useUsageStats() {
     loading.value = true
     try {
       const [start, end] = dateRange.value
-      const data = await getUsageStats(activeTab.value, {
+      const data = await statsApi(activeTab.value, {
         startTime: start.format('YYYY-MM-DD HH:mm:ss'),
         endTime: end.format('YYYY-MM-DD HH:mm:ss')
       })

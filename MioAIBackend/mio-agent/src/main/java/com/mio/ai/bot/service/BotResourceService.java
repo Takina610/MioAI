@@ -121,6 +121,10 @@ public class BotResourceService {
      * 检索并拼装可注入系统提示词的上下文，同时产出按库分组的命中摘要；落 rag_retrieval_log
      */
     public KnowledgeBuild buildKnowledge(Long agentId, Long userId, String query) {
+        return buildKnowledge(agentId, userId, query, null, null);
+    }
+
+    public KnowledgeBuild buildKnowledge(Long agentId, Long userId, String query, String conversationId, String model) {
         long startTime = System.currentTimeMillis();
         RetrievalOutcome outcome;
         try {
@@ -133,14 +137,14 @@ public class BotResourceService {
             log.error("知识库检索失败, agentId={}", agentId, e);
             return KnowledgeBuild.empty();
         }
-        return toKnowledgeBuild(agentId, userId, query, outcome, startTime);
+        return toKnowledgeBuild(agentId, userId, query, outcome, startTime, conversationId, model);
     }
 
     /**
      * 按用户显式引用的知识库集合检索（输入框 @ 引用）：与绑定检索同构的注入文本与命中摘要。
      * 失败降级为空，不阻断对话。
      */
-    public KnowledgeBuild buildKnowledgeForKbs(java.util.Collection<Long> kbIds, Long userId, String query) {
+    public KnowledgeBuild buildKnowledgeForKbs(java.util.Collection<Long> kbIds, Long userId, String query, String conversationId, String model) {
         if (kbIds == null || kbIds.isEmpty()) {
             return KnowledgeBuild.empty();
         }
@@ -152,17 +156,18 @@ public class BotResourceService {
             log.error("引用知识库检索失败, kbIds={}", kbIds, e);
             return KnowledgeBuild.empty();
         }
-        return toKnowledgeBuild(null, userId, query, outcome, startTime);
+        return toKnowledgeBuild(null, userId, query, outcome, startTime, conversationId, model);
     }
 
     /** 命中结果 → 注入文本 + 分组摘要 + 检索日志（buildKnowledge/buildKnowledgeForKbs 共用） */
     private KnowledgeBuild toKnowledgeBuild(Long agentId, Long userId, String query,
-                                            RetrievalOutcome outcome, long startTime) {
+                                            RetrievalOutcome outcome, long startTime,
+                                            String conversationId, String model) {
         List<KnowledgeRetrievalResult> results = outcome.results();
         if (results.isEmpty()) {
             return KnowledgeBuild.empty();
         }
-        logRetrieval(agentId, userId, query, results, outcome, startTime);
+        logRetrieval(agentId, userId, query, results, outcome, startTime, conversationId, model);
         // 摘要分组与注入文本同源同截断：前端看到的片段就是模型拿到的片段
         List<KnowledgeRetrievalResult> injected =
                 results.subList(0, Math.min(results.size(), MAX_CONTEXT_CHUNKS));
@@ -214,7 +219,7 @@ public class BotResourceService {
 
     private void logRetrieval(Long agentId, Long userId, String query,
                               List<KnowledgeRetrievalResult> results, RetrievalOutcome outcome,
-                              long startTime) {
+                              long startTime, String conversationId, String model) {
         try {
             List<Map<String, Object>> chunks = results.stream()
                     .map(r -> Map.<String, Object>of(
@@ -230,6 +235,8 @@ public class BotResourceService {
             retrievalLog.setAgentId(agentId != null ? agentId : MioBot.AGENT_ID);
             retrievalLog.setUserId(userId);
             retrievalLog.setKbId(results.get(0).getKbId() != null ? results.get(0).getKbId() : 0L);
+            retrievalLog.setConversationId(conversationId);
+            retrievalLog.setModel(model);
             retrievalLog.setQuery(query);
             retrievalLog.setRetrievedChunks(JacksonUtil.writeValueAsString(chunks));
             retrievalLog.setTopK(results.size());

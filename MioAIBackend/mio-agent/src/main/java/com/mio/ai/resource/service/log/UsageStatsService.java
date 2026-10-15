@@ -19,4 +19,9 @@ public interface UsageStatsService {
      * @return 统计数据
      */
     UsageStatsVO buildStats(String type, LocalDateTime startTime, LocalDateTime endTime, Long userId);
+
+    /**
+     * 带智能体过滤的统计（管理端）：agentId 仅对 agent 类型生效，其余类型忽略
+     */
+    UsageStatsVO buildStats(String type, LocalDateTime startTime, LocalDateTime endTime, Long userId, Long agentId);
 }

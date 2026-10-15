@@ -14,17 +14,10 @@
           <line x1="9.2" y1="4.8" x2="9.2" y2="19.2" />
         </svg>
       </button>
-      <div v-if="isAdmin" class="admin-btns">
-        <a
-          v-for="entry in adminEntries"
-          :key="entry.path"
-          :href="`${baseUrl}${entry.path}`"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="admin-btn"
-        >
-          <span class="btn-text">{{ entry.label }}</span>
-          <ExportOutlined class="btn-icon" />
+      <div v-if="isAdmin && !hideAdminEntry" class="admin-btns">
+        <a class="admin-btn" @click="router.push('/admin')">
+          <span class="btn-text">管理后台</span>
+          <DashboardOutlined class="btn-icon" />
         </a>
       </div>
     </div>
@@ -34,28 +27,24 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ExportOutlined } from '@ant-design/icons-vue'
+import { useRouter } from 'vue-router'
+import { DashboardOutlined } from '@ant-design/icons-vue'
 import { useUserStore } from '@/store/user'
 
-defineProps<{
+const props = defineProps<{
   toggle: () => void
   enterHandle: () => void
   leaveHandle: () => void
+  /** 管理后台内部使用：不再显示返回管理后台的入口按钮 */
+  hideAdminEntry?: boolean
 }>()
 
+void props
+
+const router = useRouter()
 const userStore = useUserStore()
-const baseUrl = window.location.origin
 
 const isAdmin = computed(() => userStore.userInfo?.userRole === 'admin')
-
-/** 管理后台跳转入口 */
-const adminEntries = [
-  { path: '/admin/user', label: '用户管理' },
-  { path: '/admin/agent', label: '智能体管理' },
-  { path: '/admin/mcp', label: 'MCP 管理' },
-  { path: '/admin/knowledge', label: '知识库管理' },
-  { path: '/admin/usage', label: '记录管理' }
-]
 </script>
 
 <style lang="scss" scoped>

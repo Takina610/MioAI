@@ -1,6 +1,6 @@
 <template>
-  <div class="share-page" ref="pageRef">
-    <div class="share-container" ref="containerRef">
+  <div class="share-page">
+    <div class="share-container">
       <div class="conversation-card">
         <div class="card-header">
           <h1 class="conversation-title">{{ conversationTitle || '分享对话' }}</h1>
@@ -11,33 +11,14 @@
 
         <div class="card-divider"></div>
 
-        <div class="card-content" ref="contentRef">
-          <div class="chat-messages" ref="messagesRef" v-if="messages.length > 0">
-            <div class="messages-wrapper">
-              <div
-                v-for="msg in messages"
-                :key="msg.id"
-                class="message"
-                :class="msg.role"
-                @mouseenter="hoverMessageId = msg.id"
-                @mouseleave="hoverMessageId = ''"
-              >
-                <div class="message-content">
-                  <MarkdownView v-if="msg.content" class="message-text" :content="msg.content" />
-                  <div class="message-actions">
-                    <div class="copy-area" v-show="hoverMessageId === msg.id && msg.content">
-                      <a-tooltip :title="copiedMessageId === msg.id ? '已复制' : '复制'">
-                        <a-button type="text" size="small" class="copy-btn" :class="{ 'copied': copiedMessageId === msg.id }" @click="copyMessage(msg.content, msg.id)">
-                          <CheckOutlined v-if="copiedMessageId === msg.id" />
-                          <CopyOutlined v-else />
-                        </a-button>
-                      </a-tooltip>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+        <div class="card-content">
+          <!-- 与聊天界面同构的消息渲染（块级内容/思考/工具/引用全保留），只读无编辑 -->
+          <ChatMessageList
+            v-if="messages.length > 0"
+            :messages="messages"
+            :is-loading="false"
+            :can-modify="false"
+          />
 
           <div class="conversation-loading" v-if="loading">
             <a-spin size="large" />
@@ -46,17 +27,17 @@
         </div>
       </div>
 
-      <div class="action-buttons fixed">
+      <div class="action-buttons">
         <button class="text-btn" @click="goToChat">
-          <MessageOutlined />
-          <div class="text">
-            {{ agentInfo?.name || 'MioBot' }}继续聊
-          </div>
+          <span class="text">{{ ctaText }}</span>
         </button>
       </div>
 
       <div class="footer-section">
-        <p class="copyright">{{ agentInfo?.name || 'MioBot' }} • 你的AI助手</p>
+        <div class="agent-identity">
+          <AgentFace :agent="agentInfo" :size="22" />
+          <span class="agent-name">{{ agentInfo?.name || 'MioBot' }}</span>
+        </div>
       </div>
     </div>
   </div>
@@ -66,23 +47,21 @@
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { getConversation } from '@/api/chatMemory'
-import { getBotMessages } from '@/api/botMessages'
-import { getAgentById } from '@/api/agent'
-import type { Agent, ChatMessage, MessageBlock } from '@/types'
-import { CopyOutlined, CheckOutlined, MessageOutlined } from '@ant-design/icons-vue'
-import MarkdownView from '@/components/MarkdownView.vue'
+import { getSharedConversation, type SharedAgentBrief } from '@/api/chatMemory'
+import type { ChatMessage, MessageBlock } from '@/types'
+import AgentFace from '@/components/AgentFace.vue'
+import ChatMessageList from '@/views/chat/components/ChatMessageList.vue'
 import { textOfBlocks } from '@/views/chat/composables/useChatMessages'
+import { useUserStore } from '@/store/user'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
 
 const loading = ref<boolean>(true)
 const conversationTitle = ref<string>('')
-const hoverMessageId = ref<string>('')
-const copiedMessageId = ref<string>('')
 const messages = ref<ChatMessage[]>([])
-const agentInfo = ref<Agent | null>(null)
+const agentInfo = ref<SharedAgentBrief | null>(null)
 const conversationDate = ref<Date>(new Date())
 const agentId = ref<number>(0)
 
@@ -108,27 +87,24 @@ async function loadShareData(agentIdParam: string, conversationId: string): Prom
   loading.value = true
   try {
     agentId.value = Number(agentIdParam)
-    try {
-      agentInfo.value = await getAgentById(agentId.value)
-    } catch {
-      agentInfo.value = null
-    }
 
-    const conversationRes = await getConversation(conversationId)
-    if (conversationRes && conversationRes.title) {
-      conversationTitle.value = conversationRes.title
-      document.title = `${conversationRes.title} - MioAI`
-    }
+    const shared = await getSharedConversation(agentId.value, conversationId)
+    const rows = shared?.messages ?? []
 
-    if (conversationRes && conversationRes.createTime) {
-      conversationDate.value = new Date(conversationRes.createTime)
-    }
-
-    const rows = await getBotMessages(conversationId)
-
-    if (!rows || rows.length === 0) {
+    if (rows.length === 0) {
       router.push('/404')
       return
+    }
+
+    // 智能体展示信息随分享数据下发（私有智能体游客读不到 /agents/{id}，不单独请求）
+    agentInfo.value = shared.agent ?? null
+
+    if (shared.title) {
+      conversationTitle.value = shared.title
+      document.title = `${shared.title} - MioAI`
+    }
+    if (shared.createTime) {
+      conversationDate.value = new Date(shared.createTime)
     }
 
     messages.value = rows.map((row, index) => {
@@ -138,13 +114,14 @@ async function loadShareData(agentIdParam: string, conversationId: string): Prom
         role: row.role === 'user' ? 'user' : 'assistant',
         content: textOfBlocks(blocks ?? []),
         createTime: row.createTime ? new Date(row.createTime) : new Date(),
+        durationMs: row.durationMs,
         blocks
       } as ChatMessage
     })
 
     if (!conversationTitle.value) {
       const firstUser = rows.find(r => r.role === 'user')
-      const firstUserContent = firstUser ? textOfBlocks(firstUser.blocks ?? []) : ''
+      const firstUserContent = firstUser ? textOfBlocks((firstUser.blocks ?? []) as MessageBlock[]) : ''
       if (firstUserContent) {
         conversationTitle.value = firstUserContent.slice(0, 30) + (firstUserContent.length > 30 ? '...' : '')
         document.title = `${conversationTitle.value} - MioAI`
@@ -158,17 +135,22 @@ async function loadShareData(agentIdParam: string, conversationId: string): Prom
   }
 }
 
-async function copyMessage(content: string, messageId: string): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(content)
-    copiedMessageId.value = messageId
-  } catch (e) {
-    console.error(e)
-    message.error('复制失败')
-  }
-}
+/** 按钮文案与去向按登录态/归属分流：
+ *  未登录 = 快速开始（与首页同款入口）；别人的智能体 = 广场定位；自己的/内置 = 直接继续聊 */
+const ctaText = computed<string>(() =>
+  userStore.isLoggedIn ? `和 ${agentInfo.value?.name || 'MioBot'} 继续聊` : '快速开始'
+)
 
 function goToChat(): void {
+  if (!userStore.isLoggedIn) {
+    router.push('/chat')
+    return
+  }
+  const ownerId = agentInfo.value?.userId
+  if (ownerId != null && ownerId !== userStore.userInfo?.id) {
+    router.push({ path: '/dashboard/agent-market', query: { highlight: String(agentId.value) } })
+    return
+  }
   router.push(`/chat/${agentId.value || 1}`)
 }
 </script>
@@ -182,8 +164,8 @@ function goToChat(): void {
 
   display: flex;
   justify-content: center;
-  padding: 40px 20px 20px;
-  overflow: auto;
+  padding: 40px 20px 24px;
+  // 不设 overflow：页面滚动走文档流，底部按钮的 sticky 贴底才能锚定视口
 }
 
 .share-container {
@@ -191,7 +173,6 @@ function goToChat(): void {
   max-width: 900px;
   display: flex;
   flex-direction: column;
-  padding-bottom: 80px;
 }
 
 .conversation-card {
@@ -226,139 +207,14 @@ function goToChat(): void {
 }
 
 .card-content {
-  padding: 24px 32px;
+  // 消息区由 ChatMessageList 自带内边距，此处只做卡片底部收尾
+  padding: 0 0 8px;
 
-  .chat-messages {
-    .messages-wrapper {
-      .message {
-        display: flex;
-        gap: 16px;
-        margin-bottom: 24px;
-
-        &.user {
-          flex-direction: row-reverse;
-
-          .message-content {
-            align-items: flex-end;
-          }
-        }
-
-        .message-content {
-          flex: 1;
-          /* 允许 flex 项收缩：宽表格/代码块由内部滚动，避免被卡片 overflow:hidden 剪掉或撑破版心 */
-          min-width: 0;
-          display: flex;
-          flex-direction: column;
-          position: relative;
-
-          .message-text {
-            max-width: 70%;
-            padding: 12px 16px;
-            border-radius: 12px;
-            font-size: 14px;
-            line-height: 1.6;
-            word-break: break-word;
-
-            :deep(pre) {
-              background: #f5f3ec;
-              border-radius: 6px;
-              padding: 12px 16px;
-              overflow-x: auto;
-              margin: 8px 0;
-
-              code {
-                font-family: 'Consolas', 'Monaco', monospace;
-                font-size: 13px;
-              }
-            }
-
-            :deep(code) {
-              background: #f5f3ec;
-              padding: 2px 6px;
-              border-radius: 4px;
-              font-family: 'Consolas', 'Monaco', monospace;
-              font-size: 13px;
-            }
-
-            :deep(p) {
-              margin: 0 0 8px 0;
-
-              &:last-child {
-                margin-bottom: 0;
-              }
-            }
-
-            :deep(ul), :deep(ol) {
-              margin: 8px 0;
-              padding-left: 20px;
-            }
-
-            :deep(h1), :deep(h2), :deep(h3), :deep(h4), :deep(h5), :deep(h6) {
-              margin: 12px 0 8px 0;
-              font-weight: 600;
-            }
-
-            :deep(a) {
-              color: $primary-color;
-              text-decoration: none;
-
-              &:hover {
-                text-decoration: underline;
-              }
-            }
-
-            :deep(blockquote) {
-              border-left: 3px solid #e8e6dc;
-              padding-left: 12px;
-              margin: 8px 0;
-              color: #6e6b62;
-            }
-          }
-
-          .message-actions {
-            min-height: 35px;
-            margin-top: 8px;
-            display: flex;
-            gap: 8px;
-            align-items: center;
-
-            .copy-btn {
-              color: #8c8a82;
-              padding: 4px 8px;
-              height: auto;
-              font-size: 14px;
-              transition: all 0.2s;
-
-              &:hover {
-                color: $primary-color;
-                background: rgba($primary-color, 0.08);
-              }
-
-              &.copied {
-                color: #52c41a;
-              }
-            }
-          }
-        }
-
-        &.user .message-text {
-          background: $primary-color;
-          color: #fff;
-
-          :deep(code) {
-            background: rgba(255, 255, 255, 0.2);
-          }
-
-          :deep(pre) {
-            background: rgba(255, 255, 255, 0.1);
-          }
-        }
-
-        &.assistant .message-text {
-          background: transparent;
-        }
-      }
-    }
+  // 分享页无内部滚动：消息区随卡片文档流展开
+  :deep(.chat-messages) {
+    overflow: visible;
+    flex: none;
+    scrollbar-gutter: auto;
   }
 }
 
@@ -377,40 +233,39 @@ function goToChat(): void {
 }
 
 .footer-section {
-  margin-top: 24px;
-  text-align: center;
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 8px;
 
-  .copyright {
-    font-size: 12px;
-    color: #8c8a82;
-    margin: 0;
+  .agent-identity {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .agent-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #6e6b62;
   }
 }
 
 .action-buttons {
+  // 常规状态随内容排在卡片下方；上滑到自然位置离开视口时贴住窗口底部跟随滚动
+  position: sticky;
+  bottom: 0;
+  z-index: 100;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  margin-bottom: 16px;
-  margin-top: 40px;
-  padding-bottom: 40px;
-
-  &.fixed {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    z-index: 1000;
-
-    margin: 0;
-    padding: 12px 0;
-  }
+  margin-top: 16px;
+  padding: 20px 0 12px;
+  // 吸底悬浮时消息从身后滑过，用页面同色渐变过渡
+  background: linear-gradient(to bottom, rgba(240, 238, 230, 0), #f0eee6 60%);
 
   .text-btn {
     display: flex;
     align-items: center;
-    justify-content: center;
     height: 40px;
     padding: 0 24px;
     border: none;
@@ -420,21 +275,18 @@ function goToChat(): void {
     font-size: 15px;
     font-weight: 500;
     color: #fff;
+    box-shadow: 0 4px 16px rgba($primary-color, 0.3);
     transition: all 0.2s;
 
     &:hover {
       background: darken($primary-color, 8%);
-    }
-
-    .text {
-      margin-left: 8px;
     }
   }
 }
 
 @media (max-width: 768px) {
   .share-page {
-    padding: 20px 16px 100px;
+    padding: 20px 16px 24px;
   }
 
   .card-header {
@@ -454,58 +306,13 @@ function goToChat(): void {
   }
 
   .card-content {
-    padding: 20px;
+    padding: 0;
   }
 
-  .footer-section {
-    .action-buttons {
-      .text-btn {
-        height: 36px;
-        padding: 0 20px;
-        font-size: 14px;
-      }
-    }
+  .action-buttons .text-btn {
+    height: 36px;
+    padding: 0 18px;
+    font-size: 14px;
   }
-}
-
-:deep(ul), :deep(ol) {
-  list-style: decimal;
-}
-
-:deep(table) {
-  border: 1px solid #c5c2b8;
-}
-:deep(table) td,
-:deep(table) th {
-  border-bottom: 1px solid #c5c2b8;
-  border-right: 1px solid #c5c2b8;
-  padding: 5px 10px;
-}
-:deep(table) th {
-  text-align: center;
-  background: #ece9de;
-}
-:deep(table) th:last-child {
-  border-right: none;
-}
-:deep(table) td:last-child {
-  border-right: none;
-}
-
-:deep(table) tr:last-child td {
-  border-bottom: none;
-}
-:deep(table) tr:nth-child(even) {
-  background: #f0ede4;
-}
-/* blockquote 样式 */
-:deep(blockquote) {
-  display: block;
-  border-left: 8px solid #e3f1f2;
-  padding: 5px 10px;
-  margin: 10px 0;
-  line-height: 1.4;
-  font-size: 100%;
-  background-color: #f0ede4;
 }
 </style>

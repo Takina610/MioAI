@@ -67,6 +67,9 @@ public class User implements Serializable {
      */
     private Date updateTime;
 
+    /** 状态：1-正常 0-停用（停用后禁止登录） */
+    private Integer status;
+
     /**
      * 是否删除
      */

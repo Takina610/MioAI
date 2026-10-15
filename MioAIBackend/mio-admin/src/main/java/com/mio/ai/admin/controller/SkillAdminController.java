@@ -5,6 +5,9 @@ import cn.hutool.core.bean.copier.CopyOptions;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import java.util.List;
+import java.util.Map;
+import com.mio.ai.admin.model.dto.SkillAdminCreateRequest;
 import com.mio.ai.admin.model.dto.SkillAdminUpdateRequest;
 import com.mio.ai.common.aop.annotation.AuthCheck;
 import com.mio.ai.common.aop.annotation.LogInfo;
@@ -18,7 +21,9 @@ import com.mio.ai.resource.model.enums.SkillStatusEnum;
 import com.mio.ai.resource.model.vo.skill.SkillVO;
 import com.mio.ai.resource.service.agent.AgentSkillService;
 import com.mio.ai.resource.service.skill.SkillService;
+import com.mio.ai.user.utils.RedisComponent;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
@@ -41,6 +46,34 @@ public class SkillAdminController {
     @Resource
     private AgentSkillService agentSkillService;
 
+    @Resource
+    private RedisComponent redisComponent;
+
+    @Resource
+    private com.mio.ai.user.service.UserService userService;
+
+    /**
+     * 创建技能（本地 SKILL.md 技能壳）：归属当前管理员，区别于 GitHub/zip 安装来源
+     */
+    @PostMapping
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @LogInfo
+    public BaseResponse<Long> createSkill(@Valid @RequestBody SkillAdminCreateRequest request,
+                                          HttpServletRequest httpRequest) {
+        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
+        Skill skill = new Skill();
+        skill.setUserId(userId);
+        skill.setName(request.getName().trim());
+        skill.setDescription(request.getDescription());
+        skill.setContent(request.getContent());
+        skill.setInstalled(1);
+        skill.setStatus(request.getStatus() != null ? request.getStatus() : SkillStatusEnum.ACTIVE.getCode());
+        skill.setIsPublic(request.getIsPublic() != null ? request.getIsPublic() : 0);
+        boolean saved = skillService.save(skill);
+        ThrowUtils.throwIf(!saved, ErrorCode.OPERATION_ERROR, "创建失败");
+        return ResultUtils.success(skill.getId());
+    }
+
     /**
      * 分页查询技能列表（管理员，含私有）
      */
@@ -60,9 +93,19 @@ public class SkillAdminController {
         if (request.getStatus() != null) {
             queryWrapper.eq("status", request.getStatus());
         }
+        if (request.getStatusList() != null && !request.getStatusList().isEmpty()) {
+            queryWrapper.in("status", request.getStatusList());
+        }
+        if (StrUtil.isNotBlank(request.getOwnerName())) {
+            List<Long> ownerIds = userService.list(new QueryWrapper<com.mio.ai.user.model.entity.User>()
+                    .like("user_name", request.getOwnerName())).stream().map(com.mio.ai.user.model.entity.User::getId).toList();
+            queryWrapper.in(ownerIds.isEmpty(), "user_id", List.of(-1L));
+            queryWrapper.in(!ownerIds.isEmpty(), "user_id", ownerIds);
+        }
         queryWrapper.orderByDesc("update_time");
 
         Page<Skill> skillPage = skillService.page(new Page<>(current, size), queryWrapper);
+        Map<Long, String> ownerNames = resolveOwnerNames(skillPage.getRecords().stream().map(Skill::getUserId).toList());
         Page<SkillVO> voPage = new Page<>(skillPage.getCurrent(), skillPage.getSize(), skillPage.getTotal());
         voPage.setRecords(skillPage.getRecords().stream().map(skill -> {
             SkillVO vo = new SkillVO();
@@ -70,6 +113,7 @@ public class SkillAdminController {
             BeanUtil.copyProperties(skill, vo, CopyOptions.create().setIgnoreError(true));
             SkillStatusEnum statusEnum = SkillStatusEnum.getByCode(skill.getStatus());
             vo.setStatusDesc(statusEnum != null ? statusEnum.getDesc() : "未知");
+            vo.setUserName(ownerNames.get(skill.getUserId()));
             return vo;
         }).toList());
         return ResultUtils.success(voPage);
@@ -93,7 +137,7 @@ public class SkillAdminController {
     }
 
     /**
-     * 更新技能（管理员；content/files 不可改，走用户侧编辑）
+     * 更新技能（管理员；含公开状态与 SKILL.md 正文）
      */
     @PutMapping
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
@@ -108,8 +152,21 @@ public class SkillAdminController {
         if (StrUtil.isNotBlank(request.getName())) {
             update.setName(request.getName().trim());
         }
-        update.setDescription(request.getDescription());
-        update.setStatus(request.getStatus());
+        if (request.getDescription() != null) {
+            update.setDescription(request.getDescription());
+        }
+        if (request.getStatus() != null) {
+            update.setStatus(request.getStatus());
+        }
+        if (request.getIsPublic() != null) {
+            update.setIsPublic(request.getIsPublic());
+        }
+        if (request.getContent() != null) {
+            update.setContent(request.getContent());
+        }
+        if (request.getSourceUrl() != null) {
+            update.setSourceUrl(request.getSourceUrl());
+        }
         boolean result = skillService.updateById(update);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "更新失败");
         return ResultUtils.success(true);
@@ -130,4 +187,16 @@ public class SkillAdminController {
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "删除失败");
         return ResultUtils.success(true);
     }
+
+    /** 归属用户名批量解析（owner 列展示） */
+    private Map<Long, String> resolveOwnerNames(List<Long> userIds) {
+        List<Long> ids = userIds.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> names = new java.util.HashMap<>();
+        userService.listByIds(ids).forEach(u -> names.put(u.getId(), u.getUserName()));
+        return names;
+    }
 }
+

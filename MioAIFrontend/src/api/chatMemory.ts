@@ -56,6 +56,39 @@ export function getConversation(conversationId: string): Promise<ChatConversatio
   })
 }
 
+/** 分享页公开读取：标题/时间 + 消息文本块 + 智能体展示信息（链接即凭证，ID 对匹配即可读） */
+export interface SharedAgentBrief {
+  id: number
+  /** 所有者用户 id：分享页判断"别人的智能体"（广场引导）用 */
+  userId?: number
+  name?: string
+  avatar?: string
+  icon?: string
+  type?: number
+  members?: Array<{ id: number; name?: string; icon?: string; avatar?: string }>
+}
+
+export interface SharedConversation {
+  title?: string
+  createTime?: string
+  agent?: SharedAgentBrief
+  messages: Array<{
+    role: string
+    seq?: number
+    blocks?: unknown[]
+    durationMs?: number
+    createTime?: string
+  }>
+}
+
+export function getSharedConversation(agentId: number | string, conversationId: string): Promise<SharedConversation> {
+  return request({
+    url: `/memory/share/${agentId}/${conversationId}`,
+    method: 'get',
+    skipErrorMessage: true
+  } as never)
+}
+
 /** 跨智能体的最近会话（输入框 @ 引用数据源）：附带归属智能体名/类型 */
 export interface AllSessionItem {
   conversationId: string

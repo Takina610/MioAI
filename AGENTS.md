@@ -12,6 +12,13 @@ git push gitee master
 git push origin        # 等价于 git push origin master:main
 ```
 
+## 一键启动/停止脚本编码（红线）
+
+- 根目录 `一键启动.bat`/`一键停止.bat` 与 `一键启动脚本/*.bat` 必须是 **GBK 编码 + CRLF 行尾**：中文 Windows 的 cmd 以 cp936 解析批处理，用 UTF-8 保存会把注释字节读坏成「锟斤拷」，REM 行被拆断后产生「不是内部或外部命令」报错（2026-10-15 实际发生过）。编辑这些文件后必须确认保存编码仍是 GBK。
+- 每个脚本头部保留 `chcp 936 >nul`；`chcp 65001` 在 Win11 cmd 下不可靠（chcp 后的预读块仍按旧代码页解码，紧随其后的中文行照样乱码）。
+- 例外：`一键启动脚本/stop-all.ps1` 必须是 **UTF-8 with BOM**（PowerShell 5.1 靠 BOM 识别编码）。
+- `env.bat` 的 `set` 值全部为纯 ASCII；中文只允许出现在 REM 注释与 echo 文案里。
+
 ## 前端 UI 约定
 
 ### 布局

@@ -2,6 +2,7 @@ package com.mio.ai.admin.model.dto;
 
 import com.mio.ai.common.aop.annotation.XssClean;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -25,8 +26,17 @@ public class SkillAdminUpdateRequest implements Serializable {
     @XssClean(mode = "strict")
     private String description;
 
-    /**
+/**
      * 状态（0-禁用 1-正常）
      */
     private Integer status;
+
+    /** 是否公开到技能广场（0-私有 1-公开） */
+    private Integer isPublic;
+
+    /** SKILL.md 正文 */
+    private String content;
+
+    @Size(max = 500, message = "来源URL长度不能超过500")
+    private String sourceUrl;
 }

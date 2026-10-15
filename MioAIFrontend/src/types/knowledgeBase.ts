@@ -41,4 +41,6 @@ export interface KnowledgeBaseQueryRequest extends PaginationParams {
   name?: string
   status?: number
   userId?: number
+  statusList?: number[]
+  ownerName?: string
 }

@@ -36,6 +36,9 @@ export interface McpToolUpdateRequest {
 export interface McpToolQueryRequest extends PaginationParams {
   status?: number
   userId?: number
+  statusList?: number[]
+  ownerName?: string
+  name?: string
 }
 
 export interface McpValidateRequest {

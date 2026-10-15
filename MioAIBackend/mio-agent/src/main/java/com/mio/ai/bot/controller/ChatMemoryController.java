@@ -5,15 +5,20 @@ import com.mio.ai.common.aop.annotation.LogInfo;
 import com.mio.ai.common.common.BaseResponse;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
+import com.mio.ai.common.utils.JacksonUtil;
 import com.mio.ai.user.utils.RedisComponent;
-import com.mio.ai.common.utils.ResultUtils;import com.mio.ai.bot.model.entity.ChatConversationDO;
+import com.mio.ai.common.utils.ResultUtils;import com.mio.ai.bot.model.entity.AgentMessageDO;
+import com.mio.ai.bot.model.entity.ChatConversationDO;
 import com.mio.ai.bot.repository.ChatHistoryRepository;
+import com.mio.ai.bot.service.AgentMessageService;
+import com.mio.ai.resource.model.vo.agent.AgentVO;
 import com.mio.ai.user.model.vo.LoginUserVO;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author: Takina
@@ -39,6 +44,9 @@ public class ChatMemoryController {
 
     @Autowired
     com.mio.ai.resource.service.agent.AgentService agentService;
+
+    @Autowired
+    AgentMessageService agentMessageService;
 
 
     /**
@@ -112,6 +120,66 @@ public class ChatMemoryController {
             return ResultUtils.success(null);
         }
         return ResultUtils.success(conversation);
+    }
+
+    /**
+     * 分享页公开读取：会话标题/时间 + 消息文本块 + 智能体展示信息。
+     * 链接即凭证：会话确属该智能体（路径两个 ID 匹配，由所有者分享时给出）即可读；
+     * 只返回展示字段（名字/图标/群成员概要），不含系统提示词等敏感配置。
+     */
+    @GetMapping("/share/{agentId}/{conversationId}")
+    @LogInfo
+    public BaseResponse<Map<String, Object>> getSharedConversation(@PathVariable Long agentId,
+                                                                   @PathVariable String conversationId) {
+        ChatConversationDO conversation = chatHistoryRepository.getChatByConversationId(conversationId);
+        if (conversation == null || conversation.getAgentId() == null
+                || !conversation.getAgentId().equals(agentId)) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "会话不存在");
+        }
+
+        Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("title", conversation.getTitle());
+        data.put("createTime", conversation.getCreateTime());
+        // 私有智能体的分享页也要正确显示身份，展示字段直接随分享数据下发
+        AgentVO agent = agentService.getAgentById(agentId);
+        if (agent != null) {
+            Map<String, Object> agentBrief = new java.util.LinkedHashMap<>();
+            agentBrief.put("id", agent.getId());
+            agentBrief.put("userId", agent.getUserId());
+            agentBrief.put("name", agent.getName());
+            agentBrief.put("avatar", agent.getAvatar());
+            agentBrief.put("icon", agent.getIcon());
+            agentBrief.put("type", agent.getType());
+            agentBrief.put("members", agent.getMembers());
+            data.put("agent", agentBrief);
+        }
+        List<Map<String, Object>> messages = new java.util.ArrayList<>();
+        for (AgentMessageDO row : agentMessageService.listByConversation(conversationId)) {
+            // system 行是会话内 UI 提示（如模型切换），不属于对话内容，分享不渲染
+            if ("system".equals(row.getRole())) {
+                continue;
+            }
+            Map<String, Object> item = new java.util.LinkedHashMap<>();
+            item.put("role", row.getRole());
+            item.put("seq", row.getSeq());
+            item.put("blocks", parseJson(row.getBlocks()));
+            item.put("durationMs", row.getDurationMs());
+            item.put("createTime", row.getCreateTime());
+            messages.add(item);
+        }
+        data.put("messages", messages);
+        return ResultUtils.success(data);
+    }
+
+    private Object parseJson(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return JacksonUtil.readValue(json, Object.class);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
