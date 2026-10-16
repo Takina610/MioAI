@@ -105,9 +105,14 @@ export function useHomeChat() {
       }
       let agentId = MIOBOT_AGENT_ID
       if (userStore.isLoggedIn) {
-        // 专属 MioBot 不存在时后端会补建；解析失败不跳转——对话页会把 /chat/1 整页重定向到专属
-        // MioBot，整体刷新后交接就丢了，宁可留在此处让用户重试（失败提示由请求层统一给出）
-        agentId = await getMyMioBotAgentId()
+        // 专属 MioBot 不存在时后端会补建。解析失败就留在首页让用户重试：
+        // 退回 /chat/1 会被对话页整页重定向到专属 MioBot，刷新后交接就丢了
+        // （失败提示由请求层给出，这里只保证不把异常抛到点击处理器外）
+        try {
+          agentId = await getMyMioBotAgentId()
+        } catch {
+          return
+        }
       }
       setChatHandoff({
         agentId,
