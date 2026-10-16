@@ -17,7 +17,7 @@
       :visible="railOpen || railPeeking"
       :expanded="agentRailExpanded"
       :peek="railPeeking && sidebarPeeking"
-      :overlay="railPeeking && !railOpen"
+      :overlay="railPeeking && !sidebarPeeking"
       @mouseenter="panelEnter"
       @mouseleave="panelLeave"
       @select="handleRailSelect"
@@ -438,13 +438,15 @@ function advanceSidebarPhase(): void {
 
 /** 悬浮开关按钮：peek 出当前被收起的部分（都收起→双栏 peek；仅左轨收起→左轨 peek） */
 function onToggleHover(): void {
-  if (isMobile.value || !userStore.isLoggedIn) return
+  if (isMobile.value) return
   if (sidebarPhase.value === 0) return
   clearSidebarRetract()
   if (sidebarCollapsed.value) {
     sidebarPeeking.value = true
   }
-  railPeeking.value = true
+  if (userStore.isLoggedIn) {
+    railPeeking.value = true
+  }
 }
 
 function onToggleLeave(): void {
@@ -480,6 +482,11 @@ function closeMobileOverlays(): void {
 // 两个抽屉互斥：智能体抽屉打开时会话抽屉让位（它们宽高一致，重叠会互相遮挡）
 watch(mobileAgentsVisible, open => {
   if (open) mobileDrawerVisible.value = false
+})
+
+// 视口从移动形态变回桌面：抽屉是移动专属覆盖层，留在桌面会浮在内容区上
+watch(isMobile, (mobile) => {
+  if (!mobile) closeMobileOverlays()
 })
 
 // 切页即收：智能体抽屉点选后会跳转，抽屉留在原位会挡住新会话

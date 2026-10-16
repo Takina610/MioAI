@@ -70,8 +70,9 @@
             <span class="btn-text">智能体广场</span>
           </a-button>
 
-          <!-- 移动端专用：左轨（智能体纵列）已隐藏，改由此入口打开智能体切换抽屉 -->
-          <a-button class="app-square-btn agents-btn" @click="emit('agents')">
+          <!-- 移动端专用：左轨（智能体纵列）在移动端整体隐藏，改由此入口打开智能体切换抽屉。
+               桌面端不渲染——桌面左轨常驻，由顶部开合按钮统一控制两栏相位 -->
+          <a-button v-if="isMobile" class="app-square-btn agents-btn" @click="emit('agents')">
             <AppstoreOutlined />
             <span class="btn-text">切换智能体</span>
           </a-button>
@@ -142,6 +143,7 @@ import ChatSessionList from './ChatSessionList.vue'
 import GroupAvatar from '@/components/GroupAvatar.vue'
 import BotIcon from '@/components/bot-icon/BotIcon.vue'
 import { parseBotIcon, type BotIconConfig } from '@/components/bot-icon/types'
+import { useIsMobile } from '@/mobile/useIsMobile'
 import {
   SearchOutlined,
   HomeOutlined,
@@ -189,6 +191,9 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const userStore = useUserStore()
+
+/** 移动端形态：决定「切换智能体」入口是否渲染（桌面左轨常驻，不需要该入口） */
+const { isMobile } = useIsMobile()
 
 const sessionListRef = ref<InstanceType<typeof ChatSessionList> | null>(null)
 

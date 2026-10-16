@@ -159,7 +159,8 @@ const props = defineProps<{
   expanded: boolean
   /** 双栏同时 peek（会话开关按钮悬浮在轨道顶部，创建按钮让位下移） */
   peek?: boolean
-  /** 覆盖态投影（仅左轨 peek、会话栏常驻时，轨道浮在会话胶囊左缘之上） */
+  /** 独立浮层态（仅左轨 peek、会话胶囊未同时 peek）：轨道浮在会话胶囊左缘之上而不是与之拼接，
+   *  四周圆角 + 加深投影；双栏 peek 时两栏拼接，须保持右缘直角 */
   overlay?: boolean
 }>()
 
@@ -270,8 +271,10 @@ function emitReorder(): void {
     overflow: hidden;
   }
 
-  // 覆盖态（仅左轨 peek）：加深投影示意浮层
+  // 覆盖态（仅左轨 peek，会话胶囊常驻）：轨道以更高 z-index 浮在会话胶囊左缘之上，
+  // 是独立浮层而非拼接栏——四周圆角 + 加深投影，避免出现"右侧直角悬空"的残缺观感
   &.overlay .rail-capsule {
+    border-radius: 18px;
     box-shadow: 0 16px 44px rgba(20, 20, 19, 0.16);
   }
 
