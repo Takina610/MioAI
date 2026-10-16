@@ -84,11 +84,9 @@ const groups: FooterGroup[] = [
   }
 
   .brand-logo {
+    // 与顶栏同一份原始素材：logo 本身是黑白双色，叠滤镜会把白色部分压成灰、糊成一团
     width: 26px;
     height: 26px;
-    // 与顶栏同色处理：页面底色上的原色 logo
-    filter: grayscale(1) brightness(0.25);
-    opacity: 0.75;
   }
 
   .brand-name {

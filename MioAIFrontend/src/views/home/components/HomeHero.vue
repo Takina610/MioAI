@@ -31,12 +31,12 @@
         />
       </div>
 
-      <div class="hero-shortcuts hm-reveal delay-2">
-        <router-link class="hero-shortcut" to="/dashboard/skill-market">
-          <ThunderboltOutlined />
-          <span>技能</span>
+      <nav class="hero-entries hm-reveal delay-2" aria-label="站内入口">
+        <router-link v-for="entry in entries" :key="entry.to" class="hero-entry" :to="entry.to">
+          <component :is="entry.icon" class="entry-icon" />
+          <span>{{ entry.label }}</span>
         </router-link>
-      </div>
+      </nav>
     </div>
 
     <!-- 管理模型：与对话页同款弹窗（内嵌个人中心的模型设置） -->
@@ -54,7 +54,12 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { ThunderboltOutlined } from '@ant-design/icons-vue'
+import {
+  BookOutlined,
+  RobotOutlined,
+  ShopOutlined,
+  ThunderboltOutlined
+} from '@ant-design/icons-vue'
 import ChatInput from '@/views/chat/components/ChatInput.vue'
 import ModelSettings from '@/views/dashboard/profile/components/ModelSettings.vue'
 import HomeCloudFlow from './HomeCloudFlow.vue'
@@ -62,6 +67,14 @@ import { useHomeChat } from '../composables/useHomeChat'
 import { loadModelCatalog, useModelCatalog, writeLocalSelection } from '@/composables/useModelCatalog'
 import { useReasoningEfforts } from '@/composables/useReasoningEfforts'
 import type { ModelSelection } from '@/types'
+
+/** 输入框下方的内容入口 */
+const entries = [
+  { label: '智能体广场', to: '/dashboard/agent-market', icon: RobotOutlined },
+  { label: 'MCP 广场', to: '/dashboard/mcp-market', icon: ShopOutlined },
+  { label: '技能广场', to: '/dashboard/skill-market', icon: ThunderboltOutlined },
+  { label: '公共知识库', to: '/dashboard/public-knowledge', icon: BookOutlined }
+]
 
 const { input, renderCards, leavingKeys, setCardRef, addFiles, removePending, send } = useHomeChat()
 
@@ -101,8 +114,8 @@ onMounted(async () => {
 
 /* 云层淡出收尾：底部渐隐到页面底色，与下方区块无缝衔接 */
 .hero-clouds {
-  mask-image: linear-gradient(180deg, #000 0%, #000 58%, transparent 100%);
-  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 58%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 72%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 72%, transparent 100%);
 }
 
 .hero-inner {
@@ -131,31 +144,43 @@ onMounted(async () => {
   margin-top: clamp(28px, 5vh, 48px);
 }
 
-.hero-shortcuts {
+.hero-entries {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 12px;
-  margin-top: 20px;
+  margin-top: 22px;
 }
 
-.hero-shortcut {
+.hero-entry {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 9px 20px;
+  gap: 8px;
+  padding: 10px 20px;
   border-radius: 999px;
-  border: 1px solid var(--hm-border);
-  background: rgba(250, 249, 245, 0.6);
+  border: 1px solid rgba(20, 20, 19, 0.12);
+  background: rgba(250, 249, 245, 0.55);
   font-size: 14px;
   font-weight: 500;
-  color: var(--hm-text-2);
+  color: var(--hm-text);
   transition: border-color 0.25s var(--hm-ease), color 0.25s var(--hm-ease),
     background 0.25s var(--hm-ease);
 
+  .entry-icon {
+    font-size: 15px;
+    color: var(--hm-text-muted);
+    transition: color 0.25s var(--hm-ease);
+  }
+
   &:hover {
     border-color: var(--hm-green);
-    background: var(--hm-green-soft);
+    background: rgba(250, 249, 245, 0.9);
     color: var(--hm-green-deep);
+
+    .entry-icon {
+      color: var(--hm-green-deep);
+    }
   }
 }
 

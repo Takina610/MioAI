@@ -94,10 +94,11 @@ async function handleLogout(): Promise<void> {
   max-width: 1200px;
   margin: 0 auto;
   padding-inline: clamp(20px, 4vw, 40px);
-  transition: max-width 0.36s var(--hm-ease), padding 0.36s var(--hm-ease);
+  transition: max-width 0.36s var(--hm-ease), padding 0.36s var(--hm-ease),
+    margin 0.36s var(--hm-ease), height 0.36s var(--hm-ease);
 }
 
-/* 滚动后：整条顶栏收成居中的悬浮胶囊 */
+/* 滚动后：整条顶栏收成居中的悬浮胶囊（与视口顶部留出间距，悬浮感更明确） */
 .header.is-floating {
   background: transparent;
   pointer-events: none;
@@ -107,6 +108,7 @@ async function handleLogout(): Promise<void> {
     // 内容宽度收缩到视觉居中：胶囊只包住 logo + 右侧动作
     max-width: min(560px, calc(100% - 32px));
     height: 56px;
+    margin-top: 12px;
     padding-inline: 18px;
     border-radius: 999px;
     background: rgba(250, 249, 245, 0.82);

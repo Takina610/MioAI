@@ -26,13 +26,18 @@ html.is-mobile {
     margin-top: 26px;
   }
 
-  .home-page .hero-shortcuts {
-    margin-top: 16px;
+  .home-page .hero-entries {
+    gap: 8px;
+    margin-top: 18px;
   }
 
-  .home-page .hero-shortcut {
-    padding: 8px 18px;
+  .home-page .hero-entry {
+    padding: 8px 16px;
     font-size: 13.5px;
+
+    .entry-icon {
+      font-size: 14px;
+    }
   }
 
   // 首屏输入框工具栏：与对话页同口径收窄（长模型名不挤扁思考档位，标签不折行）
