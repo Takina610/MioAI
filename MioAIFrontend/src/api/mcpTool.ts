@@ -1,5 +1,4 @@
 import request from '@/utils/request'
-import type { RequestConfig } from '@/utils/request'
 import type {
   McpTool,
   McpToolAddRequest,
@@ -48,15 +47,11 @@ export function queryMcpTools(data: McpToolQueryRequest): Promise<PageResponse<M
   })
 }
 
-export function getPublicMcpTools(
-  params?: { current?: number; size?: number },
-  config?: RequestConfig
-): Promise<PageResponse<McpTool>> {
+export function getPublicMcpTools(params?: { current?: number; size?: number }): Promise<PageResponse<McpTool>> {
   return request({
     url: '/mcp/market',
     method: 'get',
-    params,
-    ...config
+    params
   })
 }
 

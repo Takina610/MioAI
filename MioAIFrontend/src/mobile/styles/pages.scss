@@ -7,54 +7,61 @@
    ============================================================ */
 
 html.is-mobile {
-  // 首屏：视口高度在小屏会把输入卡挤出屏幕，改为内容自适应高度
+  // 首屏：留出整屏天空（云层铺满，与桌面一致），
+  // 顶栏高度必须补回来（hero 的 margin-top: -72px 让云层盖住顶栏），
+  // 否则内容整体上浮钻到顶栏底下
   .home-page .hero {
-    min-height: 0;
-    padding: clamp(28px, 6vh, 48px) 0 32px;
+    min-height: 100svh;
+    padding: calc(72px + 16px) 0 32px;
   }
 
   // 标语：桌面宽字距在 390px 视口溢出，收紧字距并按视口缩放
   .home-page .hero-slogan {
-    margin-top: 22px;
     font-size: clamp(28px, 8.4vw, 38px);
     letter-spacing: 0.08em;
     text-indent: 0.08em;
   }
 
-  .home-page .hero-prompt {
+  .home-page .hero-input {
     margin-top: 26px;
   }
 
-  .home-page .hero-entries {
-    gap: 8px;
-    margin-top: 24px;
+  .home-page .hero-shortcuts {
+    margin-top: 16px;
   }
 
-  .home-page .entry-pill {
-    padding: 9px 18px;
+  .home-page .hero-shortcut {
+    padding: 8px 18px;
     font-size: 13.5px;
+  }
+
+  // 首屏输入框工具栏：与对话页同口径收窄（长模型名不挤扁思考档位，标签不折行）
+  .home-page .hero-input .chat-input-container .input-toolbar {
+    padding: 6px 8px 8px 10px !important;
+    gap: 6px !important;
+    min-width: 0;
+  }
+
+  .home-page .hero-input .chat-input-container .model-selector {
+    max-width: 34vw !important;
+    padding: 5px 8px !important;
+    min-height: 32px;
+  }
+
+  .home-page .hero-input .chat-input-container .effort-selector {
+    padding: 5px 8px !important;
+    min-height: 32px;
+    flex-shrink: 0;
+  }
+
+  .home-page .hero-input .model-label,
+  .home-page .hero-input .effort-label {
+    white-space: nowrap;
   }
 
   .home-page .hm-btn {
     padding: 11px 22px;
     font-size: 15px;
-  }
-
-  // 内容墙：单列，筛选按钮折行（横向滚动会带出一条滚动条，窄屏上比折行更吵）
-  .home-page .wall-head {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .home-page .wall-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-
-  // 触屏无 hover，卡片悬浮位移只会造成抖动
-  .home-page .content-card {
-    transform: none;
   }
 
   // 页脚：品牌区独占整行，链接两列
@@ -68,38 +75,18 @@ html.is-mobile {
   }
 }
 
-/* 首屏输入卡：聚焦框中键盘弹起时保证输入区可见 */
-html.is-tight .home-page .prompt-card {
-  border-radius: 18px;
-}
-
 /* ============================================================
-   首页头部：≤900px 顶栏链接折叠为菜单按钮（原先只是整体隐藏，移动端无任何入口）
+   首页头部：悬浮胶囊在窄屏收窄内边距（导航已改为首屏输入 + 页脚入口，顶栏只留品牌与账号）
    ============================================================ */
 
 html.is-tablet {
-  .home-page .nav {
-    display: none !important;
-  }
-
-  .home-page .nav-toggle {
-    display: inline-flex !important;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    color: $text-dark;
-    font-size: 17px;
-    background: transparent;
-
-    &:active {
-      background: rgba(20, 20, 19, 0.06);
-    }
+  .home-page .header.is-floating .header-inner {
+    width: calc(100% - 24px);
+    max-width: none;
   }
 }
 
-// 头像旁昵称：小屏让位给菜单按钮
+// 头像旁昵称：小屏让位给图标
 html.is-compact {
   .home-page .user-info .user-name {
     display: none !important;

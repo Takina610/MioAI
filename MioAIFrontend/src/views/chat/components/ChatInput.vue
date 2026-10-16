@@ -37,7 +37,7 @@
             contenteditable="true"
             role="textbox"
             aria-multiline="true"
-            :data-placeholder="`向 ${agentName || 'MioBot'} 提问，使用@添加上下文，使用/选择命令或能力`"
+            :data-placeholder="placeholder || `向 ${agentName || 'MioBot'} 提问，使用@添加上下文，使用/选择命令或能力`"
             @input="onEditorInput"
             @keydown="onEditorKeydown"
             @keyup="onEditorKeyup"
@@ -238,6 +238,8 @@ const props = defineProps<{
   contextUsage?: ContextUsageData | null
   /** 嵌入模式（消息编辑复用）：去外层留白/居中/欢迎区，直接以输入框原貌嵌入 */
   embedded?: boolean
+  /** 自定义占位文案（首页首屏用；缺省按智能体名拼接 @/ 用法提示） */
+  placeholder?: string
   /** 显示取消按钮（编辑模式用） */
   cancelable?: boolean
   /** 当前智能体绑定的知识库（@ 引用数据源之一） */

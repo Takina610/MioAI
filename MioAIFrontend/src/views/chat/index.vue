@@ -247,7 +247,8 @@ import { getAgentDetail, queryAgents, pinAgent, reorderAgents, getMyMioBotAgentI
 import { pinChat } from '@/api/chatMemory'
 import { useUserStore } from '@/store/user'
 import type { Agent, AgentDetail, AttachmentItem, ChatMessage, ChatRefItem, ContextUsageData, MessageBlock, ModelSelection, PendingAttachment, SubagentPanelTarget } from '@/types'
-import { isImageName } from './attachmentUtils'
+import { isImageName, MAX_PENDING_ATTACHMENTS, sandboxFileUrl } from './attachmentUtils'
+import { peekChatHandoff, takeChatHandoff } from '@/composables/chatHandoff'
 import AuthModal from '@/components/AuthModal.vue'
 import BotPet from '@/components/bot-icon/BotPet.vue'
 import MobileScrim from '@/mobile/MobileScrim.vue'
@@ -274,9 +275,10 @@ import { endTurn, syncBackendTurns } from './composables/useAgentActivity'
 import { buildRefMarkerPrefix, parseRefMarkers } from './refMarkers'
 import { usePendingCardAnimations } from './composables/usePendingCardAnimations'
 import { buildSubagentTranscript } from './subagentTranscript'
-import { truncateConversation, getReasoningEfforts, getContextUsage, uploadAttachment, deleteAttachment, getActiveTurns, recordModelSwitch } from '@/api/chat'
+import { truncateConversation, getContextUsage, uploadAttachment, deleteAttachment, getActiveTurns, recordModelSwitch } from '@/api/chat'
 import ModelSettings from '@/views/dashboard/profile/components/ModelSettings.vue'
 import { loadModelCatalog, useModelCatalog, writeLocalSelection, readSessionModel, writeSessionModel, modelDisplayName } from '@/composables/useModelCatalog'
+import { useReasoningEfforts } from '@/composables/useReasoningEfforts'
 import { getBotMessages } from '@/api/botMessages'
 
 const route = useRoute()
@@ -289,15 +291,14 @@ const authModalVisible = ref<boolean>(false)
 const personalizeVisible = ref<boolean>(false)
 const inputMessage = ref<string>('')
 
-// 思考等级：本地记忆，随每次发送透传给模型；档位列表按当前模型能力动态拉取。
-// null=未解析（展示兜底档位），[]=该模型不支持任何档位（隐藏选择器）
-const reasoningEffort = ref<string>(localStorage.getItem('reasoning-effort') || 'high')
-watch(reasoningEffort, v => localStorage.setItem('reasoning-effort', v))
-const supportedEfforts = ref<string[] | null>(null)
-let effortReqSeq = 0
-
+// 思考等级：本地记忆随每次发送透传给模型，档位按当前模型能力解析（与首页输入卡同一实现）
 // ---------- 对话模型：目录（免费档+自定义供应商）与当前选择（个人中心/聊天页共享一份内存态） ----------
 const { freeModels, providers, selection: currentModel, loaded: catalogLoaded } = useModelCatalog()
+const {
+  effort: reasoningEffort,
+  supported: supportedEfforts,
+  resolve: refreshSupportedEfforts
+} = useReasoningEfforts(currentModel, { freeModels, providers })
 
 /** 自定义供应商端点配置（仅存浏览器本地；随聊天请求瞬态经过后端，不落库） */
 const currentProvider = computed(() => {
@@ -320,52 +321,6 @@ const currentModelContext = computed(() => {
   }
   return { source: cur.source, model: cur.model, contextWindow }
 })
-
-/** 按当前模型拉取可用思考档位：声明数据优先（供应商条目/免费目录元数据，即选即切），
- *  无声明才走后端探测。本地记忆档位不被支持时回退到最接近"高"的档。 */
-async function refreshSupportedEfforts(selection: ModelSelection): Promise<void> {
-  const seq = ++effortReqSeq
-  let declared: string[] = []
-  if (selection.source === 'custom' && selection.providerId != null) {
-    const entry = providers.value.find(p => p.id === selection.providerId)
-      ?.models.find(m => m.id === selection.model)
-    if (entry?.reasoningLevels?.length) {
-      declared = [...entry.reasoningLevels]
-    }
-  } else {
-    // 免费档：目录元数据说明是否推理模型——不推理只有"关闭"档，推理给标准三档+关闭
-    const meta = freeModels.value.find(f => f.id === selection.model)
-    if (meta) {
-      declared = meta.reasoning === false ? ['none'] : ['none', 'low', 'medium', 'high']
-    }
-  }
-  if (!declared.length) {
-    const provider = selection.source === 'custom' && selection.providerId != null
-      ? providers.value.find(p => p.id === selection.providerId)
-      : undefined
-    try {
-      const res = await getReasoningEfforts(selection, provider
-        ? { baseUrl: provider.baseUrl, apiKey: provider.apiKey, apiFormat: provider.apiFormat }
-        : null)
-      // 请求期间用户已切到别的模型：丢弃过期结果
-      if (seq !== effortReqSeq) return
-      declared = res.efforts ?? []
-    } catch (e) {
-      // 探测失败：回到未解析态（展示兜底档位），不误判为"该模型无档位"
-      console.error('拉取思考档位失败，使用兜底列表', e)
-      if (seq !== effortReqSeq) return
-      supportedEfforts.value = null
-      return
-    }
-  }
-  if (seq !== effortReqSeq) return
-  supportedEfforts.value = declared
-  if (declared.length && !declared.includes(reasoningEffort.value)) {
-    reasoningEffort.value = declared.includes('high')
-      ? 'high'
-      : declared[declared.length - 1]
-  }
-}
 
 onMounted(async () => {
   await loadModelCatalog()
@@ -930,14 +885,29 @@ watch(
   { immediate: true }
 )
 
-// 首页输入卡跳转携带：问题放进输入框（不自动发送，由用户确认发出）。
-// 注册在会话 watcher 之后：会话草稿恢复先执行，携带的问题最后落位不被覆盖
+// 首页输入卡交接：目标智能体的详情就绪后取走（会话 id 与附件在首页已备好），
+// 灌进本页状态后直接走 handleSend——用户在首页发出即落地成对话页的首条消息
 watch(
-  () => route.query.q,
-  (q) => {
-    if (typeof q !== 'string' || !q.trim()) return
-    inputMessage.value = q
-    router.replace({ query: {} })
+  [agentId, agentInfo],
+  async ([id, info]) => {
+    const handoff = peekChatHandoff()
+    if (!handoff || !info || id !== handoff.agentId) return
+    takeChatHandoff()
+    switchChat(handoff.chatId)
+    // 会话切换触发的草稿/待传附件恢复在 watcher 内落位，等它完成再写入交接的附件
+    await nextTick()
+    pendingAttachments.value = handoff.attachments.map(item => ({
+      key: `pending_${item.path}`,
+      name: item.name,
+      size: item.size,
+      status: 'done' as const,
+      progress: 1 as number,
+      item,
+      previewSrc: isImageName(item.name) ? sandboxFileUrl(item.path) : undefined
+    }))
+    inputMessage.value = handoff.content
+    await nextTick()
+    handleSend()
   },
   { immediate: true }
 )
@@ -1135,7 +1105,7 @@ async function handleAddFiles(files: File[]): Promise<void> {
           // 上传完成：改用沙箱接口出图，释放本地预览
           URL.revokeObjectURL(live.localPreviewUrl)
           live.localPreviewUrl = undefined
-          live.previewSrc = `${import.meta.env.VITE_API_BASE_URL || ''}/bot/attachment/download?path=${encodeURIComponent(item.path)}`
+          live.previewSrc = sandboxFileUrl(item.path)
         }
       })
       .catch(error => {
@@ -1173,8 +1143,6 @@ function cleanupPendingAttachments(): void {
   }, 320)
 }
 
-const MAX_PENDING_ATTACHMENTS = 50
-
 /** 编辑会话消息时的附件（原附件 + 新追加），发送时按最终清单生效 */
 const editAttachments = ref<PendingAttachment[]>([])
 
@@ -1195,9 +1163,7 @@ function handleEditStart(index: number): void {
     status: 'done' as const,
     progress: 1,
     item: { ...a },
-    previewSrc: isImageName(a.name)
-      ? `${import.meta.env.VITE_API_BASE_URL || ''}/bot/attachment/download?path=${encodeURIComponent(a.path)}`
-      : undefined
+    previewSrc: isImageName(a.name) ? sandboxFileUrl(a.path) : undefined
   }))
 }
 
@@ -1237,7 +1203,7 @@ async function handleAddEditFiles(files: File[]): Promise<void> {
         if (live.localPreviewUrl) {
           URL.revokeObjectURL(live.localPreviewUrl)
           live.localPreviewUrl = undefined
-          live.previewSrc = `${import.meta.env.VITE_API_BASE_URL || ''}/bot/attachment/download?path=${encodeURIComponent(item.path)}`
+          live.previewSrc = sandboxFileUrl(item.path)
         }
       })
       .catch(error => {

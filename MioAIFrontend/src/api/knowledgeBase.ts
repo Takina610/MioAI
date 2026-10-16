@@ -1,5 +1,4 @@
 import request from '@/utils/request'
-import type { RequestConfig } from '@/utils/request'
 import type {
   KnowledgeBase,
   KnowledgeBaseAddRequest,
@@ -46,15 +45,11 @@ export function queryKnowledgeBases(data: KnowledgeBaseQueryRequest): Promise<Pa
   })
 }
 
-export function getPublicKnowledgeBases(
-  params?: { current?: number; size?: number },
-  config?: RequestConfig
-): Promise<PageResponse<KnowledgeBase>> {
+export function getPublicKnowledgeBases(params?: { current?: number; size?: number }): Promise<PageResponse<KnowledgeBase>> {
   return request({
     url: '/knowledge-bases/market',
     method: 'get',
-    params,
-    ...config
+    params
   })
 }
 

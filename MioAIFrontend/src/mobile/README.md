@@ -12,8 +12,7 @@ mobile/
 ├── useShellSidebar.ts   外壳侧栏状态机（桌面悬浮胶囊 ↔ 移动端覆盖式抽屉）
 ├── MobileScrim.vue      抽屉遮罩（点遮罩关抽屉）
 ├── components/
-│   ├── MobileAgentDrawer.vue  对话页智能体切换抽屉（补位桌面左轨）
-│   └── HomeNavDrawer.vue      首页导航抽屉（补位桌面顶栏 nav）
+│   └── MobileAgentDrawer.vue  对话页智能体切换抽屉（补位桌面左轨）
 ├── index.scss           样式入口（main.ts 引入一次）
 └── styles/
     ├── _tokens.scss     断点变量 + 安全区/触控目标/横向滚动 mixin
@@ -34,7 +33,7 @@ mobile/
 | `is-compact` | ≤480 | 小屏手机：进一步压缩留白 |
 | `is-tight` | ≤640 | 首页大标题/横幅提前折叠 |
 | `is-mobile` | ≤768 | **移动外壳**：侧栏抽屉化、内容满宽、表格横滚 |
-| `is-tablet` | ≤960 | 首页顶栏 nav 折叠为菜单按钮 |
+| `is-tablet` | ≤960 | 首页悬浮胶囊收窄内边距 |
 | `is-narrow` | ≤1200 | 图表/指标栅格收窄 |
 | `is-touch` | `(hover: none)` | 触屏：hover 才显形的控件常显 |
 

@@ -2,8 +2,7 @@
   <div class="home-page">
     <HomeHeader />
     <main>
-      <HomeHero :announcement="announcement" />
-      <HomeContentWall :items="items" />
+      <HomeHero />
     </main>
     <HomeFooter />
   </div>
@@ -12,11 +11,7 @@
 <script setup lang="ts">
 import HomeHeader from './components/HomeHeader.vue'
 import HomeHero from './components/HomeHero.vue'
-import HomeContentWall from './components/HomeContentWall.vue'
 import HomeFooter from './components/HomeFooter.vue'
-import { useHomeContent } from './composables/useHomeContent'
-
-const { items, announcement } = useHomeContent()
 </script>
 
 <style lang="scss">

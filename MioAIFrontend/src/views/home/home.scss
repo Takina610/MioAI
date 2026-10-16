@@ -70,7 +70,8 @@
   }
 }
 
-/* 内容自下而上淡入(首屏载入错落) */
+/* 内容自下而上淡入(首屏载入错落)。首屏元素同步挂载，动画必然跑完，
+   不存在"异步内容被起始透明态钉住"的问题（详见 useHomeChat 的说明） */
 @keyframes hm-fade-up {
   from {
     opacity: 0;
@@ -89,10 +90,6 @@
   animation: hm-fade-up 0.7s var(--hm-ease) forwards;
 }
 
-/* 内容区不做入场动画：它是接口返回后才挂载的，而任何"起始透明"的动画
-   （含 fill-mode backwards/both）在动画时钟不推进时会永久停在透明态。
-   首屏同步挂载，动画始终能跑完，故只有首屏使用 hm-reveal */
-
 @media (prefers-reduced-motion: reduce) {
   .hm-reveal {
     animation: none;
@@ -100,10 +97,6 @@
     transform: none;
     filter: none;
     transition: none;
-  }
-
-  .home-page .hero-backdrop::after {
-    animation: none;
   }
 }
 

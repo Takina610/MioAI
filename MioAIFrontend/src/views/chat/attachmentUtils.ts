@@ -93,6 +93,14 @@ export function extLabel(name: string): string {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
+/** 单条消息最多携带的待传附件数（对话页与首页输入卡共用） */
+export const MAX_PENDING_ATTACHMENTS = 50
+
+/** 沙箱文件 → 浏览器可直接加载的地址（图片缩略图/预览用） */
+export function sandboxFileUrl(path: string): string {
+  return `${API_BASE}/bot/attachment/download?path=${encodeURIComponent(path)}`
+}
+
 /** 消息区附件 → 展示形态：图片类型直接给沙箱下载接口作为缩略图地址 */
 export function messageAttachmentDisplays(items: AttachmentItem[]): AttachmentDisplay[] {
   return items.map(item => ({
@@ -100,8 +108,6 @@ export function messageAttachmentDisplays(items: AttachmentItem[]): AttachmentDi
     name: item.name,
     size: item.size,
     status: 'done' as const,
-    previewSrc: isImageName(item.name)
-      ? `${API_BASE}/bot/attachment/download?path=${encodeURIComponent(item.path)}`
-      : undefined
+    previewSrc: isImageName(item.name) ? sandboxFileUrl(item.path) : undefined
   }))
 }

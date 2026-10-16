@@ -1,110 +1,108 @@
 <template>
   <section class="hero">
-    <div class="hero-backdrop" aria-hidden="true"></div>
+    <HomeCloudFlow class="hero-clouds" />
 
     <div class="home-container hero-inner">
-      <div class="hero-announce-row">
-        <router-link v-if="announcement" class="hero-announce hm-reveal" :to="announcement.to">
-          <span class="spark" aria-hidden="true">✦</span>
-          <span class="announce-text">{{ announcement.text }}</span>
-          <svg class="announce-arrow" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path
-              d="M2 8h11M9 3.5 13.5 8 9 12.5"
-              stroke="currentColor"
-              stroke-width="1.6"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-        </router-link>
+      <h1 class="hero-slogan hm-reveal">会思考，能行动</h1>
+
+      <!-- 复用对话页输入框：嵌入模式只保留输入框本体（无外层留白与欢迎区）。
+           loading 恒为 false：本页不发消息，点发送只是"备好内容并跳转"，
+           跳转准备期的重复点击由 useHomeChat 内部的 sending 拦掉 -->
+      <div class="hero-input hm-reveal delay-1">
+        <ChatInput
+          v-model="input"
+          v-model:effort="effort"
+          :has-messages="false"
+          :loading="false"
+          :supported-efforts="supportedEfforts"
+          :render-cards="renderCards"
+          :leaving-keys="leavingKeys"
+          :ref-setter="setCardRef"
+          :free-models="freeModels"
+          :providers="providers"
+          :current-model="currentModel"
+          embedded
+          placeholder="问点什么，剩下的交给我"
+          @send="send"
+          @add-files="addFiles"
+          @remove-pending="removePending"
+          @select-model="handleSelectModel"
+          @manage-models="manageModelsVisible = true"
+        />
       </div>
 
-      <h1 class="hero-slogan hm-reveal delay-1">会思考，能行动</h1>
-
-      <div class="hero-prompt hm-reveal delay-2">
-        <HomePromptCard />
-      </div>
-
-      <nav class="hero-entries hm-reveal delay-3" aria-label="内容入口">
-        <router-link v-for="entry in entries" :key="entry.to" class="entry-pill" :to="entry.to">
-          {{ entry.label }}
+      <div class="hero-shortcuts hm-reveal delay-2">
+        <router-link class="hero-shortcut" to="/dashboard/skill-market">
+          <ThunderboltOutlined />
+          <span>技能</span>
         </router-link>
-      </nav>
+      </div>
     </div>
+
+    <!-- 管理模型：与对话页同款弹窗（内嵌个人中心的模型设置） -->
+    <a-modal
+      v-model:open="manageModelsVisible"
+      title="管理模型"
+      :footer="null"
+      :width="720"
+      wrap-class-name="manage-models-modal"
+    >
+      <ModelSettings />
+    </a-modal>
   </section>
 </template>
 
 <script setup lang="ts">
-import HomePromptCard from './HomePromptCard.vue'
+import { onMounted, ref } from 'vue'
+import { ThunderboltOutlined } from '@ant-design/icons-vue'
+import ChatInput from '@/views/chat/components/ChatInput.vue'
+import ModelSettings from '@/views/dashboard/profile/components/ModelSettings.vue'
+import HomeCloudFlow from './HomeCloudFlow.vue'
+import { useHomeChat } from '../composables/useHomeChat'
+import { loadModelCatalog, useModelCatalog, writeLocalSelection } from '@/composables/useModelCatalog'
+import { useReasoningEfforts } from '@/composables/useReasoningEfforts'
+import type { ModelSelection } from '@/types'
 
-defineProps<{
-  announcement: { text: string; to: string } | null
-}>()
+const { input, renderCards, leavingKeys, setCardRef, addFiles, removePending, send } = useHomeChat()
 
-/** 与顶栏导航同源的内容入口：首屏直接进内容，不做能力宣传 */
-const entries = [
-  { label: '智能体广场', to: '/dashboard/agent-market' },
-  { label: 'MCP 广场', to: '/dashboard/mcp-market' },
-  { label: '公共知识库', to: '/dashboard/public-knowledge' }
-]
+const { freeModels, providers, selection: currentModel } = useModelCatalog()
+const { effort, supported: supportedEfforts, resolve: resolveEfforts } =
+  useReasoningEfforts(currentModel, { freeModels, providers })
+
+const manageModelsVisible = ref(false)
+
+/** 模型切换：与对话页同口径——共享选择 + 本地镜像，档位按新模型重新解析 */
+async function handleSelectModel(next: ModelSelection): Promise<void> {
+  const prev = currentModel.value
+  if (next.source === prev.source && next.providerId === prev.providerId && next.model === prev.model) {
+    return
+  }
+  currentModel.value = next
+  writeLocalSelection(next)
+  await resolveEfforts(next)
+}
+
+onMounted(async () => {
+  await loadModelCatalog()
+  if (currentModel.value.model) resolveEfforts(currentModel.value)
+})
 </script>
 
 <style lang="scss" scoped>
 .hero {
   position: relative;
-  overflow: hidden;
   display: flex;
   align-items: center;
-  min-height: min(calc(100svh - 72px), 700px);
-  padding: clamp(40px, 7vh, 72px) 0 clamp(28px, 4vh, 48px);
+  // 上移一个顶栏高度：云层从视口顶端铺起，顶栏未滚动时与背景连成一片（不留横向接缝）
+  margin-top: -72px;
+  min-height: 100svh;
+  padding: calc(72px + clamp(24px, 4vh, 48px)) 0 clamp(40px, 8vh, 80px);
 }
 
-/* 顶部品牌色淡染 + 缓慢漂移的柔光：参考 DeepSeek 首屏的通透感，纯 CSS 不加画布。
-   渐变补中间色标：两色直接线性插值到透明会在中段显出一条横向 band */
-.hero-backdrop {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(
-      100% 58% at 50% -12%,
-      rgba(42, 161, 169, 0.13) 0%,
-      rgba(42, 161, 169, 0.07) 38%,
-      rgba(42, 161, 169, 0.02) 68%,
-      rgba(42, 161, 169, 0) 100%
-    ),
-    linear-gradient(
-      180deg,
-      rgba(42, 161, 169, 0.05) 0%,
-      rgba(42, 161, 169, 0.02) 40%,
-      rgba(240, 238, 230, 0) 100%
-    );
-}
-
-.hero-backdrop::after {
-  content: '';
-  position: absolute;
-  top: -18%;
-  left: 50%;
-  width: min(720px, 82vw);
-  height: 420px;
-  margin-left: min(-360px, -41vw);
-  background: radial-gradient(
-    closest-side,
-    rgba(42, 161, 169, 0.11) 0%,
-    rgba(42, 161, 169, 0.05) 45%,
-    rgba(42, 161, 169, 0) 100%
-  );
-  animation: hm-drift 26s ease-in-out infinite alternate;
-}
-
-@keyframes hm-drift {
-  from {
-    transform: translate3d(-6%, 0, 0) scale(1);
-  }
-  to {
-    transform: translate3d(6%, 4%, 0) scale(1.08);
-  }
+/* 云层淡出收尾：底部渐隐到页面底色，与下方区块无缝衔接 */
+.hero-clouds {
+  mask-image: linear-gradient(180deg, #000 0%, #000 58%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 58%, transparent 100%);
 }
 
 .hero-inner {
@@ -116,88 +114,43 @@ const entries = [
   width: 100%;
 }
 
-/* 公告行占位固定高度：数据到达前后不推动首屏 */
-.hero-announce-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 22px;
-}
-
-.hero-announce {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  max-width: min(100%, 560px);
-  font-size: 14px;
-  color: var(--hm-text-2);
-  opacity: 0.75;
-  transition: opacity 0.25s var(--hm-ease), color 0.25s var(--hm-ease);
-
-  .spark {
-    color: var(--hm-green);
-    font-size: 13px;
-    line-height: 1;
-  }
-
-  .announce-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .announce-arrow {
-    flex-shrink: 0;
-    width: 14px;
-    height: 14px;
-    transition: transform 0.25s var(--hm-ease);
-  }
-
-  &:hover {
-    opacity: 1;
-    color: var(--hm-text);
-
-    .announce-arrow {
-      transform: translateX(3px);
-    }
-  }
-}
-
-/* 标语：宽字距衬线大字，字距末位空档用 text-indent 抵消以保持视觉居中 */
 .hero-slogan {
-  margin-top: clamp(18px, 3vh, 34px);
   font-family: var(--hm-font-display);
-  font-size: clamp(34px, 5.4vw, 54px);
+  font-size: clamp(32px, 5vw, 52px);
   font-weight: 700;
   line-height: 1.35;
   letter-spacing: 0.14em;
+  // 宽字距会在末字后留出空档，用等量缩进抵消以保持视觉居中
   text-indent: 0.14em;
   text-align: center;
   color: var(--hm-green-deep);
 }
 
-.hero-prompt {
-  width: min(100%, 680px);
-  margin-top: clamp(26px, 4vh, 42px);
+.hero-input {
+  width: min(100%, 720px);
+  margin-top: clamp(28px, 5vh, 48px);
 }
 
-.hero-entries {
+.hero-shortcuts {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
   gap: 12px;
-  margin-top: clamp(22px, 3vh, 34px);
+  margin-top: 20px;
 }
 
-.entry-pill {
-  padding: 10px 22px;
+.hero-shortcut {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 20px;
   border-radius: 999px;
   border: 1px solid var(--hm-border);
+  background: rgba(250, 249, 245, 0.6);
   font-size: 14px;
   font-weight: 500;
-  color: var(--hm-text);
-  transition: border-color 0.25s var(--hm-ease), background 0.25s var(--hm-ease);
+  color: var(--hm-text-2);
+  transition: border-color 0.25s var(--hm-ease), color 0.25s var(--hm-ease),
+    background 0.25s var(--hm-ease);
 
   &:hover {
     border-color: var(--hm-green);
@@ -211,8 +164,5 @@ const entries = [
 }
 .delay-2 {
   animation-delay: 180ms;
-}
-.delay-3 {
-  animation-delay: 270ms;
 }
 </style>

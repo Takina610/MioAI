@@ -61,9 +61,10 @@ const groups: FooterGroup[] = [
 </script>
 
 <style lang="scss" scoped>
+/* 与首屏同底：页脚不做深色块，直接落在页面背景上，
+   只用一条极淡的分隔线与上方内容区分，避免"贴了一整块深色"的割裂感 */
 .footer {
-  background: var(--hm-bg-dark);
-  color: var(--hm-text-invert);
+  background: transparent;
   padding: clamp(48px, 6vw, 80px) 0 32px;
 }
 
@@ -71,6 +72,8 @@ const groups: FooterGroup[] = [
   display: grid;
   grid-template-columns: 1.6fr repeat(3, 1fr);
   gap: 40px;
+  padding-top: clamp(32px, 4vw, 48px);
+  border-top: 1px solid var(--hm-border-subtle);
 }
 
 .footer-brand {
@@ -83,13 +86,16 @@ const groups: FooterGroup[] = [
   .brand-logo {
     width: 26px;
     height: 26px;
-    filter: brightness(0) invert(1);
+    // 与顶栏同色处理：页面底色上的原色 logo
+    filter: grayscale(1) brightness(0.25);
+    opacity: 0.75;
   }
 
   .brand-name {
     font-family: var(--hm-font-display);
     font-size: 20px;
     font-weight: 700;
+    color: var(--hm-text);
   }
 }
 
@@ -102,17 +108,17 @@ const groups: FooterGroup[] = [
     font-size: 13px;
     font-weight: 600;
     letter-spacing: 0.08em;
-    color: rgba(250, 249, 245, 0.45);
+    color: var(--hm-text-muted);
     margin-bottom: 4px;
   }
 
   .col-link {
     font-size: 14px;
-    color: rgba(250, 249, 245, 0.82);
+    color: var(--hm-text-2);
     transition: color 0.2s var(--hm-ease);
 
     &:hover {
-      color: #7fd0d5;
+      color: var(--hm-green-deep);
     }
   }
 }
@@ -120,8 +126,8 @@ const groups: FooterGroup[] = [
 .footer-bottom {
   margin-top: clamp(40px, 6vw, 64px);
   padding-top: 24px;
-  border-top: 1px solid rgba(250, 249, 245, 0.12);
+  border-top: 1px solid var(--hm-border-subtle);
   font-size: 13px;
-  color: rgba(250, 249, 245, 0.45);
+  color: var(--hm-text-muted);
 }
 </style>
