@@ -43,7 +43,7 @@ const navItems = [
   { to: '/chat', label: 'MioBot', icon: MessageOutlined },
   { to: '/dashboard/agent-market', label: '智能体广场', icon: RobotOutlined },
   { to: '/dashboard/mcp-market', label: 'MCP 广场', icon: ShopOutlined },
-  { to: '/dashboard/public-knowledge', label: '知识库', icon: BookOutlined }
+  { to: '/dashboard/public-knowledge', label: '公共知识库', icon: BookOutlined }
 ]
 </script>
 

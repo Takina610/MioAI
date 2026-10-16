@@ -1,4 +1,5 @@
-/* 首页 Anthropic 风格共享层:Token 挂在 .home-page 上,类名以 hm- 前缀隔离 */
+/* 首页共享层:Token 挂在 .home-page 上,类名以 hm- 前缀隔离。
+   版面语言参考 DeepSeek 官网:首屏居中大字 + 直接可用的输入卡 + 内容入口,其余收敛留白 */
 
 .home-page {
   /* 颜色:暖米色大地调,强调色保留 MioAI 主绿 */
@@ -31,6 +32,16 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* 内容不足一屏时页脚贴底 */
+.home-page main {
+  flex: 1 1 auto;
+}
+
+/* 内容区与页脚之间的收尾留白(最后一块无论是内容区还是首屏) */
+.home-page main > :last-child {
+  padding-bottom: clamp(56px, 8vw, 104px);
+}
+
 .home-container {
   width: 100%;
   max-width: 1200px;
@@ -38,7 +49,7 @@
   padding-inline: clamp(20px, 4vw, 40px);
 }
 
-/* 胶囊按钮:主绿填充 / 深色描边 */
+/* 胶囊按钮:主绿填充(顶栏"快速开始") */
 .hm-btn {
   display: inline-flex;
   align-items: center;
@@ -59,62 +70,40 @@
   }
 }
 
-.hm-btn--outline {
-  color: var(--hm-text);
-  background: transparent;
-  border: 1px solid rgba(20, 20, 19, 0.35);
-
-  &:hover {
-    background: transparent;
-    border-color: var(--hm-text);
-  }
-}
-
-/* 小节标签(字距拉开的分类小字) */
-.hm-tag {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--hm-green);
-}
-
-/* 内容自下而上淡入(Hero 载入错落) */
+/* 内容自下而上淡入(首屏载入错落) */
 @keyframes hm-fade-up {
   from {
     opacity: 0;
-    transform: translateY(24px);
+    transform: translateY(18px);
+    filter: blur(5px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
+    filter: blur(0);
   }
 }
 
 .hm-reveal {
   opacity: 0;
-  animation: hm-fade-up 0.6s var(--hm-ease) forwards;
+  animation: hm-fade-up 0.7s var(--hm-ease) forwards;
 }
 
-/* 滚动进入视口后显现 */
-.hm-scroll-reveal {
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 0.55s var(--hm-ease), transform 0.55s var(--hm-ease);
-
-  &.is-visible {
-    opacity: 1;
-    transform: none;
-  }
-}
+/* 内容区不做入场动画：它是接口返回后才挂载的，而任何"起始透明"的动画
+   （含 fill-mode backwards/both）在动画时钟不推进时会永久停在透明态。
+   首屏同步挂载，动画始终能跑完，故只有首屏使用 hm-reveal */
 
 @media (prefers-reduced-motion: reduce) {
-  .hm-reveal,
-  .hm-scroll-reveal {
+  .hm-reveal {
     animation: none;
     opacity: 1;
     transform: none;
+    filter: none;
     transition: none;
+  }
+
+  .home-page .hero-backdrop::after {
+    animation: none;
   }
 }
 

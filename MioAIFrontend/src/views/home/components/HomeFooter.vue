@@ -7,7 +7,6 @@
             <img src="/logo.png" alt="MioAI" class="brand-logo" />
             <span class="brand-name">MioAI</span>
           </div>
-          <p class="brand-desc">会思考、能行动的 AI 助手</p>
         </div>
 
         <nav v-for="group in groups" :key="group.title" class="footer-col" :aria-label="group.title">
@@ -38,6 +37,7 @@ const groups: FooterGroup[] = [
       { label: 'MioBot 对话', to: '/chat' },
       { label: '智能体广场', to: '/dashboard/agent-market' },
       { label: 'MCP 广场', to: '/dashboard/mcp-market' },
+      { label: '技能广场', to: '/dashboard/skill-market' },
       { label: '公共知识库', to: '/dashboard/public-knowledge' }
     ]
   },
@@ -53,8 +53,8 @@ const groups: FooterGroup[] = [
   {
     title: '账号',
     items: [
-      { label: '个人中心', to: '/dashboard/profile' },
-      { label: '快速开始', to: '/chat' }
+      { label: '控制台', to: '/dashboard' },
+      { label: '个人中心', to: '/dashboard/profile' }
     ]
   }
 ]
@@ -90,12 +90,6 @@ const groups: FooterGroup[] = [
     font-family: var(--hm-font-display);
     font-size: 20px;
     font-weight: 700;
-  }
-
-  .brand-desc {
-    margin-top: 14px;
-    font-size: 14px;
-    color: rgba(250, 249, 245, 0.55);
   }
 }
 

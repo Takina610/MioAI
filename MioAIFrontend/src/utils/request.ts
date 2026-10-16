@@ -6,9 +6,10 @@ import type { BaseResponse } from '@/types'
 /** 登录态失效事件：store 监听后同步清理内存态，页面随之降级为游客视图 */
 export const UNAUTHORIZED_EVENT = 'mio:unauthorized'
 
-interface RequestConfig extends AxiosRequestConfig {
+export interface RequestConfig extends AxiosRequestConfig {
   params?: Record<string, unknown>
   data?: unknown
+  /** true = 失败不弹全局错误提示（调用方自行降级，如首页内容区） */
   skipErrorMessage?: boolean
 }
 
@@ -72,7 +73,10 @@ request.interceptors.response.use(
         localStorage.removeItem('token')
         localStorage.removeItem('userInfo')
         window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
-        showErrorMessage(res.message || '未登录')
+        // 静默请求（首页内容区等）失败只做降级，不打断用户
+        if (!(response.config as RequestConfig | undefined)?.skipErrorMessage) {
+          showErrorMessage(res.message || '未登录')
+        }
         // 仅在需要登录的页面强制回首页；公开页面（首页/对话页）就地降级为游客态
         if (router.currentRoute.value.meta.requiresAuth) {
           window.location.href = '/'

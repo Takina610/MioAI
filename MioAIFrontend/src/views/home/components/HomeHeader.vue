@@ -1,16 +1,16 @@
 <template>
   <header class="header">
     <div class="home-container header-inner">
-      <a class="logo" @click="refreshPage">
+      <router-link class="logo" to="/">
         <img src="/logo.png" alt="MioAI" class="logo-img" />
         <span class="logo-text">MioAI</span>
-      </a>
+      </router-link>
 
       <nav class="nav">
         <router-link class="nav-link" to="/chat">MioBot</router-link>
         <router-link class="nav-link" to="/dashboard/agent-market">智能体广场</router-link>
         <router-link class="nav-link" to="/dashboard/mcp-market">MCP 广场</router-link>
-        <router-link class="nav-link" to="/dashboard/public-knowledge">知识库</router-link>
+        <router-link class="nav-link" to="/dashboard/public-knowledge">公共知识库</router-link>
       </nav>
 
       <div class="header-right">
@@ -74,10 +74,6 @@ const { isTablet } = useIsMobile()
 /** 移动端导航抽屉开合 */
 const navOpen = ref(false)
 
-function refreshPage(): void {
-  window.location.reload()
-}
-
 async function handleLogout(): Promise<void> {
   await userStore.logout()
   message.success('已退出登录')
@@ -105,7 +101,6 @@ async function handleLogout(): Promise<void> {
   display: flex;
   align-items: center;
   gap: 10px;
-  cursor: pointer;
   flex-shrink: 0;
 
   .logo-img {

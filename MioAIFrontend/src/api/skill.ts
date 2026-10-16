@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import type { RequestConfig } from '@/utils/request'
 import type { PageResponse } from '@/types'
 import type {
   Skill,
@@ -87,11 +88,15 @@ export function installSkillsSh(owner: string, repo: string, skillId: string): P
   })
 }
 
-export function getPlazaSkills(params?: { current?: number; size?: number }): Promise<PageResponse<Skill>> {
+export function getPlazaSkills(
+  params?: { current?: number; size?: number },
+  config?: RequestConfig
+): Promise<PageResponse<Skill>> {
   return request({
     url: '/skills/plaza',
     method: 'get',
-    params
+    params,
+    ...config
   })
 }
 

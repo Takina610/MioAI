@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import type { RequestConfig } from '@/utils/request'
 
 import type {
   Agent,
@@ -85,11 +86,15 @@ export function getMyMioBotAgentId(): Promise<number> {
   })
 }
 
-export function getPublicAgents(params?: { current?: number; size?: number }): Promise<PageResponse<Agent>> {
+export function getPublicAgents(
+  params?: { current?: number; size?: number },
+  config?: RequestConfig
+): Promise<PageResponse<Agent>> {
   return request({
     url: '/agents/market',
     method: 'get',
-    params
+    params,
+    ...config
   })
 }
 

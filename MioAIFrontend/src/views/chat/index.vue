@@ -930,6 +930,18 @@ watch(
   { immediate: true }
 )
 
+// 首页输入卡跳转携带：问题放进输入框（不自动发送，由用户确认发出）。
+// 注册在会话 watcher 之后：会话草稿恢复先执行，携带的问题最后落位不被覆盖
+watch(
+  () => route.query.q,
+  (q) => {
+    if (typeof q !== 'string' || !q.trim()) return
+    inputMessage.value = q
+    router.replace({ query: {} })
+  },
+  { immediate: true }
+)
+
 // 刷新时路由 watch（immediate）可能早于启动登录校验完成，loadMessages 因未登录提前返回——
 // 登录态就绪后补拉一次当前会话
 watch(

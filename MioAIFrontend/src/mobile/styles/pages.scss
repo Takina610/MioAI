@@ -7,20 +7,32 @@
    ============================================================ */
 
 html.is-mobile {
-  .home-page .hero-title {
-    // 桌面 clamp 下限 42px 在 360px 视口会撑破：手机上按视口缩放
-    font-size: clamp(30px, 9.5vw, 44px);
-    line-height: 1.18;
+  // 首屏：视口高度在小屏会把输入卡挤出屏幕，改为内容自适应高度
+  .home-page .hero {
+    min-height: 0;
+    padding: clamp(28px, 6vh, 48px) 0 32px;
   }
 
-  .home-page .hero-sub {
-    margin-top: 18px;
-    font-size: 15px;
+  // 标语：桌面宽字距在 390px 视口溢出，收紧字距并按视口缩放
+  .home-page .hero-slogan {
+    margin-top: 22px;
+    font-size: clamp(28px, 8.4vw, 38px);
+    letter-spacing: 0.08em;
+    text-indent: 0.08em;
   }
 
-  .home-page .hero-actions {
-    margin-top: 28px;
-    gap: 10px;
+  .home-page .hero-prompt {
+    margin-top: 26px;
+  }
+
+  .home-page .hero-entries {
+    gap: 8px;
+    margin-top: 24px;
+  }
+
+  .home-page .entry-pill {
+    padding: 9px 18px;
+    font-size: 13.5px;
   }
 
   .home-page .hm-btn {
@@ -28,24 +40,20 @@ html.is-mobile {
     font-size: 15px;
   }
 
-  // 特性区块：标题与引言纵向排列、卡片单列
-  .home-page .section-head {
+  // 内容墙：单列，筛选按钮折行（横向滚动会带出一条滚动条，窄屏上比折行更吵）
+  .home-page .wall-head {
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
   }
 
-  .home-page .section-head .section-lead {
-    max-width: 100%;
-    text-align: left;
-  }
-
-  .home-page .grid {
+  .home-page .wall-grid {
     grid-template-columns: 1fr;
+    gap: 12px;
   }
 
-  // 特性卡片：去掉桌面悬浮位移（触屏无 hover，位移只会造成抖动）
-  .home-page .card {
+  // 触屏无 hover，卡片悬浮位移只会造成抖动
+  .home-page .content-card {
     transform: none;
   }
 
@@ -60,18 +68,9 @@ html.is-mobile {
   }
 }
 
-// 首页横幅：≤640px 换行（文案独占一行排在动作按钮下方）
-html.is-tight .home-page .hero-banner {
-  flex-wrap: wrap;
-
-  .banner-text {
-    flex-basis: 100%;
-    order: 3;
-  }
-}
-
-html.is-tight .home-page .hero-sub .sub-break {
-  display: none;
+/* 首屏输入卡：聚焦框中键盘弹起时保证输入区可见 */
+html.is-tight .home-page .prompt-card {
+  border-radius: 18px;
 }
 
 /* ============================================================
