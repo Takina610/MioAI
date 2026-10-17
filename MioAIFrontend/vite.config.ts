@@ -10,6 +10,11 @@ export default defineConfig({
       '@': resolve(__dirname, 'src')
     }
   },
+  build: {
+    // 默认目标含需 -webkit- 前缀的旧 Safari，压缩时会把标准 backdrop-filter 改写成仅剩前缀版，
+    // 而新版 Chromium 已不认该前缀别名 → 毛玻璃整体失效。本项目只跑现代浏览器，目标整体调新
+    cssTarget: ['chrome109', 'edge109', 'firefox110', 'safari16.4']
+  },
   server: {
     port: 3000,
     proxy: {

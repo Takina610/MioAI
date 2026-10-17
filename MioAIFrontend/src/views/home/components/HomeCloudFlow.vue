@@ -9,12 +9,12 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 /**
- * 流体云背景（DeepSeek 首屏同款观感）。
+ * 流体云背景：浅色天空上铺大团青绿雾霭（柔焦色块观感，颜色取站内主题绿）。
  *
- * 每朵云由若干柔光团叠亮（globalCompositeOperation: lighter）而成；各团的偏移随
- * 自身环流速率缓慢绕云心转动，相对位置持续变化 → 云的轮廓像流体一样徐徐变形，
- * 而不是整块刚性平移。整朵云同时横向环绕漂移。每帧只做少量径向渐变填充，
- * 不做逐像素运算；页面不可见时停帧。
+ * 每朵云由若干半透明柔焦团以 source-over 叠色而成；各团的偏移随自身环流速率
+ * 缓慢绕云心转动，相对位置持续变化 → 云的轮廓像流体一样徐徐变形，而不是整块
+ * 刚性平移。整朵云同时横向环绕漂移。每帧只做少量径向渐变填充，不做逐像素
+ * 运算；页面不可见时停帧。
  */
 
 interface Blob {
@@ -32,13 +32,13 @@ interface Blob {
 
 /** 云朵轮廓：7 个大小不一的团错落叠成，形成有内部分支的积云剪影 */
 const CLOUD_BLOBS: Blob[] = [
-  { dx: 0, dy: 0, scale: 0.72, weight: 0.9, orbit: 0.021, phase: 0.0 },
-  { dx: 0.5, dy: -0.14, scale: 0.5, weight: 0.85, orbit: -0.028, phase: 1.1 },
-  { dx: -0.52, dy: 0.08, scale: 0.46, weight: 0.8, orbit: 0.034, phase: 2.3 },
-  { dx: 0.2, dy: 0.3, scale: 0.42, weight: 0.7, orbit: -0.019, phase: 3.4 },
-  { dx: -0.26, dy: -0.3, scale: 0.4, weight: 0.65, orbit: 0.026, phase: 4.6 },
-  { dx: 0.66, dy: 0.2, scale: 0.32, weight: 0.5, orbit: 0.015, phase: 5.7 },
-  { dx: -0.68, dy: -0.16, scale: 0.3, weight: 0.45, orbit: -0.023, phase: 0.8 }
+  { dx: 0, dy: 0, scale: 0.72, weight: 0.9, orbit: 0.032, phase: 0.0 },
+  { dx: 0.5, dy: -0.14, scale: 0.5, weight: 0.85, orbit: -0.042, phase: 1.1 },
+  { dx: -0.52, dy: 0.08, scale: 0.46, weight: 0.8, orbit: 0.05, phase: 2.3 },
+  { dx: 0.2, dy: 0.3, scale: 0.42, weight: 0.7, orbit: -0.028, phase: 3.4 },
+  { dx: -0.26, dy: -0.3, scale: 0.4, weight: 0.65, orbit: 0.038, phase: 4.6 },
+  { dx: 0.66, dy: 0.2, scale: 0.32, weight: 0.5, orbit: 0.022, phase: 5.7 },
+  { dx: -0.68, dy: -0.16, scale: 0.3, weight: 0.45, orbit: -0.034, phase: 0.8 }
 ]
 
 interface Cloud {
@@ -47,7 +47,7 @@ interface Cloud {
   y: number
   /** 半径（相对宽度） */
   r: number
-  /** 横向漂移速度（每秒，相对宽度）：刻意很慢，几分钟才横穿一屏 */
+  /** 横向漂移速度（每秒，相对宽度）：刻意慢但可感知，十几分钟横穿一屏 */
   vx: number
   /** 呼吸幅度与相位 */
   breath: number
@@ -56,29 +56,30 @@ interface Cloud {
 }
 
 /**
- * 云团配置：少而大的厚云铺在天空上——朵与朵之间留出天空才能看出"云"的形状，
- * 一屏铺满小云只会糊成一片渐变。alpha 是加法合成的单团权重，云心亮度由几个团叠加而成，
- * 故取值很小：值 ≈ 云心目标提亮量 ÷ 该云各团权重之和（约 2），否则云心会烧成纯白。
+ * 云团配置：少而大的雾团铺在天空上——朵与朵之间留出空隙才能看出"云"的形状，
+ * 半径控制在 1/3 屏宽量级：再大就彼此重叠糊成一片均匀渐变。
+ * alpha 是单团不透明度（source-over 直接覆盖），云心浓度由几个团叠出来：
+ * 顶部主云浓、越往下越淡，与云层向下收尾的节奏一致。
  */
 const CLOUDS: Cloud[] = [
-  { x: 0.08, y: 0.0, r: 0.5, vx: 0.0011, breath: 0.06, phase: 0.2, alpha: 0.075 },
-  { x: 0.58, y: -0.08, r: 0.56, vx: -0.0008, breath: 0.07, phase: 1.4, alpha: 0.082 },
-  { x: 0.98, y: 0.08, r: 0.46, vx: 0.0009, breath: 0.06, phase: 2.6, alpha: 0.07 },
-  { x: 0.26, y: 0.32, r: 0.5, vx: -0.0006, breath: 0.08, phase: 3.8, alpha: 0.055 },
-  { x: 0.78, y: 0.46, r: 0.44, vx: 0.0007, breath: 0.07, phase: 5.1, alpha: 0.042 },
-  { x: 0.06, y: 0.72, r: 0.46, vx: 0.0005, breath: 0.08, phase: 5.6, alpha: 0.03 },
-  { x: 0.56, y: 0.88, r: 0.5, vx: -0.0004, breath: 0.07, phase: 2.1, alpha: 0.022 }
+  { x: 0.1, y: 0.02, r: 0.34, vx: 0.0022, breath: 0.06, phase: 0.2, alpha: 0.34 },
+  { x: 0.62, y: 0.12, r: 0.38, vx: -0.0016, breath: 0.07, phase: 1.4, alpha: 0.36 },
+  { x: 1.02, y: 0.0, r: 0.3, vx: 0.0018, breath: 0.06, phase: 2.6, alpha: 0.29 },
+  { x: 0.3, y: 0.42, r: 0.32, vx: -0.0012, breath: 0.08, phase: 3.8, alpha: 0.24 },
+  { x: 0.85, y: 0.55, r: 0.3, vx: 0.0014, breath: 0.07, phase: 5.1, alpha: 0.19 },
+  { x: 0.05, y: 0.68, r: 0.3, vx: 0.001, breath: 0.08, phase: 5.6, alpha: 0.15 },
+  { x: 0.55, y: 0.86, r: 0.32, vx: -0.0008, breath: 0.07, phase: 2.1, alpha: 0.1 }
 ]
 
 /**
- * 天空底色：冷青灰（绿≈蓝，才是青而非薄荷绿），顶端最深、向下渐亮回落，
- * 与云的亮度差撑出云朵轮廓，末端接近页面米色以便与下方无缝衔接。
+ * 天空底色：近白、微微偏绿的冷调（雾团是彩色时底色必须退得很浅才不脏），
+ * 末端接近页面米色以便与下方无缝衔接。
  */
-const SKY_TOP = '#b6d0ce'
-const SKY_MID = '#d0dedb'
-const SKY_BOTTOM = '#e8eeea'
-/** 云的颜色：近白微暖 */
-const CLOUD_RGB = '255, 255, 253'
+const SKY_TOP = '#f1f5f3'
+const SKY_MID = '#eef1ee'
+const SKY_BOTTOM = '#edebe2'
+/** 雾团颜色：主题青绿（同 variables.scss 的 --green） */
+const CLOUD_RGB = '42, 161, 169'
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 let ctx: CanvasRenderingContext2D | null = null
@@ -120,9 +121,6 @@ function draw(): void {
   ctx.fillStyle = sky
   ctx.fillRect(0, 0, w, h)
 
-  // 云团相互叠亮，叠出不规则云朵轮廓
-  ctx.globalCompositeOperation = 'lighter'
-
   CLOUDS.forEach((cloud) => {
     // 横向漂移做环绕：出屏后从另一侧回来，避免长期单向后留空
     const drift = cloud.x + cloud.vx * elapsed
@@ -144,10 +142,10 @@ function draw(): void {
       const alpha = cloud.alpha * blob.weight
       if (br <= 0 || alpha <= 0) return
       const grad = ctx!.createRadialGradient(bx, by, 0, bx, by, br)
-      // 停靠点收得比线性更紧：云心保亮、边缘快速化开，云朵才有轮廓而不是一团雾
+      // 停靠点收得紧：团心保浓度、边缘快速化开，才能叠出有轮廓的柔焦色块
       grad.addColorStop(0, `rgba(${CLOUD_RGB}, ${alpha})`)
-      grad.addColorStop(0.4, `rgba(${CLOUD_RGB}, ${alpha * 0.76})`)
-      grad.addColorStop(0.72, `rgba(${CLOUD_RGB}, ${alpha * 0.26})`)
+      grad.addColorStop(0.42, `rgba(${CLOUD_RGB}, ${alpha * 0.72})`)
+      grad.addColorStop(0.7, `rgba(${CLOUD_RGB}, ${alpha * 0.22})`)
       grad.addColorStop(1, `rgba(${CLOUD_RGB}, 0)`)
       ctx!.fillStyle = grad
       ctx!.fillRect(bx - br, by - br, br * 2, br * 2)
@@ -223,13 +221,13 @@ onBeforeUnmount(() => {
   height: 100%;
 }
 
-/* 细网格：给流体云一点结构感，越往下越淡（与云层同一收尾节奏） */
+/* 细网格：给流体云一点结构感，极淡的中性暖灰、越往下越淡（与云层同一收尾节奏） */
 .cloud-grid {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(to right, rgba(38, 55, 73, 0.055) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(38, 55, 73, 0.055) 1px, transparent 1px);
+    linear-gradient(to right, rgba(20, 20, 19, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(20, 20, 19, 0.04) 1px, transparent 1px);
   background-size: 76px 76px;
   mask-image: linear-gradient(180deg, #000 0%, #000 55%, transparent 100%);
   -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 55%, transparent 100%);

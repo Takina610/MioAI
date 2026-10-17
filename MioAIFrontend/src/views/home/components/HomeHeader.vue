@@ -105,17 +105,19 @@ async function handleLogout(): Promise<void> {
 
   .header-inner {
     pointer-events: auto;
-    // 内容宽度收缩到视觉居中：胶囊只包住 logo + 右侧动作
-    max-width: min(560px, calc(100% - 32px));
+    // 内容宽度收缩到视觉居中：胶囊包住 logo + 右侧动作
+    max-width: min(800px, calc(100% - 32px));
     height: 56px;
     margin-top: 12px;
     padding-inline: 18px;
     border-radius: 999px;
-    background: rgba(250, 249, 245, 0.82);
-    backdrop-filter: blur(14px) saturate(1.4);
-    -webkit-backdrop-filter: blur(14px) saturate(1.4);
-    border: 1px solid var(--hm-border-subtle);
-    box-shadow: 0 8px 28px -10px rgba(20, 20, 19, 0.18), 0 1px 2px rgba(20, 20, 19, 0.04);
+    // 毛玻璃：低不透明度底 + 大半径背景模糊，透出后面的流体云。
+    // 只写标准属性：与 -webkit- 前缀值相同时会被压缩器合并成仅剩前缀版，
+    // 而新版 Chromium 已不认 -webkit-backdrop-filter，导致模糊整体失效
+    background: rgba(250, 249, 245, 0.52);
+    backdrop-filter: blur(26px) saturate(1.7);
+    border: 1px solid rgba(250, 249, 245, 0.55);
+    box-shadow: 0 8px 28px -10px rgba(20, 20, 19, 0.12), 0 1px 2px rgba(20, 20, 19, 0.03);
   }
 
   .logo .logo-text {

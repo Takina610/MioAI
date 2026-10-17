@@ -81,12 +81,20 @@ html.is-mobile {
 }
 
 /* ============================================================
-   首页头部：悬浮胶囊在窄屏收窄内边距（导航已改为首屏输入 + 页脚入口，顶栏只留品牌与账号）
+   首页头部：悬浮胶囊窄屏下贴近屏宽（导航已改为首屏输入 + 页脚入口，顶栏只留品牌与账号）
    ============================================================ */
 
 html.is-tablet {
   .home-page .header.is-floating .header-inner {
     width: calc(100% - 24px);
+    max-width: none;
+  }
+}
+
+// 手机端：悬浮胶囊几乎满屏（只留 8px 边缝）；与上面 is-tablet 同权重，必须排在其后才能覆盖
+html.is-mobile {
+  .home-page .header.is-floating .header-inner {
+    width: calc(100% - 16px);
     max-width: none;
   }
 }
