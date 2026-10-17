@@ -7,7 +7,9 @@
       'rail-peek': railPeeking,
       'rail-wide': (railOpen || railPeeking) && agentRailExpanded,
       'is-mobile-shell': isMobile,
-      'mobile-drawer-open': mobileDrawerOpen
+      // 任一移动端覆盖层（会话抽屉/智能体抽屉）展开即视为 drawer-open：
+      // 头部开合按钮隐藏（抽屉各有自带关闭钮），避免悬浮按钮压在抽屉头部上
+      'mobile-drawer-open': mobileDrawerOpen || mobileAgentsVisible
     }"
   >
     <AgentRail
@@ -50,6 +52,7 @@
       @login="authModalVisible = true"
       @personalize="personalizeVisible = true"
       @agents="mobileAgentsVisible = true"
+      @close="mobileDrawerVisible = false"
     />
 
     <div class="main-container">
@@ -1626,6 +1629,14 @@ onBeforeUnmount(() => {
     width: 36px;
     flex-shrink: 0;
   }
+}
+
+// 移动端抽屉展开时隐藏头部开合按钮：抽屉自带关闭钮（同智能体抽屉交互），
+// 悬浮按钮压在抽屉头部的叠层观感不再出现。
+// is-mobile-shell / mobile-drawer-open 都在 .chat-layout 根节点上，须写顶层（嵌套会反转后代方向）
+.chat-layout.is-mobile-shell.mobile-drawer-open .chat-header .sidebar-toggle {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .chat-container {

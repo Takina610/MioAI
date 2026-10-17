@@ -42,6 +42,11 @@
         >
           <EditOutlined />
         </button>
+        <!-- 移动端：抽屉自带关闭钮（与智能体抽屉同款交互；头部开合按钮在抽屉展开时隐藏，
+             不再浮在抽屉头部之上） -->
+        <button v-if="isMobile" class="drawer-close" aria-label="收起侧边栏" @click="emit('close')">
+          <CloseOutlined />
+        </button>
       </div>
 
       <div class="sidebar-content">
@@ -153,7 +158,8 @@ import {
   UserOutlined,
   FormOutlined,
   EditOutlined,
-  AppstoreOutlined
+  AppstoreOutlined,
+  CloseOutlined
 } from '@ant-design/icons-vue'
 
 const props = defineProps<{
@@ -187,6 +193,8 @@ const emit = defineEmits<{
   (e: 'edit-agent'): void
   /** 打开智能体切换抽屉（仅移动端渲染入口） */
   (e: 'agents'): void
+  /** 移动端抽屉关闭（桌面不触发：关闭钮仅移动端渲染） */
+  (e: 'close'): void
 }>()
 
 const router = useRouter()
@@ -327,6 +335,26 @@ defineExpose({ checkListFilled, scrollToTop })
       &:hover {
         color: $primary-color;
         background: rgba(42, 161, 169, 0.08);
+      }
+    }
+
+    // 移动端抽屉关闭钮：40px 触控目标，与 MobileAgentDrawer 的关闭钮同款
+    .drawer-close {
+      flex-shrink: 0;
+      width: 40px;
+      height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 10px;
+      background: transparent;
+      color: #5f5d55;
+      cursor: pointer;
+      font-size: 15px;
+
+      &:active {
+        background: rgba(20, 20, 19, 0.06);
       }
     }
   }

@@ -12,6 +12,11 @@
           <img src="/logo.png" alt="Logo" class="logo-img" />
           <span class="logo-text">MioAI</span>
         </a>
+
+        <!-- 移动端：抽屉自带关闭钮（与对话页/智能体抽屉同款交互；头部开合按钮在抽屉展开时隐藏） -->
+        <button v-if="isMobile" class="drawer-close" aria-label="收起侧边栏" @click="emit('close')">
+          <CloseOutlined />
+        </button>
       </div>
 
       <div class="sidebar-menu">
@@ -81,8 +86,10 @@ import type { MenuGroup } from '../composables/useDashboardMenu'
 import {
   HomeOutlined,
   UserOutlined,
-  LogoutOutlined
+  LogoutOutlined,
+  CloseOutlined
 } from '@ant-design/icons-vue'
+import { useIsMobile } from '@/mobile/useIsMobile'
 
 const props = defineProps<{
   /** 收起态：整体滑出屏幕，Header 收缩按钮悬浮时临时滑出（peek） */
@@ -96,11 +103,15 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'login-required'): void
+  /** 移动端抽屉关闭（桌面不触发：关闭钮仅移动端渲染） */
+  (e: 'close'): void
 }>()
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
+/** 移动端形态：决定抽屉关闭钮是否渲染（桌面由头部开合按钮统一控制） */
+const { isMobile } = useIsMobile()
 const { menuGroups, currentKey, navigateTo } = useDashboardMenu(props.menuGroups)
 
 // 面板收起（含 peek 收回）时关闭挂在 body 上的用户菜单浮层
@@ -189,6 +200,27 @@ async function handleLogout(): Promise<void> {
         font-weight: 700;
         color: $text-dark;
         white-space: nowrap;
+      }
+    }
+
+    // 移动端抽屉关闭钮：40px 触控目标，与对话页/智能体抽屉的关闭钮同款
+    .drawer-close {
+      flex-shrink: 0;
+      margin-left: auto;
+      width: 40px;
+      height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 10px;
+      background: transparent;
+      color: #5f5d55;
+      cursor: pointer;
+      font-size: 15px;
+
+      &:active {
+        background: rgba(20, 20, 19, 0.06);
       }
     }
   }

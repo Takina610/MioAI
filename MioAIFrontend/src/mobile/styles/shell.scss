@@ -62,29 +62,21 @@ html.is-mobile {
    ============================================================ */
 
 html.is-mobile {
-  // 抽屉宽度按视口取（不再用桌面固定 304/244px）：窄屏九成宽，留边缘提示可关闭
+  // 三个外壳的侧栏移动端为覆盖式抽屉：宽度按视口取（窄屏九成宽，留边缘提示可关闭）
   .chat-layout .sidebar,
   .dashboard-layout .sidebar,
   .admin-layout .sidebar {
     width: min(88vw, 340px);
-    // 高于遮罩（65），低于头部按钮（70）
+    // 高于遮罩（65）
     z-index: 66;
   }
 
-  // 抽屉本体投影加深：与内容区形成前后层次
-  .chat-layout .sidebar .sidebar-capsule,
-  .dashboard-layout .sidebar .sidebar-capsule,
-  .admin-layout .sidebar .sidebar-capsule {
-    box-shadow: 0 16px 44px rgba(20, 20, 19, 0.18);
-  }
-
-  // 抽屉展开时头部内容右移，让开顶栏开合按钮：
-  // 按钮位于胶囊左上角（视口 x 12~52）且 z-index 高于抽屉，不缩进会被按钮压住 logo/头像。
-  // 与桌面 peek 态同款处理（内容缩进 + 组件既有 padding-left 过渡动画）。
-  .chat-layout .sidebar:not(.collapsed) .sidebar-top,
-  .dashboard-layout .sidebar:not(.collapsed) .sidebar-top,
-  .admin-layout .sidebar:not(.collapsed) .sidebar-top {
-    padding-left: 64px !important;
+  // 抽屉展开时隐藏头部开合按钮：抽屉自带关闭钮（与对话页/智能体抽屉同款交互），
+  // 悬浮按钮压在抽屉头部的叠层观感不再出现
+  .dashboard-layout.drawer-open .header .sidebar-toggle,
+  .admin-layout.drawer-open .header .sidebar-toggle {
+    opacity: 0;
+    pointer-events: none;
   }
 }
 

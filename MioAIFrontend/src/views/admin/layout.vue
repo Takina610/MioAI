@@ -6,6 +6,7 @@
       :enter-panel="sidebarEnterPanel"
       :leave-panel="sidebarLeavePanel"
       :menu-groups="adminMenuGroups"
+      @close="closeDrawer"
     />
 
     <div class="admin-container">

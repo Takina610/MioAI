@@ -6,6 +6,7 @@
       :enter-panel="sidebarEnterPanel"
       :leave-panel="sidebarLeavePanel"
       @login-required="showAuthModal"
+      @close="closeDrawer"
     />
 
     <div class="main-container">
