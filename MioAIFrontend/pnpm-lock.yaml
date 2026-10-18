@@ -38,9 +38,6 @@ importers:
       ant-design-vue:
         specifier: ^4.2.6
         version: 4.2.6(vue@3.5.31(typescript@6.0.2))
-      apexcharts:
-        specifier: ^8.1.0
-        version: 8.1.0
       axios:
         specifier: ^1.14.0
         version: 1.14.0
@@ -86,9 +83,6 @@ importers:
       vue-router:
         specifier: ^5.0.4
         version: 5.0.4(@vue/compiler-sfc@3.5.31)(pinia@3.0.4(typescript@6.0.2)(vue@3.5.31(typescript@6.0.2)))(vue@3.5.31(typescript@6.0.2))
-      vue3-apexcharts:
-        specifier: ^1.11.3
-        version: 1.11.3(apexcharts@8.1.0)(vue@3.5.31(typescript@6.0.2))
       vuedraggable:
         specifier: ^4.1.0
         version: 4.1.0(vue@3.5.31(typescript@6.0.2))
@@ -602,13 +596,6 @@ packages:
     engines: {node: '>=12.22.0'}
     peerDependencies:
       vue: '>=3.2.0'
-
-  apex-commons@0.8.2:
-    resolution: {integrity: sha512-XTaIc8S8YEJ6gjNMvnY2Eq5X8UM2IstpYaVSh7iERBUXIefJ8hjUR2nGhWr9guZuQpFvG9NFca9arhrDdYSgIQ==}
-
-  apexcharts@8.1.0:
-    resolution: {integrity: sha512-njSdgBkxt89iCyAQPv1F26tcioEHWPcYQ5CwoERWdlL9qKQA/YLm7OGyoNERskQim/kvSA/U9im7dMmTnjcIYQ==}
-    engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
 
   argparse@3.0.2:
     resolution: {integrity: sha512-mFdDM6WqWKraGLsVb+C9CahPnzTXOefAOLq3jYcca2YZ8bEWpr++Tzj+zSaKW9+X9L5uSxcm1AZ3Y6aZJ09OhQ==}
@@ -1236,12 +1223,6 @@ packages:
     peerDependencies:
       vue: ^3.0.0
 
-  vue3-apexcharts@1.11.3:
-    resolution: {integrity: sha512-YmXi+cslU5XYg3uNF30R3B2MS7TfHsx1bcemi389GipELpzS4jGCs/iZjeXm8R3Brgrlp/ZqOpwemd39AmGWVQ==}
-    peerDependencies:
-      apexcharts: '>=5.10.0'
-      vue: '>=3.0.0'
-
   vue@3.5.31:
     resolution: {integrity: sha512-iV/sU9SzOlmA/0tygSmjkEN6Jbs3nPoIPFhCMLD2STrjgOU8DX7ZtzMhg4ahVwf5Rp9KoFzcXeB1ZrVbLBp5/Q==}
     peerDependencies:
@@ -1771,12 +1752,6 @@ snapshots:
       vue: 3.5.31(typescript@6.0.2)
       vue-types: 3.0.2(vue@3.5.31(typescript@6.0.2))
       warning: 4.0.3
-
-  apex-commons@0.8.2: {}
-
-  apexcharts@8.1.0:
-    dependencies:
-      apex-commons: 0.8.2
 
   argparse@3.0.2: {}
 
@@ -2308,11 +2283,6 @@ snapshots:
   vue-types@3.0.2(vue@3.5.31(typescript@6.0.2)):
     dependencies:
       is-plain-object: 3.0.1
-      vue: 3.5.31(typescript@6.0.2)
-
-  vue3-apexcharts@1.11.3(apexcharts@8.1.0)(vue@3.5.31(typescript@6.0.2)):
-    dependencies:
-      apexcharts: 8.1.0
       vue: 3.5.31(typescript@6.0.2)
 
   vue@3.5.31(typescript@6.0.2):

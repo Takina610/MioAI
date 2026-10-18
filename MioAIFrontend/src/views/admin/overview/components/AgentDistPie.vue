@@ -1,7 +1,14 @@
 <template>
   <div class="dist-pie" v-if="items.length > 0">
     <div class="donut-box">
-      <VueApexCharts type="donut" width="100%" height="260" :options="chartOptions" :series="seriesValues" />
+      <BaseDonutChart
+        :items="donutItems"
+        :colors="palette"
+        center-label="调用总量"
+        :format-value="formatNumber"
+        unit="次"
+        :height="260"
+      />
     </div>
     <div class="pie-legend">
       <div class="legend-item" v-for="(entry, index) in items" :key="entry.id">
@@ -27,21 +34,22 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import VueApexCharts from 'vue3-apexcharts'
-import type { ApexOptions } from 'apexcharts'
 import type { NameValue } from '@/types'
 import type { BotIconConfig } from '@/components/bot-icon/types'
 import BotIcon from '@/components/bot-icon/BotIcon.vue'
-import { CHART_PALETTE, CHART_FONT_FAMILY } from '@/views/dashboard/usage/composables/chartTheme'
+import BaseDonutChart from '@/components/charts/BaseDonutChart.vue'
+import { ECHARTS_PALETTE } from '@/views/dashboard/usage/composables/echartsTheme'
 import { formatNumber } from '@/views/dashboard/usage/composables/format'
 
 const props = defineProps<{
   items: NameValue[]
 }>()
 
-const palette = CHART_PALETTE
+const palette = ECHARTS_PALETTE
 
-const seriesValues = computed(() => props.items.map(entry => Number(entry.value)))
+const donutItems = computed(() =>
+  props.items.map(entry => ({ name: entry.name, value: Number(entry.value) }))
+)
 
 const totalValue = computed(() => props.items.reduce((sum, entry) => sum + Number(entry.value), 0))
 
@@ -69,57 +77,6 @@ function iconConfig(item: NameValue): BotIconConfig | null {
   }
   return null
 }
-
-const chartOptions = computed<ApexOptions>(() => ({
-  chart: {
-    type: 'donut',
-    fontFamily: CHART_FONT_FAMILY,
-    animations: { speed: 450 }
-  },
-  colors: palette,
-  stroke: { width: 2, colors: ['#faf9f5'] },
-  dataLabels: { enabled: false },
-  legend: { show: false },
-  tooltip: {
-    theme: 'light',
-    style: { fontFamily: CHART_FONT_FAMILY, fontSize: '12px' },
-    y: { formatter: (value: number) => `${formatNumber(value)} 次` }
-  },
-  plotOptions: {
-    pie: {
-      donut: {
-        size: '72%',
-        labels: {
-          show: true,
-          name: {
-            fontFamily: CHART_FONT_FAMILY,
-            color: '#8c8a82',
-            fontSize: '12px',
-            offsetY: -2
-          },
-          value: {
-            fontFamily: CHART_FONT_FAMILY,
-            color: '#141413',
-            fontSize: '22px',
-            fontWeight: 600,
-            offsetY: 4,
-            formatter: (value: string) => formatNumber(Number(value))
-          },
-          total: {
-            show: true,
-            showAlways: true,
-            label: '调用总量',
-            fontFamily: CHART_FONT_FAMILY,
-            color: '#8c8a82',
-            fontSize: '12px',
-            formatter: (w: { globals: { series: number[] } }) =>
-              formatNumber(w.globals.series.reduce((sum, value) => sum + value, 0))
-          }
-        }
-      }
-    }
-  }
-}))
 </script>
 
 <style lang="scss" scoped>

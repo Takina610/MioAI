@@ -166,20 +166,6 @@ html.is-mobile {
     width: 100%;
     max-height: 220px;
   }
-
-  // 贡献热力图：12 个月 53 列网格，按容器等分后每格不足 2px 不可辨认，
-  // 改为按格宽出横向滚动（滚动条由 global.scss 统一）
-  .dashboard-layout .contribution .calendar {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .dashboard-layout .contribution .calendar .grid,
-  .dashboard-layout .contribution .calendar .month-labels {
-    // 53 列 × 14px 格 + 3px 间距 ≈ 900px 的实际可读宽度
-    grid-template-columns: repeat(53, 14px) !important;
-    min-width: max-content;
-  }
 }
 
 /* 指标卡/汇总标签：既有 1200/768 断点保留（纯栅格随宽度连续变化） */

@@ -20,7 +20,7 @@
         placeholder="用户 ID（可空）"
         class="adm-filter-item"
         :controls="false"
-        @press-enter="fetchStats"
+        @press-enter="handleQuery"
       />
       <a-input-number
         v-if="activeTab === 'agent'"
@@ -28,9 +28,9 @@
         placeholder="智能体 ID（可空）"
         class="adm-filter-item"
         :controls="false"
-        @press-enter="fetchStats"
+        @press-enter="handleQuery"
       />
-      <a-button type="primary" @click="fetchStats">查询</a-button>
+      <a-button type="primary" @click="handleQuery">查询</a-button>
     </div>
 
     <!-- Token 概览：智能体 tab（全用户聚合） -->
@@ -45,9 +45,24 @@
         </template>
         <a-spin :spinning="insightsLoading">
           <TokenSummaryChips :summary="contribution?.summary ?? null" />
-          <ContributionGraph :days="contribution?.days ?? []" :mode="contributionMode" />
+          <ContributionGraph
+            :days="contribution?.days ?? []"
+            :mode="contributionMode"
+            :selected-date="selectedDate"
+            @select-date="selectDate"
+          />
         </a-spin>
       </a-card>
+
+      <UsageDayDetailCard
+        v-if="selectedDate"
+        :date="selectedDate"
+        :detail="dayDetail"
+        :loading="dayLoading"
+        :measure-label="analytics?.measureLabel ?? 'Token 数'"
+        :measure-unit="analytics?.measureUnit ?? 'tokens'"
+        @close="clearDate"
+      />
 
       <div class="insight-grid">
         <a-card title="每日 Token 趋势" class="chart-card">
@@ -115,6 +130,8 @@
             <UsageRankList :items="rankList" :show-avatar="activeTab === 'agent'" />
           </a-card>
         </div>
+
+        <UsageAnalyticsSection :analytics="analytics" :loading="analyticsLoading" />
       </div>
     </a-spin>
   </div>
@@ -130,6 +147,8 @@ import TokenSummaryChips from '@/views/dashboard/usage/components/TokenSummaryCh
 import ContributionGraph from '@/views/dashboard/usage/components/ContributionGraph.vue'
 import TokenTrendChart from '@/views/dashboard/usage/components/TokenTrendChart.vue'
 import ModelUsagePie from '@/views/dashboard/usage/components/ModelUsagePie.vue'
+import UsageAnalyticsSection from '@/views/dashboard/usage/components/UsageAnalyticsSection.vue'
+import UsageDayDetailCard from '@/views/dashboard/usage/components/UsageDayDetailCard.vue'
 import {
   useUsageStats,
   metricLabelMap,
@@ -137,7 +156,14 @@ import {
   datePresets
 } from '@/views/dashboard/usage/composables/useUsageStats'
 import { useTokenInsights } from '@/views/dashboard/usage/composables/useTokenInsights'
-import { getAdminUsageStats, getAdminContribution, getAdminTokenTrend } from '@/api/usageStats'
+import { useUsageAnalytics } from '@/views/dashboard/usage/composables/useUsageAnalytics'
+import {
+  getAdminUsageStats,
+  getAdminContribution,
+  getAdminTokenTrend,
+  getAdminUsageAnalytics,
+  getAdminUsageDayDetail
+} from '@/api/usageStats'
 
 // 全用户维度筛选：注入 admin 数据源，闭包读取最新筛选值
 const filterUserId = ref<number | undefined>(undefined)
@@ -179,6 +205,34 @@ const {
 })
 
 const insightsLoading = computed(() => trendLoading.value)
+
+// 深度分析：全用户流向 + 当前筛选（用户/智能体）
+const {
+  analytics,
+  loading: analyticsLoading,
+  selectedDate,
+  dayDetail,
+  dayLoading,
+  selectDate,
+  clearDate,
+  refresh: refreshAnalytics
+} = useUsageAnalytics(
+  { analytics: getAdminUsageAnalytics, dayDetail: getAdminUsageDayDetail },
+  {
+    type: activeTab,
+    range: dateRange,
+    filters: () => ({
+      userId: filterUserId.value || undefined,
+      agentId: activeTab.value === 'agent' ? filterAgentId.value || undefined : undefined
+    })
+  }
+)
+
+/** 查询按钮：统计与深度分析共用同一筛选 */
+function handleQuery(): void {
+  fetchStats()
+  refreshAnalytics()
+}
 
 // 切回 agent tab 时若贡献图未拉过则重取
 watch(activeTab, tab => {

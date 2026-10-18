@@ -4,8 +4,11 @@ import com.mio.ai.common.aop.annotation.AuthCheck;
 import com.mio.ai.common.common.BaseResponse;
 import com.mio.ai.common.constant.UserConstant;
 import com.mio.ai.common.utils.ResultUtils;
+import com.mio.ai.resource.model.vo.log.UsageAnalyticsVO;
+import com.mio.ai.resource.model.vo.log.UsageDayDetailVO;
 import com.mio.ai.resource.model.vo.log.UsageStatsVO;
 import com.mio.ai.resource.service.log.UsageStatsService;
+import com.mio.ai.resource.service.log.impl.UsageAnalyticsServiceImpl;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -40,6 +43,33 @@ public class UsageStatsAdminController {
         return ResultUtils.success(stats);
     }
 
+    /** 使用去向 / 使用构成 / 使用明细（全用户，含用户→智能体→目标流向） */
+    @GetMapping("/analytics/{type}")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<UsageAnalyticsVO> getAdminAnalytics(
+            @PathVariable String type,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime,
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) Long agentId) {
+
+        LocalDateTime start = startTime != null ? startTime : LocalDateTime.now().minusDays(7);
+        LocalDateTime end = endTime != null ? endTime : LocalDateTime.now();
+        return ResultUtils.success(
+                usageAnalyticsService.buildAnalytics(type, start, end, userId, agentId, true));
+    }
+
+    /** 日历热力图点击某天：当日明细（全用户，可按用户过滤） */
+    @GetMapping("/day-detail")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<UsageDayDetailVO> getAdminDayDetail(
+            @RequestParam String date,
+            @RequestParam(required = false, defaultValue = "agent") String type,
+            @RequestParam(required = false) Long userId) {
+
+        return ResultUtils.success(usageAnalyticsService.buildDayDetail(userId, type, date));
+    }
+
     /** 全用户日历热力图（管理端使用统计） */
     @GetMapping("/contribution")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
@@ -56,6 +86,9 @@ public class UsageStatsAdminController {
             @RequestParam(required = false) String dimension) {
         return ResultUtils.success(userInsightService.buildTokenTrend(null, days, dimension));
     }
+
+    @Resource
+    private UsageAnalyticsServiceImpl usageAnalyticsService;
 
     @Resource
     private com.mio.ai.resource.service.log.UserInsightService userInsightService;

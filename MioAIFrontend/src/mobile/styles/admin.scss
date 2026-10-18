@@ -121,8 +121,10 @@ html.is-mobile {
    ============================================================ */
 
 html.is-mobile {
-  .admin-layout .ant-card .apexcharts-canvas,
-  .dashboard-layout .ant-card .apexcharts-canvas {
+  .admin-layout .ant-card .chart-canvas,
+  .dashboard-layout .ant-card .chart-canvas,
+  .admin-layout .ant-card .calendar-canvas,
+  .dashboard-layout .ant-card .calendar-canvas {
     max-width: 100%;
     overflow: hidden;
   }

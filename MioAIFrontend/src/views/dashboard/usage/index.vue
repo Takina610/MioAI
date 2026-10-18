@@ -23,8 +23,23 @@
             </a-radio-group>
           </template>
           <TokenSummaryChips :summary="contribution?.summary ?? null" />
-          <ContributionGraph :days="contribution?.days ?? []" :mode="contributionMode" />
+          <ContributionGraph
+            :days="contribution?.days ?? []"
+            :mode="contributionMode"
+            :selected-date="selectedDate"
+            @select-date="selectDate"
+          />
         </a-card>
+
+        <UsageDayDetailCard
+          v-if="selectedDate"
+          :date="selectedDate"
+          :detail="dayDetail"
+          :loading="dayLoading"
+          :measure-label="analytics?.measureLabel ?? 'Token 数'"
+          :measure-unit="analytics?.measureUnit ?? 'tokens'"
+          @close="clearDate"
+        />
 
         <!-- 每日 Token 趋势 + 模型/智能体用量 -->
         <div class="insight-grid">
@@ -97,6 +112,8 @@
               <UsageRankList :items="rankList" :show-avatar="activeTab === 'agent'" />
             </a-card>
           </div>
+
+          <UsageAnalyticsSection :analytics="analytics" :loading="analyticsLoading" />
         </div>
       </a-spin>
     </div>
@@ -114,6 +131,8 @@ import ContributionGraph from './components/ContributionGraph.vue'
 import TokenTrendChart from './components/TokenTrendChart.vue'
 import ModelUsagePie from './components/ModelUsagePie.vue'
 import UsageProfileCard from './components/UsageProfileCard.vue'
+import UsageAnalyticsSection from './components/UsageAnalyticsSection.vue'
+import UsageDayDetailCard from './components/UsageDayDetailCard.vue'
 import {
   useUsageStats,
   metricLabelMap,
@@ -121,6 +140,8 @@ import {
   datePresets
 } from './composables/useUsageStats'
 import { useTokenInsights } from './composables/useTokenInsights'
+import { useUsageAnalytics } from './composables/useUsageAnalytics'
+import { getUsageAnalytics, getUsageDayDetail } from '@/api/usageStats'
 
 const {
   activeTab,
@@ -147,6 +168,19 @@ const {
   tokenRange,
   tokenDimension
 } = useTokenInsights()
+
+const {
+  analytics,
+  loading: analyticsLoading,
+  selectedDate,
+  dayDetail,
+  dayLoading,
+  selectDate,
+  clearDate
+} = useUsageAnalytics(
+  { analytics: getUsageAnalytics, dayDetail: getUsageDayDetail },
+  { type: activeTab, range: dateRange }
+)
 </script>
 
 <style lang="scss" scoped>
@@ -169,8 +203,8 @@ const {
   }
 
   .page-scroll-content {
-    max-height: 730px;
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding: 20px 24px 24px;
     background: #f0eee6;

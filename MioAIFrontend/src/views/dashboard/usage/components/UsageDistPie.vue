@@ -2,7 +2,14 @@
   <div class="dist-wrapper">
     <template v-if="data.length > 0">
       <div class="donut-box">
-        <VueApexCharts type="donut" width="100%" height="280" :options="chartOptions" :series="seriesValues" />
+        <BaseDonutChart
+          :items="donutItems"
+          :colors="palette"
+          center-label="总计"
+          :format-value="formatNumber"
+          :unit="unit ?? '次'"
+          :height="280"
+        />
       </div>
       <div class="dist-legend">
         <div class="legend-item" v-for="(item, index) in data" :key="item.id">
@@ -22,10 +29,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import VueApexCharts from 'vue3-apexcharts'
-import type { ApexOptions } from 'apexcharts'
 import type { NameValue } from '@/types'
-import { CHART_PALETTE, CHART_FONT_FAMILY } from '../composables/chartTheme'
+import BaseDonutChart from '@/components/charts/BaseDonutChart.vue'
+import { ECHARTS_PALETTE } from '../composables/echartsTheme'
 import { formatNumber } from '../composables/format'
 
 const props = defineProps<{
@@ -34,9 +40,11 @@ const props = defineProps<{
   unit?: string
 }>()
 
-const palette = CHART_PALETTE
+const palette = ECHARTS_PALETTE
 
-const seriesValues = computed(() => props.data.map(item => Number(item.value)))
+const donutItems = computed(() =>
+  props.data.map(item => ({ name: item.name, value: Number(item.value) }))
+)
 
 function percentOf(value: number): string {
   const total = props.data.reduce((sum, item) => sum + Number(item.value), 0)
@@ -45,59 +53,6 @@ function percentOf(value: number): string {
   }
   return ((value / total) * 100).toFixed(1).replace(/\.0$/, '')
 }
-
-const chartOptions = computed<ApexOptions>(() => ({
-  chart: {
-    type: 'donut',
-    fontFamily: CHART_FONT_FAMILY,
-    animations: { speed: 450 }
-  },
-  colors: palette,
-  stroke: { width: 2, colors: ['#faf9f5'] },
-  dataLabels: { enabled: false },
-  legend: { show: false },
-  tooltip: {
-    theme: 'light',
-    style: { fontFamily: CHART_FONT_FAMILY, fontSize: '12px' },
-    y: {
-      formatter: (value: number) => `${formatNumber(value)} ${props.unit ?? '次'}`
-    }
-  },
-  plotOptions: {
-    pie: {
-      donut: {
-        size: '72%',
-        labels: {
-          show: true,
-          name: {
-            fontFamily: CHART_FONT_FAMILY,
-            color: '#8c8a82',
-            fontSize: '12px',
-            offsetY: -2
-          },
-          value: {
-            fontFamily: CHART_FONT_FAMILY,
-            color: '#141413',
-            fontSize: '22px',
-            fontWeight: 600,
-            offsetY: 4,
-            formatter: (value: string) => formatNumber(Number(value))
-          },
-          total: {
-            show: true,
-            showAlways: true,
-            label: '总计',
-            fontFamily: CHART_FONT_FAMILY,
-            color: '#8c8a82',
-            fontSize: '12px',
-            formatter: (w: { globals: { series: number[] } }) =>
-              formatNumber(w.globals.series.reduce((sum, value) => sum + value, 0))
-          }
-        }
-      }
-    }
-  }
-}))
 </script>
 
 <style lang="scss" scoped>

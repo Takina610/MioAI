@@ -71,5 +71,7 @@ public class UsageStatsVO implements Serializable {
          */
         private String icon;
         private Number value;
+        /** 调用/轮次（日明细等场景与 value 并列展示；可为空） */
+        private Long calls;
     }
 }

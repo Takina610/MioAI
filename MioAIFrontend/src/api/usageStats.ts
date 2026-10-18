@@ -1,5 +1,12 @@
 import request from '@/utils/request'
-import type { UsageStats, ContributionData, TokenTrendData, UsageProfile } from '@/types'
+import type {
+  UsageStats,
+  ContributionData,
+  TokenTrendData,
+  UsageProfile,
+  UsageAnalytics,
+  UsageDayDetail
+} from '@/types'
 
 export interface UsageStatsQueryParams {
   startTime: string
@@ -69,5 +76,51 @@ export function getTokenTrend(
     url: '/usage-stats/token-trend',
     method: 'get',
     params: { days, dimension }
+  })
+}
+
+/** 使用去向 / 使用构成 / 使用明细（当前用户） */
+export function getUsageAnalytics(
+  type: string,
+  params: UsageStatsQueryParams
+): Promise<UsageAnalytics> {
+  return request({
+    url: `/usage-stats/analytics/${type}`,
+    method: 'get',
+    params: params as unknown as Record<string, unknown>
+  })
+}
+
+/** 使用去向 / 使用构成 / 使用明细（管理端，全用户） */
+export function getAdminUsageAnalytics(
+  type: string,
+  params: UsageStatsQueryParams & { userId?: number; agentId?: number }
+): Promise<UsageAnalytics> {
+  return request({
+    url: `/admin/usage-stats/analytics/${type}`,
+    method: 'get',
+    params: params as unknown as Record<string, unknown>
+  })
+}
+
+/** 日历点击某天的明细（当前用户） */
+export function getUsageDayDetail(date: string, type: string): Promise<UsageDayDetail> {
+  return request({
+    url: '/usage-stats/day-detail',
+    method: 'get',
+    params: { date, type }
+  })
+}
+
+/** 日历点击某天的明细（管理端，可按用户过滤） */
+export function getAdminUsageDayDetail(
+  date: string,
+  type: string,
+  userId?: number
+): Promise<UsageDayDetail> {
+  return request({
+    url: '/admin/usage-stats/day-detail',
+    method: 'get',
+    params: { date, type, userId }
   })
 }

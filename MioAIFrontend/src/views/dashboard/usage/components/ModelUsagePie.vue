@@ -1,7 +1,14 @@
 <template>
   <div class="usage-pie" v-if="series.length > 0">
     <div class="donut-box">
-      <VueApexCharts type="donut" width="100%" height="280" :options="chartOptions" :series="seriesValues" />
+      <BaseDonutChart
+        :items="donutItems"
+        :colors="palette"
+        center-label="Token 总量"
+        :format-value="formatCompact"
+        unit="tokens"
+        :height="280"
+      />
     </div>
     <div class="pie-legend">
       <div class="legend-item" v-for="(entry, index) in series" :key="entry.id">
@@ -20,19 +27,20 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import VueApexCharts from 'vue3-apexcharts'
-import type { ApexOptions } from 'apexcharts'
 import type { TokenTrendSeries } from '@/types'
-import { CHART_PALETTE, CHART_FONT_FAMILY } from '../composables/chartTheme'
-import { formatCompact, formatNumber } from '../composables/format'
+import BaseDonutChart from '@/components/charts/BaseDonutChart.vue'
+import { ECHARTS_PALETTE } from '../composables/echartsTheme'
+import { formatCompact } from '../composables/format'
 
 const props = defineProps<{
   series: TokenTrendSeries[]
 }>()
 
-const palette = CHART_PALETTE
+const palette = ECHARTS_PALETTE
 
-const seriesValues = computed(() => props.series.map(entry => Number(entry.totalTokens)))
+const donutItems = computed(() =>
+  props.series.map(entry => ({ name: entry.name, value: Number(entry.totalTokens) }))
+)
 
 const totalTokens = computed(() =>
   props.series.reduce((sum, entry) => sum + Number(entry.totalTokens), 0)
@@ -50,59 +58,6 @@ function percentOf(index: number): string {
     .toFixed(1)
     .replace(/\.0$/, '')
 }
-
-const chartOptions = computed<ApexOptions>(() => ({
-  chart: {
-    type: 'donut',
-    fontFamily: CHART_FONT_FAMILY,
-    animations: { speed: 450 }
-  },
-  colors: palette,
-  stroke: { width: 2, colors: ['#faf9f5'] },
-  dataLabels: { enabled: false },
-  legend: { show: false },
-  tooltip: {
-    theme: 'light',
-    style: { fontFamily: CHART_FONT_FAMILY, fontSize: '12px' },
-    y: {
-      formatter: (value: number) => `${formatNumber(value)} tokens`
-    }
-  },
-  plotOptions: {
-    pie: {
-      donut: {
-        size: '72%',
-        labels: {
-          show: true,
-          name: {
-            fontFamily: CHART_FONT_FAMILY,
-            color: '#8c8a82',
-            fontSize: '12px',
-            offsetY: -2
-          },
-          value: {
-            fontFamily: CHART_FONT_FAMILY,
-            color: '#141413',
-            fontSize: '22px',
-            fontWeight: 600,
-            offsetY: 4,
-            formatter: (value: string) => formatCompact(Number(value))
-          },
-          total: {
-            show: true,
-            showAlways: true,
-            label: 'Token 总量',
-            fontFamily: CHART_FONT_FAMILY,
-            color: '#8c8a82',
-            fontSize: '12px',
-            formatter: (w: { globals: { series: number[] } }) =>
-              formatCompact(w.globals.series.reduce((sum, value) => sum + value, 0))
-          }
-        }
-      }
-    }
-  }
-}))
 </script>
 
 <style lang="scss" scoped>
