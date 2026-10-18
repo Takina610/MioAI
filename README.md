@@ -1,8 +1,24 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="MioAI —— 可自托管的智能体应用平台：对话、知识库、MCP 工具与技能">
+  <img src="./assets/readme/logo.png" width="150" alt="MioAI">
 </p>
 
-MioAI 是一个可自托管的智能体应用平台。模型只负责推理，会话、工具、知识库、记忆和权限都跑在你自己部署的服务上。
+<h1 align="center">MioAI</h1>
+
+---
+
+<p align="center">
+  🧠 Spring Boot × Spring AI × Vue 3 —— 会思考，能行动：对话、知识库、MCP 工具、技能与记忆，都跑在你自己部署的服务上
+</p>
+
+<p align="center">
+  <img alt="Self-hosted" src="https://img.shields.io/badge/Deploy-Self--Hosted-2aa1a9?style=flat-square">
+  <img alt="Java 21" src="https://img.shields.io/badge/Java-21-ED8B00?style=flat-square&logo=openjdk&logoColor=white">
+  <img alt="Spring Boot 4.1.1" src="https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F?style=flat-square&logo=springboot&logoColor=white">
+  <img alt="Spring AI 2.0.1" src="https://img.shields.io/badge/Spring%20AI-2.0.1-6DB33F?style=flat-square&logo=spring&logoColor=white">
+  <img alt="Vue 3" src="https://img.shields.io/badge/Vue-3-4FC08D?style=flat-square&logo=vuedotjs&logoColor=white">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6.0-3178C6?style=flat-square&logo=typescript&logoColor=white">
+  <img alt="Docker" src="https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white">
+</p>
 
 ## 界面
 
@@ -95,15 +111,41 @@ Linux 沙箱是可选项：不配置 `mio.ai.sandbox.*` 时，文件读写与终
 
 ## 技术栈
 
-| 后端 | 前端 |
-|---|---|
-| Java 21 | Vue 3 + TypeScript |
-| Spring Boot 4.1.1 | Vite 8 |
-| Spring AI 2.0.1 | Pinia + Vue Router |
-| Spring MVC / WebFlux / SSE | Ant Design Vue |
-| MyBatis-Plus 3.5.16 | ECharts 6 |
-| MySQL 8 · PostgreSQL 16 + pgvector · Redis 7 | markdown-it + KaTeX + highlight.js |
-| AWS SDK S3（Cloudflare R2） | CodeMirror 6 · Fuse.js |
+### 后端
+
+<p>
+  <img alt="Java 21" src="https://img.shields.io/badge/Java-21-ED8B00?style=flat-square&logo=openjdk&logoColor=white">
+  <img alt="Spring Boot 4.1.1" src="https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F?style=flat-square&logo=springboot&logoColor=white">
+  <img alt="Spring AI 2.0.1" src="https://img.shields.io/badge/Spring%20AI-2.0.1-6DB33F?style=flat-square&logo=spring&logoColor=white">
+  <img alt="MyBatis-Plus 3.5.16" src="https://img.shields.io/badge/MyBatis--Plus-3.5.16-C71A36?style=flat-square">
+  <img alt="SSE Streaming" src="https://img.shields.io/badge/SSE-Streaming-2aa1a9?style=flat-square">
+  <img alt="MCP Protocol" src="https://img.shields.io/badge/MCP-Protocol-2aa1a9?style=flat-square">
+</p>
+
+### 前端
+
+<p>
+  <img alt="Vue 3" src="https://img.shields.io/badge/Vue-3-4FC08D?style=flat-square&logo=vuedotjs&logoColor=white">
+  <img alt="TypeScript 6.0" src="https://img.shields.io/badge/TypeScript-6.0-3178C6?style=flat-square&logo=typescript&logoColor=white">
+  <img alt="Vite 8" src="https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white">
+  <img alt="Pinia" src="https://img.shields.io/badge/Pinia-State-2aa1a9?style=flat-square&logo=pinia&logoColor=white">
+  <img alt="Vue Router" src="https://img.shields.io/badge/Vue%20Router-Routing-4FC08D?style=flat-square&logo=vuedotjs&logoColor=white">
+  <img alt="Ant Design Vue" src="https://img.shields.io/badge/Ant%20Design%20Vue-UI-0170FE?style=flat-square&logo=antdesign&logoColor=white">
+  <img alt="ECharts 6" src="https://img.shields.io/badge/ECharts-6-AA344D?style=flat-square&logo=apacheecharts&logoColor=white">
+  <img alt="Markdown-it with KaTeX" src="https://img.shields.io/badge/markdown--it-KaTeX-2aa1a9?style=flat-square">
+  <img alt="CodeMirror 6" src="https://img.shields.io/badge/CodeMirror-6-2aa1a9?style=flat-square">
+</p>
+
+### 数据与基础设施
+
+<p>
+  <img alt="MySQL 8" src="https://img.shields.io/badge/MySQL-8-4479A1?style=flat-square&logo=mysql&logoColor=white">
+  <img alt="PostgreSQL 16" src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql&logoColor=white">
+  <img alt="pgvector" src="https://img.shields.io/badge/pgvector-HNSW-336791?style=flat-square&logo=postgresql&logoColor=white">
+  <img alt="Redis 7" src="https://img.shields.io/badge/Redis-7-DC382D?style=flat-square&logo=redis&logoColor=white">
+  <img alt="Docker Compose" src="https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white">
+  <img alt="Cloudflare R2" src="https://img.shields.io/badge/Cloudflare-R2-F38020?style=flat-square&logo=cloudflare&logoColor=white">
+</p>
 
 ## 项目结构
 
