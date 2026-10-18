@@ -8,7 +8,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import type { EChartsOption } from 'echarts'
-import { useEChart } from '@/composables/useEChart'
+import { useEChart } from '@/composables/charts/useEChart'
 import {
   ECHARTS_FONT_FAMILY,
   ECHARTS_PALETTE,

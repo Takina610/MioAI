@@ -32,7 +32,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import AuthModal from '@/components/AuthModal.vue'
+import AuthModal from '@/components/auth/AuthModal.vue'
 import MobileScrim from '@/mobile/MobileScrim.vue'
 import DashboardSidebar from './components/DashboardSidebar.vue'
 import DashboardHeader from './components/DashboardHeader.vue'

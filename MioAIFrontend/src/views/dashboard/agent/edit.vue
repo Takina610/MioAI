@@ -267,9 +267,9 @@ import {
   FileTextOutlined,
   ThunderboltOutlined
 } from '@ant-design/icons-vue'
-import AgentCreateModal from '@/components/AgentCreateModal.vue'
-import BotIcon from '@/components/bot-icon/BotIcon.vue'
-import { parseBotIcon } from '@/components/bot-icon/types'
+import AgentCreateModal from '@/components/agent/AgentCreateModal.vue'
+import BotIcon from '@/components/agent/bot-icon/BotIcon.vue'
+import { parseBotIcon } from '@/components/agent/bot-icon/types'
 import { countMcpTools } from '@/utils/mcpTool'
 import PageHeader from '../components/PageHeader.vue'
 import ResourceItem from './components/ResourceItem.vue'

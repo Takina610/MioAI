@@ -74,8 +74,8 @@
 import { computed, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { CloseCircleOutlined, PlusCircleOutlined } from '@ant-design/icons-vue'
-import BotIcon from '@/components/bot-icon/BotIcon.vue'
-import { parseBotIcon, type BotIconConfig } from '@/components/bot-icon/types'
+import BotIcon from '@/components/agent/bot-icon/BotIcon.vue'
+import { parseBotIcon, type BotIconConfig } from '@/components/agent/bot-icon/types'
 import { updateAgentGroup } from '@/api/agent'
 import type { Agent, AgentMemberBrief } from '@/types'
 

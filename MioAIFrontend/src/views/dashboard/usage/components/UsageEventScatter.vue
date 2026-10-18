@@ -51,7 +51,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import type { EChartsOption } from 'echarts'
 import type { UsageEventPoint } from '@/types'
-import { useEChart } from '@/composables/useEChart'
+import { useEChart } from '@/composables/charts/useEChart'
 import { formatCompact } from '../composables/format'
 import {
   ECHARTS_FONT_FAMILY,

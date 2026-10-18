@@ -27,9 +27,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import BotIcon from '@/components/bot-icon/BotIcon.vue'
-import { parseBotIcon, type BotIconConfig } from '@/components/bot-icon/types'
-import MarkdownView from '@/components/MarkdownView.vue'
+import BotIcon from '@/components/agent/bot-icon/BotIcon.vue'
+import { parseBotIcon, type BotIconConfig } from '@/components/agent/bot-icon/types'
+import MarkdownView from '@/components/content/MarkdownView.vue'
 import type { MessageBlock } from '@/types'
 
 type MemberBlock = Extract<MessageBlock, { type: 'member' }>

@@ -59,7 +59,7 @@ import {
   type ActiveVectorization
 } from '@/api/knowledgeBase'
 import type { KnowledgeBase, PageResponse } from '@/types'
-import KnowledgeBaseModal from '@/components/KnowledgeBaseModal.vue'
+import KnowledgeBaseModal from './components/KnowledgeBaseModal.vue'
 import PageHeader from '../components/PageHeader.vue'
 import LoginPrompt from '../components/LoginPrompt.vue'
 import KbCard from './components/KbCard.vue'

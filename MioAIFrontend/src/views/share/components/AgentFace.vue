@@ -13,9 +13,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import BotIcon from '@/components/bot-icon/BotIcon.vue'
-import GroupAvatar from '@/components/GroupAvatar.vue'
-import { DEFAULT_BOT_ICON, parseBotIcon } from '@/components/bot-icon/types'
+import BotIcon from '@/components/agent/bot-icon/BotIcon.vue'
+import GroupAvatar from '@/components/agent/GroupAvatar.vue'
+import { DEFAULT_BOT_ICON, parseBotIcon } from '@/components/agent/bot-icon/types'
 import type { AgentMemberBrief } from '@/types'
 
 /** 智能体展示子集（分享接口下发的字段即可，不要求完整 Agent） */

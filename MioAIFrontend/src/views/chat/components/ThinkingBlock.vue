@@ -18,8 +18,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { CaretRightOutlined } from '@ant-design/icons-vue'
-import CollapseTransition from '@/components/CollapseTransition.vue'
-import BrainIcon from '@/components/BrainIcon.vue'
+import CollapseTransition from '@/components/ui/CollapseTransition.vue'
+import BrainIcon from '@/components/icons/BrainIcon.vue'
 import { formatDuration } from '../toolDisplay'
 
 type ThinkingBlockType = { text: string; durationMs?: number }

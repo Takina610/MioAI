@@ -1,6 +1,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { useFloatingSidebar } from '@/composables/useFloatingSidebar'
+import { useFloatingSidebar } from '@/composables/layout/useFloatingSidebar'
 import { useIsMobile } from './useIsMobile'
 
 /**

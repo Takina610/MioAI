@@ -83,7 +83,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import type { EChartsOption } from 'echarts'
 import type { UsageDayDetail } from '@/types'
-import { useEChart } from '@/composables/useEChart'
+import { useEChart } from '@/composables/charts/useEChart'
 import { formatCompact, formatDuration } from '../composables/format'
 import {
   ECHARTS_FONT_FAMILY,

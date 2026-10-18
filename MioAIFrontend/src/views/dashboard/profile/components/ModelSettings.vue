@@ -61,7 +61,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { Modal, message } from 'ant-design-vue'
 import { DeleteOutlined, EditOutlined, LoadingOutlined, PlusOutlined } from '@ant-design/icons-vue'
-import { deleteLocalProvider, enabledProviderModels, loadModelCatalog, refreshModelCatalog, useModelCatalog } from '@/composables/useModelCatalog'
+import { deleteLocalProvider, enabledProviderModels, loadModelCatalog, refreshModelCatalog, useModelCatalog } from '@/composables/model/useModelCatalog'
 import { isVisionModel } from '@/utils/modelPresets'
 import ProviderFormModal from './ProviderFormModal.vue'
 import type { ModelProvider } from '@/types'

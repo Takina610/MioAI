@@ -96,7 +96,7 @@ import { useRouter } from 'vue-router'
 import MioMessage from '@/utils/message'
 
 import { formatDate } from '@/utils/format'
-import { useAdminTable } from '@/composables/useAdminTable'
+import { useAdminTable } from '@/composables/admin/useAdminTable'
 import { deleteUser, searchUsers, updateUser } from '@/api/adminUser'
 import type { UserAdminVO } from '@/api/adminUser'
 import RecordDrawer from './RecordDrawer.vue'

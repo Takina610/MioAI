@@ -27,8 +27,8 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import BotIcon from '@/components/bot-icon/BotIcon.vue'
-import { parseBotIcon, type BotIconConfig } from '@/components/bot-icon/types'
+import BotIcon from '@/components/agent/bot-icon/BotIcon.vue'
+import { parseBotIcon, type BotIconConfig } from '@/components/agent/bot-icon/types'
 
 export interface GroupAvatarMember {
   id: number

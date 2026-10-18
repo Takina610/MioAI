@@ -105,7 +105,7 @@ import { getChatIdsPage } from '@/api/chatMemory'
 import { queryAgents } from '@/api/agent'
 import type { ChatSession, Agent } from '@/types'
 import type { Component } from 'vue'
-import HighlightText from '@/components/HighlightText.vue'
+import HighlightText from './HighlightText.vue'
 import {
   SearchOutlined,
   CloseOutlined,

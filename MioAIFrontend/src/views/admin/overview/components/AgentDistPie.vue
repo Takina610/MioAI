@@ -35,8 +35,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { NameValue } from '@/types'
-import type { BotIconConfig } from '@/components/bot-icon/types'
-import BotIcon from '@/components/bot-icon/BotIcon.vue'
+import type { BotIconConfig } from '@/components/agent/bot-icon/types'
+import BotIcon from '@/components/agent/bot-icon/BotIcon.vue'
 import BaseDonutChart from '@/components/charts/BaseDonutChart.vue'
 import { ECHARTS_PALETTE } from '@/views/dashboard/usage/composables/echartsTheme'
 import { formatNumber } from '@/views/dashboard/usage/composables/format'

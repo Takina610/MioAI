@@ -41,8 +41,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { CloseOutlined } from '@ant-design/icons-vue'
-import MarkdownView from '@/components/MarkdownView.vue'
-import RoseFourLoader from '@/components/RoseFourLoader.vue'
+import MarkdownView from '@/components/content/MarkdownView.vue'
+import RoseFourLoader from '@/components/ui/RoseFourLoader.vue'
 import ToolRow from './ToolRow.vue'
 import { formatDuration } from '../toolDisplay'
 import type { SubagentTranscript } from '../subagentTranscript'

@@ -61,7 +61,7 @@ import { useUserStore } from '@/store/user'
 import { addMcpTool, queryMcpTools, updateMcpTool, deleteMcpTool } from '@/api/mcpTool'
 import type { McpTool, McpToolAddRequest, PageResponse } from '@/types'
 import { PlusOutlined, ToolOutlined, DeleteOutlined } from '@ant-design/icons-vue'
-import McpCreateModal from '@/components/McpCreateModal.vue'
+import McpCreateModal from './components/McpCreateModal.vue'
 import PageHeader from '../components/PageHeader.vue'
 import LoginPrompt from '../components/LoginPrompt.vue'
 

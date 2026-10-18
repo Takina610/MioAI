@@ -64,8 +64,8 @@ import { getPublicAgents, forkAgent } from '@/api/agent'
 import { formatDate } from '@/utils/format'
 import type { Agent, PageResponse } from '@/types'
 import { useUserStore } from '@/store/user'
-import BotIcon from '@/components/bot-icon/BotIcon.vue'
-import { parseBotIcon } from '@/components/bot-icon/types'
+import BotIcon from '@/components/agent/bot-icon/BotIcon.vue'
+import { parseBotIcon } from '@/components/agent/bot-icon/types'
 import PageHeader from '../components/PageHeader.vue'
 
 interface AgentWithUser extends Agent {

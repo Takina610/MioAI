@@ -49,7 +49,7 @@
 import { ref, watch, computed } from 'vue'
 import { message } from 'ant-design-vue'
 import { DownloadOutlined } from '@ant-design/icons-vue'
-import MarkdownView from '@/components/MarkdownView.vue'
+import MarkdownView from '@/components/content/MarkdownView.vue'
 import VueOfficePdf from "@vue-office/pdf/lib/v3/vue-office-pdf.mjs"
 import VueOfficeDocx from "@vue-office/docx/lib/v3/vue-office-docx.mjs"
 import "@vue-office/docx/lib/v3/index.css"

@@ -56,7 +56,7 @@ import {
 } from '@/api/knowledgeBase'
 import { formatFileSize } from '@/utils/format'
 import type { KnowledgeBase } from '@/types'
-import FilePreviewDrawer from '@/components/FilePreviewDrawer.vue'
+import FilePreviewDrawer from './components/FilePreviewDrawer.vue'
 import PageHeader from '../components/PageHeader.vue'
 import KnowledgeInfoForm from './components/KnowledgeInfoForm.vue'
 import DocumentTable from './components/DocumentTable.vue'

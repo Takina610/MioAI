@@ -69,10 +69,10 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import BotIcon from '@/components/bot-icon/BotIcon.vue'
-import BotIconDesigner from '@/components/bot-icon/BotIconDesigner.vue'
-import { DEFAULT_BOT_ICON, parseBotIcon, serializeBotIcon } from '@/components/bot-icon/types'
-import type { BotIconConfig } from '@/components/bot-icon/types'
+import BotIcon from '@/components/agent/bot-icon/BotIcon.vue'
+import BotIconDesigner from '@/components/agent/bot-icon/BotIconDesigner.vue'
+import { DEFAULT_BOT_ICON, parseBotIcon, serializeBotIcon } from '@/components/agent/bot-icon/types'
+import type { BotIconConfig } from '@/components/agent/bot-icon/types'
 import { getMyAgentConfig, saveMyAgentConfig, resetMyAgentConfig } from '@/api/agent'
 import type { Agent } from '@/types'
 

@@ -78,9 +78,9 @@
 
 <script setup lang="ts">
 import { CloseOutlined, PushpinFilled, PushpinOutlined, TeamOutlined } from '@ant-design/icons-vue'
-import BotIcon from '@/components/bot-icon/BotIcon.vue'
-import GroupAvatar from '@/components/GroupAvatar.vue'
-import { parseBotIcon, type BotIconConfig } from '@/components/bot-icon/types'
+import BotIcon from '@/components/agent/bot-icon/BotIcon.vue'
+import GroupAvatar from '@/components/agent/GroupAvatar.vue'
+import { parseBotIcon, type BotIconConfig } from '@/components/agent/bot-icon/types'
 import type { Agent } from '@/types'
 
 const props = defineProps<{

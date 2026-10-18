@@ -106,12 +106,12 @@
  * 状态旁标注该状态是否具备专属姿态/覆盖图形（其余走默认姿态，眼睛播放表仍生效）。
  */
 import { computed, ref } from 'vue'
-import BotIcon from '@/components/bot-icon/BotIcon.vue'
-import { GROK_TABLES } from '@/components/bot-icon/engine/tables'
-import { GROK_GEO } from '@/components/bot-icon/engine/geometry'
-import { GROK_FX } from '@/components/bot-icon/engine/fx'
-import { BOT_PALETTE } from '@/components/bot-icon/types'
-import type { BotFill } from '@/components/bot-icon/types'
+import BotIcon from '@/components/agent/bot-icon/BotIcon.vue'
+import { GROK_TABLES } from '@/components/agent/bot-icon/engine/tables'
+import { GROK_GEO } from '@/components/agent/bot-icon/engine/geometry'
+import { GROK_FX } from '@/components/agent/bot-icon/engine/fx'
+import { BOT_PALETTE } from '@/components/agent/bot-icon/types'
+import type { BotFill } from '@/components/agent/bot-icon/types'
 
 const state = ref('idle')
 const shape = ref('blob')

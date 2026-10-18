@@ -55,11 +55,11 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import BotIcon from '@/components/bot-icon/BotIcon.vue'
-import GroupAvatar from '@/components/GroupAvatar.vue'
+import BotIcon from '@/components/agent/bot-icon/BotIcon.vue'
+import GroupAvatar from '@/components/agent/GroupAvatar.vue'
 import { HolderOutlined, PushpinFilled, PushpinOutlined } from '@ant-design/icons-vue'
 import { idleCycleMood, railMoodStates } from '../composables/useAgentActivity'
-import type { BotIconConfig } from '@/components/bot-icon/types'
+import type { BotIconConfig } from '@/components/agent/bot-icon/types'
 import type { Agent } from '@/types'
 
 const props = defineProps<{

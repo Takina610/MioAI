@@ -124,7 +124,7 @@ import { reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import MioMessage from '@/utils/message'
 import { formatDateTime } from '@/utils/format'
-import { useAdminTable } from '@/composables/useAdminTable'
+import { useAdminTable } from '@/composables/admin/useAdminTable'
 import {
   deleteConversation,
   searchConversations

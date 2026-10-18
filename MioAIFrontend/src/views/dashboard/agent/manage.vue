@@ -94,8 +94,8 @@ import { useUserStore } from '@/store/user'
 import { queryAgents, deleteAgent } from '@/api/agent'
 import { formatDateTime } from '@/utils/format'
 import type { Agent, PageResponse } from '@/types'
-import BotIcon from '@/components/bot-icon/BotIcon.vue'
-import { parseBotIcon } from '@/components/bot-icon/types'
+import BotIcon from '@/components/agent/bot-icon/BotIcon.vue'
+import { parseBotIcon } from '@/components/agent/bot-icon/types'
 import {
   PlusOutlined,
   MoreOutlined,
@@ -104,7 +104,7 @@ import {
   MessageOutlined,
   SettingOutlined
 } from '@ant-design/icons-vue'
-import AgentCreateModal from '@/components/AgentCreateModal.vue'
+import AgentCreateModal from '@/components/agent/AgentCreateModal.vue'
 import PageHeader from '../components/PageHeader.vue'
 import LoginPrompt from '../components/LoginPrompt.vue'
 

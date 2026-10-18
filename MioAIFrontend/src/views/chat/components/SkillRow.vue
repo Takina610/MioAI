@@ -19,8 +19,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { CaretRightOutlined } from '@ant-design/icons-vue'
-import CollapseTransition from '@/components/CollapseTransition.vue'
-import SparklesIcon from '@/components/SparklesIcon.vue'
+import CollapseTransition from '@/components/ui/CollapseTransition.vue'
+import SparklesIcon from '@/components/icons/SparklesIcon.vue'
 import type { MessageBlock } from '@/types'
 
 // 技能使用行（zcode 式）：一行「技能 <名>」，展开看 SKILL.md 内容（模型按需读取技能文件时生成）

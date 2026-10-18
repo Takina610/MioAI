@@ -111,7 +111,7 @@
 import { ref } from 'vue'
 import MioMessage from '@/utils/message'
 import { formatDateTime } from '@/utils/format'
-import { useAdminTable } from '@/composables/useAdminTable'
+import { useAdminTable } from '@/composables/admin/useAdminTable'
 import { deleteKnowledgeBase, searchKnowledgeBases, updateKnowledgeBase } from '@/api/adminKnowledge'
 import type { KnowledgeBase, KnowledgeBaseQueryRequest } from '@/types'
 import RecordDrawer from './RecordDrawer.vue'

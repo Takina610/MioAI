@@ -51,8 +51,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { BookOutlined, CaretRightOutlined, ClusterOutlined } from '@ant-design/icons-vue'
-import CollapseTransition from '@/components/CollapseTransition.vue'
-import SparklesIcon from '@/components/SparklesIcon.vue'
+import CollapseTransition from '@/components/ui/CollapseTransition.vue'
+import SparklesIcon from '@/components/icons/SparklesIcon.vue'
 import type { MessageBlock } from '@/types'
 
 type KbBlock = Extract<MessageBlock, { type: 'kb' }>

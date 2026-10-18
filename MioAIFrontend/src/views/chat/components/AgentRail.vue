@@ -143,7 +143,7 @@ import { DragOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons-vue'
 import draggable from 'vuedraggable'
 import RailAgentItem from './RailAgentItem.vue'
 import { agentExecutingStates } from '../composables/useAgentActivity'
-import { parseBotIcon, type BotIconConfig } from '@/components/bot-icon/types'
+import { parseBotIcon, type BotIconConfig } from '@/components/agent/bot-icon/types'
 import type { Agent } from '@/types'
 
 const props = defineProps<{

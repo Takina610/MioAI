@@ -42,7 +42,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { CaretRightOutlined, GlobalOutlined } from '@ant-design/icons-vue'
-import CollapseTransition from '@/components/CollapseTransition.vue'
+import CollapseTransition from '@/components/ui/CollapseTransition.vue'
 import { parseMcpToolName, sourceChips, toolIcon, toolMeta, toolVerb, type ToolBlock } from '../toolDisplay'
 
 /**

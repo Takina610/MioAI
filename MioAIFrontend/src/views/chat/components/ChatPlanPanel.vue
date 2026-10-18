@@ -42,8 +42,8 @@ import {
   CloseOutlined,
   DownOutlined
 } from '@ant-design/icons-vue'
-import RoseFourLoader from '@/components/RoseFourLoader.vue'
-import CollapseTransition from '@/components/CollapseTransition.vue'
+import RoseFourLoader from '@/components/ui/RoseFourLoader.vue'
+import CollapseTransition from '@/components/ui/CollapseTransition.vue'
 import type { PlanStep } from '@/types'
 
 const props = defineProps<{

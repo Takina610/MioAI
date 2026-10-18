@@ -198,7 +198,7 @@ import {
   ThunderboltOutlined
 } from '@ant-design/icons-vue'
 import Fuse from 'fuse.js'
-import BrainIcon from '@/components/BrainIcon.vue'
+import BrainIcon from '@/components/icons/BrainIcon.vue'
 import AttachmentCard from './AttachmentCard.vue'
 import ContextUsageIndicator from './ContextUsageIndicator.vue'
 import { createTokenElement } from '../tokenDom'

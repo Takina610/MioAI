@@ -64,8 +64,8 @@ import ChatInput from '@/views/chat/components/ChatInput.vue'
 import ModelSettings from '@/views/dashboard/profile/components/ModelSettings.vue'
 import HomeCloudFlow from './HomeCloudFlow.vue'
 import { useHomeChat } from '../composables/useHomeChat'
-import { loadModelCatalog, useModelCatalog, writeLocalSelection } from '@/composables/useModelCatalog'
-import { useReasoningEfforts } from '@/composables/useReasoningEfforts'
+import { loadModelCatalog, useModelCatalog, writeLocalSelection } from '@/composables/model/useModelCatalog'
+import { useReasoningEfforts } from '@/composables/model/useReasoningEfforts'
 import type { ModelSelection } from '@/types'
 
 /** 输入框下方的内容入口 */

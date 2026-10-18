@@ -145,9 +145,9 @@ import { message } from 'ant-design-vue'
 import { useUserStore } from '@/store/user'
 import type { Agent, ChatSession } from '@/types'
 import ChatSessionList from './ChatSessionList.vue'
-import GroupAvatar from '@/components/GroupAvatar.vue'
-import BotIcon from '@/components/bot-icon/BotIcon.vue'
-import { parseBotIcon, type BotIconConfig } from '@/components/bot-icon/types'
+import GroupAvatar from '@/components/agent/GroupAvatar.vue'
+import BotIcon from '@/components/agent/bot-icon/BotIcon.vue'
+import { parseBotIcon, type BotIconConfig } from '@/components/agent/bot-icon/types'
 import { useIsMobile } from '@/mobile/useIsMobile'
 import {
   SearchOutlined,

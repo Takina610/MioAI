@@ -27,8 +27,8 @@
 </template>
 
 <script setup lang="ts">
-import BotIcon from '@/components/bot-icon/BotIcon.vue'
-import type { BotIconConfig } from '@/components/bot-icon/types'
+import BotIcon from '@/components/agent/bot-icon/BotIcon.vue'
+import type { BotIconConfig } from '@/components/agent/bot-icon/types'
 import { formatNumber } from '../composables/format'
 
 withDefaults(defineProps<{

@@ -106,7 +106,7 @@
 import { ref } from 'vue'
 import MioMessage from '@/utils/message'
 import { formatDateTime } from '@/utils/format'
-import { useAdminTable } from '@/composables/useAdminTable'
+import { useAdminTable } from '@/composables/admin/useAdminTable'
 import { deleteSkill, searchSkills, updateSkill } from '@/api/adminSkill'
 import type { Skill, SkillQueryRequest } from '@/types/skill'
 import RecordDrawer from './RecordDrawer.vue'

@@ -9,7 +9,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import type { EChartsOption } from 'echarts'
 import type { UsageDrillNode } from '@/types'
-import { useEChart } from '@/composables/useEChart'
+import { useEChart } from '@/composables/charts/useEChart'
 import {
   ECHARTS_PALETTE,
   ECHARTS_FONT_FAMILY,

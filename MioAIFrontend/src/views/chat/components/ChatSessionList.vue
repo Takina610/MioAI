@@ -59,7 +59,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { ChatSession } from '@/types'
-import RoseFourLoader from '@/components/RoseFourLoader.vue'
+import RoseFourLoader from '@/components/ui/RoseFourLoader.vue'
 import {
   MoreOutlined,
   DeleteOutlined,

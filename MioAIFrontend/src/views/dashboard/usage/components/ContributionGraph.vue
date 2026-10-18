@@ -10,7 +10,7 @@ import dayjs from 'dayjs'
 import type { EChartsOption } from 'echarts'
 import type { ContributionDay } from '@/types'
 import type { ContributionMode } from '../composables/useTokenInsights'
-import { useEChart } from '@/composables/useEChart'
+import { useEChart } from '@/composables/charts/useEChart'
 import { formatCompact } from '../composables/format'
 import {
   ECHARTS_FONT_FAMILY,
