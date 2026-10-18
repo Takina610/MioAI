@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="600" viewBox="0 0 1200 600"
+     role="img" aria-labelledby="archTitle archDesc">
+  <title id="archTitle">MioAI 运行时结构</title>
+  <desc id="archDesc">浏览器中的 Vue 3 前端经 nginx 转发到 Spring Boot 服务端；服务端由 mio-admin 入口、mio-agent 会话与资源、mio-framework 的 zagent 引擎、mio-system 用户、mio-common 基础组成；zagent 引擎调用 MCP 工具与 Linux 沙箱，数据落在 MySQL、PostgreSQL/pgvector、Redis 与对象存储，模型请求走 OpenAI 兼容网关。</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#8c8a82"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="600" rx="26" fill="#f0eee6"/>
+
+  <text x="56" y="56" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+        font-size="30" font-weight="700" fill="#141413">运行时结构</text>
+
+  <!-- 列标题 -->
+  <text x="56" y="104" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+        font-size="19" font-weight="600" letter-spacing="1.2" fill="#8c8a82">浏览器</text>
+  <text x="392" y="104" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+        font-size="19" font-weight="600" letter-spacing="1.2" fill="#8c8a82">服务端 · Spring Boot 4.1.1</text>
+  <text x="836" y="104" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+        font-size="19" font-weight="600" letter-spacing="1.2" fill="#8c8a82">存储与外部能力</text>
+
+  <!-- 浏览器 -->
+  <g id="client">
+    <rect x="56" y="122" width="256" height="190" rx="16" fill="#faf9f5" stroke="#e3e0d5"/>
+    <text x="76" y="158" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="21" font-weight="600" fill="#141413">Vue 3 单页应用</text>
+    <text x="76" y="192" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="18" fill="#5d5a52">对话 · 控制台 · 管理后台</text>
+    <text x="76" y="222" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="18" fill="#5d5a52">Pinia · Vue Router</text>
+    <text x="76" y="252" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="18" fill="#5d5a52">Ant Design Vue · ECharts</text>
+    <text x="76" y="286" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+          font-size="17" fill="#8c8a82">EventSource / SSE</text>
+  </g>
+
+  <line x1="316" y1="216" x2="380" y2="216" stroke="#8c8a82" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="322" y="204" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+        font-size="16" fill="#8c8a82">/api</text>
+
+  <!-- 服务端 -->
+  <g id="server">
+    <rect x="386" y="122" width="414" height="330" rx="18" fill="#faf9f5" stroke="#d8d5cc"/>
+
+    <rect x="404" y="140" width="378" height="52" rx="10" fill="#2aa1a9"/>
+    <text x="422" y="173" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="21" font-weight="600" fill="#ffffff">mio-admin · 8081 入口</text>
+
+    <rect x="404" y="204" width="378" height="68" rx="10" fill="#eef6f6" stroke="#cfe5e5"/>
+    <text x="422" y="232" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="20" font-weight="600" fill="#1d7f86">mio-agent</text>
+    <text x="422" y="258" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="18" fill="#5d5a52">会话 SSE · 智能体 / 知识库 / MCP / 技能</text>
+
+    <rect x="404" y="284" width="378" height="102" rx="10" fill="#ffffff" stroke="#cfe5e5"/>
+    <text x="422" y="312" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="20" font-weight="600" fill="#1d7f86">mio-framework · zagent 引擎</text>
+    <text x="422" y="340" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="18" fill="#5d5a52">Agent Loop · 工具注册表 · 上下文压缩</text>
+    <text x="422" y="366" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="18" fill="#5d5a52">记忆 · 子代理 · 钩子 · 后台任务</text>
+
+    <rect x="404" y="398" width="184" height="38" rx="9" fill="#ffffff" stroke="#e3e0d5"/>
+    <text x="422" y="423" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="18" fill="#5d5a52">mio-system · 用户</text>
+    <rect x="598" y="398" width="184" height="38" rx="9" fill="#ffffff" stroke="#e3e0d5"/>
+    <text x="616" y="423" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="18" fill="#5d5a52">mio-common · 基础</text>
+  </g>
+
+  <line x1="804" y1="216" x2="826" y2="216" stroke="#8c8a82" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- 存储与外部能力 -->
+  <g id="dependencies">
+    <rect x="836" y="122" width="308" height="66" rx="12" fill="#faf9f5" stroke="#e3e0d5"/>
+    <text x="856" y="150" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="19" font-weight="600" fill="#141413">MySQL · 业务数据</text>
+    <text x="856" y="175" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="17.5" fill="#8c8a82">智能体 · 会话 · 日志 · 用户</text>
+
+    <rect x="836" y="200" width="308" height="66" rx="12" fill="#faf9f5" stroke="#e3e0d5"/>
+    <text x="856" y="228" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="19" font-weight="600" fill="#141413">PostgreSQL / pgvector</text>
+    <text x="856" y="253" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="17.5" fill="#8c8a82">向量检索 · HNSW 索引</text>
+
+    <rect x="836" y="278" width="308" height="66" rx="12" fill="#faf9f5" stroke="#e3e0d5"/>
+    <text x="856" y="306" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="19" font-weight="600" fill="#141413">Redis · 登录态与限流</text>
+    <text x="856" y="331" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="17.5" fill="#8c8a82">Token · 分钟窗口 · 队列</text>
+
+    <rect x="836" y="356" width="308" height="66" rx="12" fill="#faf9f5" stroke="#e3e0d5"/>
+    <text x="856" y="384" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="19" font-weight="600" fill="#141413">MCP 服务 · Linux 沙箱</text>
+    <text x="856" y="409" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="17.5" fill="#8c8a82">STDIO / HTTP 工具 · SSH 执行</text>
+
+    <rect x="836" y="434" width="308" height="66" rx="12" fill="#faf9f5" stroke="#e3e0d5"/>
+    <text x="856" y="462" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="19" font-weight="600" fill="#141413">模型网关 · 对象存储</text>
+    <text x="856" y="487" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+          font-size="17.5" fill="#8c8a82">OpenAI 兼容 /v1 · S3 / R2</text>
+  </g>
+
+  <!-- 底部说明 -->
+  <rect x="56" y="478" width="756" height="82" rx="14" fill="#faf9f5" stroke="#e3e0d5"/>
+  <text x="78" y="510" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+        font-size="18" fill="#5d5a52">一次对话：前端发起 SSE 连接 → mio-agent 组装绑定资源 → zagent 循环调用模型与工具</text>
+  <text x="78" y="540" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif"
+        font-size="18" fill="#5d5a52">→ 事件按块推回前端渲染（文本 / 思考 / 工具 / 结构化 UI），消息与计划同步落库</text>
+</svg>

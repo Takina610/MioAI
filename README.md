@@ -1,215 +1,174 @@
-# MioAI
+<p align="center">
+  <img src="./assets/readme/hero.svg" width="100%" alt="MioAI —— 可自托管的智能体应用平台：对话、知识库、MCP 工具与技能">
+</p>
 
-MioAI 是一个基于 Spring Boot 3、Spring AI 和 Vue 3 的智能体应用平台，后端提供流式 AI 对话、智能体管理、知识库 RAG、MCP 工具接入、用户体系和文件存储能力，前端提供智能体广场、聊天、知识库管理、MCP 管理和个人中心等页面。
+MioAI 是一个可自托管的智能体应用平台。模型只负责推理，会话、工具、知识库、记忆和权限都跑在你自己部署的服务上。
 
-## 功能特性
+## 界面
 
-- 智能体对话：支持默认智能体、CS 游戏助手、MioManus 超级智能体和自定义智能体的 SSE 流式输出。
-- 智能体管理：支持智能体创建、编辑、发布、删除、头像上传和应用广场展示。
-- 知识库 RAG：支持知识库创建、文档上传、文档解析、向量检索、命中测试和公共知识库。
-- **知识库绑定与检索隔离**：自定义智能体只检索其绑定的知识库（向量过滤 `kbId`），每个绑定可独立配置 topK / 相似度阈值 / 是否重排（`agent_knowledge.retrieval_config`）。
-- **MioManus 显式规划**：对标 Manus 的任务清单机制，执行前创建计划、每步更新状态，计划实时注入思考提示词。
-- **长会话摘要记忆**：超过阈值的历史对话自动压缩为摘要注入上下文，避免固定窗口遗忘早期信息。
-- **RAG 消融实验**：内置 30 条评测集与检索评测脚本，支持分块大小/关键词增强/重排的单变量对比实验（见 `doc/rag-eval-experiment.md`）。
-- MCP 工具：支持 MCP 工具配置、校验、市场展示，并可绑定到自定义智能体（支持绑定级 `config_override` 覆盖密钥等参数）。
-- 用户体系：支持注册、登录、登出、当前用户获取、个人资料维护和管理员接口（密码 BCrypt 存储，历史 MD5 口令登录时自动升级）。
-- 聊天记录：支持会话保存、历史消息、标题生成和对话分享。
-- 文件与外部服务：支持 Cloudflare R2 对象存储、Pexels 图片搜索、SearchAPI Web 搜索、PDF 生成等扩展能力。
-- 安全基线：接口级资源归属校验、终端命令白名单、XSS 过滤、前端路由守卫。
+一次完整轮次：工具调用过程可见，回答可以是文字，也可以是结构化卡片与年表。
+
+<p align="center">
+  <img src="./assets/readme/screen-chat.png" width="100%" alt="对话页：MioBot 完成一次检索与知识库读取后，以卡片和年表呈现结构化回答">
+</p>
+
+<p align="center">
+  <img src="./assets/readme/screen-agent.png" width="49.5%" alt="智能体管理页：卡片列表展示图标、状态与更新时间">
+  <img src="./assets/readme/screen-usage.png" width="49.5%" alt="使用记录页：Token 概览、每日趋势与模型用量环图">
+</p>
+
+## 能做什么
+
+**对话** —— SSE 流式输出，思考过程与工具调用逐步展开。回答里的图表、表格、任务清单、表单、图集等 17 种结构化块由模型按协议生成，前端按白名单渲染，未知类型降级为可折叠原始数据。
+
+**智能体** —— 创建时可选图标、人设、模型、知识库绑定、MCP 绑定与技能绑定；每次发布留版本快照，可回滚。内置智能体支持用户级个性化（改人设、换图标）并单独发布到广场。群聊智能体把多个自定义智能体编成一个组，由调度器按任务委派成员执行。
+
+**知识库** —— 文档上传、解析、分块、向量化、命中测试；公共知识库可跨用户检索。每个「智能体 ↔ 知识库」绑定独立配置 topK、相似度阈值与是否重排，检索限定在绑定范围内。
+
+**MCP** —— 填写配置后在线校验，校验失败按错误类型给出定位；支持市场展示与绑定到智能体，绑定级可覆盖密钥等参数。标准输入型服务在容器内以子进程运行。
+
+**技能** —— 从 ZIP、GitHub 仓库或 skills.sh 导入 SKILL.md 与附属文件，绑定到智能体后在运行时物化到工作区，可发布到技能广场。
+
+**记忆与后台任务** —— 会话上下文超阈值自动压缩为摘要（不需要沙箱）。跨会话事实写入沙箱内的文件级记忆，会话开始注入索引；长命令与子代理任务可脱离本轮在后台执行，服务重启后重连并补发结果。这两项依赖沙箱。
+
+**使用分析** —— Token 统计、日历热力图、每日趋势、模型构成、来源去向与逐日下钻。
+
+**管理后台** —— 总览、用户、会话、日志审计、运行数据、资源管理、使用统计。
+
+## 架构
+
+<p align="center">
+  <img src="./assets/readme/architecture.svg" width="100%" alt="MioAI 运行时结构：Vue 前端经 SSE 连接 Spring Boot 后端，zagent 引擎调用模型、工具与沙箱，数据落在 MySQL、pgvector、Redis 与对象存储">
+</p>
+
+一次对话的路径：前端建立 SSE 连接 → `mio-agent` 组装该智能体绑定的知识库、MCP 与技能 → `zagent` 引擎进入 Agent Loop，每一步把可用工具与压缩后的上下文交给模型 → 工具调用回流到注册表执行 → 事件按块推给前端，同时消息与计划落库。
+
+引擎自带工具：`Read` `Write` `Edit` `Bash` `Glob` `Grep` `WebFetch` `WebSearch` `TodoRead` `TodoWrite` `TaskOutput` `TaskStop` `Agent` `AskUserQuestion`。MCP 工具与内置工具共用同一个注册表、同一套钩子（调用前可拦截，调用后可审计）。
+
+## 快速开始
+
+### Docker 一键部署
+
+```bash
+cp .env.example .env      # 填入密钥
+docker compose up -d --build
+```
+
+首次启动时 `MioAIBackend/mio_ai.sql` 会自动导入，创建表结构与种子数据。访问 <http://localhost:8090>，默认管理员 `admin / admin123456`，**首次登录后立即修改密码**。
+
+Compose 起五个容器：MySQL、PostgreSQL(pgvector)、Redis、后端、前端。前端 nginx 负责静态托管并把 `/api` 反代到后端。
+
+### 本地开发
+
+需要 JDK 21、Maven 3.9+、Node.js 20+、pnpm、MySQL 8、PostgreSQL 16（含 pgvector）、Redis。
+
+```bash
+# 1. 建库（结构 + 种子数据）
+mysql -u root -p < MioAIBackend/mio_ai.sql
+
+# 2. 配置后端
+cp MioAIBackend/mio-admin/src/main/resources/application.yml.example \
+   MioAIBackend/mio-admin/src/main/resources/application.yml
+
+# 3. 构建并启动后端（http://localhost:8081）
+cd MioAIBackend && mvn -DskipTests package
+java -jar mio-admin/target/mio-admin-*.jar
+
+# 4. 启动前端（http://localhost:3000，/api 已代理到后端）
+cd MioAIFrontend && pnpm install && pnpm dev
+```
+
+`application.yml` 与 `.env` 都已排除在版本库外。配置里的敏感项都支持用同名大写环境变量覆盖，Docker 部署走的就是这条路径。
+
+需要的密钥（只有 Embedding 是必需的）：
+
+| 变量 | 用途 |
+|---|---|
+| `EMBED_APIKEY` | **必填。** Embedding，OpenAI 兼容 `/v1/embeddings`，默认 mistral-embed |
+| `R2_ENDPOINT` `R2_ACCESS_KEY_ID` `R2_SECRET_ACCESS_KEY` | 文件上传需要，S3 兼容对象存储 |
+| `WEB_SEARCH_API_KEY` | 联网搜索工具，可选 |
+| `PEXELS_API_KEY` | 图片检索工具，可选 |
+| `GITHUB_TOKEN` | 知识库 GitHub 导入提升 API 限额，可选 |
+| `DASHSCOPE_API_KEY` | 重排，默认关闭，可选 |
+
+Linux 沙箱是可选项：不配置 `mio.ai.sandbox.*` 时，文件读写与终端工具不会注册，对话、知识库、MCP、技能都不受影响。
 
 ## 技术栈
 
-### 后端
-
-- Java 21
-- Spring Boot 4.1.1
-- Spring AI 2.0.1
-- Spring AI OpenAI 兼容接入（对话走本地 opencode2api/zen 网关，Embedding 走 42x 网关 mistral-embed）
-- Spring MVC / WebFlux / SSE
-- MyBatis-Plus 3.5.11
-- MySQL 8
-- PostgreSQL 16 + pgvector（向量库）/ Redis（缓存）
-- Lombok、Hutool、iText、Jsoup、spring-security-crypto（BCrypt）
-- AWS SDK S3 兼容存储，用于接入 Cloudflare R2
-
-### 前端
-
-- Vue 3
-- Vite
-- TypeScript
-- Vue Router（含全局路由守卫）
-- Pinia
-- Ant Design Vue
-- Axios
-- Marked
-- Vue Office
+| 后端 | 前端 |
+|---|---|
+| Java 21 | Vue 3 + TypeScript |
+| Spring Boot 4.1.1 | Vite 8 |
+| Spring AI 2.0.1 | Pinia + Vue Router |
+| Spring MVC / WebFlux / SSE | Ant Design Vue |
+| MyBatis-Plus 3.5.16 | ECharts 6 |
+| MySQL 8 · PostgreSQL 16 + pgvector · Redis 7 | markdown-it + KaTeX + highlight.js |
+| AWS SDK S3（Cloudflare R2） | CodeMirror 6 · Fuse.js |
 
 ## 项目结构
 
 ```text
-mio-ai
-|-- MioAIBackend/                   # Spring Boot 3 后端项目
-|   |-- Dockerfile                  # 后端镜像（多阶段构建）
-|   |-- settings.xml                # Docker 构建专用：Maven Central 阿里云镜像
-|   |-- mio_ai.sql                  # 数据库初始化脚本（纯结构 + 种子数据，无真实数据）
-|   |-- doc/
-|   |   `-- rag-eval-experiment.md  # RAG 消融实验设计与论文写作指引
-|   |-- pom.xml                     # Maven 后端依赖
-|   `-- src/
-|       |-- main/
-|       |   |-- java/com/mio/ai/
-|       |   |   |-- common/             # 通用响应、异常、配置、AOP、工具类
-|       |   |   |-- customagent/        # 自定义智能体、知识库、MCP 工具、检索隔离等业务
-|       |   |   |-- superagent/         # 默认智能体、CS 助手、MioManus（含显式规划）、摘要记忆与工具
-|       |   |   |-- user/               # 用户模块
-|       |   |   `-- MioAIApplication.java
-|       |   `-- resources/
-|       |       |-- application.yml.example  # 后端配置模板（复制为 application.yml 后填写）
-|       |       |-- rag/                # 内置 RAG 文档
-|       |       `-- sql/                # Spring AI 聊天记忆表结构
-|       `-- test/                       # 纯单元测试（无需外部环境）+ 集成/评测测试（需配置环境）
-|-- MioAIFrontend/                  # Vue 3 前端项目
-|   |-- Dockerfile                  # 前端镜像（构建 + nginx）
-|   |-- nginx.conf                  # 容器内 nginx 配置（静态托管 + /api 反代 + SSE）
-|   |-- src/
-|   |   |-- api/                    # 前端接口封装
-|   |   |-- components/             # 通用组件
-|   |   |-- router/                 # 前端路由（含 requiresAuth/requiresAdmin 守卫）
-|   |   |-- store/                  # Pinia 状态管理
-|   |   |-- types/                  # TypeScript 类型
-|   |   |-- utils/                  # 请求、消息、存储等工具
-|   |   `-- views/                  # 页面视图
-|   |-- package.json
-|   `-- vite.config.ts
-|-- docker-compose.yml              # 一键部署：MySQL + PostgreSQL(pgvector) + Redis + 后端 + 前端
-|-- .env.example                    # 部署环境变量模板
-`-- README.md
+MioAI/
+├── MioAIBackend/                  Spring Boot 多模块
+│   ├── mio-admin/                 启动入口、application.yml
+│   ├── mio-agent/                 会话 SSE、智能体/知识库/MCP/技能资源、日志
+│   ├── mio-framework/             zagent 引擎、RAG、MCP 客户端、SSH 沙箱、记忆
+│   ├── mio-system/                用户、登录态
+│   ├── mio-common/                统一响应、异常、AOP、工具类
+│   ├── mio_ai.sql                 建库脚本（表结构 + 种子数据）
+│   ├── sql/                       增量迁移脚本
+│   └── doc/                       实验记录与问题跟踪
+├── MioAIFrontend/                 Vue 3 单页应用
+│   ├── src/views/                 页面：首页、对话、控制台、管理后台、分享、调试
+│   ├── src/components/            跨页面共享组件（agent/auth/charts/content/icons/ui）
+│   ├── src/composables/           跨页面共享逻辑（admin/charts/chat/layout/model）
+│   ├── src/mobile/                移动端适配层（断点、外壳侧栏、抽屉）
+│   ├── src/api/ src/types/ src/utils/ src/store/ src/router/ src/styles/
+│   └── nginx.conf                 静态托管 + /api 反代 + SSE 超时
+├── assets/readme/                 README 视觉素材（SVG 源 + 截图）
+├── docs/                          架构与演进文档
+├── docker-compose.yml
+└── .env.example
 ```
 
-## 环境要求
+## 接口
 
-- JDK 21
-- Maven 3.9+
-- Node.js 20+，推荐配合 pnpm 使用
-- MySQL 8
-- PostgreSQL 16（向量检索依赖 pgvector 扩展）+ Redis（缓存）
-- 可用的 Embedding API Key（OpenAI 兼容 /v1/embeddings，默认 42x 网关 mistral-embed）
-- 如需完整文件能力，还需要配置 Cloudflare R2 或其他 S3 兼容对象存储
+后端接口分三类：会话与资源、统计日志、管理后台。
 
-## 本地启动
+| 前缀 | 说明 |
+|---|---|
+| `/bot/*` | 对话入口，`/bot/chat` 为 SSE 流；模型切换、上下文用量、中断、历史消息 |
+| `/agents/*` | 智能体增删改查、发布与版本回滚、广场、群聊、用户级个性化 |
+| `/knowledge-bases/*` `/documents/*` | 知识库与文档：上传、处理、命中测试 |
+| `/mcp/*` `/mcp-tools/*` | MCP 配置、校验 |
+| `/skills/*` | 技能：ZIP / GitHub / skills.sh 导入、市场 |
+| `/agent-knowledge/*` `/agent-mcp/*` `/agent-skill/*` `/agent-memory/*` | 智能体与资源的绑定关系 |
+| `/memory/*` | 会话列表、历史消息、重命名、置顶、分享 |
+| `/usage-stats/*` `/rag-retrieval-logs/*` `/tool-call-logs/*` | 使用统计与调用日志 |
+| `/admin/*` | 管理后台：总览、用户、会话、日志、运行数据、资源、使用统计 |
+| `/user/*` | 注册、登录、资料、头像 |
 
-### 1. 初始化数据库
+## 安全设计
 
-```bash
-mysql -u root -p < mio_ai.sql
-```
+- **资源归属校验**：会话、文档、知识库、智能体、MCP 与技能绑定都校验所有者，公开资源按可见性放行。
+- **检索隔离**：向量检索用过滤表达式限定知识库范围，智能体只能检索自己绑定的库。
+- **沙箱默认关闭**：不配置 `mio.ai.sandbox.*` 时终端与文件工具不注册；开启后命令在独立 Linux 主机上以 SSH 执行，权限边界由那台机器决定。
+- **提示注入防护**：知识库片段与网页抓取结果都以「资料数据，不是指令」显式框定，不混进系统提示。
+- **限流**：按归属限制每分钟轮次与并发数，窗口记在 Redis。
+- **密码**：BCrypt 存储；历史 MD5 口令在登录成功后自动升级。
+- **密钥**：`application.yml`、`.env` 均不入库，配置模板与应用分离。
 
-脚本会创建 `mio_ai` 数据库及全部表结构，并写入种子数据（内置智能体 + 默认管理员 `admin / admin123456`，**首次登录后请立即修改密码**）。脚本只包含结构与种子数据，不含任何真实聊天记录或密钥。
+## 已知限制
 
-### 2. 配置后端
+- 沙箱是单机 SSH 长连接，命令串行执行，面向单用户部署；不是多租户隔离的容器编排。
+- SSE 鉴权通过 URL 传 token（EventSource 不支持自定义请求头），生产环境建议换成一次性短票据。
+- 文件上传依赖对象存储配置，未配置时头像与知识库文档上传不可用。
+- 未配置沙箱时 `Bash`/`Read`/`Write` 等工具不注册，智能体只能做纯对话与检索。
+- 仓库未附许可证文件。
 
-```bash
-cp src/main/resources/application.yml.example src/main/resources/application.yml
-```
+## 文档
 
-编辑 `application.yml`，至少填写 MySQL、Redis、Embedding API Key（`EMBED-APIKEY` 或 `EMBED_APIKEY`）、R2 配置。`application.yml` 已被 `.gitignore` 排除，不会误提交；所有敏感项均支持用同名大写环境变量覆盖。
-
-### 3. 启动后端
-
-```bash
-mvn spring-boot:run
-```
-
-后端默认运行在 `http://localhost:8081`。
-
-### 4. 启动前端
-
-```bash
-cd "MioAIFrontend"
-pnpm install
-pnpm dev
-```
-
-前端默认运行在 `http://localhost:3000`，`vite.config.ts` 已将 `/api` 代理到 `http://127.0.0.1:8081`。
-
-## Docker 一键部署
-
-```bash
-cp .env.example .env      # 填入真实密钥
-docker compose up -d --build
-# 首次访问 http://localhost:8090（数据库结构已由 compose 初始化脚本自动导入）
-```
-
-## 常用命令
-
-### 后端
-
-```bash
-# 启动后端
-mvn spring-boot:run
-
-# 运行纯单元测试（无需 MySQL/Redis/密钥）
-mvn test
-
-# 运行 RAG 检索评测（需要真实环境，详见 doc/rag-eval-experiment.md）
-RAG_EVAL=true RAG_EVAL_KB_ID=1 mvn test -Dtest=RagEvaluationTest
-
-# 打包
-mvn clean package
-```
-
-### 前端
-
-```bash
-cd "MioAIFrontend"
-
-# 开发环境
-pnpm dev
-
-# 类型检查
-pnpm type-check
-
-# 构建生产包
-pnpm build
-
-# 本地预览生产包
-pnpm preview
-```
-
-## 主要接口方向
-
-- `/chat`：默认智能体流式对话。
-- `/cs/chat`：CS 游戏助手流式对话。
-- `/mio/chat`：MioManus 超级智能体流式对话（含显式任务规划）。
-- `/custom/chat`：自定义智能体流式对话（仅检索绑定知识库）。
-- `/summary`：对话标题生成。
-- `/user/**`：用户注册、登录、资料维护、头像上传。
-- `/agents/**`：智能体增删改查、发布、市场列表、头像管理。
-- `/knowledge-bases/**`：知识库增删改查、公共知识库、分页查询。
-- `/documents/**`：知识库文档上传、处理、查询、命中测试（按知识库过滤）。
-- `/mcp/**`：MCP 工具配置、校验、管理。
-- `/agent-mcp/**`、`/agent-knowledge/**`：智能体与 MCP、知识库的绑定关系（含归属校验）。
-- `/rag-retrieval-logs/**`、`/tool-call-logs/**`、`/agent-usage-logs/**`：检索、工具调用和智能体使用日志。
-- `/usage-stats/**`、`/admin/**`：用户/管理员使用统计与后台管理。
-
-## 安全设计要点
-
-- **资源归属校验**：会话、文档、知识库、智能体、MCP 绑定等资源均校验所有者（公开资源按可见性规则放行），见 `AccessGuardService`。
-- **检索隔离**：向量检索通过 `filterExpression` 限定 `kbId` 范围，自定义智能体无法跨用户检索。
-- **终端命令白名单**：MioManus 的终端工具仅允许白名单内单条命令，拒绝管道/链式/重定向（`TerminalCommandPolicy`，可经 `mio.ai.tools.terminal.allowed-commands` 配置）。
-- **密码安全**：BCrypt 存储；历史 MD5 口令在登录成功后自动升级，`mio_ai.sql` 不含真实用户口令。
-- **密钥管理**：`application.yml`、`.env` 均不入库，配置模板与应用分离；历史泄露的密钥请到对应平台作废重发。
-
-## 生产环境建议
-
-- 使用环境变量或独立配置文件管理数据库、Redis、API Key、R2 密钥。
-- 关闭开发环境 SQL 日志，避免泄露参数和影响性能。
-- 为 SSE 接口和上传接口配置合理的 Nginx 超时时间与文件大小限制（`MioAIFrontend/nginx.conf` 已按 SSE 调整）。
-- 为 Redis、MySQL、对象存储配置访问控制和备份策略。
-- SSE 鉴权当前通过 URL 传 token（EventSource 限制），生产环境建议改为一次性短票据换取连接。
-
-## 注意事项
-
-- 向量数据存 PostgreSQL（pgvector），普通 Redis 只作缓存，不再承担向量检索。
-- 文件上传依赖 R2 配置，未配置对象存储时头像、知识库文档等上传能力可能不可用。
-- 前端通过 `token` 请求头传递登录态，联调时请确认浏览器本地存储和后端 Redis 登录态一致。
+- [Agent 演进路线图](./docs/agent-evolution-roadmap.md)
+- [RAG 消融实验设计与写作指引](./MioAIBackend/doc/rag-eval-experiment.md)
+- [动态 UI 三期方案](./docs/dynamic-ui-phase3-plan.md)
+- [MCP 问题跟踪](./MioAIBackend/doc/mcp-issues-2026-10.md)
