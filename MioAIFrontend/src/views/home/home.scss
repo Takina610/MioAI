@@ -39,7 +39,7 @@
 
 /* 内容区与页脚之间的收尾留白(最后一块无论是内容区还是首屏) */
 .home-page main > :last-child {
-  padding-bottom: clamp(56px, 8vw, 104px);
+  padding-bottom: clamp(36px, 6vh, 64px);
 }
 
 .home-container {
@@ -71,7 +71,7 @@
 }
 
 /* 内容自下而上淡入(首屏载入错落)。首屏元素同步挂载，动画必然跑完，
-   不存在"异步内容被起始透明态钉住"的问题（详见 useHomeChat 的说明） */
+   不存在"异步内容被起始透明态钉住"的问题 */
 @keyframes hm-fade-up {
   from {
     opacity: 0;

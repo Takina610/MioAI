@@ -74,6 +74,16 @@ const groups: FooterGroup[] = [
   gap: 40px;
   padding-top: clamp(32px, 4vw, 48px);
   border-top: 1px solid var(--hm-border-subtle);
+
+  /* 窄屏：品牌占整行，链接组两列排布 */
+  @media (max-width: 720px) {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px 20px;
+
+    .footer-brand {
+      grid-column: 1 / -1;
+    }
+  }
 }
 
 .footer-brand {

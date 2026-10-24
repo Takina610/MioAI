@@ -238,6 +238,8 @@ const props = defineProps<{
   contextUsage?: ContextUsageData | null
   /** 嵌入模式（消息编辑复用）：去外层留白/居中/欢迎区，直接以输入框原貌嵌入 */
   embedded?: boolean
+  /** 嵌入模式下仍启用 @ / 命令菜单（首页演示窗用；编辑复用场景保持关闭） */
+  embeddedMenu?: boolean
   /** 自定义占位文案（首页首屏用；缺省按智能体名拼接 @/ 用法提示） */
   placeholder?: string
   /** 显示取消按钮（编辑模式用） */
@@ -724,7 +726,7 @@ const flatMenuRows = computed<MentionRow[]>(() => menuSections.value.flatMap(s =
 
 /** 光标前的触发词探测：从光标回扫到空白边界，'@'/'/' 开头即开菜单（嵌入模式不启用） */
 function detectTrigger(): void {
-  if (props.embedded || composing) {
+  if ((props.embedded && !props.embeddedMenu) || composing) {
     closeMenu()
     return
   }
