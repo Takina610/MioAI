@@ -19,12 +19,24 @@
 
       <div class="footer-bottom">
         <span>&copy; 2026 MioAI</span>
+        <button
+          type="button"
+          class="footer-replay-btn"
+          title="重新播放首屏加载动画"
+          @click="emit('replay-animation')"
+        >
+          重播首屏动画
+        </button>
       </div>
     </div>
   </footer>
 </template>
 
 <script setup lang="ts">
+const emit = defineEmits<{
+  (e: 'replay-animation'): void
+}>()
+
 interface FooterGroup {
   title: string
   items: { label: string; to: string }[]
@@ -137,5 +149,22 @@ const groups: FooterGroup[] = [
   border-top: 1px solid var(--hm-border-subtle);
   font-size: 13px;
   color: var(--hm-text-muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footer-replay-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  color: var(--hm-text-muted);
+  cursor: pointer;
+  transition: color 0.2s var(--hm-ease);
+
+  &:hover {
+    color: var(--hm-green);
+  }
 }
 </style>

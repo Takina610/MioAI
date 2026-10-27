@@ -1,9 +1,13 @@
 <template>
   <!-- /chat 复刻演示窗：左轨 + 会话侧栏 + 主区（消息/输入为真实组件），整窗纯展示
        （pointer-events:none，用户不可交互；演示播放器以合成事件驱动输入框） -->
-  <div class="chat-demo" :class="{ 'panels-open': panelsOpen }" aria-label="功能演示">
+  <div
+    class="chat-demo"
+    :class="{ 'panels-open': panelsOpen, 'is-docked': isDocked }"
+    aria-label="功能演示"
+  >
     <!-- 两侧栏：桌面常驻；窄屏转为左滑抽屉（头部按钮唤出，右上角关闭） -->
-    <div class="panels-drawer">
+    <div ref="panelsDrawerRef" class="panels-drawer">
       <aside class="demo-rail">
         <span class="rail-action"><TeamOutlined /></span>
         <span class="rail-divider" />
@@ -51,7 +55,7 @@
       </button>
     </div>
 
-    <div class="demo-main">
+    <div ref="demoMainRef" class="demo-main">
       <header class="demo-chat-header">
         <button
           type="button"
@@ -115,6 +119,20 @@ import { DEMO_KBS, DEMO_SKILLS } from '../demoScenarios'
 import { DEMO_AGENTS, type DemoAgentDef } from '../demoAgents'
 import { useHomeChatDemo } from '../composables/useHomeChatDemo'
 
+const props = withDefaults(
+  defineProps<{
+    /** 是否自动开始演示 */
+    autoStart?: boolean
+  }>(),
+  {
+    autoStart: true
+  }
+)
+
+const panelsDrawerRef = ref<HTMLElement | null>(null)
+const demoMainRef = ref<HTMLElement | null>(null)
+const isDocked = ref(true)
+
 const {
   messages,
   isLoading,
@@ -123,6 +141,8 @@ const {
   streamingSessionId,
   pendingFiles,
   start,
+  stop,
+  resetState,
   jumpToSession,
   switchAgent
 } = useHomeChatDemo()
@@ -181,7 +201,31 @@ const petConfig = computed<BotIconConfig>(() => iconOf(currentAgent.value) ?? DE
 
 const listRef = ref<InstanceType<typeof ChatMessageList> | null>(null)
 
-start()
+if (props.autoStart) {
+  start()
+}
+
+function playDemo(): void {
+  start()
+}
+
+function stopDemo(): void {
+  stop()
+}
+
+function resetDemo(): void {
+  stop()
+  resetState()
+}
+
+defineExpose({
+  panelsDrawerRef,
+  demoMainRef,
+  isDocked,
+  playDemo,
+  stopDemo,
+  resetDemo
+})
 
 /** 滚动跟随：流式期间（isLoading）始终贴底；用户向上滚轮阅读时让位，
     重新滚回底部或切换会话后恢复跟随。以 DOM 观察器驱动（流式字符级变更
@@ -255,13 +299,7 @@ watch(
   max-width: 100%;
   height: clamp(440px, calc(100svh - 320px), 760px);
   display: flex;
-  background: rgba(250, 249, 245, 0.58);
-  backdrop-filter: blur(24px) saturate(1.5);
-  -webkit-backdrop-filter: blur(24px) saturate(1.5);
-  border: 1px solid rgba(232, 230, 220, 0.75);
-  border-radius: 16px;
-  box-shadow: 0 14px 44px rgba(20, 20, 19, 0.08);
-  overflow: hidden;
+  overflow: visible;
 }
 
 /* 智能体左轨：可点击切换智能体（创建入口为装饰） */
@@ -319,8 +357,18 @@ watch(
 .demo-main {
   flex: 1;
   min-width: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
+  background: rgba(250, 249, 245, 0.72);
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  border: 1px solid rgba(232, 230, 220, 0.85);
+  box-shadow: 0 14px 44px rgba(20, 20, 19, 0.08);
+  border-radius: 16px;
+  overflow: hidden;
+  transition: border-radius 0.40s var(--hm-ease);
+  will-change: transform, opacity;
 }
 
 .demo-chat-header {
@@ -398,6 +446,31 @@ watch(
 .panels-drawer {
   display: flex;
   flex-shrink: 0;
+  height: 100%;
+  background: rgba(250, 249, 245, 0.72);
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  border: 1px solid rgba(232, 230, 220, 0.85);
+  box-shadow: 0 14px 44px rgba(20, 20, 19, 0.08);
+  border-radius: 16px;
+  overflow: hidden;
+  transition: border-radius 0.40s var(--hm-ease);
+  will-change: transform, opacity;
+}
+
+/* 拼接状态：左右两盒无缝并接为一体工作台 */
+.chat-demo.is-docked {
+  .panels-drawer {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-right: none;
+  }
+
+  .demo-main {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-left: none; // 由 DemoSessionSidebar 的右边框提供 1px 细线
+  }
 }
 
 /* 抽屉右上角关闭钮：仅窄屏显示 */
@@ -424,10 +497,15 @@ watch(
     box-shadow: 8px 0 28px rgba(20, 20, 19, 0.14);
     transform: translateX(-110%);
     transition: transform 0.3s var(--hm-ease);
+    border-radius: 0 16px 16px 0 !important;
   }
 
   .chat-demo.panels-open .panels-drawer {
     transform: translateX(0);
+  }
+
+  .demo-main {
+    border-radius: 16px !important;
   }
 
   :deep(.dsb) {

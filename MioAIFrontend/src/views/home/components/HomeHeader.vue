@@ -1,6 +1,6 @@
 <template>
   <header class="header" :class="{ 'is-floating': floating }">
-    <div class="header-inner">
+    <div ref="innerEl" class="header-inner">
       <router-link class="logo" to="/">
         <img src="/logo.png" alt="MioAI" class="logo-img" />
         <span class="logo-text">MioAI</span>
@@ -40,9 +40,12 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import gsap from 'gsap'
 import { SettingOutlined, UserOutlined, LogoutOutlined } from '@ant-design/icons-vue'
 import { useUserStore } from '@/store/user'
 import { message } from 'ant-design-vue'
+
+const innerEl = ref<HTMLElement | null>(null)
 
 /** 滑过首屏后顶栏收成居中胶囊；用滚动量而非位置触发，回顶时无缝还原 */
 const SCROLL_TRIGGER = 60
@@ -69,6 +72,29 @@ async function handleLogout(): Promise<void> {
   await userStore.logout()
   message.success('已退出登录')
 }
+
+function prepareEntrance(): void {
+  if (innerEl.value) {
+    gsap.set(innerEl.value, { y: -72, opacity: 0 })
+  }
+}
+
+function playEntrance(): void {
+  if (innerEl.value) {
+    gsap.to(innerEl.value, {
+      y: 0,
+      opacity: 1,
+      duration: 0.75,
+      ease: 'power3.out',
+      clearProps: 'transform,opacity'
+    })
+  }
+}
+
+defineExpose({
+  prepareEntrance,
+  playEntrance
+})
 </script>
 
 <style lang="scss" scoped>

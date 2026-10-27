@@ -378,6 +378,8 @@ export function useHomeChatDemo() {
     streamingSessionId,
     pendingFiles,
     start,
+    stop,
+    resetState,
     jumpToSession,
     switchAgent
   }

@@ -7,6 +7,7 @@ import pinia from './store'
 import { useUserStore } from './store/user'
 import { setupModalLeaveGuard } from './utils/modalLeaveGuard'
 import { installViewport } from './mobile/useIsMobile'
+import './styles/fonts.scss'
 import './styles/global.scss'
 import './mobile/index.scss'
 
