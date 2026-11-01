@@ -26,11 +26,12 @@ Build settings：
 | 变量 | 值 |
 | --- | --- |
 | `NODE_VERSION` | `24` |
-| `PNPM_VERSION` | `12.6.0` |
+| `PNPM_VERSION` | `12.6.0`（可选，仅用于固定构建可复现） |
 | `VITE_API_BASE_URL` | 后端公网地址，如 `https://api.example.com` |
 
 - 构建命令与产物目录都相对 Root directory，产物目录写 `dist`，不要写 `MioAIFrontend/dist`。
-- `PNPM_VERSION` 必须显式指定：Pages 默认版本不读取 `pnpm-workspace.yaml` 的 `allowBuilds`，依赖的构建脚本会被跳过。
+- `pnpm-workspace.yaml` 必须保留 `packages` 字段（当前为 `packages: []`）：pnpm 9 及更早版本缺这个字段会直接报 `packages field missing or empty` 并中断安装。Pages 构建日志里的 `Detected ... pnpm@X` 会随镜像与锁文件版本变化，实测未设变量时可能落到 pnpm 9，别赌它一定是新版。
+- 依赖构建脚本白名单同时写了 `allowBuilds`（pnpm 10+）和 `onlyBuiltDependencies`（pnpm 9 及更早，10/12 也认）。只写前者时 pnpm 9/10 会忽略整段配置，跳过 `@vue-office/*` 等依赖的 postinstall 并打印 `Ignored build scripts` 警告。
 - 仓库内 `.env` 的 `VITE_API_BASE_URL=/api` 是给 Docker + nginx 同源代理用的；Pages 上必须用控制台变量覆盖成后端绝对地址，否则请求会打到 Pages 自身并被 SPA 回退吞掉。
 - 后端控制器映射本身不带 `/api` 前缀，变量值不要追加 `/api`，也不要带结尾斜杠。后端需公网 HTTPS，CORS 已由 `CorsConfig` 放行。
 - `VITE_*` 在构建时写入产物，修改后需重新部署。
