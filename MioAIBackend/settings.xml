@@ -1,14 +1,44 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Docker 构建专用：Maven Central 走阿里云镜像（国内服务器直连 Central 过慢） -->
+<!-- Docker 构建专用：Maven Central 走阿里云镜像（国内服务器直连 Central 过慢）。
+     阿里云偶发对个别构件返回 502/缺件，失败会让整次构建中断，
+     因此补上官方 central 作为兜底仓库（镜像仅加速，不是唯一源）。 -->
 <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
           xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
-  <mirrors>
-    <mirror>
-      <id>aliyun-central</id>
-      <name>Aliyun Maven Central Mirror</name>
-      <url>https://maven.aliyun.com/repository/public</url>
-      <mirrorOf>central</mirrorOf>
-    </mirror>
-  </mirrors>
+  <profiles>
+    <profile>
+      <id>fallback-central</id>
+      <repositories>
+        <repository>
+          <id>central</id>
+          <url>https://repo1.maven.org/maven2</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>false</enabled></snapshots>
+        </repository>
+        <repository>
+          <id>aliyun-public</id>
+          <url>https://maven.aliyun.com/repository/public</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>false</enabled></snapshots>
+        </repository>
+      </repositories>
+      <pluginRepositories>
+        <pluginRepository>
+          <id>central</id>
+          <url>https://repo1.maven.org/maven2</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>false</enabled></snapshots>
+        </pluginRepository>
+        <pluginRepository>
+          <id>aliyun-public</id>
+          <url>https://maven.aliyun.com/repository/public</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>false</enabled></snapshots>
+        </pluginRepository>
+      </pluginRepositories>
+    </profile>
+  </profiles>
+  <activeProfiles>
+    <activeProfile>fallback-central</activeProfile>
+  </activeProfiles>
 </settings>

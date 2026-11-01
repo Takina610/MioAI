@@ -1,0 +1,9 @@
+# 公网入口容器：host 网络直接监听 80，反代到后端容器
+services:
+  nginx-proxy:
+    image: nginx:1.27-alpine
+    container_name: mio-ai-proxy
+    network_mode: host
+    volumes:
+      - /opt/mioai/deploy/nginx-host-80.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
