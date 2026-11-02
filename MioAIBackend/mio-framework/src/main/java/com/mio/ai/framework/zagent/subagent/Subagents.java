@@ -5,6 +5,7 @@ import com.mio.ai.framework.zagent.AgentEngineConfig;
 import com.mio.ai.framework.zagent.AgentEvents;
 import com.mio.ai.framework.zagent.context.ContextBuilder;
 import com.mio.ai.framework.zagent.history.ConversationState;
+import com.mio.ai.framework.zagent.tools.DelegationExecutors;
 import com.mio.ai.framework.zagent.tools.ToolRegistry;
 import com.mio.ai.framework.zagent.tools.ToolsetFactory;
 import lombok.extern.slf4j.Slf4j;
@@ -21,15 +22,28 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 子代理运行器（zcode runtime/methods/subagent.ts 的对位移植）：
  * 子运行时独立历史与上下文（只拿 prompt 文本），工具面按档案裁剪；
  * 工具调用以带前缀 id 镜像到父级事件流；后台模式入注册表并通知父会话。
+ * <p>后台委派走 {@link DelegationExecutors#background()} 有界池：每个后台子代理都是一个
+ * 能跑完整 AgentEngine 的线程，无界池在多轮累积后会把线程数推到不可控。
  */
 @Slf4j
 public final class Subagents implements SubagentLauncher {
 
-    private static final ExecutorService POOL = Executors.newCachedThreadPool(runnable -> {
-        Thread thread = new Thread(runnable, "zagent-subagent");
-        thread.setDaemon(true);
-        return thread;
-    });
+    private static final ExecutorService POOL = DelegationExecutors.background();
+
+    /**
+     * 后台委派池的可替换引用：生产恒为 {@link DelegationExecutors#background()}。
+     * 测试通过 {@link #useBackgroundExecutor} 注入会拒绝提交的池，以验证池满时
+     * 已登记任务不会被遗留成永久 running 的幽灵任务。
+     */
+    private static volatile ExecutorService backgroundExecutor = POOL;
+
+    static void useBackgroundExecutor(ExecutorService executor) {
+        backgroundExecutor = executor == null ? POOL : executor;
+    }
+
+    static ExecutorService currentBackgroundExecutor() {
+        return backgroundExecutor;
+    }
 
     private final ChatModel chatModel;
     private final AgentEngineConfig config;
@@ -100,11 +114,7 @@ public final class Subagents implements SubagentLauncher {
         if (background) {
             var task = runContext.tasks().register(runContext.chatId(), "agent",
                     description == null ? profile.name() : description);
-            POOL.execute(() -> {
-                task.runnerThread = Thread.currentThread();
-                Outcome outcome = runChild(profile, agentId, prompt);
-                runContext.tasks().complete(task, outcome.failed(), 0, outcome.content());
-            });
+            submitBackground(task, () -> runChild(profile, agentId, prompt));
             return new Result(agentId, profile.name(), prompt,
                     "Agent launched in background (" + profile.name() + "). You will be notified when it "
                             + "completes; use TaskOutput with task_id \"" + task.id + "\" to wait for it.",
@@ -112,7 +122,8 @@ public final class Subagents implements SubagentLauncher {
         }
         Outcome outcome = runChild(profile, agentId, prompt);
         return new Result(agentId, profile.name(), prompt, outcome.content(),
-                outcome.toolUseCount(), outcome.totalTokens(), System.currentTimeMillis() - startedAt, null);
+                outcome.toolUseCount(), outcome.totalTokens(), System.currentTimeMillis() - startedAt,
+                null, outcome.failed());
     }
 
     /**
@@ -127,11 +138,7 @@ public final class Subagents implements SubagentLauncher {
         if (background) {
             var task = runContext.tasks().register(runContext.chatId(), "agent",
                     description == null ? member.name() : description);
-            POOL.execute(() -> {
-                task.runnerThread = Thread.currentThread();
-                Outcome outcome = runMemberWithPresence(member, agentId, prompt);
-                runContext.tasks().complete(task, outcome.failed(), 0, outcome.content());
-            });
+            submitBackground(task, () -> runMemberWithPresence(member, agentId, prompt));
             return new Result(agentId, member.name(), prompt,
                     "Agent launched in background (" + member.name() + "). You will be notified when it "
                             + "completes; use TaskOutput with task_id \"" + task.id + "\" to wait for it.",
@@ -139,7 +146,8 @@ public final class Subagents implements SubagentLauncher {
         }
         Outcome outcome = runMemberWithPresence(member, agentId, prompt);
         return new Result(agentId, member.name(), prompt, outcome.content(),
-                outcome.toolUseCount(), outcome.totalTokens(), System.currentTimeMillis() - startedAt, null);
+                outcome.toolUseCount(), outcome.totalTokens(), System.currentTimeMillis() - startedAt,
+                null, outcome.failed());
     }
 
     /** 成员执行全周期：started → 装配 → 运行 → finished（装配失败也走 finished(failed)） */
@@ -180,11 +188,97 @@ public final class Subagents implements SubagentLauncher {
         }
     }
 
-    private record Outcome(String content, int toolUseCount, long inputTokens, long outputTokens, boolean failed) {
+    /**
+     * 提交后台委派。池满时任务已在注册表里登记，必须就地收尾为失败——
+     * 否则会留下一条永远 "running" 的幽灵任务（TaskOutput 永远查不到结果、
+     * TaskStop 也停不掉），这是有界池相对旧无界池新引入的失败面。
+     */
+    private void submitBackground(com.mio.ai.framework.zagent.task.BackgroundTasks.Task task,
+                                  java.util.function.Supplier<Outcome> body) {
+        try {
+            backgroundExecutor.execute(() -> {
+                task.runnerThread = Thread.currentThread();
+                Outcome outcome;
+                try {
+                    outcome = runWithBudget(body);
+                } catch (Throwable fatal) {
+                    // 兜底收尾：任何逃逸出 runWithBudget 的异常（含 Error）都必须让任务落地，
+                    // 否则会留下永久 running 的幽灵任务——TaskOutput 查不到、TaskStop 停不掉。
+                    log.warn("后台委派异常终止 ({}): {}", task.id, fatal.toString());
+                    runContext.tasks().complete(task, true, null,
+                            "(Background delegation aborted: " + fatal.getMessage() + ")");
+                    return;
+                }
+                runContext.tasks().complete(task, outcome.failed(), 0, outcome.content());
+            });
+        } catch (java.util.concurrent.RejectedExecutionException rejected) {
+            log.warn("后台委派池已满，任务直接失败: {}", task.id);
+            runContext.tasks().complete(task, true, null,
+                    "(Delegation rejected: the background agent pool is full. Retry later.)");
+            throw rejected;
+        }
+    }
+
+    /** 一次子代理/成员运行的结果（包级可见：runWithBudget 的回归测试需要它） */
+    record Outcome(String content, int toolUseCount, long inputTokens, long outputTokens, boolean failed) {
 
         private long totalTokens() {
             return inputTokens + outputTokens;
         }
+    }
+
+    /** 后台委派看门狗：单例调度器，任务结束即取消，不随委派数增长 */
+    private static final java.util.concurrent.ScheduledExecutorService BUDGET_WATCHDOG =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor(runnable -> {
+                Thread thread = new Thread(runnable, "zagent-delegate-budget");
+                thread.setDaemon(true);
+                return thread;
+            });
+
+    /**
+     * 后台委派的墙钟预算：前台由 {@link org.springframework.ai.tool.ToolCallback} 侧的
+     * future 超时兜住，后台没有等待者，必须自己起看门狗——否则一个卡住的成员会永久
+     * 占住有界池的一个线程，直到后端重启。
+     * <p>包级可见：中断标记清理只能在"刚返回那一刻"观察（JDK 的 ThreadPoolExecutor 会在
+     * 任务边界自动清标记，从池外永远看不到残留），回归测试需直接驱动本方法。
+     */
+    Outcome runWithBudget(java.util.function.Supplier<Outcome> body) {
+        long budgetMs = config.delegationTimeoutMs();
+        if (budgetMs <= 0) {
+            return body.get();
+        }
+        Thread runner = Thread.currentThread();
+        java.util.concurrent.ScheduledFuture<?> watchdog = BUDGET_WATCHDOG.schedule(() -> {
+            log.warn("后台委派超出预算 {}ms，中断执行线程", budgetMs);
+            runner.interrupt();
+        }, budgetMs, java.util.concurrent.TimeUnit.MILLISECONDS);
+        try {
+            return body.get();
+        } catch (Exception e) {
+            if (isInterrupted(e)) {
+                return new Outcome("(Delegation exceeded its time budget of " + (budgetMs / 1000)
+                        + "s and was aborted.)", 0, 0, 0, true);
+            }
+            throw e;
+        } finally {
+            watchdog.cancel(false);
+            // 线程会被有界池复用：残留的中断标记会让下一个委派在第一步就自杀。
+            // 看门狗存在"任务刚返回、中断才送达"的竞态，所以无条件清一次。
+            Thread.interrupted();
+        }
+    }
+
+    /** 中断类失败：直查标记与异常链（引擎会把 InterruptedException 包成 TurnStoppedException） */
+    private static boolean isInterrupted(Throwable error) {
+        Throwable current = error;
+        while (current != null) {
+            if (current instanceof InterruptedException
+                    || current instanceof com.mio.ai.framework.zagent.TurnStoppedException) {
+                return true;
+            }
+            current = current.getCause() == current ? null : current.getCause();
+        }
+        return false;
     }
 
     /** 群成员运行：成员自己的 MCP 工具/知识库命中/技能清单，全量内置工具面。
@@ -230,10 +324,15 @@ public final class Subagents implements SubagentLauncher {
                     child.inputTokens(), child.outputTokens(), false);
         } catch (Exception e) {
             log.warn("子代理执行失败 ({}): {}", agentId, e.getMessage());
+            // 失败前已消耗的 token 仍要计入（子代理可能跑了多步才失败）
             return new Outcome("(Subagent failed: " + e.getMessage() + ")", 0,
-                    0, 0, true);
+                    child.inputTokens(), child.outputTokens(), true);
         } finally {
-            childRegistry.shutdown();
+            // registry 可能因装配期异常为 null（此时 bindTools 已抛，走不到这里，
+            // 但保持与未来改动兼容）：不能让它把原始异常顶替成 NPE
+            if (childRegistry != null) {
+                childRegistry.shutdown();
+            }
         }
     }
 

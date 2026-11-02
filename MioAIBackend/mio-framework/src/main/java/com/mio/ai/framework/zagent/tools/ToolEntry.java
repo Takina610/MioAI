@@ -27,10 +27,16 @@ public final class ToolEntry {
     public final boolean concurrentSafe;
     public final boolean destructive;
     public final long timeoutMs;
+    /**
+     * 委派类工具（子代理/群成员）：执行期会长期占用线程，必须走独立线程池。
+     * 与普通工具同池会让"父级委派占满池 → 子代理自己的并行工具拿不到线程"相互饿死。
+     */
+    public final boolean delegation;
     public final Handler handler;
 
     private ToolEntry(String name, String description, String inputSchema, boolean readOnly,
-                      boolean concurrentSafe, boolean destructive, long timeoutMs, Handler handler) {
+                      boolean concurrentSafe, boolean destructive, long timeoutMs, boolean delegation,
+                      Handler handler) {
         this.name = name;
         this.description = description;
         this.inputSchema = inputSchema;
@@ -38,37 +44,39 @@ public final class ToolEntry {
         this.concurrentSafe = concurrentSafe;
         this.destructive = destructive;
         this.timeoutMs = timeoutMs;
+        this.delegation = delegation;
         this.handler = handler;
     }
 
     public static ToolEntry of(String name, String description, String inputSchema, StringHandler handler) {
-        return new ToolEntry(name, description, inputSchema, true, true, false, 300_000, wrap(handler));
+        return new ToolEntry(name, description, inputSchema, true, true, false, 300_000, false, wrap(handler));
     }
 
     /** 需要门禁/串行的工具（写文件、跑命令、联网取数之外的副作用类） */
     public static ToolEntry ofMutable(String name, String description, String inputSchema,
                                       long timeoutMs, StringHandler handler) {
-        return new ToolEntry(name, description, inputSchema, false, false, false, timeoutMs, wrap(handler));
+        return new ToolEntry(name, description, inputSchema, false, false, false, timeoutMs, false, wrap(handler));
     }
 
     /**
      * 重量级但并发安全的编排工具（子代理/群成员委派）：每次调用运行独立子运行时，
      * 相互不共享可变状态，可并行（zcode Agent 工具同语义）。共享的只有事件通道与
      * 沙箱会话——通道加锁、沙箱命令串行化由其自身保证。
+     * <p>并发执行走委派专用池，不与普通工具争线程（见 {@link ToolScheduler}）。
      */
-    public static ToolEntry ofConcurrent(String name, String description, String inputSchema,
+    public static ToolEntry ofDelegation(String name, String description, String inputSchema,
                                          long timeoutMs, StringHandler handler) {
-        return new ToolEntry(name, description, inputSchema, true, true, false, timeoutMs, wrap(handler));
+        return new ToolEntry(name, description, inputSchema, true, true, false, timeoutMs, true, wrap(handler));
     }
 
     /** 只读但联网（可并行，无需审批） */
     public static ToolEntry ofReadOnly(String name, String description, String inputSchema, StringHandler handler) {
-        return new ToolEntry(name, description, inputSchema, true, true, false, 60_000, wrap(handler));
+        return new ToolEntry(name, description, inputSchema, true, true, false, 60_000, false, wrap(handler));
     }
 
     /** 可携带媒体结果的执行器变体（Read 图片分支） */
     public static ToolEntry ofReadOnly(String name, String description, String inputSchema, Handler handler) {
-        return new ToolEntry(name, description, inputSchema, true, true, false, 60_000, handler);
+        return new ToolEntry(name, description, inputSchema, true, true, false, 60_000, false, handler);
     }
 
     private static Handler wrap(StringHandler handler) {
@@ -85,5 +93,9 @@ public final class ToolEntry {
 
     public long timeoutMs() {
         return timeoutMs;
+    }
+
+    public boolean delegation() {
+        return delegation;
     }
 }

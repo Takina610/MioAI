@@ -372,7 +372,7 @@ public class MioBot {
                 // 群聊：成员委派以平等消息块呈现，Agent 工具行不进主消息流
                 channel.setSuppressAgentToolRows(groupCoordinator != null);
                 registry = toolsetFactory.build(chatId, state, mcpTools, null, launcher, events, toolHooks,
-                        ownerKey());
+                        ownerKey(), config.delegationTimeoutMs(), config.maxConcurrentDelegations());
                 // 动态 UI 块工具：仅主轮次注册（子代理注册表不含），校验通过的块经通道下发/落库；
                 // 图片块按本会话 image_search 登记簿核对 url（防伪造）并回填来源元数据
                 registry.register(UiRenderTool.entry(channel,

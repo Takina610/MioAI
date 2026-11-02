@@ -129,6 +129,14 @@ public class MioBotController {
     @org.springframework.beans.factory.annotation.Value("${mio.ai.agent.model-retries:3}")
     private int agentModelRetries;
 
+    /** 单次委派墙钟预算（毫秒，0 = 不限）：防止多步串行的子代理把轮次线程长期挂住 */
+    @org.springframework.beans.factory.annotation.Value("${mio.ai.agent.delegation-timeout-ms:600000}")
+    private long agentDelegationTimeoutMs;
+
+    /** 单轮并行委派上限：模型一轮内可同时发起的子代理/群成员数 */
+    @org.springframework.beans.factory.annotation.Value("${mio.ai.agent.max-concurrent-delegations:4}")
+    private int agentMaxConcurrentDelegations;
+
     /** 上下文窗口（token）：自动压缩阈值 = 窗口 − 输出预留 − 缓冲 */
     @org.springframework.beans.factory.annotation.Value("${mio.ai.agent.context-window-tokens:200000}")
     private long agentContextWindowTokens;
@@ -468,7 +476,8 @@ public class MioBotController {
             // 压缩阈值与容量指示同源：按本轮实际模型解析窗口（客户端声明 > 免费档目录 > 配置值）
             var engineConfig = new com.mio.ai.framework.zagent.AgentEngineConfig(
                     agentMaxSteps, agentStreamTimeoutSeconds, agentModelRetries,
-                    resolveContextWindow(modelSource, chatModelName, contextWindow));
+                    resolveContextWindow(modelSource, chatModelName, contextWindow),
+                    agentDelegationTimeoutMs, agentMaxConcurrentDelegations);
             MioBot mioBot = new MioBot(chatResolution.model(), toolsetFactory, List.of(mcp.callbacks()), skills,
                     agentUsageLogService, toolCallLogService, userStatsDailyService, skillUsageLogService,
                     agentMessageService, chatFileService, imageSearchService,

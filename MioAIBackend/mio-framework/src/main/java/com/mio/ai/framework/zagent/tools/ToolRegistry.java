@@ -50,11 +50,16 @@ public final class ToolRegistry {
         this(context, null);
     }
 
+    /** 单次运行的执行线程上限：按需建线程，只在真正并发时才达到该数 */
+    private static final int EXECUTOR_THREADS = 16;
+
     public ToolRegistry(ToolContext context, AgentHooks hooks) {
         this.context = context;
         this.hooks = hooks == null ? new AgentHooks() {
         } : hooks;
-        this.executor = Executors.newFixedThreadPool(4, runnable -> {
+        // 该池承载本运行内所有工具执行（含被调度器并行提交的）。上限需覆盖
+        // "一轮内并行发起的委派数"，否则调度器放行的并发会被这里串行化回去。
+        this.executor = Executors.newFixedThreadPool(EXECUTOR_THREADS, runnable -> {
             Thread thread = new Thread(runnable, "zagent-tool");
             thread.setDaemon(true);
             return thread;
@@ -90,6 +95,11 @@ public final class ToolRegistry {
 
     public List<ToolEntry> entries() {
         return new ArrayList<>(entries.values());
+    }
+
+    /** 按名取条目（调度器查执行属性用，避免每次调用都复制整张表） */
+    public ToolEntry entry(String name) {
+        return entries.get(name);
     }
 
     public boolean isEmpty() {
@@ -159,7 +169,12 @@ public final class ToolRegistry {
             } catch (TimeoutException timeout) {
                 future.cancel(true);
                 Executed timedOut = new Executed(call.name(),
-                        "<tool_use_error>Tool execution exceeded timeout of " + entry.timeoutMs()
+                        entry.delegation()
+                                ? "<tool_use_error>Delegation exceeded its time budget of "
+                                + (entry.timeoutMs() / 1000) + "s and was aborted. The task was not "
+                                + "completed. Continue without this delegation, retry with a narrower "
+                                + "prompt, or delegate to a different agent.</tool_use_error>"
+                                : "<tool_use_error>Tool execution exceeded timeout of " + entry.timeoutMs()
                                 + "ms</tool_use_error>",
                         true, System.currentTimeMillis() - startedAt);
                 hooks.afterToolCall(hookCall, timedOut, context);

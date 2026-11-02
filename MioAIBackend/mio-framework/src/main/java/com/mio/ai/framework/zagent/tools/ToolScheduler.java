@@ -9,6 +9,8 @@ import java.util.concurrent.Future;
 /**
  * 工具调度器（zcode ToolScheduler 的对位移植）：
  * 连续的只读并发安全工具并入并行组（上限 10），其余串行执行。
+ * <p>委派类工具走 {@link DelegationExecutors} 专用池：它们长阻塞且会再开子运行时，
+ * 与毫秒级普通工具同池会互相饿死（父级委派占满池 → 子代理并行工具无线程可用）。
  */
 public final class ToolScheduler {
 
@@ -51,28 +53,49 @@ public final class ToolScheduler {
     }
 
     private boolean isParallelizable(ToolRegistry.PendingCall call) {
-        return registry.entries().stream()
-                .filter(entry -> entry.name.equals(call.name()))
-                .findFirst().map(ToolEntry::parallelizable)
-                .orElse(false);
+        ToolEntry entry = registry.entry(call.name());
+        return entry != null && entry.parallelizable();
     }
 
+    /**
+     * 并行执行一组调用，结果严格按入参顺序返回——{@code AgentEngine.executeToolBatch}
+     * 按位置索引回填 tool_call id，顺序错位会让模型看到错配的工具结果。
+     */
     private List<ToolRegistry.Executed> runParallel(List<ToolRegistry.PendingCall> calls) {
-        List<ToolRegistry.Executed> results = new ArrayList<>(calls.size());
+        ToolRegistry.Executed[] ordered = new ToolRegistry.Executed[calls.size()];
         List<Future<ToolRegistry.Executed>> futures = new ArrayList<>();
-        for (ToolRegistry.PendingCall call : calls) {
-            futures.add(POOL.submit(() -> registry.execute(call)));
-        }
-        for (Future<ToolRegistry.Executed> future : futures) {
+        List<Integer> futureSlots = new ArrayList<>();
+        for (int i = 0; i < calls.size(); i++) {
+            ToolRegistry.PendingCall call = calls.get(i);
+            ExecutorService pool = isDelegation(call) ? DelegationExecutors.foreground() : POOL;
             try {
-                results.add(future.get());
-            } catch (Exception e) {
-                results.add(new ToolRegistry.Executed("unknown",
-                        "<tool_use_error>Parallel tool execution failed: " + e.getMessage() + "</tool_use_error>",
-                        true, 0));
+                futures.add(pool.submit(() -> registry.execute(call)));
+                futureSlots.add(i);
+            } catch (java.util.concurrent.RejectedExecutionException rejected) {
+                // 有界池满：单个工具降级为失败信封，绝不能让提交异常穿透调度器中断整轮。
+                // （旧实现用的是无界队列的池，提交永不拒绝，这是换有界池后必须补的分支）
+                ordered[i] = new ToolRegistry.Executed(call.name(),
+                        "<tool_use_error>" + call.name() + " was not executed: too many tools are "
+                                + "running concurrently. Retry it on its own.</tool_use_error>",
+                        true, 0);
             }
         }
-        return results;
+        for (int k = 0; k < futures.size(); k++) {
+            int slot = futureSlots.get(k);
+            try {
+                ordered[slot] = futures.get(k).get();
+            } catch (Exception e) {
+                ordered[slot] = new ToolRegistry.Executed(calls.get(slot).name(),
+                        "<tool_use_error>Parallel tool execution failed: " + e.getMessage()
+                                + "</tool_use_error>", true, 0);
+            }
+        }
+        return new ArrayList<>(java.util.Arrays.asList(ordered));
+    }
+
+    private boolean isDelegation(ToolRegistry.PendingCall call) {
+        ToolEntry entry = registry.entry(call.name());
+        return entry != null && entry.delegation();
     }
 
     public void shutdown() {
