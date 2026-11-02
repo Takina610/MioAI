@@ -47,7 +47,7 @@
             @paste="onEditorPaste"
             @copy="onEditorCopy"
             @cut="onEditorCopy($event, true)"
-            @compositionstart="composing = true"
+            @compositionstart="onCompositionStart"
             @compositionend="onCompositionEnd"
           ></div>
         </div>
@@ -158,7 +158,7 @@
               type="button"
               class="send-pill"
               :disabled="!canSend || loading"
-              @click="emit('send', [...chatRefs])"
+              @click="handleSendClick"
             >
               {{ loading ? '发送中…' : '发送' }}
             </button>
@@ -168,7 +168,7 @@
                 type="primary"
                 class="send-btn"
                 :disabled="!loading && !canSend"
-                @click="loading ? emit('stop') : emit('send', [...chatRefs])"
+                @click="loading ? emit('stop') : handleSendClick()"
               >
                 <span v-if="loading" class="stop-square" />
                 <ArrowUpOutlined v-else />
@@ -182,42 +182,21 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, nextTick, onMounted, ref, render as vueRender, watch } from 'vue'
-import type { Component } from 'vue'
-import { useUserStore } from '@/store/user'
+import { ref } from 'vue'
 import {
   ApiOutlined,
   ArrowUpOutlined,
   CheckOutlined,
-  CompressOutlined,
-  DatabaseOutlined,
   DownOutlined,
-  MessageOutlined,
-  PlusOutlined,
-  RightOutlined,
-  ThunderboltOutlined
+  PlusOutlined
 } from '@ant-design/icons-vue'
-import Fuse from 'fuse.js'
 import BrainIcon from '@/components/icons/BrainIcon.vue'
 import AttachmentCard from './AttachmentCard.vue'
 import ContextUsageIndicator from './ContextUsageIndicator.vue'
-import { createTokenElement } from '../tokenDom'
-import { getAllSessions, type AllSessionItem } from '@/api/chatMemory'
 import type { ChatRefItem, ContextUsageData, FreeModel, KnowledgeBase, McpTool, ModelProvider, ModelSelection, PendingAttachment, Skill } from '@/types'
-
-/** 思考档位全量标签（实际渲染哪些档由后端按模型能力返回） */
-const EFFORT_LABELS: Record<string, string> = {
-  max: '极限',
-  xhigh: '超高',
-  high: '最高',
-  medium: '中等',
-  low: '较低',
-  minimal: '极低',
-  none: '关闭'
-}
-
-/** 探测失败时的兜底档位 */
-const FALLBACK_EFFORTS = ['high', 'medium', 'low', 'none']
+import { useWelcomeGreeting } from '../composables/useWelcomeGreeting'
+import { useModelPicker } from '../composables/useModelPicker'
+import { useChatEditor } from '../composables/useChatEditor'
 
 const props = defineProps<{
   modelValue: string
@@ -277,796 +256,76 @@ const emit = defineEmits<{
   (e: 'manage-models'): void
 }>()
 
-const userStore = useUserStore()
+// ---------- 打包：问候语 / 模型切换器 / 富文本编辑器 ----------
+const { welcomeTitle } = useWelcomeGreeting()
 
-// ---------- 新对话问候语：按时段分短语池随机取一句；有简短画像时混入画像变体 ----------
-// [起始小时, 结束小时(含), 短语池]；池内含 {profile} 的变体仅在画像存在且简短时启用
-const GREETING_BUCKETS: Array<[number, number, string[]]> = [
-  [0, 4, ['还没睡，{name}？', '夜深了，{name}，想聊点什么？', '这么晚还没休息？{name}，我在。', '还没睡，{name}？{profile}的事不急于这一晚。']],
-  [5, 8, ['早安，{name}！今天想从什么开始？', '早上好，{name}。新的一天，有什么想做的？', '早安，{name}！今天{profile}的日程还顺利吗？']],
-  [9, 11, ['上午好，{name}！有什么想一起解决的？', '嗨，{name}，上午想研究点什么？', '上午好，{name}！{profile}的活儿需要搭把手吗？']],
-  [12, 13, ['中午好，{name}！忙碌间隙想聊点什么？', '午安，{name}。有什么我能帮忙的？']],
-  [14, 17, ['下午好，{name}！下午想推进点什么？', '嗨，{name}，下午进展如何？', '下午好，{name}！今天{profile}那边今天有什么新进展？']],
-  [18, 22, ['晚上好，{name}！今晚想聊点什么？', '晚上好呀，{name}。有什么新鲜事想问？', '晚上好，{name}！今天{profile}的事还顺利吗？']],
-  [23, 23, ['还没睡，{name}？', '夜深了，{name}，想聊点什么？', '这么晚还没休息？{name}，我在。', '还没睡，{name}？{profile}的事不急于这一晚。']]
-]
-
-const welcomeTitle = computed(() => {
-  const name = userStore.userName?.trim() || '朋友'
-  const profile = userStore.userInfo?.userProfile?.trim()
-  const hour = new Date().getHours()
-  const pool = GREETING_BUCKETS.find(([from, to]) => hour >= from && hour <= to)?.[2]
-    ?? ['嗨，{name}！有什么想聊的？']
-  // 画像缺失或过长时不用画像变体，避免占位符漏出
-  const usable = pool.filter(p => !p.includes('{profile}') || (profile && profile.length <= 12))
-  const picked = usable[Math.floor(Math.random() * usable.length)]
-  return picked.split('{name}').join(name).split('{profile}').join(profile ?? '')
+const {
+  modelMenuOpen,
+  cascadeGroups,
+  currentModelKey,
+  currentModelLabel,
+  onModelMenuClick,
+  effortOptions,
+  effort,
+  effortLabel
+} = useModelPicker({
+  currentModel: () => props.currentModel,
+  freeModels: () => props.freeModels ?? [],
+  providers: () => props.providers ?? [],
+  supportedEfforts: () => props.supportedEfforts,
+  effort: () => props.effort,
+  onSelect: selection => emit('select-model', selection),
+  onManage: () => emit('manage-models')
 })
-
-const value = computed({
-  get: () => props.modelValue,
-  set: (v: string) => emit('update:modelValue', v)
-})
-
-// 档位列表如实渲染：未解析（null）才用兜底；解析为空数组 = 该模型不支持思考，选择器隐藏
-const effortOptions = computed(() =>
-  (props.supportedEfforts == null
-    ? FALLBACK_EFFORTS
-    : props.supportedEfforts)
-    .map(v => ({ value: v, label: EFFORT_LABELS[v] ?? v }))
-    .reverse()
-)
-
-const effort = computed(() => props.effort || 'high')
-
-const effortLabel = computed(
-  () => effortOptions.value.find(o => o.value === effort.value)?.label ?? EFFORT_LABELS[effort.value] ?? effort.value
-)
 
 function onEffortClick({ key }: { key: string | number }): void {
   emit('update:effort', String(key))
 }
 
-// ---------- 模型切换器：供应商 hover 子菜单（a-sub-menu），切换上抛父级联动思考档位 ----------
-const freeModels = computed(() => props.freeModels ?? [])
-const providers = computed(() => props.providers ?? [])
-
-const modelMenuOpen = ref(false)
-
-interface CascadeModel {
-  key: string
-  id: string
-  selection: ModelSelection
-}
-
-const cascadeGroups = computed(() => {
-  interface Group {
-    key: string
-    label: string
-    models: CascadeModel[]
-    current: boolean
-  }
-  const cur = props.currentModel
-  const groups: Group[] = [
-    {
-      key: 'opencode',
-      label: 'OpenCode 免费模型',
-      models: freeModels.value.map(m => ({
-        key: `opencode|${m.id}`,
-        id: m.id,
-        selection: { source: 'opencode' as const, providerId: null, model: m.id }
-      })),
-      current: cur?.source === 'opencode'
-    }
-  ]
-  for (const p of providers.value) {
-    groups.push({
-      key: `p_${p.id}`,
-      label: p.name,
-      models: p.models
-        .filter(m => m.enabled !== false)
-        .map(m => ({
-          key: `custom|${p.id}|${m.id}`,
-          id: m.id,
-          selection: { source: 'custom' as const, providerId: p.id, model: m.id }
-        })),
-      current: cur?.source === 'custom' && cur.providerId === p.id
-    })
-  }
-  return groups
+const {
+  editorRef,
+  chatRefs,
+  canSend,
+  menuOpen,
+  menuTrigger,
+  activeIndex,
+  menuBodyRef,
+  menuSections,
+  flatMenuRows,
+  onEditorInput,
+  onEditorKeydown,
+  onEditorKeyup,
+  onEditorFocus,
+  onEditorBlur,
+  onEditorPaste,
+  onEditorCopy,
+  onCompositionStart,
+  onCompositionEnd,
+  detectTrigger
+} = useChatEditor({
+  modelValue: () => props.modelValue,
+  onUpdateModelValue: v => emit('update:modelValue', v),
+  onSend: sendFromEditor,
+  onAddFiles: files => emit('add-files', files),
+  onFocus: () => emit('input-focus'),
+  onBlur: () => emit('input-blur'),
+  menuEnabled: () => !(props.embedded && !props.embeddedMenu),
+  currentChatId: () => props.currentChatId,
+  knowledgeBases: () => props.knowledgeBases,
+  skills: () => props.skills,
+  mcpTools: () => props.mcpTools
 })
 
-const currentModelKey = computed(() => {
-  const cur = props.currentModel
-  if (!cur) return ''
-  return cur.source === 'custom' && cur.providerId != null
-    ? `custom|${cur.providerId}|${cur.model}`
-    : `opencode|${cur.model}`
-})
-
-const currentModelLabel = computed(() => {
-  const cur = props.currentModel
-  if (!cur?.model) return '模型'
-  const provider = cur.source === 'custom'
-    ? providers.value.find(p => p.id === cur.providerId)
-    : undefined
-  const full = provider ? `${provider.name}/${cur.model}` : cur.model
-  return full.length > 32 ? full.slice(0, 31) + '…' : full
-})
-
-function onModelMenuClick({ key }: { key: string | number }): void {
-  if (key === '__manage__') {
-    modelMenuOpen.value = false
-    emit('manage-models')
-    return
-  }
-  const target = cascadeGroups.value
-    .flatMap(g => g.models)
-    .find(m => m.key === String(key))
-  if (target) {
-    modelMenuOpen.value = false
-    emit('select-model', target.selection)
-  }
+/** 发送：把当前引用清单随事件上抛（编辑器内部 refs 由父级决定是否清空） */
+function sendFromEditor(): void {
+  emit('send', [...chatRefs.value])
 }
 
-// ---------- 富文本编辑器（contenteditable）：纯文本编辑 + 内联引用 token ----------
-const editorRef = ref<HTMLElement | null>(null)
-const chatRefs = ref<ChatRefItem[]>([])
-const tokenDestroyers = new Map<HTMLElement, () => void>()
-
-/** 有文本或有引用即可发送（仅引用=让模型基于注入材料继续） */
-const canSend = computed(() => !!props.modelValue.trim() || chatRefs.value.length > 0)
-
-let composing = false
-
-/** 编辑器纯文本：text 原文、BR 换行；token 是引用不是文本，不进 modelValue */
-function textOfNode(node: Node): string {
-  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? ''
-  if (node.nodeType !== Node.ELEMENT_NODE) return ''
-  const el = node as HTMLElement
-  if (el.classList.contains('editor-token')) return ''
-  if (el.tagName === 'BR') return '\n'
-  return Array.from(el.childNodes).map(textOfNode).join('')
+function handleSendClick(): void {
+  emit('send', [...chatRefs.value])
 }
 
-function editorText(): string {
-  const el = editorRef.value
-  return el ? textOfNode(el) : ''
-}
-
-/** 空态标记：placeholder 用 CSS ::before 呈现（token 在场时自动消失） */
-function syncEmpty(): void {
-  const el = editorRef.value
-  if (!el) return
-  const empty = el.textContent === '' && !el.querySelector('.editor-token')
-  if (empty) el.setAttribute('data-empty', '')
-  else el.removeAttribute('data-empty')
-}
-
-function emitText(): void {
-  if (composing) return
-  emit('update:modelValue', editorText())
-  syncEmpty()
-}
-
-/** 编辑器初始渲染 + 外部值同步（草稿恢复/发送清空）：全量重建文本并清掉残留 token 节点
- *  （本地输入走 editorText 相同值短路，不会走到重建） */
-function renderEditorText(text: string): void {
-  const el = editorRef.value
-  if (!el) return
-  for (const wrapper of Array.from(el.querySelectorAll<HTMLElement>(':scope .editor-token'))) {
-    destroyTokenIcon(wrapper)
-    wrapper.remove()
-  }
-  el.textContent = ''
-  if (text) {
-    const lines = text.split('\n')
-    lines.forEach((line, i) => {
-      if (i > 0) el.appendChild(document.createElement('br'))
-      if (line) el.appendChild(document.createTextNode(line))
-    })
-  }
-  syncEmpty()
-}
-
-onMounted(() => {
-  renderEditorText(props.modelValue)
-})
-
-watch(value, v => {
-  const el = editorRef.value
-  if (!el) return
-  if (editorText() === v) return
-  renderEditorText(v)
-})
-
-// 引用随文本清空而清空；不跨会话携带
-watch(value, v => {
-  if (!v && chatRefs.value.length) chatRefs.value = []
-})
-watch(
-  () => props.currentChatId,
-  () => {
-    chatRefs.value = []
-    closeMenu()
-  }
-)
-
-// ---------- 光标上下文与触发检测 ----------
-interface TriggerRange {
-  node: Text
-  start: number
-  end: number
-}
-
-/** 光标所在文本节点（元素边界时回溯前一个文本节点的末尾） */
-function caretTextInfo(): { node: Text; offset: number } | null {
-  const sel = window.getSelection()
-  const el = editorRef.value
-  if (!sel || sel.rangeCount === 0 || !el) return null
-  const range = sel.getRangeAt(0)
-  if (!range.collapsed || !el.contains(range.startContainer)) return null
-  let node = range.startContainer
-  let offset = range.startOffset
-  if (node.nodeType === Node.TEXT_NODE) {
-    return { node: node as Text, offset }
-  }
-  if (node.nodeType === Node.ELEMENT_NODE) {
-    const host = node as HTMLElement
-    // offset 指向子节点索引：光标在其前——取该位置前最近的文本节点末尾
-    let prev: Node | null = offset > 0 ? host.childNodes[offset - 1] : null
-    while (prev && prev.nodeType !== Node.TEXT_NODE) {
-      const last = prev.childNodes[prev.childNodes.length - 1]
-      if (!last) break
-      prev = last
-    }
-    if (prev && prev.nodeType === Node.TEXT_NODE) {
-      return { node: prev as Text, offset: (prev as Text).length }
-    }
-    // 无前文（编辑器最前）：取第一个文本节点的开头
-    const first = firstTextNode(host)
-    if (first) return { node: first, offset: 0 }
-  }
-  return null
-}
-
-function firstTextNode(root: Node): Text | null {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-  return walker.nextNode() as Text | null
-}
-
-const menuOpen = ref(false)
-const menuTrigger = ref<'@' | '/'>('@')
-let triggerRange: TriggerRange | null = null
-const menuQuery = ref('')
-const activeIndex = ref(0)
-const menuBodyRef = ref<HTMLElement | null>(null)
-
-function closeMenu(): void {
-  menuOpen.value = false
-  triggerRange = null
-}
-
-function openMenu(trigger: '@' | '/', range: TriggerRange, query: string): void {
-  const wasClosed = !menuOpen.value
-  menuOpen.value = true
-  menuTrigger.value = trigger
-  triggerRange = range
-  menuQuery.value = query
-  if (wasClosed) {
-    activeIndex.value = 0
-  }
-  // 每次 @ 触发都刷新会话（新会话可能刚产生）；在途去重在 loadMentionSessions 内
-  if (trigger === '@') {
-    loadMentionSessions()
-  }
-}
-
-watch([menuQuery, menuTrigger], () => {
-  activeIndex.value = 0
-})
-
-const MENTION_FUSE_OPTIONS = {
-  // zcode 命令面板同源的模糊参数：转置/缺字母也能命中（scripts/fuse-tune.mjs 调参定版的同族值）
-  threshold: 0.45,
-  ignoreLocation: true,
-  minMatchCharLength: 1
-}
-
-/** 菜单候选项模糊过滤（fuse.js）：query 为空显示全部，非空按相关度返回 */
-function fuzzyFilter<T extends { title: string; desc?: string }>(rows: T[], query: string): T[] {
-  if (!query) return rows
-  return new Fuse(rows, { ...MENTION_FUSE_OPTIONS, keys: ['title', 'desc'] })
-    .search(query)
-    .map(r => r.item)
-}
-
-const mentionSessions = ref<AllSessionItem[]>([])
-let sessionsReqSeq = 0
-let sessionsInflight = false
-
-/** @ 菜单打开时刷新跨智能体会话（排除当前会话：自身上下文已在模型内） */
-async function loadMentionSessions(): Promise<void> {
-  if (sessionsInflight) return
-  sessionsInflight = true
-  const seq = ++sessionsReqSeq
-  try {
-    const rows = await getAllSessions(200)
-    if (seq === sessionsReqSeq) {
-      mentionSessions.value = rows.filter(s => s.conversationId !== props.currentChatId)
-    }
-  } catch {
-    // 拉取失败保持空态行，不打断输入
-  } finally {
-    sessionsInflight = false
-  }
-}
-
-interface MentionRow {
-  key: string
-  index: number
-  icon: Component
-  /** 类型色调（与会话/知识库/技能/MCP/Compact 的 token 颜色一致） */
-  tone: 'session' | 'kb' | 'skill' | 'mcp' | 'compact'
-  title: string
-  desc?: string
-  suffix?: string
-  pick: () => void
-}
-
-interface MentionSection {
-  title: string
-  rows: MentionRow[]
-}
-
-const menuSections = computed<MentionSection[]>(() => {
-  const query = menuQuery.value.trim().toLowerCase()
-  if (menuTrigger.value === '@') {
-    const sections: MentionSection[] = [
-      {
-        title: '会话',
-        rows: fuzzyFilter(
-          mentionSessions.value.map(s => ({ ...s, title: s.title || '新对话' })),
-          query
-        )
-          .slice(0, 20)
-          .map(s => ({
-            key: `session_${s.conversationId}`,
-            index: 0,
-            icon: MessageOutlined,
-            tone: 'session',
-            title: s.title || '新对话',
-            suffix: s.agentName,
-            pick: () =>
-              pickRef({
-                type: 'session',
-                id: s.conversationId,
-                name: s.title || '新对话',
-                agentName: s.agentName
-              })
-          }))
-      }
-    ]
-    const kbRows = fuzzyFilter(
-      (props.knowledgeBases ?? []).map(kb => ({ ...kb, title: kb.name })),
-      query
-    ).map(kb => ({
-        key: `kb_${kb.id}`,
-        index: 0,
-        icon: DatabaseOutlined,
-        tone: 'kb' as const,
-        title: kb.name,
-        desc: kb.description,
-        pick: () => pickRef({ type: 'kb', kbId: kb.id, name: kb.name })
-      }))
-    if (kbRows.length) {
-      sections.push({ title: '知识库', rows: kbRows })
-    }
-    return withIndex(sections)
-  }
-  const sections: MentionSection[] = [
-    {
-      title: '命令',
-      rows: [
-        {
-          key: 'cmd_compact',
-          index: 0,
-          icon: CompressOutlined,
-          tone: 'compact' as const,
-          title: '/compact',
-          desc: '压缩上下文',
-          pick: pickCompact
-        }
-      ].filter(row => fuzzyFilter([row], query).length > 0)
-    }
-  ]
-  const skillRows = fuzzyFilter(
-    (props.skills ?? []).map(s => ({ ...s, title: s.name })),
-    query
-  ).map(s => ({
-      key: `skill_${s.id}`,
-      index: 0,
-      icon: ThunderboltOutlined,
-      tone: 'skill' as const,
-      title: s.name,
-      desc: s.description,
-      pick: () => pickRef({ type: 'skill', name: s.name })
-    }))
-  if (skillRows.length) {
-    sections.push({ title: '技能', rows: skillRows })
-  }
-  const mcpRows = fuzzyFilter(
-    (props.mcpTools ?? []).map(m => ({ ...m, title: m.name })),
-    query
-  ).map(m => ({
-      key: `mcp_${m.id}`,
-      index: 0,
-      icon: ApiOutlined,
-      tone: 'mcp' as const,
-      title: m.name,
-      desc: m.description,
-      pick: () => pickRef({ type: 'mcp', name: m.name })
-    }))
-  if (mcpRows.length) {
-    sections.push({ title: 'MCP', rows: mcpRows })
-  }
-  return withIndex(sections)
-})
-
-/** 统一编号供键盘上下移动 */
-function withIndex(sections: MentionSection[]): MentionSection[] {
-  let counter = 0
-  return sections.map(section => ({
-    ...section,
-    rows: section.rows.map(row => ({ ...row, index: counter++ }))
-  }))
-}
-
-const flatMenuRows = computed<MentionRow[]>(() => menuSections.value.flatMap(s => s.rows))
-
-/** 光标前的触发词探测：从光标回扫到空白边界，'@'/'/' 开头即开菜单（嵌入模式不启用） */
-function detectTrigger(): void {
-  if ((props.embedded && !props.embeddedMenu) || composing) {
-    closeMenu()
-    return
-  }
-  const info = caretTextInfo()
-  if (!info) {
-    closeMenu()
-    return
-  }
-  const before = (info.node.textContent ?? '').slice(0, info.offset)
-  let i = before.length - 1
-  while (i >= 0 && !/\s/.test(before[i]!)) i--
-  const token = before.slice(i + 1)
-  if (token.startsWith('@') && token.length <= 64) {
-    openMenu('@', { node: info.node, start: i + 1, end: info.offset }, token.slice(1))
-  } else if (token.startsWith('/') && token.length <= 64) {
-    openMenu('/', { node: info.node, start: i + 1, end: info.offset }, token.slice(1))
-  } else {
-    closeMenu()
-  }
-}
-
-// ---------- 引用 token 插入与移除（都在文本流内，无外置容器） ----------
-function removeToken(wrapper: HTMLElement, item: ChatRefItem): void {
-  tokenDestroyers.get(wrapper)?.()
-  tokenDestroyers.delete(wrapper)
-  wrapper.remove()
-  const idx = chatRefs.value.indexOf(item)
-  if (idx >= 0) chatRefs.value.splice(idx, 1)
-  syncEmpty()
-  emitText()
-  refocusEditor()
-}
-
-/** 清理 token 节点上的 Vue 图标渲染（卸载防泄漏） */
-function destroyTokenIcon(wrapper: HTMLElement): void {
-  for (const icon of Array.from(wrapper.querySelectorAll<HTMLElement>(':scope .token-icon'))) {
-    vueRender(null, icon)
-  }
-}
-
-/** 删除光标处记录的触发词（菜单起始位 → 当前光标） */
-function removeTriggerRange(): void {
-  const sel = window.getSelection()
-  if (!sel || sel.rangeCount === 0) return
-  if (triggerRange && triggerRange.node.isConnected) {
-    const tr = document.createRange()
-    tr.setStart(triggerRange.node, triggerRange.start)
-    tr.setEnd(triggerRange.node, triggerRange.end)
-    tr.deleteContents()
-    tr.collapse(true)
-    sel.removeAllRanges()
-    sel.addRange(tr)
-  }
-}
-
-/** 移除编辑器里的 Compact token（压缩与其他引用互斥） */
-function removeCompactToken(): void {
-  const el = editorRef.value
-  const wrapper = el?.querySelector<HTMLElement>(':scope .editor-token:has(.is-compact)')
-  if (wrapper) {
-    destroyTokenIcon(wrapper)
-    wrapper.remove()
-  }
-  chatRefs.value = chatRefs.value.filter(r => r.type !== 'compact')
-}
-
-/**
- * 选区 → 标记文本（zcode PromptClipboardPlugin 对位）：token 输出 canonical 标记，
- * 其余保留原文本；copy/cut 时写入剪贴板——选中的是文字，复制到的是标记。
- */
-function selectionToMarkdown(selection: Selection): string {
-  const range = selection.getRangeAt(0)
-  const walk = (node: Node): string => {
-    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? ''
-    if (node.nodeType === Node.ELEMENT_NODE) {
-      const el = node as HTMLElement
-      if (el.classList.contains('editor-token')) {
-        return el.dataset.refCanonical ?? el.dataset.refName ?? ''
-      }
-    }
-    // DocumentFragment/容器节点：递归拼接子节点
-    return Array.from(node.childNodes).map(walk).join('')
-  }
-  return walk(range.cloneContents())
-}
-
-function onEditorCopy(e: ClipboardEvent, cut = false): void {
-  const sel = window.getSelection()
-  const el = editorRef.value
-  if (!sel || sel.isCollapsed || sel.rangeCount === 0 || !el) return
-  const range = sel.getRangeAt(0)
-  if (!el.contains(range.commonAncestorContainer)) return
-  const markdown = selectionToMarkdown(sel)
-  if (!markdown) return
-  e.clipboardData?.setData('text/plain', markdown)
-  e.preventDefault()
-  if (cut) {
-    range.deleteContents()
-    sel.removeAllRanges()
-    for (const [wrapper, destroy] of [...tokenDestroyers]) {
-      if (!el.contains(wrapper)) {
-        destroy()
-        tokenDestroyers.delete(wrapper)
-        const item = refItemOf(wrapper)
-        if (item) {
-          const idx = chatRefs.value.indexOf(item)
-          if (idx >= 0) chatRefs.value.splice(idx, 1)
-        }
-      }
-    }
-    syncEmpty()
-    emitText()
-  }
-}
-
-/** 光标处删除触发词并插入 token 节点 + 空格，光标落空格后 */
-function pickRef(item: ChatRefItem): void {
-  // Compact 是命令型引用，编辑器内最多一个
-  if (item.type === 'compact' && chatRefs.value.some(r => r.type === 'compact')) {
-    removeTriggerRange()
-    closeMenu()
-    emitText()
-    refocusEditor()
-    return
-  }
-  // 压缩命令只能单独出现：引入其他引用前先移除 Compact
-  if (item.type !== 'compact') {
-    removeCompactToken()
-  }
-  const el = editorRef.value
-  const sel = window.getSelection()
-  if (!el || !sel || sel.rangeCount === 0) return
-  // 同一引用（同类型同目标）只保留一个：重复选择只剔除触发词
-  const dup = chatRefs.value.find(r =>
-    r.type === item.type && (r.id ?? r.kbId ?? r.name) === (item.id ?? item.kbId ?? item.name))
-  if (dup && item.type !== 'compact') {
-    removeTriggerRange()
-    closeMenu()
-    emitText()
-    refocusEditor()
-    return
-  }
-  removeTriggerRange()
-  const range = sel.getRangeAt(0)
-  const { wrapper, destroy } = createTokenElement(item)
-  tokenDestroyers.set(wrapper, destroy)
-  range.insertNode(wrapper)
-  // 普通空格（pre-wrap 下保留）：Backspace 可先删空格再回退删 token，不被 nbsp 挡住
-  const space = document.createTextNode(' ')
-  wrapper.after(space)
-  range.setStart(space, 1)
-  range.collapse(true)
-  sel.removeAllRanges()
-  sel.addRange(range)
-  chatRefs.value.push(item)
-  closeMenu()
-  syncEmpty()
-  emitText()
-}
-
-/**
- * /compact：压缩命令单独出现——清空输入框内其他引用与文字，只留 Compact token。
- * 发送时由父级编排为压缩指令。
- */
-function pickCompact(): void {
-  const el = editorRef.value
-  if (!el) return
-  // 清空已有 token 与全部文本（Compact 不可与任何内容同现）
-  for (const wrapper of Array.from(el.querySelectorAll<HTMLElement>(':scope .editor-token'))) {
-    destroyTokenIcon(wrapper)
-    wrapper.remove()
-  }
-  el.textContent = ''
-  chatRefs.value = []
-  const sel = window.getSelection()
-  const range = document.createRange()
-  range.selectNodeContents(el)
-  range.collapse(false)
-  if (sel) {
-    sel.removeAllRanges()
-    sel.addRange(range)
-  }
-  pickRef({ type: 'compact' })
-}
-
-function refocusEditor(): void {
-  nextTick(() => {
-    const el = editorRef.value
-    el?.focus()
-    const sel = window.getSelection()
-    if (el && sel) {
-      const range = document.createRange()
-      range.selectNodeContents(el)
-      range.collapse(false)
-      sel.removeAllRanges()
-      sel.addRange(range)
-    }
-  })
-}
-
-/** 光标紧邻的前一个 token 节点（Backspace 整体删除目标）：token 后的占位空格一并接管 */
-function tokenBeforeCaret(): HTMLElement | null {
-  const sel = window.getSelection()
-  if (!sel || sel.rangeCount === 0) return null
-  const range = sel.getRangeAt(0)
-  if (!range.collapsed) return null
-  const node = range.startContainer
-  const offset = range.startOffset
-  let prev: Node | null = null
-  if (node.nodeType === Node.TEXT_NODE) {
-    const text = node.textContent ?? ''
-    // 光标前有真实字符：正常删字符，不接管（除非前缀全是空白=占位空格）
-    if (text.slice(0, offset).trim() !== '') return null
-    prev = node.previousSibling
-  } else if (node.nodeType === Node.ELEMENT_NODE) {
-    prev = (node as HTMLElement).childNodes[offset - 1] ?? null
-  } else {
-    return null
-  }
-  while (prev && prev.nodeType === Node.TEXT_NODE && (prev.textContent ?? '').trim() === '') {
-    prev = prev.previousSibling
-  }
-  return prev && prev.nodeType === Node.ELEMENT_NODE && (prev as HTMLElement).classList.contains('editor-token')
-    ? prev as HTMLElement
-    : null
-}
-
-function moveActive(delta: number): void {
-  const total = flatMenuRows.value.length
-  if (!total) return
-  activeIndex.value = (activeIndex.value + delta + total) % total
-  nextTick(() => {
-    menuBodyRef.value
-      ?.querySelector(`[data-index="${activeIndex.value}"]`)
-      ?.scrollIntoView({ block: 'nearest' })
-  })
-}
-
-function onEditorKeydown(e: KeyboardEvent): void {
-  if (menuOpen.value) {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      moveActive(1)
-      return
-    }
-    if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      moveActive(-1)
-      return
-    }
-    if (e.key === 'Enter' || e.key === 'Tab') {
-      e.preventDefault()
-      flatMenuRows.value[activeIndex.value]?.pick()
-      return
-    }
-    if (e.key === 'Escape') {
-      e.preventDefault()
-      closeMenu()
-      return
-    }
-  }
-  // Backspace 在 token 紧邻处：整体删除 token（含 Vue 卸载与 refs 同步）
-  if (e.key === 'Backspace') {
-    const wrapper = tokenBeforeCaret()
-    if (wrapper) {
-      e.preventDefault()
-      const item = refItemOf(wrapper)
-      if (item) {
-        removeToken(wrapper, item)
-      } else {
-        wrapper.remove()
-        syncEmpty()
-        emitText()
-      }
-      return
-    }
-  }
-  // 换行强制走 <br>（Chrome 默认插块级 div，会让纯文本提取出现双换行）
-  if (e.key === 'Enter' && e.shiftKey && !e.isComposing) {
-    e.preventDefault()
-    document.execCommand('insertLineBreak')
-    return
-  }
-  // 回车=发送（Shift+Enter 换行走上方分支；IME 组合中不触发）
-  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-    e.preventDefault()
-    emit('send', [...chatRefs.value])
-  }
-}
-
-/** wrapper ↔ 引用项对应：按插入顺序与 DOM 顺序一致推断（token 不重排） */
-function refItemOf(wrapper: HTMLElement): ChatRefItem | undefined {
-  const el = editorRef.value
-  if (!el) return undefined
-  const wrappers = Array.from(el.querySelectorAll(':scope .editor-token'))
-  const idx = wrappers.indexOf(wrapper)
-  return idx >= 0 ? chatRefs.value[idx] : undefined
-}
-
-function onEditorInput(): void {
-  emitText()
-  detectTrigger()
-}
-
-function onEditorKeyup(e: KeyboardEvent): void {
-  // 方向键移动光标后触发词上下文可能变化
-  if (e.key.startsWith('Arrow')) detectTrigger()
-}
-
-function onEditorFocus(): void {
-  emit('input-focus')
-  detectTrigger()
-}
-
-function onEditorBlur(): void {
-  emit('input-blur')
-  // 菜单行用 mousedown.prevent 接管选择，不会走到这里；点外部即收起
-  closeMenu()
-}
-
-function onCompositionEnd(): void {
-  composing = false
-  emitText()
-  detectTrigger()
-}
-
-function onEditorPaste(e: ClipboardEvent): void {
-  const files = Array.from(e.clipboardData?.files ?? [])
-  if (files.length) {
-    e.preventDefault()
-    emit('add-files', files)
-    return
-  }
-  const text = e.clipboardData?.getData('text/plain') ?? ''
-  if (text) {
-    e.preventDefault()
-    document.execCommand('insertText', false, text)
-  }
-}
-
+// ---------- 文件选择 / 拖拽上传 ----------
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const dragOver = ref(false)
 

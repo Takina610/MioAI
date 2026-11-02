@@ -246,11 +246,11 @@
 import { ref, computed, onMounted, onUnmounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getAgentDetail, queryAgents, pinAgent, reorderAgents, getMyMioBotAgentId } from '@/api/agent'
+import { getAgentDetail, getMyMioBotAgentId } from '@/api/agent'
 import { pinChat } from '@/api/chatMemory'
 import { useUserStore } from '@/store/user'
-import type { Agent, AgentDetail, AttachmentItem, ChatMessage, ChatRefItem, ContextUsageData, MessageBlock, ModelSelection, PendingAttachment, SubagentPanelTarget } from '@/types'
-import { isImageName, MAX_PENDING_ATTACHMENTS, sandboxFileUrl } from './attachmentUtils'
+import type { AgentDetail, ChatMessage, ChatRefItem, MessageBlock, ModelSelection, SubagentPanelTarget } from '@/types'
+import { isImageName, sandboxFileUrl } from './attachmentUtils'
 import { peekChatHandoff, takeChatHandoff } from '@/composables/chat/chatHandoff'
 import AuthModal from '@/components/auth/AuthModal.vue'
 import BotPet from '@/components/agent/bot-icon/BotPet.vue'
@@ -271,18 +271,21 @@ import AgentPersonalizeModal from './components/AgentPersonalizeModal.vue'
 import AgentCreateModal from '@/components/agent/AgentCreateModal.vue'
 import EditGroupModal from './components/EditGroupModal.vue'
 import { useChatSessions } from './composables/useChatSessions'
-import { useChatMessages, generateConversationId, generateMessageId } from './composables/useChatMessages'
+import { useChatMessages, generateMessageId } from './composables/useChatMessages'
 import { useChatStream } from './composables/useChatStream'
 import { useBotMood } from './composables/useBotMood'
 import { endTurn, syncBackendTurns } from './composables/useAgentActivity'
-import { buildRefMarkerPrefix, parseRefMarkers } from './refMarkers'
-import { usePendingCardAnimations } from './composables/usePendingCardAnimations'
+import { buildRefMarkerPrefix } from './refMarkers'
 import { buildSubagentTranscript } from './subagentTranscript'
-import { truncateConversation, getContextUsage, uploadAttachment, deleteAttachment, getActiveTurns, recordModelSwitch } from '@/api/chat'
+import { getActiveTurns, recordModelSwitch } from '@/api/chat'
 import ModelSettings from '@/views/dashboard/profile/components/ModelSettings.vue'
 import { loadModelCatalog, useModelCatalog, writeLocalSelection, readSessionModel, writeSessionModel, modelDisplayName } from '@/composables/model/useModelCatalog'
 import { useReasoningEfforts } from '@/composables/model/useReasoningEfforts'
-import { getBotMessages } from '@/api/botMessages'
+import { useChatShell } from './composables/useChatShell'
+import { useAgentRail } from './composables/useAgentRail'
+import { useContextUsage } from './composables/useContextUsage'
+import { useChatAttachments } from './composables/useChatAttachments'
+import { useMessageActions } from './composables/useMessageActions'
 
 const route = useRoute()
 const router = useRouter()
@@ -377,169 +380,48 @@ const manageModelsVisible = ref(false)
 const sidebarRef = ref<InstanceType<typeof ChatSidebar> | null>(null)
 const messageListRef = ref<InstanceType<typeof ChatMessageList> | null>(null)
 
-// ---------- 侧栏相位：都展示(0) → 仅会话栏(1) → 都收起(2) → 仅会话栏(3) → 循环 ----------
-// 收缩/展开统一由 chat-header 的会话开关按钮管理（聊天侧栏自身不再有独立开关）。
-// 悬浮（开关按钮/左轨/会话胶囊任一区域内）peek 出被收起的部分，离开整个区域才收回。
-// 移动端（≤768px）无 hover：形态收敛为"会话抽屉 + 智能体抽屉"，由本页统一协调。
-type SidebarPhase = 0 | 1 | 2 | 3
-const sidebarPhase = ref<SidebarPhase>(0)
-const sidebarPeeking = ref(false)
-const railPeeking = ref(false)
-let sidebarRetractTimer: number | undefined
-
+// ---------- 侧栏相位 + 移动端抽屉（见 useChatShell） ----------
 const { isMobile } = useIsMobile()
 
-/** 移动端抽屉状态（会话栏 / 智能体切换，互斥） */
-const mobileDrawerVisible = ref(false)
-const mobileAgentsVisible = ref(false)
-
-/** 任一移动端浮层展开：驱动遮罩、滚动锁与布局类名 */
-const mobileDrawerOpen = computed(() => isMobile.value && mobileDrawerVisible.value)
-
-function clearSidebarRetract(): void {
-  if (sidebarRetractTimer !== undefined) {
-    window.clearTimeout(sidebarRetractTimer)
-    sidebarRetractTimer = undefined
-  }
-}
-
-function scheduleSidebarRetract(): void {
-  clearSidebarRetract()
-  sidebarRetractTimer = window.setTimeout(() => {
-    sidebarPeeking.value = false
-    railPeeking.value = false
-    sidebarRetractTimer = undefined
-  }, 400)
-}
-
-/** 会话胶囊是否收起：桌面按相位 2，移动端按抽屉是否展开 */
-const sidebarCollapsed = computed(() =>
-  isMobile.value ? !mobileDrawerVisible.value : sidebarPhase.value === 2
-)
-
-/** 开关按钮点击：移动端开合会话抽屉；桌面推进相位（游客只有 展开↔收起 两态） */
-function onToggleClick(): void {
-  if (isMobile.value) {
-    mobileAgentsVisible.value = false
-    mobileDrawerVisible.value = !mobileDrawerVisible.value
-    return
-  }
-  advanceSidebarPhase()
-}
-
-/** 开关按钮点击（桌面）：推进相位 */
-function advanceSidebarPhase(): void {
-  clearSidebarRetract()
-  sidebarPeeking.value = false
-  railPeeking.value = false
-  if (!userStore.isLoggedIn) {
-    sidebarPhase.value = sidebarPhase.value === 2 ? 0 : 2
-    return
-  }
-  sidebarPhase.value = ((sidebarPhase.value + 1) % 4) as SidebarPhase
-}
-
-/** 悬浮开关按钮：peek 出当前被收起的部分（都收起→双栏 peek；仅左轨收起→左轨 peek） */
-function onToggleHover(): void {
-  if (isMobile.value) return
-  if (sidebarPhase.value === 0) return
-  clearSidebarRetract()
-  if (sidebarCollapsed.value) {
-    sidebarPeeking.value = true
-  }
-  if (userStore.isLoggedIn) {
-    railPeeking.value = true
-  }
-}
-
-function onToggleLeave(): void {
-  if (isMobile.value) return
-  scheduleSidebarRetract()
-}
-
-/** 悬浮区域（左轨/会话胶囊）：进入保持，离开整体后延时收回 */
-function panelEnter(): void {
-  if (isMobile.value) return
-  clearSidebarRetract()
-}
-
-function panelLeave(): void {
-  if (isMobile.value) return
-  scheduleSidebarRetract()
-}
-
-/** 选中会话等动作后主动收回 peek（移动端同时收起抽屉） */
-function sidebarClosePeek(): void {
-  clearSidebarRetract()
-  sidebarPeeking.value = false
-  railPeeking.value = false
-  mobileDrawerVisible.value = false
-}
-
-/** 关闭移动端全部浮层 */
-function closeMobileOverlays(): void {
-  mobileDrawerVisible.value = false
-  mobileAgentsVisible.value = false
-}
-
-// 两个抽屉互斥：智能体抽屉打开时会话抽屉让位（它们宽高一致，重叠会互相遮挡）
-watch(mobileAgentsVisible, open => {
-  if (open) mobileDrawerVisible.value = false
+const {
+  sidebarPhase,
+  sidebarPeeking,
+  railPeeking,
+  mobileDrawerVisible,
+  mobileAgentsVisible,
+  mobileDrawerOpen,
+  sidebarCollapsed,
+  onToggleClick,
+  onToggleHover,
+  onToggleLeave,
+  panelEnter,
+  panelLeave,
+  sidebarClosePeek,
+  closeMobileOverlays,
+  onMobileKeydown
+} = useChatShell({
+  isMobile,
+  routeFullPath: () => route.fullPath
 })
 
-// 视口从移动形态变回桌面：抽屉是移动专属覆盖层，留在桌面会浮在内容区上
-watch(isMobile, (mobile) => {
-  if (!mobile) closeMobileOverlays()
-})
-
-// 切页即收：智能体抽屉点选后会跳转，抽屉留在原位会挡住新会话
-watch(() => route.fullPath, closeMobileOverlays)
-
-// 移动端浮层展开时锁定背景滚动（触摸滑动不穿透到消息区）
-watch(() => mobileDrawerOpen.value || mobileAgentsVisible.value, open => {
-  document.body.style.overflow = open && isMobile.value ? 'hidden' : ''
-})
-
-// Esc 关闭移动端浮层
-function onMobileKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape') closeMobileOverlays()
-}
-
-onBeforeUnmount(() => {
-  clearSidebarRetract()
-  document.body.style.overflow = ''
-})
-
-// ---------- 会话搜索命令面板 ----------
-const searchModalVisible = ref(false)
-
-// ---------- 智能体左轨：我的智能体（不含群聊）+ 群聊独立区块 + 创建群聊入口 ----------
-const agentRailExpanded = ref(false)
-const myAgents = ref<Agent[]>([])
-const groupModalVisible = ref(false)
-
-/** 左轨"我的智能体"：自定义 + 专属 MioBot，群聊独立区块展示 */
-const railSoloAgents = computed(() => myAgents.value.filter(a => a.type !== 2))
-const railGroupAgents = computed(() => myAgents.value.filter(a => a.type === 2))
+// ---------- 智能体左轨（见 useAgentRail） ----------
+const {
+  agentRailExpanded,
+  myAgents,
+  groupModalVisible,
+  railSoloAgents,
+  railGroupAgents,
+  groupCandidates,
+  loadMyAgents,
+  handleRailTogglePin,
+  handleRailReorder
+} = useAgentRail()
 
 /** 左轨常驻展示：登录且相位 0（都展开）。移动端左轨整体隐藏，恒不展示 */
 const railOpen = computed(() => !isMobile.value && userStore.isLoggedIn && sidebarPhase.value === 0)
 
-/** 群聊候选成员：我的自定义智能体（群聊不可嵌套） */
-const groupCandidates = computed(() => myAgents.value.filter(a => a.type === 1))
-
-async function loadMyAgents(): Promise<void> {
-  if (!userStore.isLoggedIn) {
-    myAgents.value = []
-    return
-  }
-  try {
-    const res = await queryAgents({ current: 1, pageSize: 100 })
-    myAgents.value = res.records ?? []
-  } catch (e) {
-    console.error('加载我的智能体失败', e)
-  }
-}
+// ---------- 会话搜索命令面板 ----------
+const searchModalVisible = ref(false)
 
 function handleRailSelect(targetAgentId: number): void {
   if (targetAgentId === agentId.value) {
@@ -576,22 +458,6 @@ function handleEditCurrentAgent(): void {
 function onCurrentAgentEdited(): void {
   loadAgentInfo()
   loadMyAgents()
-}
-
-/** 左轨图钉：本地乐观切换并移到对应分组顶部，落库失败回读服务端顺序 */
-function handleRailTogglePin(agent: Agent): void {
-  const pinned = agent.pinned !== 1
-  const next = myAgents.value.map(a => (a.id === agent.id ? { ...a, pinned: pinned ? 1 : 0 } : a))
-  myAgents.value = [...next.filter(a => a.pinned === 1), ...next.filter(a => a.pinned !== 1)]
-  pinAgent(agent.id, pinned).catch(() => loadMyAgents())
-}
-
-/** 左轨拖动排序：本地按新顺序重排，落库失败回读 */
-function handleRailReorder(orderedIds: number[]): void {
-  if (orderedIds.join() === myAgents.value.map(a => a.id).join()) return
-  const byId = new Map(myAgents.value.map(a => [a.id, a]))
-  myAgents.value = orderedIds.map(id => byId.get(id)).filter((a): a is Agent => !!a)
-  reorderAgents(orderedIds).catch(() => loadMyAgents())
 }
 
 /** 会话置顶：本地乐观移动（置顶到最前 / 取消回到普通组顶部），落库失败回读 */
@@ -770,56 +636,47 @@ const activePlan = computed(() => {
   return null
 })
 
-// ---------- 上下文容量指示器：会话/智能体/模型切换、轮次收尾刷新；轮次进行中每 5s 跟随步进 ----------
-// 轮次内 agent_message 的 WIP 行随每个模型步增量落库，干跑估算随之增长，轮询即可近似实时。
-// 窗口大小按当前模型解析（自定义声明/免费目录元数据），随模型切换即时变化
-const contextUsage = ref<ContextUsageData | null>(null)
-let usageReqSeq = 0
-let usagePollTimer: number | undefined
-
-async function refreshContextUsage(): Promise<void> {
-  const chatId = currentChatId.value
-  if (!chatId) {
-    contextUsage.value = null
-    return
-  }
-  const seq = ++usageReqSeq
-  try {
-    const data = await getContextUsage(chatId, agentId.value, currentModelContext.value)
-    // 只应用最新一次请求：轮询重叠/切换会话时丢弃过期响应
-    if (seq === usageReqSeq && currentChatId.value === chatId) {
-      contextUsage.value = data
-    }
-  } catch {
-    // 非关键指标：失败静默，指示器维持现状
-  }
-}
-
-function stopUsagePolling(): void {
-  if (usagePollTimer) {
-    window.clearInterval(usagePollTimer)
-    usagePollTimer = undefined
-  }
-}
-
-watch([currentChatId, agentId, currentModelContext], () => refreshContextUsage())
-watch(isLoading, (now, was) => {
-  if (now) {
-    stopUsagePolling()
-    usagePollTimer = window.setInterval(refreshContextUsage, 5000)
-  } else {
-    stopUsagePolling()
-    if (was) refreshContextUsage()
-  }
+// ---------- 上下文容量指示器（见 useContextUsage） ----------
+const { contextUsage } = useContextUsage({
+  currentChatId: () => currentChatId.value,
+  agentId: () => agentId.value,
+  modelContext: () => currentModelContext.value,
+  isLoading: () => isLoading.value
 })
-onUnmounted(stopUsagePolling)
 
 // ---------- 左下角常驻机器人（情绪随会话执行情况实时切换） ----------
-// 待上传附件：选中文件即开始上传到沙箱（卡片带实时进度环）。
-// 必须在 useBotMood 之前声明：uploading 信号在 watch 注册期就会被求值，放后面会 TDZ
-const pendingAttachments = ref<PendingAttachment[]>([])
 const inputListening = ref(false)
+
+// ---------- 待传附件 / 草稿隔离 / 编辑附件（见 useChatAttachments） ----------
+const {
+  pendingAttachments,
+  renderCards,
+  leavingKeys,
+  setCardRef,
+  renderEditCards,
+  leavingEditKeys,
+  setEditCardRef,
+  handleAddFiles,
+  handleRemovePending,
+  cleanupPendingAttachments,
+  readyAttachments,
+  hasUploading,
+  hasUploadError,
+  handleEditStart,
+  handleEditCancel,
+  handleAddEditFiles,
+  handleRemoveEditAtt
+} = useChatAttachments({
+  currentChatId: () => currentChatId.value,
+  routeConversationId: () => route.params.conversationId as string | undefined,
+  inputMessage: () => inputMessage.value,
+  setInputMessage: v => { inputMessage.value = v },
+  setCurrentChatId: id => { messagesApi.currentChatId.value = id },
+  getMessages: chatId => messagesApi.getChatMessages(chatId)
+})
+
 const uploadingCount = computed(() => pendingAttachments.value.filter(p => p.status === 'uploading').length)
+// 必须在 useBotMood 之前声明：uploading 信号在 watch 注册期就会被求值
 const { mood: petMood, fxSignal: petFxSignal } = useBotMood(
   messages, isLoading, inputListening, inputMessage, uploadingCount, activePlan, currentChatId
 )
@@ -982,16 +839,14 @@ function handleSend(refs: ChatRefItem[] = []): void {
   if (!guestCanSend()) return
 
   // 附件在选中时已上传；仍在途的门控等待，失败的单卡跳过并提示
-  if (pendingAttachments.value.some(p => p.status === 'uploading')) {
+  if (hasUploading()) {
     message.warning('附件正在上传，请稍候')
     return
   }
-  if (pendingAttachments.value.some(p => p.status === 'error')) {
+  if (hasUploadError()) {
     message.warning('部分附件上传失败，已自动跳过')
   }
-  const attachments = pendingAttachments.value
-    .filter(p => p.status === 'done' && p.item)
-    .map(p => p.item as AttachmentItem)
+  const attachments = readyAttachments()
 
   // 引用编排为标记前缀（zcode 同构）：消息文本本身携带 [#名](#sess_id) 等标记，
   // 前端渲染成彩色 token，复制/编辑/持久化的都是标记文本
@@ -1067,351 +922,19 @@ function handleStop(): void {
   }
 }
 
-
-/**
- * 未落会话转正：'' 新会话产生首个附件时生成正式会话 id，
- * 并把草稿/待传附件迁移过去（隔离 watch 随后加载的就是迁移后的状态，不会清空）
- */
-function prepareChat(): string {
-  // 整页刷新后 currentChatId 可能尚未恢复，路由上的会话 id 优先
-  const existing = messagesApi.currentChatId.value || (route.params.conversationId as string) || ''
-  if (existing) {
-    messagesApi.currentChatId.value = existing
-    return existing
-  }
-  const id = userStore.isLoggedIn ? generateConversationId() : 'temp_' + Date.now()
-  draftByChat.set(id, inputMessage.value)
-  pendingByChat.set(id, pendingAttachments.value)
-  messagesApi.currentChatId.value = id
-  return id
-}
-
-async function handleAddFiles(files: File[]): Promise<void> {
-  const chatId = prepareChat()
-  // 转正触发的会话隔离 watch 在 nextTick 内完成加载，先等它再 push
-  await nextTick()
-  const slots = MAX_PENDING_ATTACHMENTS - pendingAttachments.value.length
-  for (const file of files.slice(0, Math.max(0, slots))) {
-    const record: PendingAttachment = {
-      key: `pending_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      name: file.name,
-      size: file.size,
-      status: 'uploading',
-      progress: 0,
-      previewSrc: isImageName(file.name) ? URL.createObjectURL(file) : undefined
-    }
-    record.localPreviewUrl = record.previewSrc
-    // 经响应式代理写入：闭包里必须持有代理引用，直接改原始对象不会触发渲染
-    pendingAttachments.value.push(record)
-    const live = pendingAttachments.value[pendingAttachments.value.length - 1]
-    uploadAttachment(file, chatId, percent => {
-      live.progress = percent
-    })
-      .then(item => {
-        live.status = 'done'
-        live.progress = 1
-        live.item = item
-        if (live.localPreviewUrl) {
-          // 上传完成：改用沙箱接口出图，释放本地预览
-          URL.revokeObjectURL(live.localPreviewUrl)
-          live.localPreviewUrl = undefined
-          live.previewSrc = sandboxFileUrl(item.path)
-        }
-      })
-      .catch(error => {
-        console.error('附件上传失败:', error)
-        live.status = 'error'
-      })
-  }
-}
-
-function handleRemovePending(key: string): void {
-  const record = pendingAttachments.value.find(p => p.key === key)
-  pendingAttachments.value = pendingAttachments.value.filter(p => p.key !== key)
-  // 沙箱文件删除与本地预览释放延迟到离场动画后（缩略图淡出期间保持可显，避免破图闪现）
-  window.setTimeout(() => {
-    if (record?.localPreviewUrl) {
-      URL.revokeObjectURL(record.localPreviewUrl)
-    }
-    // 已传到沙箱的文件同步删除（失败忽略：每日清理任务 7 天兜底）
-    if (record?.item?.path) {
-      deleteAttachment(record.item.path).catch(() => {})
-    }
-  }, 320)
-}
-
-function cleanupPendingAttachments(): void {
-  const records = pendingAttachments.value
-  pendingAttachments.value = []
-  // 本地预览释放延迟到离场动画后（发送时全部卡片向中间缩小淡出，期间缩略图保持可显）
-  window.setTimeout(() => {
-    for (const record of records) {
-      if (record.localPreviewUrl) {
-        URL.revokeObjectURL(record.localPreviewUrl)
-      }
-    }
-  }, 320)
-}
-
-/** 编辑会话消息时的附件（原附件 + 新追加），发送时按最终清单生效 */
-const editAttachments = ref<PendingAttachment[]>([])
-
-// 编辑列表与输入框同一套 GSAP 进出场动画（独立实例，互不干扰）
-const {
-  renderCards: renderEditCards,
-  leavingKeys: leavingEditKeys,
-  setCardRef: setEditCardRef,
-} = usePendingCardAnimations(computed(() => editAttachments.value))
-
-function handleEditStart(index: number): void {
-  const msg = messagesApi.getChatMessages(currentChatId.value)[index]
-  if (!msg) return
-  editAttachments.value = attachmentsOf(msg).map(a => ({
-    key: a.path,
-    name: a.name,
-    size: a.size,
-    status: 'done' as const,
-    progress: 1,
-    item: { ...a },
-    previewSrc: isImageName(a.name) ? sandboxFileUrl(a.path) : undefined
-  }))
-}
-
-function handleEditCancel(): void {
-  for (const record of editAttachments.value) {
-    if (record.localPreviewUrl) {
-      URL.revokeObjectURL(record.localPreviewUrl)
-    }
-  }
-  editAttachments.value = []
-}
-
-/** 编辑中新追加文件：走与输入框相同的上传流程 */
-async function handleAddEditFiles(files: File[]): Promise<void> {
-  const chatId = currentChatId.value
-  if (!chatId) return
-  for (const file of files.slice(0, Math.max(0, MAX_PENDING_ATTACHMENTS - editAttachments.value.length))) {
-    const record: PendingAttachment = {
-      key: `edit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      name: file.name,
-      size: file.size,
-      status: 'uploading',
-      progress: 0,
-      previewSrc: isImageName(file.name) ? URL.createObjectURL(file) : undefined,
-      addedDuringEdit: true
-    }
-    record.localPreviewUrl = record.previewSrc
-    editAttachments.value.push(record)
-    const live = editAttachments.value[editAttachments.value.length - 1]
-    uploadAttachment(file, chatId, percent => {
-      live.progress = percent
-    })
-      .then(item => {
-        live.status = 'done'
-        live.progress = 1
-        live.item = item
-        if (live.localPreviewUrl) {
-          URL.revokeObjectURL(live.localPreviewUrl)
-          live.localPreviewUrl = undefined
-          live.previewSrc = sandboxFileUrl(item.path)
-        }
-      })
-      .catch(error => {
-        console.error('附件上传失败:', error)
-        live.status = 'error'
-      })
-  }
-}
-
-/** 编辑中移除附件：本次编辑新追加且已上传的立即从沙箱删除；原附件在发送时按 diff 删除 */
-function handleRemoveEditAtt(key: string): void {
-  const record = editAttachments.value.find(p => p.key === key)
-  if (record?.localPreviewUrl) {
-    URL.revokeObjectURL(record.localPreviewUrl)
-  }
-  if (record?.addedDuringEdit && record.item?.path) {
-    deleteAttachment(record.item.path).catch(() => {})
-  }
-  editAttachments.value = editAttachments.value.filter(p => p.key !== key)
-}
-
-// 待上传卡片动画（GSAP）：实例挂在本页——会话切换的 watcher 里能先 arm 静默再换表，
-// 保证切换/新建时卡片直接落位（子组件内实例化时 watcher 顺序颠倒，静默标志永远晚到）
-const {
-  renderCards,
-  leavingKeys,
-  setCardRef,
-  beginSilentSwap: beginPendingSilentSwap,
-} = usePendingCardAnimations(computed(() => pendingAttachments.value))
-
-// 草稿与待传附件按会话隔离：切换时各自保存/恢复。'' 代表未落会话的新会话状态——
-// 纯文字、纯文件、图文混合都要记录。切换/新建由 ChatInput 侧 arm 静默（整表直接落位不播动画）；
-// ''→真实 id 的"转正"迁移在 prepareChat 里做（见下），此处只做纯存/取
-const draftByChat = new Map<string, string>()
-const pendingByChat = new Map<string, PendingAttachment[]>()
-watch(
-  () => messagesApi.currentChatId.value,
-  (newId, oldId) => {
-    const from = oldId ?? ''
-    const to = newId ?? ''
-    if (from === to) return
-    // 会话切换/新建=附件整表替换：先 arm 静默（本 watcher 内同步生效），卡片直接落位不播动画
-    beginPendingSilentSwap()
-    draftByChat.set(from, inputMessage.value)
-    pendingByChat.set(from, pendingAttachments.value)
-    inputMessage.value = draftByChat.get(to) ?? ''
-    pendingAttachments.value = pendingByChat.get(to) ?? []
-  },
-)
+// ---------- 消息级操作（见 useMessageActions） ----------
+const { handleRegenerate, handleEditMessage, handleSwitchVersion } = useMessageActions({
+  messagesApi,
+  currentChatId: () => currentChatId.value,
+  sendMessage,
+  reasoningEffort: () => reasoningEffort.value,
+  currentModel: () => currentModel.value,
+  currentProvider: () => currentProvider.value,
+  currentModelContext: () => currentModelContext.value
+})
 
 function handleDeleteConfirm(): void {
   confirmDelete((chatId) => chatId === currentChatId.value)
-}
-
-/** 消息操作的前置校验：登录 + 会话已建立 + 当前无流式任务 */
-function canModifyMessages(): boolean {
-  if (!userStore.isLoggedIn) return false
-  if (!currentChatId.value) return false
-  // 按当前会话判断执行状态：其他会话的执行/恢复轮询不应拦截本会话的编辑
-  if (messagesApi.chatLoadingMap.value.get(currentChatId.value)) {
-    message.warning('当前会话有任务正在执行，请等完成后再操作')
-    return false
-  }
-  return true
-}
-
-/** 取服务端消息行（截断以 seq 精确定位，本地列表不维护 seq） */
-async function fetchRows(chatId: string): Promise<Array<{ role: string; seq: number; groupSeq?: number | null }>> {
-  const rows = await getBotMessages(chatId, { skipErrorMessage: true })
-  return (rows ?? []).map(r => ({ role: r.role, seq: r.seq ?? 0, groupSeq: r.groupSeq ?? null }))
-}
-
-/** 旧回复快照存入版本历史（供 <n/n> 切换）；空回复不留版本 */
-function snapshotHistory(oldReply?: ChatMessage, priorHistory?: ChatMessage[]): ChatMessage[] | undefined {
-  const history = [...(priorHistory ?? [])]
-  if (oldReply && (oldReply.content || oldReply.blocks?.length)) {
-    history.push({ ...oldReply, history: undefined, activeVersion: undefined })
-  }
-  return history.length ? history : undefined
-}
-
-/** 重新生成：截断到最后一条用户消息（本地+服务端），原文重发且不重复落库；旧回复存为版本 */
-async function handleRegenerate(): Promise<void> {
-  if (!canModifyMessages()) return
-  const chatId = currentChatId.value
-  const msgs = messagesApi.getChatMessages(chatId)
-  let lastUserIndex = -1
-  for (let i = msgs.length - 1; i >= 0; i--) {
-    if (msgs[i].role === 'user') { lastUserIndex = i; break }
-  }
-  if (lastUserIndex < 0) return
-  const content = msgs[lastUserIndex].content
-  const oldReply = msgs[msgs.length - 1]
-  const history = snapshotHistory(
-    oldReply.role === 'assistant' ? oldReply : undefined,
-    oldReply.role === 'assistant' ? oldReply.history : undefined
-  )
-  try {
-    const rows = await fetchRows(chatId)
-    const lastUserRow = [...rows].reverse().find(r => r.role === 'user')
-    if (!lastUserRow) {
-      message.error('找不到原始提问')
-      return
-    }
-    const groupKey = lastUserRow.groupSeq ?? lastUserRow.seq
-    await truncateConversation(chatId, lastUserRow.seq, groupKey)
-  } catch (e) {
-    console.error(e)
-    message.error('操作失败，请重试')
-    return
-  }
-
-  messagesApi.setChatMessages(chatId, msgs.slice(0, lastUserIndex + 1))
-  sendMessage(content, {
-    skipUserMessage: true,
-    skipUserPersist: true,
-    reasoningEffort: reasoningEffort.value,
-    modelSelection: currentModel.value,
-    provider: currentProvider.value,
-    contextWindow: currentModelContext.value?.contextWindow,
-    history,
-    attachments: attachmentsOf(msgs[lastUserIndex])
-  })
-}
-
-/** 编辑用户消息：截断该消息及其后历史（本地+服务端），以新内容重新发送；旧回复存为版本 */
-async function handleEditMessage(index: number, newContent: string, editAttachments?: AttachmentItem[]): Promise<void> {
-  if (!canModifyMessages()) return
-  const chatId = currentChatId.value
-  const msgs = messagesApi.getChatMessages(chatId)
-  if (!msgs[index] || msgs[index].role !== 'user') {
-    message.error('编辑目标已变化，请重试')
-    return
-  }
-  const oldReply = msgs.slice(index + 1).find(m => m.role === 'assistant')
-  const history = snapshotHistory(oldReply, oldReply?.history)
-  let groupKey: number | undefined
-
-  try {
-    const rows = await fetchRows(chatId)
-    // 本地该消息是第 n 条 user → 服务端第 n 个 user 行；保留其前一行的 seq
-    const userOrdinal = msgs.slice(0, index + 1).filter(m => m.role === 'user').length
-    const targetRow = rows.filter(r => r.role === 'user')[userOrdinal - 1]
-    if (!targetRow) {
-      message.error('找不到原始提问')
-      return
-    }
-    const prevRow = [...rows].reverse().find(r => r.seq < targetRow.seq)
-    groupKey = targetRow.groupSeq ?? targetRow.seq
-    await truncateConversation(chatId, prevRow ? prevRow.seq : 0, groupKey)
-  } catch (e) {
-    console.error(e)
-    message.error('操作失败，请重试')
-    return
-  }
-
-  messagesApi.setChatMessages(chatId, msgs.slice(0, index))
-
-  // 编辑后的附件清单（确认时同步捕获）：保留的沿用原路径；被移除的原附件从沙箱删除（消息已截断，成为孤儿）
-  const finalAttachments = editAttachments ?? []
-  const finalPaths = new Set(finalAttachments.map(a => a.path))
-  for (const a of attachmentsOf(msgs[index])) {
-    if (!finalPaths.has(a.path)) {
-      deleteAttachment(a.path).catch(() => {})
-    }
-  }
-  // 编辑重发保留引用：从标记文本还原引用清单，服务端据此重新注入上下文
-  const editRefs = parseRefMarkers(newContent)
-  sendMessage(newContent, {
-    reasoningEffort: reasoningEffort.value,
-    modelSelection: currentModel.value,
-    provider: currentProvider.value,
-    contextWindow: currentModelContext.value?.contextWindow,
-    history,
-    groupSeq: groupKey,
-    attachments: finalAttachments,
-    refs: editRefs.length ? editRefs : undefined
-  })
-}
-
-/** 该消息随发的附件（attachments 输入块）：编辑/重生成重发时沿用原路径 */
-function attachmentsOf(msg: ChatMessage): AttachmentItem[] {
-  return (msg.blocks ?? [])
-    .filter((b): b is Extract<MessageBlock, { type: 'attachments' }> => b.type === 'attachments')
-    .filter(b => b.side === 'input')
-    .flatMap(b => b.items)
-}
-
-/** 切换回复版本：只改前端显示，不动服务端历史 */
-function handleSwitchVersion(messageId: string, version: number): void {
-  const chatId = currentChatId.value
-  if (!chatId) return
-  const msgs = messagesApi.getChatMessages(chatId)
-  const idx = msgs.findIndex(m => m.id === messageId)
-  if (idx < 0) return
-  const updated = [...msgs]
-  updated[idx] = { ...updated[idx], activeVersion: version }
-  messagesApi.setChatMessages(chatId, updated)
 }
 
 /** 全局快捷键：Ctrl/Cmd+K 新对话（保持原快捷键不变）；Ctrl/Cmd+P 打开会话搜索（与侧边栏搜索入口提示一致） */
