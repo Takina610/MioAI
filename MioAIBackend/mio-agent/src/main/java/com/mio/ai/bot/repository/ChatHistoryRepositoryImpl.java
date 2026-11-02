@@ -39,6 +39,12 @@ public class ChatHistoryRepositoryImpl implements ChatHistoryRepository {
             newChat.setTitle(ChatTitles.fallbackTitle(chatVO.getMessage()));
             chatConversationDOMapper.insert(newChat);
         } else {
+            // 并发新建同一 chatId 时先到者已落行：归属不同即视为抢占，拒绝写入
+            if (exist.getUserId() != null && chatVO.getUserId() != null
+                    && !exist.getUserId().equals(chatVO.getUserId())) {
+                throw new com.mio.ai.common.exception.BusinessException(
+                        com.mio.ai.common.exception.ErrorCode.NO_AUTH_ERROR, "无权限访问该会话");
+            }
             exist.setUpdateTime(new Date());
             chatConversationDOMapper.updateById(exist);
         }

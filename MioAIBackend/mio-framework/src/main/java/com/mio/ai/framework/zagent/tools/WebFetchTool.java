@@ -129,27 +129,7 @@ final class WebFetchTool {
      * 暴露给任何能驱动模型的输入（网页注入、用户提示词）。
      */
     private static boolean isPublicHttpUrl(String url) {
-        try {
-            java.net.URL parsed = new java.net.URL(url);
-            String protocol = parsed.getProtocol();
-            if (!"http".equals(protocol) && !"https".equals(protocol)) {
-                return false;
-            }
-            for (java.net.InetAddress address : java.net.InetAddress.getAllByName(parsed.getHost())) {
-                if (address.isLoopbackAddress() || address.isSiteLocalAddress()
-                        || address.isLinkLocalAddress() || address.isAnyLocalAddress()
-                        || address.isMulticastAddress()) {
-                    return false;
-                }
-                if (address instanceof java.net.Inet6Address
-                        && (address.getAddress()[0] & 0xFE) == 0xFC) {
-                    return false; // IPv6 unique local fc00::/7
-                }
-            }
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
+        return com.mio.ai.common.utils.OutboundUrlGuard.isPublicHttpUrl(url);
     }
 
     /** zcode：用小快模型对正文按 prompt 作答（网页内容是不可信数据，显式隔离指令） */

@@ -49,7 +49,7 @@ return ToolEntry.ofMutable("AskUserQuestion", ASK_USER_QUESTION, schema, 0, AskU
         }
         List<Map<String, Object>> payload = parseAndValidate(input);
         String id = "q_" + ID_SEQ.incrementAndGet();
-        if (QuestionGate.instance().register(ctx.chatId, id, payload) == null) {
+        if (QuestionGate.instance().register(ctx.chatId, id, payload, ctx.ownerKey) == null) {
             throw new ToolUseFailure(41, "Another question is already waiting for the user's answer "
                     + "in this conversation.");
         }

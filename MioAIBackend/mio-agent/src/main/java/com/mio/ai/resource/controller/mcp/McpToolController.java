@@ -72,12 +72,12 @@ public class McpToolController {
     }
 
     @GetMapping("/{id:\\d+}")
-    @Cacheable(value = "mcpTools", key = "#id")
     public BaseResponse<McpToolVO> getMcpTool(@PathVariable Long id, HttpServletRequest httpRequest) {
-        Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
-        // 可见性校验：所有者或公开工具（在读取缓存前执行）
+        // 结果随查看者变化（所有者看原始配置、其他人看脱敏配置），不能走全局缓存
+        Long userId = redisComponent.getUserIdNullable(httpRequest.getHeader("token"));
+        // 可见性校验：所有者或公开工具
         accessGuardService.checkMcpReadable(id, userId);
-        McpToolVO tool = mcpToolService.getMcpToolById(id);
+        McpToolVO tool = mcpToolService.getMcpToolById(id, userId);
         return ResultUtils.success(tool);
     }
 

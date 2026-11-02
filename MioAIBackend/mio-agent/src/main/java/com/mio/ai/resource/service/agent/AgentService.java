@@ -34,6 +34,11 @@ public interface AgentService extends IService<Agent> {
 
     AgentDetailVO getAgentDetailById(Long id, Long userId);
 
+    /**
+     * @param includePrompt 管理端场景无条件返回系统提示词；业务侧一律按所有者判定
+     */
+    AgentDetailVO getAgentDetailById(Long id, Long userId, boolean includePrompt);
+
     Page<AgentVO> queryAgents(AgentQueryRequest request);
 
     /**

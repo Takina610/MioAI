@@ -26,8 +26,24 @@ public class AgentMcpServiceImpl extends ServiceImpl<AgentMcpMapper, AgentMcp> i
     @Autowired
     private McpClientFactory mcpClientFactory;
 
+    @Autowired
+    private com.mio.ai.resource.service.mcp.McpStdioGuard mcpStdioGuard;
+
+    /** 读取 MCP 原始配置用于 STDIO 判定（不引入 McpToolService，避免依赖成环） */
+    @Autowired
+    private com.mio.ai.resource.mapper.mcp.McpToolMapper mcpToolMapper;
+
     @Override
     public Long addAgentMcp(AgentMcpAddRequest request) {
+        return addAgentMcp(request, null);
+    }
+
+    /**
+     * @param userId 绑定操作者：覆盖配置可能改写 command（STDIO 会在服务器上执行命令），
+     *               必须与新建 MCP 工具走同一 stdio 门禁，否则可绕过限制实现远程命令执行
+     */
+    @Override
+    public Long addAgentMcp(AgentMcpAddRequest request, Long userId) {
         if (request.getAgentId() == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "智能体ID不能为空");
         }
@@ -40,6 +56,12 @@ public class AgentMcpServiceImpl extends ServiceImpl<AgentMcpMapper, AgentMcp> i
             if (structureError != null) {
                 throw new BusinessException(ErrorCode.PARAMS_ERROR, "配置覆盖无效：" + structureError);
             }
+            // STDIO 门禁：只拦「把原本不是 STDIO 的工具改成执行本地命令」这一越权路径。
+            // 原本就是 STDIO 的工具（可能由管理员创建）允许普通用户继续使用/调 env。
+            if (introducesStdio(request.getMcpId(), request.getConfigOverride(), userId)) {
+                throw new BusinessException(ErrorCode.NO_AUTH_ERROR,
+                        "STDIO 型 MCP 会在服务器上执行本地命令，当前仅对管理员开放");
+            }
         }
         AgentMcp agentMcp = new AgentMcp();
         agentMcp.setAgentId(request.getAgentId());
@@ -48,6 +70,55 @@ public class AgentMcpServiceImpl extends ServiceImpl<AgentMcpMapper, AgentMcp> i
         agentMcp.setConfigOverride(request.getConfigOverride());
         this.save(agentMcp);
         return agentMcp.getId();
+    }
+
+    /**
+     * 覆盖配置是否把「原本非 STDIO」的工具改成了 STDIO。
+     * <p>这是唯一的越权形态：用户本来无权创建 STDIO（会执行本地命令），
+     * 却能借 HTTP 型工具 + 覆盖 command 绕到等价效果。
+     * 原本就是 STDIO 的工具不受影响（存量可用性），无覆盖配置也不受影响。
+     */
+    private boolean introducesStdio(Long mcpId, String configOverride, Long userId) {
+        if (mcpStdioGuard == null) {
+            return false;
+        }
+        com.mio.ai.resource.model.entity.McpTool base = mcpId == null ? null : this.getBaseMcp(mcpId);
+        if (base != null && isStdioConfig(base.getConfig())) {
+            return false;
+        }
+        if (!isStdioConfig(configOverride)) {
+            return false;
+        }
+        return mcpStdioGuard.denyReason(configOverride, userId) != null;
+    }
+
+    /** 读取 MCP 原始配置（避免与 McpToolService 循环依赖，直接用 mapper 查询） */
+    private com.mio.ai.resource.model.entity.McpTool getBaseMcp(Long mcpId) {
+        return mcpToolMapper.selectById(mcpId);
+    }
+
+    /** 配置是否 STDIO 形态（有 command 且无 url） */
+    private static boolean isStdioConfig(String config) {
+        if (StringUtils.isBlank(config)) {
+            return false;
+        }
+        try {
+            cn.hutool.json.JSONObject root = cn.hutool.json.JSONUtil.parseObj(config);
+            cn.hutool.json.JSONObject servers = root.getJSONObject("mcpServers");
+            if (servers == null || servers.isEmpty()) {
+                return false;
+            }
+            cn.hutool.json.JSONObject server =
+                    servers.getJSONObject(servers.keySet().iterator().next());
+            if (server == null) {
+                return false;
+            }
+            String command = server.getStr("command");
+            String url = server.getStr("url");
+            return command != null && !command.isBlank() && StringUtils.isBlank(url);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     @Override

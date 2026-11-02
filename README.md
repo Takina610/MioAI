@@ -100,12 +100,22 @@ cd MioAIFrontend && pnpm install && pnpm dev
 
 | 变量 | 用途 |
 |---|---|
-| `EMBED_APIKEY` | **必填。** Embedding，OpenAI 兼容 `/v1/embeddings`，默认 mistral-embed |
+| `EMBED_APIKEY` | **必填。** Embedding，OpenAI 兼容 `/v1/embeddings`。默认走本地服务（见下） |
 | `R2_ENDPOINT` `R2_ACCESS_KEY_ID` `R2_SECRET_ACCESS_KEY` | 文件上传需要，S3 兼容对象存储 |
 | `WEB_SEARCH_API_KEY` | 联网搜索工具，可选 |
 | `PEXELS_API_KEY` | 图片检索工具，可选 |
 | `GITHUB_TOKEN` | 知识库 GitHub 导入提升 API 限额，可选 |
 | `DASHSCOPE_API_KEY` | 重排，默认关闭，可选 |
+
+**Embedding 二选一**：
+
+- **本地服务（默认，零成本）** —— `EMBED_BASE_URL=http://127.0.0.1:8099/v1`、`EMBED_MODEL=multilingual-e5-large`。
+  `一键启动.bat` 会自动拉起 `MioAIBackend/embed/embed_server.py`（fastembed + multilingual-e5-large，1024 维，支持中文）。
+  首次使用需先装依赖 `pip install fastembed`，首次启动会下载约 2GB 模型。想手动启动：`一键启动脚本\start-embed.bat`。
+- **外部服务** —— 换成有 embedding 渠道的供应商：`EMBED_APIKEY=sk-xxx`、`EMBED_BASE_URL=...`、`EMBED_MODEL=...`。
+
+后端启动时会打印 `embedding 配置就绪: base-url=..., model=...` 表示配置生效；
+若 Key 为空则打印配置告警并提示知识库检索不可用。
 
 Linux 沙箱是可选项：不配置 `mio.ai.sandbox.*` 时，文件读写与终端工具不会注册，对话、知识库、MCP、技能都不受影响。
 

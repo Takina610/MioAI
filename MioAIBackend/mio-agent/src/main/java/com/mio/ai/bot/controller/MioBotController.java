@@ -141,6 +141,9 @@ public class MioBotController {
     private com.mio.ai.bot.config.ModelEffortCapabilities modelEffortCapabilities;
 
     /** OpenCode 免费模型目录（按所选模型解析上下文窗口等元数据） */
+    /** 客户端可声明的上下文窗口下限：低于该值压缩阈值会变成负数（每轮强制压缩） */
+    private static final long MIN_CONTEXT_WINDOW_TOKENS = 8_000;
+
     @Autowired
     private com.mio.ai.bot.config.OpenCodeModelCatalog openCodeModelCatalog;
 
@@ -189,6 +192,15 @@ public class MioBotController {
         String targetModel = StrUtil.isBlank(model) ? engineModelName : model;
         List<String> efforts;
         if ("custom".equals(source)) {
+            // 自定义端点探测由后端代为发请求：必须登录，且只允许公网 http(s)——
+            // 否则匿名请求即可把后端当作内网探针（SSRF）
+            if (redisComponent.getUserIdNullable(httpRequest.getHeader("token")) == null) {
+                throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR, "请先登录后再探测自定义模型");
+            }
+            if (StrUtil.isBlank(providerBaseUrl)
+                    || !com.mio.ai.common.utils.OutboundUrlGuard.isPublicHttpUrl(providerBaseUrl)) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, "模型端点必须是公网 http(s) 地址");
+            }
             efforts = modelEffortCapabilities.supportedEfforts(providerBaseUrl, providerApiKey, targetModel);
         } else {
             efforts = modelEffortCapabilities.supportedEfforts(targetModel);
@@ -253,10 +265,13 @@ public class MioBotController {
     /**
      * 按模型选择解析上下文窗口（容量指示与轮次压缩阈值同源）：
      * 客户端声明（自定义供应商条目）优先，其次免费档目录元数据，缺省回退配置窗口。
+     * <p>客户端声明有下限与上限约束：窗口过小会让压缩阈值变成负数（每轮都压缩、
+     * 连续失败后直接输出兜底文案），过大则压缩永远不触发、请求必然超限。
      */
     private long resolveContextWindow(String source, String model, Long contextWindow) {
+        long configured = agentContextWindowTokens > 0 ? agentContextWindowTokens : 200_000;
         if (contextWindow != null && contextWindow > 0) {
-            return contextWindow;
+            return Math.min(configured, Math.max(MIN_CONTEXT_WINDOW_TOKENS, contextWindow));
         }
         if ("opencode".equals(source) && model != null) {
             com.mio.ai.bot.config.OpenCodeModelCatalog.FreeModel meta = openCodeModelCatalog.find(model);
@@ -264,7 +279,7 @@ public class MioBotController {
                 return meta.contextWindow();
             }
         }
-        return agentContextWindowTokens;
+        return configured;
     }
 
     /**
@@ -351,22 +366,40 @@ public class MioBotController {
         long resolvedAgentId = agentId != null ? agentId : MioBot.AGENT_ID;
         String ownerKey = userId != null ? "u:" + userId : "guest:" + clientIp(httpRequest);
 
-        // 游客累计配额：超出必须登录（拒绝发生在占用 chatId 之前）
-        if (userId == null && !chatRateLimiter.tryGuestTurn(ownerKey, guestMaxTurns)) {
-            return emitAuthRequiredReply("游客最多可发送 " + guestMaxTurns
-                    + " 条消息，登录后可继续对话");
+        // 会话归属：已有会话必须属于当前用户（游客只能用自己的临时会话），否则拒绝——
+        // 否则他人 chatId 会被水合进本轮上下文（读）并把消息写进对方会话（写）
+        String ownershipError = checkConversationOwnership(chatId, userId);
+        if (ownershipError != null) {
+            return emitSingleReply(ownershipError);
         }
 
-        // 频率窗口与并发上限：游客敞口最大，一并约束（拒绝发生在占用 chatId 之前）
+        // 游客累计配额：超出必须登录（拒绝发生在占用 chatId 之前）
+        boolean guestQuotaConsumed = false;
+        if (userId == null) {
+            if (!chatRateLimiter.tryGuestTurn(ownerKey, guestMaxTurns)) {
+                // 超限分支同样是先自增再判断：退还这一次，避免计数被拒绝请求持续推高
+                // （否则配额耗尽后每次尝试都会 +1，长期膨胀且掩盖真实消耗）
+                refundGuestQuota(ownerKey, true);
+                return emitAuthRequiredReply("游客最多可发送 " + guestMaxTurns
+                        + " 条消息，登录后可继续对话");
+            }
+            guestQuotaConsumed = true;
+        }
+
+        // 频率窗口与并发上限：游客敞口最大，一并约束（拒绝发生在占用 chatId 之前）。
+        // 配额已在上方消耗：任一步被拒绝都要退还，否则正常游客会被无端扣掉消息次数
         try {
             chatRateLimiter.checkTurn(ownerKey, turnsPerMinute);
         } catch (BusinessException e) {
+            refundGuestQuota(ownerKey, guestQuotaConsumed);
             return emitSingleReply(e.getMessage());
         }
         if (countActiveByOwner(ownerKey) >= maxConcurrentPerOwner) {
+            refundGuestQuota(ownerKey, guestQuotaConsumed);
             return emitSingleReply("你当前有多个对话任务正在执行，请等待完成后再发送。");
         }
         if (ACTIVE_CHATS.putIfAbsent(chatId, ownerKey) != null) {
+            refundGuestQuota(ownerKey, guestQuotaConsumed);
             return emitSingleReply("当前会话有正在进行的任务，请等待完成后再发送（可刷新页面查看进度）。");
         }
 
@@ -377,90 +410,120 @@ public class MioBotController {
             promptContext = resolvePromptContext(resolvedAgentId, userId);
         } catch (BusinessException e) {
             ACTIVE_CHATS.remove(chatId);
+            refundGuestQuota(ownerKey, guestQuotaConsumed);
             return emitSingleReply(e.getMessage());
         }
         String customSystemPrompt = promptContext.systemPrompt();
 
-        // 会话记录：仅登录用户落库（游客会话不产生列表项）；重新生成时用户消息已在历史里，跳过
-        if (userId != null && !skipUserPersist) {
-            ChatVO chatVO = new ChatVO();
-            chatVO.setChatId(chatId);
-            chatVO.setMessage(content);
-            chatVO.setAgentId(resolvedAgentId);
-            chatVO.setUserId(userId);
-            chatHistoryRepository.save(chatVO);
-        }
-
-        if (containsSensitiveWord(content)) {
-            ACTIVE_CHATS.remove(chatId);
-            return emitSingleReply(SENSITIVE_REPLY);
-        }
-
-        BotResourceService.McpAssembly mcp = botResourceService.assembleMcpTools(resolvedAgentId);
-        BotResourceService.KnowledgeBuild knowledge = botResourceService.buildKnowledge(resolvedAgentId, userId, content, chatId, model);
-        List<Skill> skills = botResourceService.assembleSkills(resolvedAgentId);
-
-        // 输入框 @ // 引用的上下文：会话转录/点名知识库检索并入知识上下文，技能与 MCP 以提醒注入
-        RefsBuild refsBuild = buildRefs(refs, userId, content, chatId, model);
-        if (!refsBuild.kbGroups().isEmpty()) {
-            List<Map<String, Object>> mergedGroups = new ArrayList<>(knowledge.groups());
-            mergedGroups.addAll(refsBuild.kbGroups());
-            knowledge = new BotResourceService.KnowledgeBuild(
-                    knowledge.context().isEmpty()
-                            ? refsBuild.kbContext()
-                            : knowledge.context() + "\n\n" + refsBuild.kbContext(),
-                    mergedGroups);
-        }
-
-        String effort = reasoningEffort != null && REASONING_EFFORTS.contains(reasoningEffort)
-                ? reasoningEffort : null;
-        // 模型选择：聊天页切换的 OpenCode 免费模型 / 自定义供应商模型。解析失败（游客选了
-        // 自定义/供应商已删）回退引擎默认继续对话，不整轮报错
-        com.mio.ai.bot.service.RuntimeChatModelFactory.Resolved chatResolution;
+        // 占用登记之后的任何失败都必须解除占用，否则该 chatId 与并发额度会永久泄漏
         try {
-            var endpoint = "custom".equals(modelSource)
-                    ? new com.mio.ai.bot.service.RuntimeChatModelFactory.ProviderEndpoint(
-                            providerBaseUrl, providerApiKey, providerApiFormat)
-                    : null;
-            chatResolution = runtimeChatModelFactory.resolve(modelSource, endpoint, model);
-        } catch (BusinessException e) {
-            log.info("模型选择解析失败（{}），回退引擎默认: {}", e.getMessage(), chatId);
-            chatResolution = new com.mio.ai.bot.service.RuntimeChatModelFactory.Resolved(chatModel, engineModelName);
-        }
-        String chatModelName = chatResolution.resolvedModel();
-        // 压缩阈值与容量指示同源：按本轮实际模型解析窗口（客户端声明 > 免费档目录 > 配置值）
-        var engineConfig = new com.mio.ai.framework.zagent.AgentEngineConfig(
-                agentMaxSteps, agentStreamTimeoutSeconds, agentModelRetries,
-                resolveContextWindow(modelSource, chatModelName, contextWindow));
-        MioBot mioBot = new MioBot(chatResolution.model(), toolsetFactory, List.of(mcp.callbacks()), skills,
-                agentUsageLogService, toolCallLogService, userStatsDailyService, skillUsageLogService,
-                agentMessageService, chatFileService, imageSearchService,
-                chatId, userId, resolvedAgentId, customSystemPrompt, chatModelName, effort, engineConfig,
-                fileTransfer, com.mio.ai.bot.model.dto.AttachmentItem.parseList(attachments));
-        // 群聊智能体：注入成员协调器（Agent 工具按成员名委派时以成员自身资源运行）
-        if (promptContext.coordinator() != null) {
-            mioBot.setGroupCoordinator(promptContext.coordinator());
-        }
-        // 编辑重发：新 user 行沿用被编辑轮次的组锚（版本组持久化）
-        mioBot.setUserGroupSeq(groupSeq);
-        // 知识库命中摘要：回答实际引用时在收尾落引用行；MCP/技能由模型按需使用，走工具行标注
-        mioBot.setMcpFailures(mcp.failures());
-        mioBot.setKbGroups(knowledge.groups());
-        // 引用上下文：注入本轮模型提示词 + 随 user 行持久化引用清单（刷新后 chips 原样还原）
-        mioBot.setRefsContext(refsBuild.context());
-        mioBot.setUserRefs(refsBuild.items());
-        // 免费档自愈：本轮用免费模型时，模型服务侧故障即视为目录陈旧，失效 Redis 目录并重取。
-        // 判定同时看 source 与模型名后缀（old client 可能不带 source，但免费档模型名必带 -free）
-        mioBot.setFreeCatalogModel("opencode".equals(modelSource)
-                || (chatModelName != null && chatModelName.endsWith("-free")));
-        mioBot.setCatalogInvalidator(openCodeModelCatalog::invalidate);
-        // 任务真正结束（含异常）时解除会话占用与轮次登记
-        mioBot.setOnFinish(() -> {
+            // 会话记录：仅登录用户落库（游客会话不产生列表项）；重新生成时用户消息已在历史里，跳过
+            if (userId != null && !skipUserPersist) {
+                ChatVO chatVO = new ChatVO();
+                chatVO.setChatId(chatId);
+                chatVO.setMessage(content);
+                chatVO.setAgentId(resolvedAgentId);
+                chatVO.setUserId(userId);
+                chatHistoryRepository.save(chatVO);
+            }
+
+            if (containsSensitiveWord(content)) {
+                ACTIVE_CHATS.remove(chatId);
+                refundGuestQuota(ownerKey, guestQuotaConsumed);
+                return emitSingleReply(SENSITIVE_REPLY);
+            }
+
+            BotResourceService.McpAssembly mcp = botResourceService.assembleMcpTools(resolvedAgentId);
+            BotResourceService.KnowledgeBuild knowledge = botResourceService.buildKnowledge(resolvedAgentId, userId, content, chatId, model);
+            List<Skill> skills = botResourceService.assembleSkills(resolvedAgentId);
+
+            // 输入框 @ // 引用的上下文：会话转录/点名知识库检索并入知识上下文，技能与 MCP 以提醒注入
+            RefsBuild refsBuild = buildRefs(refs, userId, content, chatId, model);
+            if (!refsBuild.kbGroups().isEmpty()) {
+                List<Map<String, Object>> mergedGroups = new ArrayList<>(knowledge.groups());
+                mergedGroups.addAll(refsBuild.kbGroups());
+                knowledge = new BotResourceService.KnowledgeBuild(
+                        knowledge.context().isEmpty()
+                                ? refsBuild.kbContext()
+                                : knowledge.context() + "\n\n" + refsBuild.kbContext(),
+                        mergedGroups);
+            }
+
+            String effort = reasoningEffort != null && REASONING_EFFORTS.contains(reasoningEffort)
+                    ? reasoningEffort : null;
+            // 模型选择：聊天页切换的 OpenCode 免费模型 / 自定义供应商模型。解析失败（游客选了
+            // 自定义/供应商已删）回退引擎默认继续对话，不整轮报错
+            com.mio.ai.bot.service.RuntimeChatModelFactory.Resolved chatResolution;
+            try {
+                var endpoint = "custom".equals(modelSource)
+                        ? new com.mio.ai.bot.service.RuntimeChatModelFactory.ProviderEndpoint(
+                                providerBaseUrl, providerApiKey, providerApiFormat)
+                        : null;
+                chatResolution = runtimeChatModelFactory.resolve(modelSource, endpoint, model);
+            } catch (BusinessException e) {
+                log.info("模型选择解析失败（{}），回退引擎默认: {}", e.getMessage(), chatId);
+                chatResolution = new com.mio.ai.bot.service.RuntimeChatModelFactory.Resolved(chatModel, engineModelName);
+            }
+            String chatModelName = chatResolution.resolvedModel();
+            // 压缩阈值与容量指示同源：按本轮实际模型解析窗口（客户端声明 > 免费档目录 > 配置值）
+            var engineConfig = new com.mio.ai.framework.zagent.AgentEngineConfig(
+                    agentMaxSteps, agentStreamTimeoutSeconds, agentModelRetries,
+                    resolveContextWindow(modelSource, chatModelName, contextWindow));
+            MioBot mioBot = new MioBot(chatResolution.model(), toolsetFactory, List.of(mcp.callbacks()), skills,
+                    agentUsageLogService, toolCallLogService, userStatsDailyService, skillUsageLogService,
+                    agentMessageService, chatFileService, imageSearchService,
+                    chatId, userId, resolvedAgentId, customSystemPrompt, chatModelName, effort, engineConfig,
+                    fileTransfer, com.mio.ai.bot.model.dto.AttachmentItem.parseList(attachments));
+            // 群聊智能体：注入成员协调器（Agent 工具按成员名委派时以成员自身资源运行）
+            if (promptContext.coordinator() != null) {
+                mioBot.setGroupCoordinator(promptContext.coordinator());
+            }
+            // 编辑重发：新 user 行沿用被编辑轮次的组锚（版本组持久化）
+            mioBot.setUserGroupSeq(groupSeq);
+            // 问答归属：AskUserQuestion 的待答问题绑定到本归属，他人凭 chatId 无法代答
+            mioBot.setOwnerKey(ownerKey);
+            // 知识库命中摘要：回答实际引用时在收尾落引用行；MCP/技能由模型按需使用，走工具行标注
+            mioBot.setMcpFailures(mcp.failures());
+            mioBot.setKbGroups(knowledge.groups());
+            // 引用上下文：注入本轮模型提示词 + 随 user 行持久化引用清单（刷新后 chips 原样还原）
+            mioBot.setRefsContext(refsBuild.context());
+            mioBot.setUserRefs(refsBuild.items());
+            // 免费档自愈：本轮用免费模型时，模型服务侧故障即视为目录陈旧，失效 Redis 目录并重取。
+            // 判定同时看 source 与模型名后缀（old client 可能不带 source，但免费档模型名必带 -free）
+            mioBot.setFreeCatalogModel("opencode".equals(modelSource)
+                    || (chatModelName != null && chatModelName.endsWith("-free")));
+            mioBot.setCatalogInvalidator(openCodeModelCatalog::invalidate);
+            // 任务真正结束（含异常）时解除会话占用与轮次登记
+            mioBot.setOnFinish(() -> {
+                ACTIVE_CHATS.remove(chatId);
+                ACTIVE_TURNS.remove(chatId);
+            });
+            ACTIVE_TURNS.put(chatId, mioBot);
+            // 轮次已成功启动：配额视为真实消耗，后续异常不再退还
+            guestQuotaConsumed = false;
+            return mioBot.run(content, knowledge.context(), !skipUserPersist);
+        } catch (RuntimeException e) {
             ACTIVE_CHATS.remove(chatId);
             ACTIVE_TURNS.remove(chatId);
-        });
-        ACTIVE_TURNS.put(chatId, mioBot);
-        return mioBot.run(content, knowledge.context(), !skipUserPersist);
+            refundGuestQuota(ownerKey, guestQuotaConsumed);
+            throw e;
+        }
+    }
+
+    /**
+     * 退还游客配额：仅在「配额已消耗但本轮未真正开始」时调用
+     * （限流拒绝、并发超限、会话占用冲突、智能体无权、敏感词、装配阶段异常）。
+     * Redis 异常静默：退还是优化项，失败只让游客少一次额度，不阻断主流程。
+     */
+    private void refundGuestQuota(String ownerKey, boolean consumed) {
+        if (!consumed || !ownerKey.startsWith("guest:")) {
+            return;
+        }
+        try {
+            chatRateLimiter.refundGuestTurn(ownerKey);
+        } catch (Exception e) {
+            log.warn("游客配额退还失败: {}, {}", ownerKey, e.getMessage());
+        }
     }
 
     /**
@@ -763,8 +826,12 @@ public class MioBotController {
      */
     @org.springframework.web.bind.annotation.PostMapping("/bot/answer")
     public BaseResponse<Map<String, Object>> answer(
-            @org.springframework.web.bind.annotation.RequestBody Map<String, Object> body) {
+            @org.springframework.web.bind.annotation.RequestBody Map<String, Object> body,
+            jakarta.servlet.http.HttpServletRequest httpRequest) {
         String chatId = String.valueOf(body.get("chatId"));
+        // 归属校验：只有发起本轮提问的同一用户/游客才能作答（游客按 IP，与 /bot/chat 口径一致）
+        Long userId = redisComponent.getUserIdNullable(httpRequest.getHeader("token"));
+        String ownerKey = userId != null ? "u:" + userId : "guest:" + clientIp(httpRequest);
         String id = body.get("id") == null ? null : String.valueOf(body.get("id"));
         List<com.mio.ai.framework.zagent.tools.QuestionGate.Answer> answers = new ArrayList<>();
         Object rawAnswers = body.get("answers");
@@ -790,7 +857,7 @@ public class MioBotController {
             }
         }
         List<Map<String, Object>> payload =
-                com.mio.ai.framework.zagent.tools.QuestionGate.instance().resolve(chatId, answers);
+                com.mio.ai.framework.zagent.tools.QuestionGate.instance().resolve(chatId, answers, ownerKey);
         if (payload == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "当前会话没有待回答的问题（可能已超时或已作答）");
         }
@@ -992,16 +1059,33 @@ public class MioBotController {
         return emitter;
     }
 
-    /** 游客归属标识：优先 X-Forwarded-For 首段（反代场景），否则对端地址 */
+    /**
+     * 会话归属校验：会话不存在视为新建（放行）；已存在时必须归当前登录用户所有。
+     * 游客（userId=null）无法证明归属，已有会话一律拒绝——游客会话本就不落库，
+     * 空会话走正常新建路径。
+     *
+     * @return 拒绝原因；null 表示放行
+     */
+    private String checkConversationOwnership(String chatId, Long userId) {
+        ChatConversationDO conversation = chatHistoryRepository.getChatByConversationId(chatId);
+        if (conversation == null) {
+            return null;
+        }
+        if (userId == null) {
+            return "该会话已存在，请登录后继续对话";
+        }
+        if (conversation.getUserId() == null || !conversation.getUserId().equals(userId)) {
+            return "无权限访问该会话";
+        }
+        return null;
+    }
+
+    /**
+     * 游客归属标识：仅在直连对端为受信代理时采信转发头（X-Real-IP 优先），
+     * 否则用对端地址——自填 X-Forwarded-For 不再能冒充他人（游客按 IP 记账与鉴权）。
+     */
     private String clientIp(jakarta.servlet.http.HttpServletRequest request) {
-        if (request == null) {
-            return "unknown";
-        }
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (StrUtil.isNotBlank(forwarded)) {
-            return forwarded.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
+        return com.mio.ai.common.utils.ClientIpResolver.resolve(request);
     }
 
     /** 敏感词命中的单条完整回复（answer 整段 + done） */

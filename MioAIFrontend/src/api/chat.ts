@@ -162,15 +162,31 @@ export const deleteAttachment = async (path: string): Promise<boolean> => {
   return request.delete('/bot/attachment', { params: { path } } as never)
 }
 
+/**
+ * 拉取暂存文件为 blob URL（图片缩略图/预览用）。
+ * 走 axios 携带 token 请求头，而不是把 token 拼进 URL——
+ * 查询参数会随 nginx 访问日志、浏览器历史、Referer 外泄。
+ * 调用方负责 URL.revokeObjectURL 释放。
+ * @returns blob URL；失败返回 null
+ */
+export const fetchAttachmentObjectUrl = async (path: string): Promise<string | null> => {
+  try {
+    const response = await axios.get(`${BASE_URL}/bot/attachment/download`, {
+      params: { path },
+      responseType: 'blob',
+      headers: { token: localStorage.getItem('token') || '' },
+      timeout: 120000
+    })
+    return URL.createObjectURL(response.data as Blob)
+  } catch {
+    return null
+  }
+}
+
 /** 下载 Agent 产出的暂存文件（outputs/...）：blob 保存为浏览器下载 */
 export const downloadAttachment = async (path: string, name: string): Promise<void> => {
-  const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL || ''}/bot/attachment/download`, {
-    params: { path },
-    responseType: 'blob',
-    headers: { token: localStorage.getItem('token') || '' },
-    timeout: 120000
-  })
-  const url = URL.createObjectURL(response.data as Blob)
+  const url = await fetchAttachmentObjectUrl(path)
+  if (!url) return
   const link = document.createElement('a')
   link.href = url
   link.download = name

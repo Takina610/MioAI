@@ -751,9 +751,20 @@ public class BotEventChannel {
             }
             SseEmitter current = emitter;
             if (current != null) {
-                SseStreams.sendTyped(current, fields, next);
+                if (!SseStreams.sendTyped(current, fields, next)) {
+                    // 发送失败即连接已断：记录状态，供轮次收尾判断是否该停止空等
+                    clientGone = true;
+                }
             }
         }
+    }
+
+    /** 客户端连接是否已断开（发送失败后置位；断线重连接管会清零） */
+    private volatile boolean clientGone;
+
+    /** 供轮次判断：本轮是否已无接收方（据此停止继续等待模型流） */
+    public boolean isClientGone() {
+        return clientGone;
     }
 
     /**
@@ -774,6 +785,8 @@ public class BotEventChannel {
             }
             superseded = emitter;
             emitter = newEmitter;
+            // 新连接接管：重置断开标记，否则重连后的正常轮次会被误判为无接收方而停止
+            clientGone = false;
         }
         if (superseded != null && superseded != newEmitter) {
             // 不入缓冲不占 seq：纯单连接信令，接收端据此放弃本流

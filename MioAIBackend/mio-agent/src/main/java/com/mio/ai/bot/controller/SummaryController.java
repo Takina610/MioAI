@@ -37,12 +37,22 @@ public class SummaryController {
     @Resource
     ChatConversationDOMapper chatConversationDOMapper;
 
+    @Resource
+    com.mio.ai.bot.repository.ChatHistoryRepository chatHistoryRepository;
+
+    @Resource
+    com.mio.ai.user.utils.RedisComponent redisComponent;
+
     /**
      * 输入一段对话文本，返回一句总结标题；生成失败回退库内/首条消息标题。
+     * 登录用户的会话必须属于本人（会话名/标题是会话内容的一部分，不能由他人改写）。
      */
     @PostMapping("/summary")
-    public BaseResponse<String> generateTitle(@Valid @RequestBody ChatMessageRequest chatMessageRequest) {
+    public BaseResponse<String> generateTitle(@Valid @RequestBody ChatMessageRequest chatMessageRequest,
+                                              jakarta.servlet.http.HttpServletRequest httpRequest) {
         String conversationId = chatMessageRequest.getConversationId();
+        Long userId = redisComponent.getUserIdNullable(httpRequest.getHeader("token"));
+        requireConversationOwnership(conversationId, userId);
         String currentTitle = currentTitle(conversationId, chatMessageRequest.getAgentId());
 
         String title = generateWithRetry(chatMessageRequest.getContent());
@@ -55,6 +65,21 @@ public class SummaryController {
 
         persistTitle(conversationId, chatMessageRequest.getAgentId(), title);
         return ResultUtils.success(title);
+    }
+
+    /**
+     * 会话归属校验：会话不存在视为新建（标题由本轮首条消息兜底，无需拒绝）；
+     * 已存在且归属他人时拒绝——否则可改写他人会话标题。
+     */
+    private void requireConversationOwnership(String conversationId, Long userId) {
+        ChatConversationDO conversation = chatHistoryRepository.getChatByConversationId(conversationId);
+        if (conversation == null) {
+            return;
+        }
+        if (conversation.getUserId() == null || !conversation.getUserId().equals(userId)) {
+            throw new com.mio.ai.common.exception.BusinessException(
+                    com.mio.ai.common.exception.ErrorCode.NO_AUTH_ERROR, "无权限操作该会话");
+        }
     }
 
     /** 模型生成 + 一次重试；全部失败返回 null */

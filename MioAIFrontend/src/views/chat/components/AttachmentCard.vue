@@ -61,10 +61,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { CloseOutlined, EyeOutlined } from '@ant-design/icons-vue'
 import { attachmentIcon, extLabel, formatSize, isImageName, typeColor } from '../attachmentUtils'
-import { downloadAttachment } from '@/api/chat'
+import { downloadAttachment, fetchAttachmentObjectUrl } from '@/api/chat'
 import type { AttachmentDisplay } from '@/types'
 
 const props = defineProps<{
@@ -90,26 +90,95 @@ const emit = defineEmits<{
 }>()
 
 /**
- * 缩略图加载：瞬时失败（SFTP 流抖动等）自动带 cache-buster 重试两次，
- * 仍失败才回退类型图标；组件重建（切回会话）时重试计数归零，缩略图自愈
+ * 缩略图加载：瞬时失败（SFTP 流抖动等）自动重试两次，仍失败才回退类型图标；
+ * 组件重建（切回会话）时重试计数归零，缩略图自愈。
+ * 取图走带请求头的 axios + blob URL，URL 里不出现 token（避免进入访问日志）。
  */
 const retryCount = ref(0)
 const broken = ref(false)
-const imgSrc = computed(() => {
-  if (broken.value || !props.item.previewSrc || props.item.status === 'uploading') {
-    return undefined
+/** 已拉取的 blob URL；仅释放「本组件创建」的，本地预览由 index.vue 管理生命周期 */
+const objectUrl = ref<string>()
+/** 当前 objectUrl 是否由本组件创建（本地 blob: 预览不归本组件所有） */
+let ownsObjectUrl = false
+
+/** 从预览地址中取出沙箱相对路径（previewSrc 只声明 path，不带凭证） */
+function stagedPathOf(src: string): string | null {
+  try {
+    const raw = src.includes('?') ? src.slice(src.indexOf('?') + 1) : ''
+    const value = new URLSearchParams(raw).get('path')
+    return value || null
+  } catch {
+    return null
   }
-  return retryCount.value
-    ? `${props.item.previewSrc}${props.item.previewSrc.includes('?') ? '&' : '?'}_r=${retryCount.value}`
-    : props.item.previewSrc
+}
+
+function releaseObjectUrl(): void {
+  // 只释放本组件拉取的 blob；本地预览的对象 URL 由 index.vue 统一 revoke
+  if (objectUrl.value && ownsObjectUrl) {
+    URL.revokeObjectURL(objectUrl.value)
+  }
+  objectUrl.value = undefined
+  ownsObjectUrl = false
+}
+
+/** 并发/切走保护：每次加载递增，回填时校验，避免旧请求覆盖新状态或泄漏 blob */
+let loadToken = 0
+
+async function loadPreview(): Promise<void> {
+  const src = props.item.previewSrc
+  const token = ++loadToken
+  releaseObjectUrl()
+  if (!src || props.item.status === 'uploading' || broken.value) {
+    return
+  }
+  // 本地对象 URL（刚上传的文件）：直接展示，生命周期归 index.vue，不在此处释放
+  if (src.startsWith('blob:') || src.startsWith('data:')) {
+    objectUrl.value = src
+    ownsObjectUrl = false
+    return
+  }
+  const path = stagedPathOf(src)
+  if (!path) {
+    objectUrl.value = src
+    ownsObjectUrl = false
+    return
+  }
+  const fetched = await fetchAttachmentObjectUrl(path)
+  if (token !== loadToken) {
+    // 期间已切换/卸载：丢弃这次结果，立即释放，避免泄漏
+    if (fetched) URL.revokeObjectURL(fetched)
+    return
+  }
+  if (fetched) {
+    objectUrl.value = fetched
+    ownsObjectUrl = true
+  } else {
+    onImgError()
+  }
+}
+
+watch(
+  () => [props.item.previewSrc, props.item.status],
+  () => loadPreview(),
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  // 失效在途请求，避免卸载后回填泄漏 blob
+  loadToken++
+  releaseObjectUrl()
 })
+
+const imgSrc = computed(() => (broken.value ? undefined : objectUrl.value))
 
 function onImgError(): void {
   if (retryCount.value < 2) {
     retryCount.value += 1
     broken.value = false
+    void loadPreview()
   } else {
     broken.value = true
+    releaseObjectUrl()
   }
 }
 

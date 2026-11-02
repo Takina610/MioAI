@@ -27,6 +27,18 @@ public record AttachmentItem(String path, String name, long size) {
         return ALLOWED_ROOTS.stream().anyMatch(p::startsWith);
     }
 
+    /**
+     * 暂存路径 uploads|outputs/&lt;chatId&gt;/&lt;file&gt; 中的 chatId（归属校验用）。
+     * 形态不符（段数不足或为空的 chatId 段）返回 null，调用方按无法判定处理。
+     */
+    public static String chatIdOfStagedPath(String path) {
+        if (!isStagedPath(path)) {
+            return null;
+        }
+        String[] segments = path.trim().split("/");
+        return segments.length >= 3 && !segments[1].isBlank() ? segments[1] : null;
+    }
+
     /** 从前端 JSON 数组解析附件引用，非法项直接丢弃（宁可少一个附件不让坏路径进上下文） */
     public static List<AttachmentItem> parseList(String json) {
         List<AttachmentItem> items = new ArrayList<>();

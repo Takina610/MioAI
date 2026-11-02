@@ -22,4 +22,7 @@ public interface RagRetrievalLogService extends IService<RagRetrievalLog> {
      * 分页查询RAG检索日志
      */
     Page<RagRetrievalLogVO> queryRetrievalLogs(RagRetrievalLogQueryRequest request);
+
+    /** 按用户限定查询（业务侧入口：只能看到自己的检索记录） */
+    Page<RagRetrievalLogVO> queryRetrievalLogs(RagRetrievalLogQueryRequest request, Long userId);
 }

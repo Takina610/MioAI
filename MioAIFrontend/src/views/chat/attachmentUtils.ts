@@ -96,7 +96,11 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 /** 单条消息最多携带的待传附件数（对话页与首页输入卡共用） */
 export const MAX_PENDING_ATTACHMENTS = 50
 
-/** 沙箱文件 → 浏览器可直接加载的地址（图片缩略图/预览用） */
+/**
+ * 沙箱文件地址（仅作路径声明，不直接喂给 &lt;img src&gt;）。
+ * 不带 token：查询参数会随 nginx 访问日志、浏览器历史、Referer 外泄。
+ * 实际取图由 AttachmentCard 带请求头拉 blob（见 fetchAttachmentObjectUrl）。
+ */
 export function sandboxFileUrl(path: string): string {
   return `${API_BASE}/bot/attachment/download?path=${encodeURIComponent(path)}`
 }

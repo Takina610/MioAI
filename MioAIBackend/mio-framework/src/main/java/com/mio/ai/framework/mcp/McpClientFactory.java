@@ -15,6 +15,7 @@ import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.spec.McpClientTransport;
 import io.modelcontextprotocol.spec.McpSchema;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -47,6 +48,14 @@ public class McpClientFactory {
 
     /** STDIO 子进程 stderr 尾部保留行数（仅用于拼进错误消息） */
     private static final int STDERR_TAIL_LINES = 10;
+
+    /**
+     * 是否允许 MCP 的 HTTP/SSE 端点指向内网/回环地址。
+     * <p>默认 false：任意登录用户都能配置 MCP URL，若不做限制即可把后端当作内网探针
+     * （读取内网服务的 listTools 结果）。确实需要连内网自建 MCP 时显式开启。
+     */
+    @Value("${mio.ai.mcp.allow-private-endpoints:false}")
+    private boolean allowPrivateEndpoints;
 
     private final McpJsonMapper jsonMapper = new JacksonMcpJsonMapper(JsonMapper.builder().build());
 
@@ -81,6 +90,11 @@ public class McpClientFactory {
         String command = serverConfig.getStr("command");
         if ((url == null || url.isBlank()) && (command == null || command.isBlank())) {
             return "服务器配置必须包含 url(HTTP/SSE) 或 command(STDIO)";
+        }
+        // 保存前即拒绝非公网 HTTP 端点：与运行期同一策略，避免配完才发现连不上
+        if (url != null && !url.isBlank() && !allowPrivateEndpoints
+                && !com.mio.ai.common.utils.OutboundUrlGuard.isPublicHttpUrl(url)) {
+            return "MCP 端点必须是公网 http(s) 地址: " + url;
         }
         return null;
     }
@@ -122,6 +136,11 @@ public class McpClientFactory {
 
     private McpClientHandle createHttpClient(String clientName, String url, JSONObject serverConfig,
                                              Duration requestTimeout, Duration initializationTimeout) {
+        // SSRF 防线：URL 由用户配置，后端代为连接。非公网地址默认拒绝，
+        // 否则可借 listTools 读取内网服务响应（需要连内网 MCP 时显式开开关）
+        if (!allowPrivateEndpoints && !com.mio.ai.common.utils.OutboundUrlGuard.isPublicHttpUrl(url)) {
+            throw new IllegalArgumentException("MCP 端点必须是公网 http(s) 地址: " + url);
+        }
         Map<String, String> headers = parseStringMap(serverConfig.getJSONObject("headers"));
         McpSyncHttpClientRequestCustomizer headerCustomizer = (builder, method, uri, body, context) ->
                 headers.forEach(builder::header);

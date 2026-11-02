@@ -23,6 +23,9 @@ public interface ToolCallLogService extends IService<ToolCallLog> {
      */
     Page<ToolCallLogVO> queryToolCallLogs(ToolCallLogQueryRequest request);
 
+    /** 按用户限定查询（业务侧入口：只能看到自己的工具调用记录） */
+    Page<ToolCallLogVO> queryToolCallLogs(ToolCallLogQueryRequest request, Long userId);
+
     /**
      * 统计工具调用次数
      */

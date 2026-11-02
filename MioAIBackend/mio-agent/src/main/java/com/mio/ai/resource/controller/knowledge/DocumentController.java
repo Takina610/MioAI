@@ -125,6 +125,11 @@ public class DocumentController {
             response.setContentLength(fileContent.length);
             response.getOutputStream().write(fileContent);
             response.getOutputStream().flush();
+        } catch (com.mio.ai.common.exception.BusinessException e) {
+            // 无权限/不存在是正常的业务结果，不能报成 500（前端据状态码区分"无权"与"服务故障"）
+            log.debug("预览文档被拒绝: id={}, reason={}", id, e.getMessage());
+            response.setStatus(e.getCode() == com.mio.ai.common.exception.ErrorCode.NO_AUTH_ERROR.getCode()
+                    ? HttpServletResponse.SC_FORBIDDEN : HttpServletResponse.SC_NOT_FOUND);
         } catch (Exception e) {
             log.error("预览文件失败", e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);

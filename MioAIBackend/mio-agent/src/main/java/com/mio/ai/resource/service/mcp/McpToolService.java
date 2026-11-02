@@ -36,6 +36,18 @@ public interface McpToolService extends IService<McpTool> {
     McpToolVO getMcpToolById(Long id);
 
     /**
+     * 根据ID获取MCP工具（按查看者决定是否脱敏：所有者返回原始配置，其他人掩码凭证）
+     */
+    McpToolVO getMcpToolById(Long id, Long viewerUserId);
+
+    /**
+     * 根据ID获取MCP工具。
+     *
+     * @param includeSecrets 管理端审阅场景显式放开：无条件返回原始配置；业务侧按所有者判定
+     */
+    McpToolVO getMcpToolById(Long id, Long viewerUserId, boolean includeSecrets);
+
+    /**
      * 分页查询MCP工具
      */
     Page<McpToolVO> queryMcpTools(McpToolQueryRequest request);

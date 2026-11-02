@@ -330,8 +330,34 @@ public class KnowledgeRetrievalServiceImpl implements KnowledgeRetrievalService 
         } catch (Exception first) {
             log.warn("向量检索失败（多为嵌入请求限流），节流排队后重试一次: {}", first.getMessage());
             embeddingThrottle.awaitTurn();
-            return vectorStore.similaritySearch(request);
+            try {
+                return vectorStore.similaritySearch(request);
+            } catch (Exception second) {
+                // 重试仍失败：给出可理解的原因。否则全局兜底会把它包装成"系统错误"，
+                // 用户看到那句话不知道该等一等还是改参数
+                throw toRetrievalFailure(second);
+            }
         }
+    }
+
+    /**
+     * 把向量检索的上游失败翻译成业务异常：
+     * 429/限流 → 「服务繁忙，请稍后重试」；其余 → 「检索暂不可用」。
+     * 原始异常挂在 cause 上，日志里仍有完整堆栈。
+     */
+    private com.mio.ai.common.exception.BusinessException toRetrievalFailure(Exception e) {
+        String message = e.getMessage() == null ? "" : e.getMessage().toLowerCase();
+        boolean rateLimited = message.contains("429") || message.contains("rate limit")
+                || message.contains("请求数限制") || message.contains("too many requests")
+                || message.contains("quota");
+        String userMessage = rateLimited
+                ? "知识库检索服务繁忙（上游限流），请稍后重试"
+                : "知识库检索暂不可用，请稍后重试";
+        com.mio.ai.common.exception.BusinessException failure =
+                new com.mio.ai.common.exception.BusinessException(
+                        com.mio.ai.common.exception.ErrorCode.SYSTEM_ERROR, userMessage);
+        failure.initCause(e);
+        return failure;
     }
 
     private KnowledgeRetrievalResult toResult(Document doc) {

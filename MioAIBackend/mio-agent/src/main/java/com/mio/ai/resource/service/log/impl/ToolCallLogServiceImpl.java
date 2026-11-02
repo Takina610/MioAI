@@ -28,9 +28,16 @@ public class ToolCallLogServiceImpl extends ServiceImpl<ToolCallLogMapper, ToolC
 
     @Override
     public Page<ToolCallLogVO> queryToolCallLogs(ToolCallLogQueryRequest request) {
+        return queryToolCallLogs(request, null);
+    }
+
+    @Override
+    public Page<ToolCallLogVO> queryToolCallLogs(ToolCallLogQueryRequest request, Long userId) {
         Page<ToolCallLog> page = new Page<>(request.getCurrent(), request.getPageSize());
         LambdaQueryWrapper<ToolCallLog> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(request.getAgentId() != null, ToolCallLog::getAgentId, request.getAgentId())
+        // 非 null 时强制按归属过滤：业务侧不能看到他人工具调用记录
+        wrapper.eq(userId != null, ToolCallLog::getUserId, userId)
+                .eq(request.getAgentId() != null, ToolCallLog::getAgentId, request.getAgentId())
                 .eq(request.getToolId() != null, ToolCallLog::getToolId, request.getToolId())
                 .eq(request.getConversationId() != null, ToolCallLog::getConversationId, request.getConversationId())
                 .eq(request.getStatus() != null, ToolCallLog::getStatus, request.getStatus())

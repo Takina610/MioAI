@@ -24,10 +24,15 @@ import java.util.List;
 public final class ToolsetFactory {
 
     public record RunContext(String chatId, SandboxFs fs, List<ToolCallback> mcpTools,
-                             BackgroundTasks tasks, AgentHooks hooks) {
+                             BackgroundTasks tasks, AgentHooks hooks, String ownerKey) {
 
         public RunContext(String chatId, SandboxFs fs, List<ToolCallback> mcpTools, BackgroundTasks tasks) {
-            this(chatId, fs, mcpTools, tasks, null);
+            this(chatId, fs, mcpTools, tasks, null, null);
+        }
+
+        public RunContext(String chatId, SandboxFs fs, List<ToolCallback> mcpTools, BackgroundTasks tasks,
+                          AgentHooks hooks) {
+            this(chatId, fs, mcpTools, tasks, hooks, null);
         }
     }
 
@@ -68,9 +73,24 @@ public final class ToolsetFactory {
     public ToolRegistry build(String chatId, ConversationState state, List<ToolCallback> mcpTools,
                               List<String> allowedTools, SubagentLauncher launcher, AgentEvents events,
                               AgentHooks hooks) {
+        return build(chatId, state, mcpTools, allowedTools, launcher, events, hooks, null);
+    }
+
+    /**
+     * 组装一次运行的注册表。
+     *
+     * @param allowedTools 工具白名单（null/"*" = 全量；子代理档案传入裁剪清单）
+     * @param launcher     子代理启动器（null = 本运行不注册 Agent 工具）
+     * @param events       引擎事件通道（null = 非交互运行，不注册 AskUserQuestion）
+     * @param hooks        工具调用钩子（null = 无钩子；子代理注册表沿用运行级钩子）
+     * @param ownerKey     轮次归属标识（交互工具据此绑定发起人；null = 不校验）
+     */
+    public ToolRegistry build(String chatId, ConversationState state, List<ToolCallback> mcpTools,
+                              List<String> allowedTools, SubagentLauncher launcher, AgentEvents events,
+                              AgentHooks hooks, String ownerKey) {
         SandboxFs fs = sandboxFs();
         ToolContext context = new ToolContext(chatId, state, ReadFileState.forChat(chatId), fs,
-                BackgroundTasks.instance(), launcher, events);
+                BackgroundTasks.instance(), launcher, events, ownerKey);
         ToolRegistry registry = new ToolRegistry(context, hooks);
         boolean all = allowedTools == null || allowedTools.isEmpty() || allowedTools.contains("*");
 

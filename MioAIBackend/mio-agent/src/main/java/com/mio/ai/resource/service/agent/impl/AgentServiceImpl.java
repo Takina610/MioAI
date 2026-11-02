@@ -122,6 +122,10 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
     @Autowired
     private AgentUserConfigService agentUserConfigService;
 
+    /** STDIO 型 MCP 门禁：回滚恢复覆盖配置时同样校验（与绑定入口一致） */
+    @Autowired
+    private com.mio.ai.resource.service.mcp.McpStdioGuard mcpStdioGuard;
+
     /** 广场 MioBot 槽位署名：发布者用户名 */
     @Autowired
     @org.springframework.context.annotation.Lazy
@@ -264,8 +268,13 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
 
     @Override
     public AgentVO getAgentById(Long id, Long userId) {
+        Agent agent = id == null ? null : this.getById(id);
         AgentVO vo = getAgentById(id);
         applyUserOverride(vo, id, userId);
+        // 系统提示词是私有资产：仅所有者可见（convertToVO 已默认置空，这里按所有者回填）
+        if (agent != null && userId != null && userId.equals(agent.getUserId())) {
+            vo.setSystemPrompt(agent.getSystemPrompt());
+        }
         return vo;
     }
 
@@ -411,6 +420,8 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
     private AgentVO convertToVO(Agent agent) {
         AgentVO vo = new AgentVO();
         BeanUtil.copyProperties(agent, vo, CopyOptions.create().setIgnoreError(true));
+        // 系统提示词默认不外发：广场/列表/他人查询都拿不到，只有所有者场景显式回填
+        vo.setSystemPrompt(null);
         AgentTypeEnum typeEnum = AgentTypeEnum.getByCode(agent.getType());
         vo.setTypeDesc(typeEnum != null ? typeEnum.getDesc() : "未知");
         AgentStatusEnum statusEnum = AgentStatusEnum.getByCode(agent.getStatus());
@@ -424,6 +435,14 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
 
     @Override
     public AgentDetailVO getAgentDetailById(Long id, Long userId) {
+        return getAgentDetailById(id, userId, false);
+    }
+
+    /**
+     * @param includePrompt 管理端场景：无条件返回系统提示词（管理员需审阅/编辑）
+     */
+    @Override
+    public AgentDetailVO getAgentDetailById(Long id, Long userId, boolean includePrompt) {
         if (id == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "智能体ID不能为空");
         }
@@ -440,6 +459,11 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
 
         AgentDetailVO vo = new AgentDetailVO();
         BeanUtil.copyProperties(agent, vo, CopyOptions.create().setIgnoreError(true));
+        // 系统提示词是私有资产：仅所有者（或管理端）可见，其他查看者/游客不返回
+        boolean owner = userId != null && userId.equals(agent.getUserId());
+        if (!owner && !includePrompt) {
+            vo.setSystemPrompt(null);
+        }
         AgentTypeEnum typeEnum = AgentTypeEnum.getByCode(agent.getType());
         vo.setTypeDesc(typeEnum != null ? typeEnum.getDesc() : "未知");
         AgentStatusEnum statusEnum = AgentStatusEnum.getByCode(agent.getStatus());
@@ -515,6 +539,8 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         return mcpList.stream().map(mcp -> {
             McpToolVO mcpVo = new McpToolVO();
             BeanUtil.copyProperties(mcp, mcpVo);
+            // 绑定视图对外展示：配置一律脱敏（避免他人密钥随智能体详情泄露）
+            mcpVo.setConfig(com.mio.ai.framework.mcp.McpConfigMasker.mask(mcp.getConfig()));
             McpToolStatusEnum statusEnum = McpToolStatusEnum.getByCode(mcp.getStatus());
             mcpVo.setStatusDesc(statusEnum != null ? statusEnum.getDesc() : "未知");
             return mcpVo;
@@ -582,7 +608,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
 
         // 资源绑定恢复到版本快照（此后被删除的资源跳过），再以恢复后的状态生成新版本留档
         String bindingsJson = target.getBindingsJson();
-        restoreBindings(agentId, bindingsJson);
+        restoreBindings(agentId, bindingsJson, userId);
         com.mio.ai.resource.model.entity.AgentVersion snapshot =
                 agentVersionService.createSnapshot(agent, bindingsJson, userId, target.getVersion());
         agent.setVersion(snapshot.getVersion());
@@ -708,7 +734,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
     }
 
     /** 回滚时按快照重建资源绑定：整删整插，快照里此后已被删除的资源跳过 */
-    private void restoreBindings(Long agentId, String bindingsJson) {
+    private void restoreBindings(Long agentId, String bindingsJson, Long userId) {
         agentMcpService.deleteByAgentId(agentId);
         agentKnowledgeService.deleteByAgentId(agentId);
         agentSkillService.deleteByAgentId(agentId);
@@ -739,10 +765,23 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
                 if (mcpId == null || mcpToolMapper.selectById(mcpId) == null) {
                     continue;
                 }
+                String configOverride = asString(row.get("configOverride"));
+                // 回滚不新增权限：只拦「把原本非 STDIO 的工具改成 STDIO」；
+                // 存量的 STDIO 绑定照常恢复，否则回滚会让既有工具静默失效
+                if (configOverride != null && !configOverride.isBlank()) {
+                    com.mio.ai.resource.model.entity.McpTool base = mcpToolMapper.selectById(mcpId);
+                    boolean baseIsStdio = base != null && isStdioConfig(base.getConfig());
+                    if (!baseIsStdio && isStdioConfig(configOverride)
+                            && mcpStdioGuard.denyReason(configOverride, userId) != null) {
+                        LOGGER.warn("跳过回滚中把非 STDIO 工具改为 STDIO 的覆盖配置, agentId={}, mcpId={}",
+                                agentId, mcpId);
+                        continue;
+                    }
+                }
                 AgentMcp entity = new AgentMcp();
                 entity.setAgentId(agentId);
                 entity.setMcpId(mcpId);
-                entity.setConfigOverride(asString(row.get("configOverride")));
+                entity.setConfigOverride(configOverride);
                 entity.setEnabled(toInt(row.get("enabled"), 1));
                 agentMcpService.save(entity);
             }
@@ -777,6 +816,29 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
 
     private static String asString(Object raw) {
         return raw == null ? null : String.valueOf(raw);
+    }
+
+    /** 配置是否 STDIO 形态（有 command 且无 url）：回滚门禁用它区分「存量」与「新增越权」 */
+    private static boolean isStdioConfig(String config) {
+        if (config == null || config.isBlank()) {
+            return false;
+        }
+        try {
+            cn.hutool.json.JSONObject root = cn.hutool.json.JSONUtil.parseObj(config);
+            cn.hutool.json.JSONObject servers = root.getJSONObject("mcpServers");
+            if (servers == null || servers.isEmpty()) {
+                return false;
+            }
+            cn.hutool.json.JSONObject server = servers.getJSONObject(servers.keySet().iterator().next());
+            if (server == null) {
+                return false;
+            }
+            String command = server.getStr("command");
+            String url = server.getStr("url");
+            return command != null && !command.isBlank() && (url == null || url.isBlank());
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private Agent checkAgentOwner(Long agentId, Long userId) {

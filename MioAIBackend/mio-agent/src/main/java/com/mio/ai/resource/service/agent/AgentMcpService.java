@@ -19,6 +19,11 @@ public interface AgentMcpService extends IService<AgentMcp> {
     Long addAgentMcp(AgentMcpAddRequest request);
 
     /**
+     * 添加智能体-MCP关联（携带操作者：覆盖配置可能改写 command，需过 STDIO 门禁）
+     */
+    Long addAgentMcp(AgentMcpAddRequest request, Long userId);
+
+    /**
      * 删除智能体-MCP关联
      */
     boolean deleteAgentMcp(Long id);

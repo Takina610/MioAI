@@ -26,8 +26,13 @@ public final class ModelStepRunner {
     private static final long RETRY_BASE_DELAY_MS = 2_000;
     private static final long RETRY_MAX_DELAY_MS = 60_000;
 
-    /** 流式分片间 idle 超时（zcode stream-idle-timeout 对位）：防半开连接把单步挂满整个 callTimeout */
-    private static final Duration STREAM_IDLE_TIMEOUT = Duration.ofSeconds(600);
+    /**
+     * 流式分片间 idle 超时（zcode stream-idle-timeout 对位）：防半开连接把单步挂满整个 callTimeout。
+     * <p>取值 180s 而非 zcode 的 600s：后端在等待期间会占用该用户的一个并发额度
+     * （maxConcurrentPerOwner 默认 3），上游静默挂起时 10 分钟不可用对用户是明显的故障感。
+     * 正常长生成每步都有分片，180s 静默已属异常，交给重试更合适。
+     */
+    private static final Duration STREAM_IDLE_TIMEOUT = Duration.ofSeconds(180);
     /** 每次重试放宽 idle 超时，避免被同一上游的静默窗口反复打断 */
     private static final Duration IDLE_TIMEOUT_RETRY_INCREMENT = Duration.ofSeconds(30);
     /** 空补全重试上限（独立于主重试预算）：上游可能以 HTTP 200 返回零输出流 */
@@ -109,7 +114,27 @@ public final class ModelStepRunner {
                 Prompt prompt = new Prompt(messages, buildOptions(toolCallbacks));
                 Duration idleTimeout = STREAM_IDLE_TIMEOUT.plus(
                         IDLE_TIMEOUT_RETRY_INCREMENT.multipliedBy(attempt - 1L));
-                chatModel.stream(prompt).timeout(idleTimeout).doOnNext(collector::accept).blockLast();
+                // timeout(idle) 只对"已订阅且底层在发信号"的流可靠；上游完全静默（半开连接）时
+                // 仍可能永远不结束。这里再叠加 blockLast 的硬截止（idle 的 2 倍）兜底，
+                // 保证单步一定会返回，不会把轮次线程与并发额度永久占住。
+                try {
+                    chatModel.stream(prompt)
+                            .timeout(idleTimeout)
+                            .doOnNext(collector::accept)
+                            .blockLast(idleTimeout.multipliedBy(2));
+                } catch (IllegalStateException hardTimeout) {
+                    // Reactor 的 blockLast(Duration) 超时抛 IllegalStateException：
+                    // 转成带 TimeoutException cause 的运行时异常，让失败分类识别为可重试的 idle 超时
+                    if (hardTimeout.getMessage() != null
+                            && hardTimeout.getMessage().contains("Timeout on blocking read")) {
+                        java.util.concurrent.TimeoutException translated =
+                                new java.util.concurrent.TimeoutException(
+                                        "stream hard timeout after " + idleTimeout.multipliedBy(2));
+                        translated.initCause(hardTimeout);
+                        throw new RuntimeException("模型流硬超时（上游无任何分片）", translated);
+                    }
+                    throw hardTimeout;
+                }
                 lastStepTextEmitted = collector.hasEmittedText();
                 StepResult result = finishStep(collector, events);
                 // 空补全（零文本+零工具+零用量）：多半是上游静默故障，作废本轮再试一次；

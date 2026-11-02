@@ -148,15 +148,36 @@ public class BotResourceService {
         if (kbIds == null || kbIds.isEmpty()) {
             return KnowledgeBuild.empty();
         }
+        // 归属过滤：只保留当前用户可读取的知识库（本人所有或公开），
+        // 否则可凭他人私有 kbId 直接检索出内容
+        List<Long> readableKbIds = filterReadableKbs(kbIds, userId);
+        if (readableKbIds.isEmpty()) {
+            return KnowledgeBuild.empty();
+        }
         long startTime = System.currentTimeMillis();
         RetrievalOutcome outcome;
         try {
-            outcome = knowledgeRetrievalService.retrieveDetailed(kbIds, query, com.mio.ai.framework.rag.RetrievalConfig.defaults());
+            outcome = knowledgeRetrievalService.retrieveDetailed(readableKbIds, query, com.mio.ai.framework.rag.RetrievalConfig.defaults());
         } catch (Exception e) {
-            log.error("引用知识库检索失败, kbIds={}", kbIds, e);
+            log.error("引用知识库检索失败, kbIds={}", readableKbIds, e);
             return KnowledgeBuild.empty();
         }
         return toKnowledgeBuild(null, userId, query, outcome, startTime, conversationId, model);
+    }
+
+    /** 可读知识库过滤：本人所有 或 is_public=1；查询失败按全部拒绝（失败即关闭） */
+    private List<Long> filterReadableKbs(java.util.Collection<Long> kbIds, Long userId) {
+        try {
+            List<KnowledgeBase> kbs = knowledgeBaseService.listByIds(kbIds);
+            return kbs.stream()
+                    .filter(kb -> Integer.valueOf(1).equals(kb.getIsPublic())
+                            || (userId != null && userId.equals(kb.getUserId())))
+                    .map(KnowledgeBase::getId)
+                    .toList();
+        } catch (Exception e) {
+            log.warn("引用知识库归属查询失败，按无权限处理: {}", e.getMessage());
+            return List.of();
+        }
     }
 
     /** 命中结果 → 注入文本 + 分组摘要 + 检索日志（buildKnowledge/buildKnowledgeForKbs 共用） */

@@ -356,22 +356,31 @@ public final class AgentEngine {
         return events;
     }
 
+    /**
+     * 上下文超限判定：只认上游对「请求上下文过长」的明确表述。
+     * <p>此前用的 "input token"/"token limit"/"length exceeds"/"超过上限" 等宽泛子串会把
+     * 参数校验类 400（如 "invalid input token"、"max_tokens 超过上限"）误判为超限，
+     * 触发一次无用的压缩 + 重发，掩盖真实错误并多花一次摘要调用。因此收紧为
+     * 带上下文语义的完整短语。
+     */
+    private static final String[] CONTEXT_EXCEEDED_MARKERS = {
+            "context length", "context window", "maximum context", "context_length_exceeded",
+            "context window exceed", "prompt is too long", "prompt too long", "prompt_length_exceeded",
+            "input length exceed", "input is too long", "too many tokens",
+            "上下文长度", "上下文过长", "上下文超限", "上下文超出",
+            "内容过长", "输入过长", "超出上下文", "超过上下文", "请求内容过长"
+    };
+
     public static boolean isContextExceeded(Throwable error) {
         Throwable current = error;
         while (current != null) {
             String message = current.getMessage();
             if (message != null) {
                 String lower = message.toLowerCase();
-                if (lower.contains("context length") || lower.contains("context window")
-                        || lower.contains("maximum context") || lower.contains("prompt is too long")
-                        || lower.contains("context_length_exceeded") || lower.contains("prompt too long")
-                        || lower.contains("input length exceed") || lower.contains("length exceeds")
-                        || lower.contains("input token") || lower.contains("token limit")
-                        || lower.contains("超过上限") || lower.contains("超出上限")
-                        || lower.contains("上下文长度") || lower.contains("上下文过长")
-                        || lower.contains("内容过长") || lower.contains("输入过长")
-                        || lower.contains("token超限") || lower.contains("token 超限")) {
-                    return true;
+                for (String marker : CONTEXT_EXCEEDED_MARKERS) {
+                    if (lower.contains(marker)) {
+                        return true;
+                    }
                 }
             }
             current = current.getCause() == current ? null : current.getCause();

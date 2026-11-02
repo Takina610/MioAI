@@ -267,7 +267,48 @@ public class MioBot {
         }
 
         sseEmitter.onTimeout(() -> log.warn("MioBot SSE connection timeout, chatId={}", chatId));
+        // 断连不立即停轮：前端可能只是在跳转/刷新后马上重连（/bot/chat/stream 回放接管）。
+        // 给一个宽限期，期间轮次继续跑并缓冲事件；宽限期满仍无重连才停，避免白占并发额度。
+        sseEmitter.onError(err -> {
+            log.info("MioBot SSE 连接异常, chatId={}: {}", chatId, err.toString());
+            scheduleDisconnectStop();
+        });
+        sseEmitter.onCompletion(() -> {
+            if (channel.isClientGone()) {
+                log.info("MioBot 客户端断开, chatId={}", chatId);
+                scheduleDisconnectStop();
+            }
+        });
         return sseEmitter;
+    }
+
+    /** 断连宽限期：覆盖前端刷新/切页后的重连窗口（重连成功会取消本次停止） */
+    private static final long DISCONNECT_GRACE_MILLIS = 15_000;
+    private volatile java.util.concurrent.ScheduledFuture<?> pendingDisconnectStop;
+
+    /**
+     * 客户端断开后的延迟停止：宽限期内若被断线重连接管（attachReplay）则取消，
+     * 否则停止本轮，避免无人接收时一直等着模型流（最长到 idle timeout）。
+     */
+    private void scheduleDisconnectStop() {
+        if (stopped) {
+            return;
+        }
+        cancelPendingDisconnectStop();
+        pendingDisconnectStop = HEARTBEAT_SCHEDULER.schedule(() -> {
+            if (channel.isClientGone() && !stopped) {
+                log.info("MioBot 断连宽限期已过且未重连，停止本轮, chatId={}", chatId);
+                stop();
+            }
+        }, DISCONNECT_GRACE_MILLIS, TimeUnit.MILLISECONDS);
+    }
+
+    private void cancelPendingDisconnectStop() {
+        java.util.concurrent.ScheduledFuture<?> pending = pendingDisconnectStop;
+        if (pending != null) {
+            pending.cancel(false);
+            pendingDisconnectStop = null;
+        }
     }
 
     private void runTurnTask(String userPrompt, String knowledgeContext, boolean persistUserMessage,
@@ -298,7 +339,8 @@ public class MioBot {
             AgentHooks toolHooks = AgentHooks.chain(List.of(new ToolAuditHook()));
             ToolsetFactory.RunContext runContext = new ToolsetFactory.RunContext(
                     chatId, fs, mcpTools,
-                    com.mio.ai.framework.zagent.task.BackgroundTasks.instance(), toolHooks);
+                    com.mio.ai.framework.zagent.task.BackgroundTasks.instance(), toolHooks,
+                    ownerKey());
             ContextBuilder contextBuilder = new ContextBuilder(
                     customSystemPrompt, knowledgeContext, skillsContext, runContext.fs(), modelName,
                     userId != null ? agentId : null);
@@ -329,7 +371,8 @@ public class MioBot {
                         groupCoordinator != null ? new GroupMemberPresenter() : null, memberUsageListener);
                 // 群聊：成员委派以平等消息块呈现，Agent 工具行不进主消息流
                 channel.setSuppressAgentToolRows(groupCoordinator != null);
-                registry = toolsetFactory.build(chatId, state, mcpTools, null, launcher, events, toolHooks);
+                registry = toolsetFactory.build(chatId, state, mcpTools, null, launcher, events, toolHooks,
+                        ownerKey());
                 // 动态 UI 块工具：仅主轮次注册（子代理注册表不含），校验通过的块经通道下发/落库；
                 // 图片块按本会话 image_search 登记簿核对 url（防伪造）并回填来源元数据
                 registry.register(UiRenderTool.entry(channel,
@@ -418,6 +461,8 @@ public class MioBot {
     /** 断线重连：把新连接挂到事件通道上，回放 lastSeq 之后的事件并续播直播 */
     public void attachReplay(SseEmitter emitter, long lastSeq) {
         channel.attachReplay(emitter, lastSeq);
+        // 重连接管成功：取消断连宽限期内的停止动作，轮次继续跑
+        cancelPendingDisconnectStop();
     }
 
     /** 重连回放是否已对本轮停用（缓冲超上限） */
@@ -814,6 +859,18 @@ public class MioBot {
 
     public void setOnFinish(Runnable onFinish) {
         this.onFinish = onFinish;
+    }
+
+    /** 本轮归属标识（控制器注入："u:&lt;id&gt;"/"guest:&lt;ip&gt;"，与 ACTIVE_CHATS 口径一致）：
+     *  供 AskUserQuestion 把待答问题绑定到发起人，防止他人凭 chatId 代答 */
+    private volatile String ownerKey;
+
+    public void setOwnerKey(String ownerKey) {
+        this.ownerKey = ownerKey;
+    }
+
+    private String ownerKey() {
+        return ownerKey;
     }
 
     private Long parseConversationId() {

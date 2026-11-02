@@ -21,6 +21,11 @@ public final class ToolContext {
     public final SubagentLauncher subagents;
     /** 引擎事件通道（问答 UI 推送用）；子代理为 null */
     public final AgentEvents events;
+    /**
+     * 轮次归属标识（"u:&lt;id&gt;"/"guest:&lt;ip&gt;"，子代理为 null）：
+     * 交互工具（如 AskUserQuestion）据此把待答问题绑定到发起人，防止他人代答。
+     */
+    public final String ownerKey;
 
     public ToolContext(String chatId, ConversationState state, ReadFileState readFileState,
                        SandboxFs fs, BackgroundTasks tasks, SubagentLauncher subagents) {
@@ -30,6 +35,12 @@ public final class ToolContext {
     public ToolContext(String chatId, ConversationState state, ReadFileState readFileState,
                        SandboxFs fs, BackgroundTasks tasks, SubagentLauncher subagents,
                        AgentEvents events) {
+        this(chatId, state, readFileState, fs, tasks, subagents, events, null);
+    }
+
+    public ToolContext(String chatId, ConversationState state, ReadFileState readFileState,
+                       SandboxFs fs, BackgroundTasks tasks, SubagentLauncher subagents,
+                       AgentEvents events, String ownerKey) {
         this.chatId = chatId;
         this.state = state;
         this.readFileState = readFileState;
@@ -37,5 +48,6 @@ public final class ToolContext {
         this.tasks = tasks;
         this.subagents = subagents;
         this.events = events;
+        this.ownerKey = ownerKey;
     }
 }

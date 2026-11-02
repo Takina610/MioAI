@@ -60,6 +60,24 @@ public class ChatFileServiceImpl implements ChatFileService {
     }
 
     @Override
+    public boolean markPendingByPath(String path, Long userId) {
+        List<ChatFileDO> rows = chatFileMapper.selectList(
+                new QueryWrapper<ChatFileDO>().eq("path", path));
+        if (rows.isEmpty()) {
+            // 历史未登记文件：无归属可判，放行（与旧语义一致）
+            return true;
+        }
+        // 存在归属他人的行即拒绝；未登记用户的历史行（userId 为空）按无主处理
+        boolean anyForeign = rows.stream()
+                .anyMatch(row -> row.getUserId() != null && !row.getUserId().equals(userId));
+        if (anyForeign) {
+            return false;
+        }
+        updateStatus(new UpdateWrapper<ChatFileDO>().eq("path", path));
+        return true;
+    }
+
+    @Override
     public void markPendingByConversation(String conversationId) {
         updateStatus(new UpdateWrapper<ChatFileDO>().eq("conversation_id", conversationId));
     }
@@ -85,5 +103,20 @@ public class ChatFileServiceImpl implements ChatFileService {
                 .eq("status", STATUS_PENDING_DELETE)
                 .orderByAsc("id")
                 .last("LIMIT " + limit));
+    }
+
+    @Override
+    public Long findOwnerByPath(String path) {
+        if (path == null || path.isBlank()) {
+            return null;
+        }
+        List<ChatFileDO> rows = chatFileMapper.selectList(
+                new QueryWrapper<ChatFileDO>().eq("path", path));
+        // 同一路径理论唯一（随机前缀）；取任一有归属的行
+        return rows.stream()
+                .map(ChatFileDO::getUserId)
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 }

@@ -112,6 +112,8 @@ public class McpAdminController {
         List<McpToolVO> voList = mcpPage.getRecords().stream().map(mcp -> {
             McpToolVO vo = new McpToolVO();
             BeanUtil.copyProperties(mcp, vo);
+            // 分页列表脱敏：密钥不随列表批量下发；完整配置走详情接口（管理员审阅）
+            vo.setConfig(com.mio.ai.framework.mcp.McpConfigMasker.mask(mcp.getConfig()));
             McpToolStatusEnum statusEnum = McpToolStatusEnum.getByCode(mcp.getStatus());
             vo.setStatusDesc(statusEnum != null ? statusEnum.getDesc() : "未知");
             vo.setUserName(ownerNames.get(mcp.getUserId()));
@@ -122,14 +124,15 @@ public class McpAdminController {
     }
 
     /**
-     * 根据 id 获取 MCP 工具详情
+     * 根据 id 获取 MCP 工具详情（管理端审阅：返回原始配置供核查/排障）
      */
     @GetMapping("/{id}")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     @LogInfo
-    public BaseResponse<McpToolVO> getMcpById(@PathVariable Long id) {
+    public BaseResponse<McpToolVO> getMcpById(@PathVariable Long id, HttpServletRequest httpRequest) {
         ThrowUtils.throwIf(id == null || id <= 0, ErrorCode.PARAMS_ERROR, "MCP 工具 id 不合法");
-        McpToolVO vo = mcpToolService.getMcpToolById(id);
+        Long adminUserId = redisComponent.getUserIdNullable(httpRequest.getHeader("token"));
+        McpToolVO vo = mcpToolService.getMcpToolById(id, adminUserId, true);
         return ResultUtils.success(vo);
     }
 
@@ -160,7 +163,10 @@ public class McpAdminController {
             update.setIsPublic(request.getIsPublic());
         }
         if (request.getConfig() != null) {
-            update.setConfig(request.getConfig());
+            // 列表/详情回传的可能是脱敏配置：含掩码则视为未修改，避免把 *** 覆盖成真实密钥
+            if (!com.mio.ai.framework.mcp.McpConfigMasker.isMasked(request.getConfig())) {
+                update.setConfig(request.getConfig());
+            }
         }
         if (request.getToolInfo() != null) {
             update.setToolInfo(request.getToolInfo());

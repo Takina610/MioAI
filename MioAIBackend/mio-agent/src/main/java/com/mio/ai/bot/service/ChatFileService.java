@@ -27,6 +27,12 @@ public interface ChatFileService {
     /** 撤回单个附件：置待删（行不存在视作成功，兼容历史未登记文件） */
     void markPendingByPath(String path);
 
+    /**
+     * 撤回单个附件（带归属）：仅当台账行归属调用方时置待删。
+     * 行不存在仍返回 true（历史未登记文件）；归属他人返回 false 且不改动。
+     */
+    boolean markPendingByPath(String path, Long userId);
+
     /** 删除会话：该会话全部登记行置待删 */
     void markPendingByConversation(String conversationId);
 
@@ -38,4 +44,12 @@ public interface ChatFileService {
 
     /** 待删行快照（兜底扫描重入队用），按 id 升序限量 */
     List<ChatFileDO> listPending(int limit);
+
+    /**
+     * 按路径查台账归属者（下载/删除的归属兜底判定）。
+     * 会话行不存在时靠它识别"这是谁上传的"，避免暂存文件对所有人生效。
+     *
+     * @return 上传者 id；未登记或登记时无用户（游客）返回 null
+     */
+    Long findOwnerByPath(String path);
 }

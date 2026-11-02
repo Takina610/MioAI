@@ -106,7 +106,7 @@ import MioMessage from '@/utils/message'
 import { formatDateTime } from '@/utils/format'
 import { countMcpTools } from '@/utils/mcpTool'
 import { useAdminTable } from '@/composables/admin/useAdminTable'
-import { deleteMcpTool, searchMcpTools, updateMcpTool } from '@/api/adminMcp'
+import { deleteMcpTool, getMcpToolById, searchMcpTools, updateMcpTool } from '@/api/adminMcp'
 import type { McpTool, McpToolQueryRequest } from '@/types/mcpTool'
 import RecordDrawer from './RecordDrawer.vue'
 
@@ -157,16 +157,28 @@ const drawerOpen = ref(false)
 const drawerMode = ref<'detail' | 'form'>('form')
 const activeRecord = ref<McpTool | null>(null)
 
-function openDetail(record: McpTool) {
-  drawerMode.value = 'detail'
+/**
+ * 列表接口已脱敏（config 中的密钥被掩码），详情/编辑前按 id 拉一次完整记录，
+ * 否则编辑页会把 *** 当成真实配置保存回去。
+ */
+async function openWithFullRecord(record: McpTool, mode: 'detail' | 'form'): Promise<void> {
+  drawerMode.value = mode
   activeRecord.value = record
   drawerOpen.value = true
+  try {
+    const full = await getMcpToolById(record.id)
+    if (full) activeRecord.value = full
+  } catch {
+    // 拉取失败时保持列表行（脱敏态），不阻断抽屉打开
+  }
 }
 
-function openEdit(record: McpTool) {
-  drawerMode.value = 'form'
-  activeRecord.value = record
-  drawerOpen.value = true
+function openDetail(record: McpTool): void {
+  void openWithFullRecord(record, 'detail')
+}
+
+function openEdit(record: McpTool): void {
+  void openWithFullRecord(record, 'form')
 }
 
 function openCreate() {

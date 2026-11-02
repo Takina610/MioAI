@@ -68,4 +68,20 @@ public class ChatRateLimiter {
             return true;
         }
     }
+
+    /**
+     * 退还一次游客配额（本轮未真正开始：限流/并发/占用冲突/无权/装配失败等）。
+     * 计数下限钳到 0，避免异常序列把额度退成负数；Redis 异常静默，不影响主流程。
+     */
+    public void refundGuestTurn(String ownerKey) {
+        String key = "mio:chat-guest-turns:" + ownerKey;
+        try {
+            Long remaining = stringRedisTemplate.opsForValue().decrement(key);
+            if (remaining != null && remaining < 0) {
+                stringRedisTemplate.opsForValue().set(key, "0", Duration.ofDays(30));
+            }
+        } catch (Exception e) {
+            log.warn("游客配额退还异常: {}, {}", ownerKey, e.getMessage());
+        }
+    }
 }

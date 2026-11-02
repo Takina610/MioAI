@@ -132,12 +132,12 @@ public class AgentController {
     }
 
     @GetMapping("/{id:\\d+}")
-    @Cacheable(value = "agents", key = "#id")
     public BaseResponse<AgentVO> getAgent(@PathVariable Long id, HttpServletRequest httpRequest) {
-        // 游客也可读取内置/公开已发布的智能体（chat 页未登录可见）
+        // 结果随查看者变化（内置智能体合并个性化覆盖），且 systemPrompt 属私有资产：
+        // 不能走全局缓存，否则首个访问者的个性化配置会泄漏给所有人
         Long userId = redisComponent.getUserIdNullable(httpRequest.getHeader("token"));
         accessGuardService.checkAgentReadable(id, userId);
-        AgentVO agent = agentService.getAgentById(id);
+        AgentVO agent = agentService.getAgentById(id, userId);
         return ResultUtils.success(agent);
     }
 

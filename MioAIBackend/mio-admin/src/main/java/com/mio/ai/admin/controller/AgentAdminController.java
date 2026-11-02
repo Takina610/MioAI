@@ -157,7 +157,7 @@ public class AgentAdminController {
     @LogInfo
     public BaseResponse<AgentDetailVO> getAgentDetail(@PathVariable Long id) {
         ThrowUtils.throwIf(id == null || id <= 0, ErrorCode.PARAMS_ERROR, "智能体 id 不合法");
-        AgentDetailVO detail = agentService.getAgentDetailById(id, null);
+        AgentDetailVO detail = agentService.getAgentDetailById(id, null, true);
         return ResultUtils.success(detail);
     }
 

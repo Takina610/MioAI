@@ -61,13 +61,12 @@ public final class ConversationCompactor {
      */
     public String compact(ConversationState state) {
         List<ConversationEntry> entries = state.entries();
-        if (entries.size() <= KEEP_TAIL_ENTRIES + 2) {
+        int splitAt = tailStartIndex(entries);
+        if (splitAt <= 0) {
             return null;
         }
-        List<ConversationEntry> toSummarize =
-                new ArrayList<>(entries.subList(0, entries.size() - KEEP_TAIL_ENTRIES));
-        List<ConversationEntry> tail =
-                new ArrayList<>(entries.subList(entries.size() - KEEP_TAIL_ENTRIES, entries.size()));
+        List<ConversationEntry> toSummarize = new ArrayList<>(entries.subList(0, splitAt));
+        List<ConversationEntry> tail = new ArrayList<>(entries.subList(splitAt, entries.size()));
         String summary = requestSummary(toSummarize);
         if (summary == null || summary.isBlank()) {
             consecutiveCompactFailures++;
@@ -80,6 +79,30 @@ public final class ConversationCompactor {
         replacement.addAll(tail);
         state.replaceAll(replacement);
         return summary;
+    }
+
+    /**
+     * 压缩切点：目标是从尾部保留至多 KEEP_TAIL_ENTRIES 条，但切点不能落在
+     * 「工具结果」上——否则它的 assistant tool_call 被摘要吞掉，投影后成了没有
+     * 前置 assistant 的孤立 tool 消息，OpenAI 兼容端点直接 400（压缩一次会话即失效）。
+     * <p>处理方式是<b>向前回退</b>到拥有这些工具结果的那条 assistant，把调用与结果
+     * 一起留在保留段。不能向后跳过：尾部若是一长串工具结果（如并发工具调用后中断），
+     * 向后会一路走到末尾，压缩永远不触发，长会话必然撞上下文上限。
+     *
+     * @return 尾部起点下标；<=0 表示不值得压缩（内容过少或无法形成合法切点）
+     */
+    private int tailStartIndex(List<ConversationEntry> entries) {
+        int splitAt = Math.max(0, entries.size() - KEEP_TAIL_ENTRIES);
+        // 向前回退：跳过尾部的 TOOL 条目，落在其 assistant 调用（或 user/reminder）上
+        while (splitAt > 0 && splitAt < entries.size()
+                && entries.get(splitAt).kind == ConversationEntry.Kind.TOOL) {
+            splitAt--;
+        }
+        // 退到 0 说明整段都是工具相关条目，没有可摘要的对话内容
+        if (splitAt <= 0 || splitAt >= entries.size()) {
+            return -1;
+        }
+        return splitAt;
     }
 
     /** 微压缩：久远的大体积工具结果截头保留（模型步间调用，便宜且无模型开销） */

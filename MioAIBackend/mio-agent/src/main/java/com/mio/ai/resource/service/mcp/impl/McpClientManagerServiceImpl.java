@@ -46,7 +46,14 @@ public class McpClientManagerServiceImpl implements McpClientManagerService {
     @Autowired
     private McpClientFactory mcpClientFactory;
 
-    private final ConcurrentHashMap<Long, McpClientFactory.McpClientHandle> clientCache = new ConcurrentHashMap<>();
+    @Autowired
+    private com.mio.ai.resource.service.mcp.McpStdioGuard mcpStdioGuard;
+
+    /** 缓存键为 "mcpId|配置指纹"（字符串），同一 MCP 的不同覆盖配置各占一项 */
+    private final ConcurrentHashMap<String, McpClientFactory.McpClientHandle> clientCache = new ConcurrentHashMap<>();
+
+    /** 缓存上限：超过整体清空重建，避免配置频繁变更导致连接无限累积 */
+    private static final int CLIENT_CACHE_MAX = 64;
 
     @Override
     public List<McpTool> getAgentMcpTools(Long agentId) {
@@ -81,6 +88,16 @@ public class McpClientManagerServiceImpl implements McpClientManagerService {
         return result;
     }
 
+    /** 配置节点是否为 STDIO（含 command 且 URL 为空） */
+    static boolean isStdio(JSONObject server) {
+        if (server == null) {
+            return false;
+        }
+        String command = server.getStr("command");
+        String url = server.getStr("url");
+        return command != null && !command.isBlank() && (url == null || url.isBlank());
+    }
+
     /**
      * 将绑定上的覆盖配置合并进 MCP 工具的原始配置。
      * 按 mcpServers 下同名（或第一个）服务节点合并：env 按键覆盖、args/url/command 存在则整体替换。
@@ -113,6 +130,16 @@ public class McpClientManagerServiceImpl implements McpClientManagerService {
             }
             for (String key : List.of("args", "url", "command")) {
                 if (overrideServer.containsKey(key)) {
+                    // STDIO 门禁：禁止用覆盖配置把「原本不是 STDIO」的工具改成执行本地命令
+                    // （这正是绕过创建/绑定入口校验注入 RCE 的路径）。
+                    // 原本就是 STDIO 的配置不受影响，避免让存量工具失效。
+                    if ("command".equals(key) && !isStdio(baseServer)) {
+                        String denyReason = mcpStdioGuard.denyReason(override.toString(), null);
+                        if (denyReason != null) {
+                            log.warn("绑定覆盖配置试图把 HTTP 型 MCP 改为 STDIO，已拒绝: {}", serverName);
+                            return baseConfig;
+                        }
+                    }
                     baseServer.set(key, overrideServer.get(key));
                 }
             }
@@ -157,32 +184,35 @@ public class McpClientManagerServiceImpl implements McpClientManagerService {
         Set<String> usedNames = new HashSet<>();
 
         for (McpTool mcpTool : mcpTools) {
+            String cacheKey = cacheKeyOf(mcpTool);
             try {
-                // 复用缓存的客户端，避免每次对话都新建连接（旧实现每次 put 覆盖且不 close，造成进程/连接泄漏）
-                McpClientFactory.McpClientHandle handle = clientCache.get(mcpTool.getId());
+                // 复用缓存的客户端，避免每次对话都新建连接（旧实现每次 put 覆盖且不 close，造成进程/连接泄漏）。
+                // 缓存键含配置指纹：绑定级 configOverride 合并后会改变端点/密钥/命令，
+                // 只按 mcpId 缓存会让后绑定者拿到前一个的客户端（配置不生效且可能用错凭证）
+                McpClientFactory.McpClientHandle handle = clientCache.get(cacheKey);
                 if (handle == null) {
                     handle = createHandle(mcpTool);
                     if (handle == null) {
                         failures.add(mcpTool.getName() + "：配置无效");
                         continue;
                     }
-                    clientCache.put(mcpTool.getId(), handle);
+                    cacheHandle(cacheKey, handle);
                 }
                 allCallbacks.addAll(buildCallbacks(mcpTool, handle, usedNames));
                 log.info("成功初始化MCP工具: {} - {}", mcpTool.getName(), mcpTool.getId());
             } catch (Exception e) {
                 // 缓存的客户端可能已失效（服务端重启等）：关闭并重建一次
-                closeQuietly(clientCache.remove(mcpTool.getId()));
+                closeQuietly(clientCache.remove(cacheKey));
                 try {
                     McpClientFactory.McpClientHandle recreated = createHandle(mcpTool);
                     if (recreated != null) {
-                        clientCache.put(mcpTool.getId(), recreated);
+                        cacheHandle(cacheKey, recreated);
                         allCallbacks.addAll(buildCallbacks(mcpTool, recreated, usedNames));
                         log.info("重建MCP客户端成功: {} - {}", mcpTool.getName(), mcpTool.getId());
                         continue;
                     }
                 } catch (Exception retryError) {
-                    closeQuietly(clientCache.remove(mcpTool.getId()));
+                    closeQuietly(clientCache.remove(cacheKey));
                 }
                 log.error("初始化MCP工具失败: {} - {}", mcpTool.getName(), mcpTool.getId(), e);
                 failures.add(mcpTool.getName() + "：" + shortReason(e));
@@ -192,14 +222,69 @@ public class McpClientManagerServiceImpl implements McpClientManagerService {
         return new McpInitResult(allCallbacks.toArray(new ToolCallback[0]), List.copyOf(failures));
     }
 
-    /** 失败原因摘要：取首行、截断，供会话内提示（完整堆栈只在日志） */
-    private static String shortReason(Exception e) {
-        String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-        int newline = msg.indexOf('\n');
-        if (newline > 0) {
-            msg = msg.substring(0, newline);
+    /** 缓存键：mcpId + 生效配置指纹（同一 MCP 在不同智能体上覆盖成不同端点时互不串用） */
+    private static String cacheKeyOf(McpTool mcpTool) {
+        String config = mcpTool.getConfig() == null ? "" : mcpTool.getConfig();
+        return mcpTool.getId() + "|" + Integer.toHexString(config.hashCode());
+    }
+
+    /** 缓存客户端；超过上限整体清空重建（供应商配置编辑后旧实例靠此淘汰） */
+    private void cacheHandle(String cacheKey, McpClientFactory.McpClientHandle handle) {
+        if (clientCache.size() >= CLIENT_CACHE_MAX) {
+            closeAllClients();
         }
-        return msg.length() > 120 ? msg.substring(0, 120) + "..." : msg;
+        McpClientFactory.McpClientHandle previous = clientCache.put(cacheKey, handle);
+        if (previous != null && previous != handle) {
+            closeQuietly(previous);
+        }
+    }
+
+    /** 失败原因摘要：取首行、截断，供会话内提示（完整堆栈只在日志） */
+    /**
+     * 失败原因的用户可读描述：MCP SDK 的原文（如 "Client failed to initialize by explicit API call"）
+     * 对用户没有指导意义——这里按失败类型归类成中文原因，完整信息仍留在日志。
+     */
+    static String shortReason(Exception e) {
+        String raw = e.getMessage() == null ? "" : e.getMessage();
+        String lower = raw.toLowerCase();
+        // 连接类
+        if (lower.contains("timed out") || lower.contains("timeout")) {
+            return "连接超时，服务未响应";
+        }
+        if (lower.contains("connection refused") || lower.contains("connectException".toLowerCase())) {
+            return "连接被拒绝，服务可能未启动";
+        }
+        if (lower.contains("unknownhost") || lower.contains("unknown host")
+                || lower.contains("nodename nor servname")) {
+            return "域名解析失败，请检查地址";
+        }
+        if (lower.contains("ssl") || lower.contains("certificate") || lower.contains("handshake")) {
+            return "TLS 握手失败，证书或协议不兼容";
+        }
+        // 认证类
+        if (lower.contains("401") || lower.contains("unauthorized") || lower.contains("invalid token")) {
+            return "认证失败，请检查访问令牌";
+        }
+        if (lower.contains("403") || lower.contains("forbidden")) {
+            return "无权访问该服务";
+        }
+        if (lower.contains("404")) {
+            return "接口路径不存在，请检查 MCP 地址";
+        }
+        // 协议/握手类
+        if (lower.contains("initialize") || lower.contains("initialize by explicit api call")) {
+            return "握手失败，对方可能不是可用的 MCP 服务";
+        }
+        if (lower.contains("parse") || lower.contains("json") || lower.contains("schema")) {
+            return "响应格式无法解析，对方可能不是标准 MCP 服务";
+        }
+        // 兜底：保留首行截断，避免整段 SDK 文本刷屏
+        int newline = raw.indexOf('\n');
+        String first = newline > 0 ? raw.substring(0, newline) : raw;
+        if (first.isBlank()) {
+            return "初始化失败（" + e.getClass().getSimpleName() + "）";
+        }
+        return first.length() > 80 ? first.substring(0, 80) + "..." : first;
     }
 
     /**
@@ -253,7 +338,15 @@ public class McpClientManagerServiceImpl implements McpClientManagerService {
         if (mcpId == null) {
             return;
         }
-        closeQuietly(clientCache.remove(mcpId));
+        // 缓存键带配置指纹：删除该 MCP 的全部派生实例（含各智能体覆盖配置的）
+        String prefix = mcpId + "|";
+        clientCache.keySet().removeIf(key -> {
+            if (!key.startsWith(prefix)) {
+                return false;
+            }
+            closeQuietly(clientCache.get(key));
+            return true;
+        });
     }
 
     private void closeQuietly(McpClientFactory.McpClientHandle handle) {
@@ -301,7 +394,7 @@ public class McpClientManagerServiceImpl implements McpClientManagerService {
 
     @Override
     public void closeAllClients() {
-        for (Map.Entry<Long, McpClientFactory.McpClientHandle> entry : clientCache.entrySet()) {
+        for (Map.Entry<String, McpClientFactory.McpClientHandle> entry : clientCache.entrySet()) {
             try {
                 entry.getValue().close();
                 log.info("关闭MCP客户端: {}", entry.getKey());

@@ -144,11 +144,8 @@ public class UserActivityLogAspect {
         return attrs != null ? attrs.getRequest() : null;
     }
 
+    /** 审计日志的客户端 IP：与游客归属同一解析（只在受信代理后采信转发头） */
     private String resolveIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
+        return com.mio.ai.common.utils.ClientIpResolver.resolve(request);
     }
 }

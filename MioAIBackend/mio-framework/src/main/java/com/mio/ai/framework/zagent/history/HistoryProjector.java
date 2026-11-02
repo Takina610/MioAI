@@ -35,11 +35,19 @@ public final class HistoryProjector {
     /** zcode TOOL_RESULT_MEDIA_INTRO_PREFIX */
     private static final String TOOL_RESULT_MEDIA_INTRO_PREFIX = "Tool result media from";
 
+    /** 单张媒体上限（解码后字节）：约 1.4MB base64，覆盖常规截图/缩略图 */
+    static final int MAX_MEDIA_BYTES_PER_ITEM = 1024 * 1024;
+    /** 单次投影的媒体总量上限：防止多张大图叠加把上下文撑爆 */
+    static final int MAX_MEDIA_BYTES_TOTAL = 3 * 1024 * 1024;
+
     public static List<Message> project(List<Message> systemPrefix, List<ConversationEntry> entries) {
         List<Message> messages = new ArrayList<>(systemPrefix);
         List<ToolResponseMessage.ToolResponse> pendingToolResults = new ArrayList<>();
         List<ToolMedia> pendingMedia = new ArrayList<>();
         Set<String> mediaToolNames = new LinkedHashSet<>();
+        // 尚未被任何 assistant tool_call 声明的 tool 结果：提供方要求逐个配对，
+        // 孤立结果（压缩/截断/水合边界产生）会让整个请求被 400，这里直接丢弃
+        Set<String> declaredToolCallIds = new LinkedHashSet<>();
         for (ConversationEntry entry : entries) {
             switch (entry.kind) {
                 case USER -> {
@@ -62,9 +70,10 @@ public final class HistoryProjector {
                     } else {
                         List<AssistantMessage.ToolCall> calls = new ArrayList<>();
                         for (ToolCallInput input : entry.toolCalls) {
-                            calls.add(new AssistantMessage.ToolCall(
-                                    input.id() == null ? "" : input.id(), "function",
+                            String id = input.id() == null ? "" : input.id();
+                            calls.add(new AssistantMessage.ToolCall(id, "function",
                                     input.name(), input.arguments() == null ? "{}" : input.arguments()));
+                            declaredToolCallIds.add(id);
                         }
                         messages.add(AssistantMessage.builder()
                                 .content(entry.text == null ? "" : entry.text)
@@ -73,6 +82,10 @@ public final class HistoryProjector {
                     }
                 }
                 case TOOL -> {
+                    if (!declaredToolCallIds.contains(entry.toolCallId)) {
+                        // 无对应 assistant 调用的孤立工具结果：丢弃，避免上游 400
+                        continue;
+                    }
                     pendingToolResults.add(new ToolResponseMessage.ToolResponse(
                             entry.toolCallId, entry.toolName, entry.content == null ? "" : entry.content));
                     if (entry.media != null && !entry.media.isEmpty()) {
@@ -102,13 +115,40 @@ public final class HistoryProjector {
         if (!pendingMedia.isEmpty()) {
             String intro = TOOL_RESULT_MEDIA_INTRO_PREFIX + " " + String.join(", ", mediaToolNames) + ":";
             List<Media> parts = new ArrayList<>(pendingMedia.size());
+            long totalBytes = 0;
+            int skipped = 0;
             for (ToolMedia m : pendingMedia) {
-                parts.add(Media.builder()
-                        .mimeType(MimeType.valueOf(m.mimeType()))
-                        .data(Base64.getDecoder().decode(m.base64()))
-                        .build());
+                // 体积上限：媒体会随历史进入后续每一次请求（压缩也会重发），
+                // 不设限时几张原图就能把上下文撑爆、请求必然超限
+                String base64 = m.base64();
+                if (base64 == null || base64.isBlank()) {
+                    skipped++;
+                    continue;
+                }
+                long estimated = (long) base64.length() * 3 / 4;
+                if (estimated > MAX_MEDIA_BYTES_PER_ITEM
+                        || totalBytes + estimated > MAX_MEDIA_BYTES_TOTAL) {
+                    skipped++;
+                    continue;
+                }
+                try {
+                    byte[] data = Base64.getDecoder().decode(base64);
+                    parts.add(Media.builder()
+                            .mimeType(MimeType.valueOf(m.mimeType()))
+                            .data(data)
+                            .build());
+                    totalBytes += data.length;
+                } catch (Exception malformed) {
+                    // 非法 base64：跳过该张，不影响其余媒体
+                    skipped++;
+                }
             }
-            messages.add(UserMessage.builder().text(intro).media(parts).build());
+            if (skipped > 0) {
+                intro += " (" + skipped + " media item(s) omitted: malformed or exceeds size limit)";
+            }
+            if (!parts.isEmpty()) {
+                messages.add(UserMessage.builder().text(intro).media(parts).build());
+            }
             pendingMedia.clear();
             mediaToolNames.clear();
         }

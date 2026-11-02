@@ -43,7 +43,7 @@ public class AgentMcpController {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         accessGuardService.checkAgentOwner(request.getAgentId(), userId);
         accessGuardService.checkMcpReadable(request.getMcpId(), userId);
-        Long id = agentMcpService.addAgentMcp(request);
+        Long id = agentMcpService.addAgentMcp(request, userId);
         return ResultUtils.success(id);
     }
 

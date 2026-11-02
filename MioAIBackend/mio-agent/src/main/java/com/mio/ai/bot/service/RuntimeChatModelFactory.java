@@ -47,8 +47,25 @@ public class RuntimeChatModelFactory {
     private final ObservationRegistry observationRegistry;
     private final MeterRegistry meterRegistry;
 
-    /** key = 端点|api-key|api格式|模型 */
-    private final ConcurrentHashMap<String, ChatModel> cache = new ConcurrentHashMap<>();
+    /**
+     * key = 端点|api-key|api格式|模型；value 同时持有可关闭的底层客户端。
+     * <p>OpenAiChatModel 不暴露 close，但工厂自建的 OpenAIClient 持有连接池与调度线程——
+     * 淘汰时不关就会长跑泄漏（旧实现 cache.clear() 直接丢弃引用）。
+     */
+    private final ConcurrentHashMap<String, CachedEntry> cache = new ConcurrentHashMap<>();
+
+    /** 一条缓存：ChatModel + 其底层资源的关闭动作（可能是多个） */
+    private record CachedEntry(ChatModel model, List<Runnable> closers) {
+        void close() {
+            for (Runnable closer : closers) {
+                try {
+                    closer.run();
+                } catch (Exception ignored) {
+                    // 关闭失败不影响淘汰流程
+                }
+            }
+        }
+    }
 
     public RuntimeChatModelFactory(ChatModel defaultChatModel,
                                    @Value("${spring.ai.openai.base-url}") String proxyBaseUrl,
@@ -98,6 +115,12 @@ public class RuntimeChatModelFactory {
             if (endpoint == null || endpoint.baseUrl() == null || endpoint.baseUrl().isBlank()) {
                 return new Resolved(defaultChatModel, engineModel);
             }
+            // 自定义端点由后端代为请求：只允许公网 http(s)，否则可把模型调用指向内网
+            // （错误信息会回显内网响应，构成 SSRF）。非公网地址回退默认模型继续对话
+            if (!com.mio.ai.common.utils.OutboundUrlGuard.isPublicHttpUrl(endpoint.baseUrl())) {
+                log.warn("自定义模型端点不是公网地址，回退引擎默认模型: {}", endpoint.baseUrl());
+                return new Resolved(defaultChatModel, engineModel);
+            }
             endpointBaseUrl = endpoint.baseUrl();
             endpointApiKey = endpoint.apiKey() == null ? "" : endpoint.apiKey();
             apiFormat = endpoint.apiFormat() == null || endpoint.apiFormat().isBlank()
@@ -109,11 +132,11 @@ public class RuntimeChatModelFactory {
         }
         String modelName = model == null ? engineModel : model;
         String key = endpointBaseUrl + "|" + endpointApiKey + "|" + apiFormat + "|" + modelName;
-        ChatModel cached = cache.get(key);
+        CachedEntry cached = cache.get(key);
         if (cached != null) {
-            return new Resolved(cached, modelName);
+            return new Resolved(cached.model(), modelName);
         }
-        ChatModel built;
+        CachedEntry built;
         try {
             built = build(endpointBaseUrl, endpointApiKey, apiFormat, modelName);
         } catch (com.mio.ai.common.exception.BusinessException e) {
@@ -127,25 +150,56 @@ public class RuntimeChatModelFactory {
                     com.mio.ai.common.exception.ErrorCode.SYSTEM_ERROR, "模型端点不可用，已回退默认模型");
         }
         if (cache.size() >= CACHE_MAX) {
-            cache.clear();
+            // 只淘汰一个最旧条目：整体清空会关掉其他并发请求正在使用的客户端
+            evictOldest();
         }
-        cache.put(key, built);
-        return new Resolved(built, modelName);
+        CachedEntry previous = cache.put(key, built);
+        if (previous != null) {
+            previous.close();
+        }
+        return new Resolved(built.model(), modelName);
     }
 
-    private ChatModel build(String endpointBaseUrl, String endpointApiKey, String apiFormat, String modelName) {
+    /** 淘汰最旧的缓存条目（ConcurrentHashMap 迭代序不保证 LRU，取任意一个即可满足上限） */
+    private void evictOldest() {
+        for (String key : cache.keySet()) {
+            CachedEntry removed = cache.remove(key);
+            if (removed != null) {
+                removed.close();
+                return;
+            }
+        }
+    }
+
+    /** 清空缓存并关闭全部底层客户端（进程收尾用；运行期不要调用） */
+    public void evictAll() {
+        cache.values().forEach(CachedEntry::close);
+        cache.clear();
+    }
+
+    /** 容器关闭时释放全部连接池与调度线程 */
+    @jakarta.annotation.PreDestroy
+    public void shutdown() {
+        evictAll();
+    }
+
+    private CachedEntry build(String endpointBaseUrl, String endpointApiKey, String apiFormat, String modelName) {
         return switch (apiFormat) {
-            case "anthropic" -> new com.mio.ai.framework.zagent.vendor.AnthropicChatModel(
-                    endpointBaseUrl, endpointApiKey, modelName);
-            case "responses" -> new com.mio.ai.framework.zagent.vendor.ResponsesChatModel(
-                    endpointBaseUrl, endpointApiKey, modelName);
+            case "anthropic" -> new CachedEntry(
+                    new com.mio.ai.framework.zagent.vendor.AnthropicChatModel(
+                            endpointBaseUrl, endpointApiKey, modelName),
+                    List.of());
+            case "responses" -> new CachedEntry(
+                    new com.mio.ai.framework.zagent.vendor.ResponsesChatModel(
+                            endpointBaseUrl, endpointApiKey, modelName),
+                    List.of());
             default -> buildOpenAiCompatible(endpointBaseUrl, endpointApiKey, modelName);
         };
     }
 
     /** OpenAI 兼容端点：与自动装配一致的 customizer 扩展点（超时钉死与网关头注入同样生效）。
      *  opencode 网关直连时自动补 x-api-key 头（其工作区 key 走该头认证，Bearer 会被网关拒绝）。 */
-    private ChatModel buildOpenAiCompatible(String endpointBaseUrl, String endpointApiKey, String modelName) {
+    private CachedEntry buildOpenAiCompatible(String endpointBaseUrl, String endpointApiKey, String modelName) {
         SpringAiOpenAiHttpClient.Builder httpBuilder = SpringAiOpenAiHttpClient.builder()
                 .observationRegistry(observationRegistry)
                 .meterRegistry(meterRegistry);
@@ -166,16 +220,19 @@ public class RuntimeChatModelFactory {
                 .build();
         // 同步与异步客户端必须都给：流式走 async 通道，缺省时 builder 会自建无凭证的
         // async client，构建期直接抛 "At least one credential source must be specified"
+        var syncClient = new com.openai.client.OpenAIClientImpl(clientOptions);
+        var asyncClient = new com.openai.client.OpenAIClientAsyncImpl(clientOptions);
         OpenAiChatModel chatModel = OpenAiChatModel.builder()
-                .openAiClient(new com.openai.client.OpenAIClientImpl(clientOptions))
-                .openAiClientAsync(new com.openai.client.OpenAIClientAsyncImpl(clientOptions))
+                .openAiClient(syncClient)
+                .openAiClientAsync(asyncClient)
                 .options(OpenAiChatOptions.builder()
                         .model(modelName)
                         .timeout(Duration.ofSeconds(callTimeoutSeconds))
                         .build())
                 .build();
         log.info("运行时 ChatModel 已构建: endpoint={} model={}", endpointBaseUrl, modelName);
-        return chatModel;
+        // 两个客户端共享连接池与调度器：都登记关闭动作，淘汰时一并释放
+        return new CachedEntry(chatModel, List.of(() -> syncClient.close(), () -> asyncClient.close()));
     }
 
     public record Resolved(ChatModel model, String resolvedModel) {

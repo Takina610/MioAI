@@ -112,8 +112,14 @@ public class ConversationAdminController {
             wrapper.in(!agentIds.isEmpty(), "agent_id", agentIds);
         }
         if (StrUtil.isNotBlank(request.getMessageKeyword())) {
-            String kw = request.getMessageKeyword().replace("'", "''");
-            wrapper.inSql("conversation_id", "SELECT conversation_id COLLATE utf8mb4_unicode_ci FROM agent_message WHERE blocks LIKE '%" + kw + "%'");
+            // 参数化绑定（{0} 由 MyBatis 生成占位符）：关键字不做字符串拼接，杜绝 SQL 注入；
+            // 转义 LIKE 通配符，保证用户输入的 % / _ 按字面匹配
+            String keyword = request.getMessageKeyword()
+                    .replace("\\", "\\\\")
+                    .replace("%", "\\%")
+                    .replace("_", "\\_");
+            wrapper.apply("conversation_id IN (SELECT conversation_id COLLATE utf8mb4_unicode_ci "
+                    + "FROM agent_message WHERE blocks LIKE {0} ESCAPE '\\\\')", "%" + keyword + "%");
         }
         wrapper.orderByDesc("update_time");
 

@@ -28,9 +28,16 @@ public class RagRetrievalLogServiceImpl extends ServiceImpl<RagRetrievalLogMappe
 
     @Override
     public Page<RagRetrievalLogVO> queryRetrievalLogs(RagRetrievalLogQueryRequest request) {
+        return queryRetrievalLogs(request, null);
+    }
+
+    @Override
+    public Page<RagRetrievalLogVO> queryRetrievalLogs(RagRetrievalLogQueryRequest request, Long userId) {
         Page<RagRetrievalLog> page = new Page<>(request.getCurrent(), request.getPageSize());
         LambdaQueryWrapper<RagRetrievalLog> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(request.getAgentId() != null, RagRetrievalLog::getAgentId, request.getAgentId())
+        // 非 null 时强制按归属过滤：业务侧不能看到他人检索记录
+        wrapper.eq(userId != null, RagRetrievalLog::getUserId, userId)
+                .eq(request.getAgentId() != null, RagRetrievalLog::getAgentId, request.getAgentId())
                 .eq(request.getKbId() != null, RagRetrievalLog::getKbId, request.getKbId())
                 .like(StringUtils.isNotBlank(request.getQuery()), RagRetrievalLog::getQuery, request.getQuery())
                 .orderByDesc(RagRetrievalLog::getCreateTime);

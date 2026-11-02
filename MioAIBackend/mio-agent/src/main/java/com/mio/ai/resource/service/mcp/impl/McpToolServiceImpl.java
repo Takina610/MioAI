@@ -71,6 +71,11 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
         BeanUtil.copyProperties(request, mcpTool);
         mcpTool.setUserId(userId);
         mcpTool.setStatus(McpToolStatusEnum.ACTIVE.getCode());
+        // tool_info 列 NOT NULL 且无默认值：调用方不传时插库会直接失败（500），
+        // 未连接过的工具本就还没有工具清单，兜底为空数组
+        if (mcpTool.getToolInfo() == null || mcpTool.getToolInfo().isBlank()) {
+            mcpTool.setToolInfo("[]");
+        }
         this.save(mcpTool);
         return mcpTool.getId();
     }
@@ -133,6 +138,19 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
 
     @Override
     public McpToolVO getMcpToolById(Long id) {
+        return getMcpToolById(id, null);
+    }
+
+    /**
+     * 按查看者返回详情：所有者看到原始配置（编辑页需要回填），其他人只看脱敏配置。
+     */
+    @Override
+    public McpToolVO getMcpToolById(Long id, Long viewerUserId) {
+        return getMcpToolById(id, viewerUserId, false);
+    }
+
+    @Override
+    public McpToolVO getMcpToolById(Long id, Long viewerUserId, boolean includeSecrets) {
         if (id == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "工具ID不能为空");
         }
@@ -141,7 +159,18 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
 //            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "MCP工具不存在");
             return null;
         }
-        return convertToVO(mcpTool);
+        return convertToVO(mcpTool, shouldMaskSecrets(viewerUserId, mcpTool.getUserId(), includeSecrets));
+    }
+
+    /**
+     * 是否脱敏：所有者本人不脱敏；管理端审阅（includeSecrets）不脱敏；其余一律脱敏。
+     * 抽成静态方法以便回归测试锁定「管理端仍能拿到原始配置」这一行为。
+     */
+    static boolean shouldMaskSecrets(Long viewerUserId, Long ownerUserId, boolean includeSecrets) {
+        if (includeSecrets) {
+            return false;
+        }
+        return viewerUserId == null || !viewerUserId.equals(ownerUserId);
     }
 
     @Override
@@ -154,7 +183,8 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
                 .orderByDesc(McpTool::getCreateTime);
         Page<McpTool> toolPage = this.page(page, wrapper);
         Page<McpToolVO> voPage = new Page<>(toolPage.getCurrent(), toolPage.getSize(), toolPage.getTotal());
-        voPage.setRecords(toolPage.getRecords().stream().map(this::convertToVO).toList());
+        // 列表查询按 userId 限定为本人资源，配置原样返回（编辑/详情需回填）
+        voPage.setRecords(toolPage.getRecords().stream().map(tool -> convertToVO(tool, false)).toList());
         return voPage;
     }
 
@@ -167,17 +197,22 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
                 .orderByDesc(McpTool::getCreateTime);
         Page<McpTool> toolPage = this.page(page, wrapper);
         Page<McpToolVO> voPage = new Page<>(toolPage.getCurrent(), toolPage.getSize(), toolPage.getTotal());
-        voPage.setRecords(toolPage.getRecords().stream().map(this::convertToVO).toList());
+        // 广场对所有人（含匿名）开放：配置一律脱敏
+        voPage.setRecords(toolPage.getRecords().stream().map(tool -> convertToVO(tool, true)).toList());
         return voPage;
     }
 
-    private McpToolVO convertToVO(McpTool mcpTool) {
-        User user = userMapper.selectById(mcpTool.getUserId());
+    private McpToolVO convertToVO(McpTool mcpTool, boolean maskSecrets) {
+        User user = mcpTool.getUserId() == null ? null : userMapper.selectById(mcpTool.getUserId());
 
         McpToolVO vo = new McpToolVO();
-        vo.setUserName(user.getUserName());
+        vo.setUserName(user == null ? null : user.getUserName());
 
         BeanUtil.copyProperties(mcpTool, vo);
+        if (maskSecrets) {
+            // 对外脱敏：headers/env 凭证、url query 与 args 里的密钥一律掩码
+            vo.setConfig(com.mio.ai.framework.mcp.McpConfigMasker.mask(mcpTool.getConfig()));
+        }
         McpToolStatusEnum statusEnum = McpToolStatusEnum.getByCode(mcpTool.getStatus());
         vo.setStatusDesc(statusEnum != null ? statusEnum.getDesc() : "未知");
         return vo;
