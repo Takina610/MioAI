@@ -1,12 +1,12 @@
 package com.mio.ai.resource.controller.agent;
 
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.utils.ResultUtils;
 import com.mio.ai.framework.zagent.memory.AgentMemory;
-import com.mio.ai.framework.zagent.tools.SandboxFs;
-import com.mio.ai.framework.zagent.tools.ToolsetFactory;
+import com.mio.ai.framework.zagent.tools.fs.SandboxFs;
+import com.mio.ai.framework.zagent.tools.contract.ToolsetFactory;
 import com.mio.ai.resource.service.security.AccessGuardService;
 import com.mio.ai.user.utils.RedisComponent;
 import jakarta.annotation.Resource;

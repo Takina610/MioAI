@@ -2,11 +2,11 @@ package com.mio.ai.resource.service.security;
 
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
-import com.mio.ai.resource.model.entity.Agent;
-import com.mio.ai.resource.model.entity.KnowledgeBase;
-import com.mio.ai.resource.model.entity.McpTool;
-import com.mio.ai.resource.model.entity.Skill;
-import com.mio.ai.resource.model.enums.AgentStatusEnum;
+import com.mio.ai.resource.model.entity.agent.Agent;
+import com.mio.ai.resource.model.entity.knowledge.KnowledgeBase;
+import com.mio.ai.resource.model.entity.mcp.McpTool;
+import com.mio.ai.resource.model.entity.skill.Skill;
+import com.mio.ai.resource.model.enums.agent.AgentStatusEnum;
 import com.mio.ai.resource.service.agent.AgentService;
 import com.mio.ai.resource.service.knowledge.KnowledgeBaseService;
 import com.mio.ai.resource.service.mcp.McpToolService;

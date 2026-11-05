@@ -1,6 +1,6 @@
 package com.mio.ai.common.exception;
 
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.common.utils.ResultUtils;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;

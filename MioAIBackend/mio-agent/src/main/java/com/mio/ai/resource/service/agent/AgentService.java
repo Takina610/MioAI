@@ -5,7 +5,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.mio.ai.resource.model.dto.agent.AgentAddRequest;
 import com.mio.ai.resource.model.dto.agent.AgentQueryRequest;
 import com.mio.ai.resource.model.dto.agent.AgentUpdateRequest;
-import com.mio.ai.resource.model.entity.Agent;
+import com.mio.ai.resource.model.entity.agent.Agent;
 import com.mio.ai.resource.model.vo.agent.AgentDetailVO;
 import com.mio.ai.resource.model.vo.agent.AgentVO;
 import com.mio.ai.resource.model.vo.agent.AgentVersionVO;

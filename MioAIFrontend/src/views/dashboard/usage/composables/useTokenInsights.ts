@@ -3,7 +3,7 @@ import {
   getContribution,
   getTokenTrend,
   getUsageProfile
-} from '@/api/usageStats'
+} from '@/api/usage'
 import type {
   ContributionData,
   TokenTrendData,

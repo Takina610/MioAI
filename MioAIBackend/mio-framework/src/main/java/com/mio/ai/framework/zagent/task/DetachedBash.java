@@ -1,7 +1,7 @@
 package com.mio.ai.framework.zagent.task;
 
 import cn.hutool.core.util.StrUtil;
-import com.mio.ai.framework.zagent.tools.SandboxFs;
+import com.mio.ai.framework.zagent.tools.fs.SandboxFs;
 import lombok.extern.slf4j.Slf4j;
 
 import java.nio.charset.StandardCharsets;

@@ -1,9 +1,9 @@
 package com.mio.ai.resource.controller.agent;
 
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.common.utils.ResultUtils;
-import com.mio.ai.resource.model.dto.agentskill.AgentSkillAddRequest;
-import com.mio.ai.resource.model.entity.AgentSkill;
+import com.mio.ai.resource.model.dto.agent.AgentSkillAddRequest;
+import com.mio.ai.resource.model.entity.agent.AgentSkill;
 import com.mio.ai.resource.service.agent.AgentSkillService;
 import com.mio.ai.resource.service.security.AccessGuardService;
 import com.mio.ai.user.utils.RedisComponent;

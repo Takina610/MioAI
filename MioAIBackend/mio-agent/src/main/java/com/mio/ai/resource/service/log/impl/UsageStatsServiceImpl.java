@@ -1,9 +1,9 @@
 package com.mio.ai.resource.service.log.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.mio.ai.resource.model.entity.AgentUsageLog;
-import com.mio.ai.resource.model.entity.RagRetrievalLog;
-import com.mio.ai.resource.model.entity.ToolCallLog;
+import com.mio.ai.resource.model.entity.log.AgentUsageLog;
+import com.mio.ai.resource.model.entity.log.RagRetrievalLog;
+import com.mio.ai.resource.model.entity.log.ToolCallLog;
 import com.mio.ai.resource.model.vo.log.UsageStatsVO;
 import com.mio.ai.resource.service.knowledge.KnowledgeBaseService;
 import com.mio.ai.resource.service.log.AgentUsageLogService;
@@ -87,7 +87,7 @@ public class UsageStatsServiceImpl implements UsageStatsService {
             wrapper.eq(AgentUsageLog::getUserId, userId);
         }
         if (agentId != null) {
-            wrapper.eq(com.mio.ai.resource.model.entity.AgentUsageLog::getAgentId, agentId);
+            wrapper.eq(com.mio.ai.resource.model.entity.log.AgentUsageLog::getAgentId, agentId);
         }
         List<AgentUsageLog> logs = agentUsageLogService.list(wrapper);
 
@@ -168,38 +168,38 @@ public class UsageStatsServiceImpl implements UsageStatsService {
     private UsageStatsVO buildSkillStats(LocalDateTime startTime, LocalDateTime endTime,
                                          LocalDateTime prevStartTime, LocalDateTime prevEndTime,
                                          Long userId) {
-        LambdaQueryWrapper<com.mio.ai.resource.model.entity.SkillUsageLog> wrapper =
+        LambdaQueryWrapper<com.mio.ai.resource.model.entity.log.SkillUsageLog> wrapper =
                 new LambdaQueryWrapper<>();
-        wrapper.ge(com.mio.ai.resource.model.entity.SkillUsageLog::getCreateTime, startTime)
-                .le(com.mio.ai.resource.model.entity.SkillUsageLog::getCreateTime, endTime);
+        wrapper.ge(com.mio.ai.resource.model.entity.log.SkillUsageLog::getCreateTime, startTime)
+                .le(com.mio.ai.resource.model.entity.log.SkillUsageLog::getCreateTime, endTime);
         if (userId != null) {
-            wrapper.eq(com.mio.ai.resource.model.entity.SkillUsageLog::getUserId, userId);
+            wrapper.eq(com.mio.ai.resource.model.entity.log.SkillUsageLog::getUserId, userId);
         }
-        List<com.mio.ai.resource.model.entity.SkillUsageLog> logs =
+        List<com.mio.ai.resource.model.entity.log.SkillUsageLog> logs =
                 skillUsageLogService.list(wrapper);
 
-        LambdaQueryWrapper<com.mio.ai.resource.model.entity.SkillUsageLog> prevWrapper =
+        LambdaQueryWrapper<com.mio.ai.resource.model.entity.log.SkillUsageLog> prevWrapper =
                 new LambdaQueryWrapper<>();
-        prevWrapper.ge(com.mio.ai.resource.model.entity.SkillUsageLog::getCreateTime, prevStartTime)
-                .le(com.mio.ai.resource.model.entity.SkillUsageLog::getCreateTime, prevEndTime);
+        prevWrapper.ge(com.mio.ai.resource.model.entity.log.SkillUsageLog::getCreateTime, prevStartTime)
+                .le(com.mio.ai.resource.model.entity.log.SkillUsageLog::getCreateTime, prevEndTime);
         if (userId != null) {
-            prevWrapper.eq(com.mio.ai.resource.model.entity.SkillUsageLog::getUserId, userId);
+            prevWrapper.eq(com.mio.ai.resource.model.entity.log.SkillUsageLog::getUserId, userId);
         }
-        List<com.mio.ai.resource.model.entity.SkillUsageLog> prevLogs = skillUsageLogService.list(prevWrapper);
+        List<com.mio.ai.resource.model.entity.log.SkillUsageLog> prevLogs = skillUsageLogService.list(prevWrapper);
 
         UsageStatsVO vo = new UsageStatsVO();
 
-        long skillCount = logs.stream().map(com.mio.ai.resource.model.entity.SkillUsageLog::getSkillId)
+        long skillCount = logs.stream().map(com.mio.ai.resource.model.entity.log.SkillUsageLog::getSkillId)
                 .filter(Objects::nonNull).distinct().count();
         long useCount = logs.size();
-        long agentCount = logs.stream().map(com.mio.ai.resource.model.entity.SkillUsageLog::getAgentId)
+        long agentCount = logs.stream().map(com.mio.ai.resource.model.entity.log.SkillUsageLog::getAgentId)
                 .filter(Objects::nonNull).distinct().count();
         long avgPerAgent = agentCount == 0 ? 0 : useCount / agentCount;
 
-        long prevSkillCount = prevLogs.stream().map(com.mio.ai.resource.model.entity.SkillUsageLog::getSkillId)
+        long prevSkillCount = prevLogs.stream().map(com.mio.ai.resource.model.entity.log.SkillUsageLog::getSkillId)
                 .filter(Objects::nonNull).distinct().count();
         long prevUseCount = prevLogs.size();
-        long prevAgentCount = prevLogs.stream().map(com.mio.ai.resource.model.entity.SkillUsageLog::getAgentId)
+        long prevAgentCount = prevLogs.stream().map(com.mio.ai.resource.model.entity.log.SkillUsageLog::getAgentId)
                 .filter(Objects::nonNull).distinct().count();
         long prevAvgPerAgent = prevAgentCount == 0 ? 0 : prevUseCount / prevAgentCount;
 
@@ -219,12 +219,12 @@ public class UsageStatsServiceImpl implements UsageStatsService {
         // 分布按 skill_id 聚合：名称优先取日志冗余（技能删除后仍可展示）
         Map<Long, String> skillNames = logs.stream()
                 .filter(log -> log.getSkillId() != null)
-                .collect(Collectors.toMap(com.mio.ai.resource.model.entity.SkillUsageLog::getSkillId,
+                .collect(Collectors.toMap(com.mio.ai.resource.model.entity.log.SkillUsageLog::getSkillId,
                         log -> log.getSkillName() != null ? log.getSkillName() : "技能 " + log.getSkillId(),
                         (first, second) -> first));
         List<UsageStatsVO.NameValue> distribution = logs.stream()
                 .filter(log -> log.getSkillId() != null)
-                .collect(Collectors.groupingBy(com.mio.ai.resource.model.entity.SkillUsageLog::getSkillId,
+                .collect(Collectors.groupingBy(com.mio.ai.resource.model.entity.log.SkillUsageLog::getSkillId,
                         Collectors.counting()))
                 .entrySet().stream()
                 .map(e -> {
@@ -243,19 +243,19 @@ public class UsageStatsServiceImpl implements UsageStatsService {
     }
 
     private Map<String, List<UsageStatsVO.TimePoint>> buildSkillTrendMap(
-            List<com.mio.ai.resource.model.entity.SkillUsageLog> logs, LocalDateTime startTime, LocalDateTime endTime) {
+            List<com.mio.ai.resource.model.entity.log.SkillUsageLog> logs, LocalDateTime startTime, LocalDateTime endTime) {
         return buildTrendMap(logs, startTime, endTime,
-                com.mio.ai.resource.model.entity.SkillUsageLog::getCreateTime,
+                com.mio.ai.resource.model.entity.log.SkillUsageLog::getCreateTime,
                 bucketLogs -> (long) bucketLogs.size(),
                 bucketLogs -> bucketLogs.stream()
-                        .map(com.mio.ai.resource.model.entity.SkillUsageLog::getSkillId)
+                        .map(com.mio.ai.resource.model.entity.log.SkillUsageLog::getSkillId)
                         .filter(Objects::nonNull).distinct().count(),
                 bucketLogs -> bucketLogs.stream()
-                        .map(com.mio.ai.resource.model.entity.SkillUsageLog::getAgentId)
+                        .map(com.mio.ai.resource.model.entity.log.SkillUsageLog::getAgentId)
                         .filter(Objects::nonNull).distinct().count(),
                 bucketLogs -> {
                     long agents = bucketLogs.stream()
-                            .map(com.mio.ai.resource.model.entity.SkillUsageLog::getAgentId)
+                            .map(com.mio.ai.resource.model.entity.log.SkillUsageLog::getAgentId)
                             .filter(Objects::nonNull).distinct().count();
                     return agents == 0 ? 0L : (long) bucketLogs.size() / agents;
                 });

@@ -47,11 +47,11 @@
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { getSharedConversation, type SharedAgentBrief } from '@/api/chatMemory'
+import { getSharedConversation, type SharedAgentBrief } from '@/api/chat/memory'
 import type { ChatMessage, MessageBlock } from '@/types'
 import AgentFace from './components/AgentFace.vue'
-import ChatMessageList from '@/views/chat/components/ChatMessageList.vue'
-import { textOfBlocks } from '@/views/chat/composables/useChatMessages'
+import ChatMessageList from '@/views/chat/components/messages/ChatMessageList.vue'
+import { textOfBlocks } from '@/views/chat/composables/message/useChatMessages'
 import { useUserStore } from '@/store/user'
 
 const route = useRoute()

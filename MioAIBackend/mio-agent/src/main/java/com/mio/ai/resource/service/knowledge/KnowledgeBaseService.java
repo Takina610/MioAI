@@ -2,10 +2,10 @@ package com.mio.ai.resource.service.knowledge;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.mio.ai.resource.model.dto.knowledgebase.KnowledgeBaseAddRequest;
-import com.mio.ai.resource.model.dto.knowledgebase.KnowledgeBaseQueryRequest;
-import com.mio.ai.resource.model.dto.knowledgebase.KnowledgeBaseUpdateRequest;
-import com.mio.ai.resource.model.entity.KnowledgeBase;
+import com.mio.ai.resource.model.dto.knowledge.KnowledgeBaseAddRequest;
+import com.mio.ai.resource.model.dto.knowledge.KnowledgeBaseQueryRequest;
+import com.mio.ai.resource.model.dto.knowledge.KnowledgeBaseUpdateRequest;
+import com.mio.ai.resource.model.entity.knowledge.KnowledgeBase;
 import com.mio.ai.resource.model.vo.knowledge.KnowledgeBaseVO;
 
 /**

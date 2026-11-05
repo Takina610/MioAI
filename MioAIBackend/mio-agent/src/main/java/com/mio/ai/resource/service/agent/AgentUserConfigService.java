@@ -2,7 +2,7 @@ package com.mio.ai.resource.service.agent;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.mio.ai.resource.model.dto.agent.AgentUserConfigRequest;
-import com.mio.ai.resource.model.entity.AgentUserConfig;
+import com.mio.ai.resource.model.entity.agent.AgentUserConfig;
 import com.mio.ai.resource.model.vo.agent.AgentUserConfigVO;
 
 /**

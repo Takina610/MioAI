@@ -1,6 +1,6 @@
 package com.mio.ai.resource.service.log;
 
-import com.mio.ai.resource.model.entity.Agent;
+import com.mio.ai.resource.model.entity.agent.Agent;
 import com.mio.ai.resource.service.agent.AgentService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Component;

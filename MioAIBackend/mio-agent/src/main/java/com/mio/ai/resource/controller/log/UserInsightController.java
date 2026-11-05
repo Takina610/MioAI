@@ -1,6 +1,6 @@
 package com.mio.ai.resource.controller.log;
 
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.common.utils.ResultUtils;
 import com.mio.ai.resource.model.vo.log.ContributionVO;
 import com.mio.ai.resource.model.vo.log.TokenTrendVO;

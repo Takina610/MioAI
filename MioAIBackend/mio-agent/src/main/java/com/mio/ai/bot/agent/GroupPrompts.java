@@ -1,7 +1,7 @@
 package com.mio.ai.bot.agent;
 
 import com.mio.ai.framework.zagent.subagent.MemberLauncher.MemberAgent;
-import com.mio.ai.resource.model.entity.Agent;
+import com.mio.ai.resource.model.entity.agent.Agent;
 
 import java.util.List;
 

@@ -1,6 +1,6 @@
 package com.mio.ai.resource.service.mcp;
 
-import com.mio.ai.resource.model.dto.mcptool.McpValidateRequest;
+import com.mio.ai.resource.model.dto.mcp.McpValidateRequest;
 import com.mio.ai.resource.model.vo.mcp.McpValidateResultVO;
 
 /**

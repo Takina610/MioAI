@@ -1,7 +1,7 @@
 package com.mio.ai.resource.service.agent;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.mio.ai.resource.model.entity.AgentSkill;
+import com.mio.ai.resource.model.entity.agent.AgentSkill;
 
 import java.util.List;
 

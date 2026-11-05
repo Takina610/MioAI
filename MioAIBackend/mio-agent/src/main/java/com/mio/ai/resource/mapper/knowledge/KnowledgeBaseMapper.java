@@ -1,7 +1,7 @@
 package com.mio.ai.resource.mapper.knowledge;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.mio.ai.resource.model.entity.KnowledgeBase;
+import com.mio.ai.resource.model.entity.knowledge.KnowledgeBase;
 import org.apache.ibatis.annotations.Mapper;
 
 /**

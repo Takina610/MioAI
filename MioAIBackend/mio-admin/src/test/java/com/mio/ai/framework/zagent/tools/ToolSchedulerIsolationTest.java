@@ -1,5 +1,11 @@
 package com.mio.ai.framework.zagent.tools;
 
+import com.mio.ai.framework.zagent.tools.contract.ToolContext;
+import com.mio.ai.framework.zagent.tools.contract.ToolEntry;
+import com.mio.ai.framework.zagent.tools.contract.ToolRegistry;
+import com.mio.ai.framework.zagent.tools.contract.ToolScheduler;
+import com.mio.ai.framework.zagent.tools.delegation.AgentTool;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 

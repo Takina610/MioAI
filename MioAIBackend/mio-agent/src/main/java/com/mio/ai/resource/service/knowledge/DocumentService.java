@@ -2,9 +2,9 @@ package com.mio.ai.resource.service.knowledge;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.mio.ai.resource.model.dto.document.DocumentAddRequest;
-import com.mio.ai.resource.model.dto.document.DocumentQueryRequest;
-import com.mio.ai.resource.model.entity.Document;
+import com.mio.ai.resource.model.dto.knowledge.DocumentAddRequest;
+import com.mio.ai.resource.model.dto.knowledge.DocumentQueryRequest;
+import com.mio.ai.resource.model.entity.knowledge.Document;
 import com.mio.ai.resource.model.vo.knowledge.DocumentVO;
 
 /**

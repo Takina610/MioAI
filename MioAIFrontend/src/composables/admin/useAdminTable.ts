@@ -1,7 +1,7 @@
 import { reactive, ref } from 'vue'
 import type { Ref } from 'vue'
 import type { PageResponse } from '@/types'
-import MioMessage from '@/utils/message'
+import MioMessage from '@/utils/ui/message'
 
 /**
  * 管理后台分页表格通用状态机：筛选变更回第一页、翻页续查、异常统一提示

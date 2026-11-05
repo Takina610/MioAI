@@ -1,7 +1,7 @@
 package com.mio.ai.resource.mapper.log;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.mio.ai.resource.model.entity.ToolCallLog;
+import com.mio.ai.resource.model.entity.log.ToolCallLog;
 import org.apache.ibatis.annotations.Mapper;
 
 /**

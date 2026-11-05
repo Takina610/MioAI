@@ -57,7 +57,7 @@ import {
   deleteKnowledgeBase,
   listActiveVectorizations,
   type ActiveVectorization
-} from '@/api/knowledgeBase'
+} from '@/api/knowledge'
 import type { KnowledgeBase, PageResponse } from '@/types'
 import KnowledgeBaseModal from './components/KnowledgeBaseModal.vue'
 import PageHeader from '../components/PageHeader.vue'

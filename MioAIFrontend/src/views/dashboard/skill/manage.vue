@@ -201,7 +201,7 @@ import {
   installSkillsSh,
   updateSkillPublic
 } from '@/api/skill'
-import { formatDate } from '@/utils/format'
+import { formatDate } from '@/utils/format/format'
 import type { Skill, SkillsShSkill } from '@/types/skill'
 import PageHeader from '../components/PageHeader.vue'
 import LoginPrompt from '../components/LoginPrompt.vue'

@@ -206,7 +206,7 @@ public final class BackgroundTasks {
      *
      * @param fs 沙箱文件系统；null（沙箱未启用）时跳过
      */
-    public void refreshDetached(String chatId, com.mio.ai.framework.zagent.tools.SandboxFs fs) {
+    public void refreshDetached(String chatId, com.mio.ai.framework.zagent.tools.fs.SandboxFs fs) {
         BackgroundTaskStore taskStore = store;
         if (fs == null || taskStore == null) {
             return;
@@ -236,7 +236,7 @@ public final class BackgroundTasks {
     }
 
     /** 探针结果落地（TaskOutput 阻塞轮询同样走此入口）：done → completed/failed；gone → failed；超时先杀再改判 failed */
-    public void refreshFromProbe(com.mio.ai.framework.zagent.tools.SandboxFs fs, Task task,
+    public void refreshFromProbe(com.mio.ai.framework.zagent.tools.fs.SandboxFs fs, Task task,
                                  DetachedBash.ProbeResult probe) {
         long deadline = task.deadlineAt;
         if ("running".equals(probe.status()) && deadline > 0 && System.currentTimeMillis() > deadline) {

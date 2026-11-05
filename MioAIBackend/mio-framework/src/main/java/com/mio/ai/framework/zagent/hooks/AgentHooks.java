@@ -1,7 +1,7 @@
 package com.mio.ai.framework.zagent.hooks;
 
-import com.mio.ai.framework.zagent.tools.ToolContext;
-import com.mio.ai.framework.zagent.tools.ToolRegistry;
+import com.mio.ai.framework.zagent.tools.contract.ToolContext;
+import com.mio.ai.framework.zagent.tools.contract.ToolRegistry;
 
 import java.util.List;
 

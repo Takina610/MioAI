@@ -67,7 +67,7 @@
 import { ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { getAgentVersions, rollbackAgentVersion } from '@/api/agent'
-import { formatDateTime } from '@/utils/format'
+import { formatDateTime } from '@/utils/format/format'
 import type { AgentVersion } from '@/types'
 
 const props = defineProps<{

@@ -1,7 +1,7 @@
 package com.mio.ai.resource.service.log;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.mio.ai.resource.model.entity.SkillUsageLog;
+import com.mio.ai.resource.model.entity.log.SkillUsageLog;
 
 /**
  * 技能使用日志服务接口

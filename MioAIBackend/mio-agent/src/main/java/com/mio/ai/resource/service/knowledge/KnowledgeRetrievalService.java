@@ -1,8 +1,8 @@
 package com.mio.ai.resource.service.knowledge;
 
-import com.mio.ai.framework.rag.KnowledgeRetrievalResult;
-import com.mio.ai.framework.rag.RetrievalConfig;
-import com.mio.ai.framework.rag.RetrievalOutcome;
+import com.mio.ai.framework.rag.retrieval.KnowledgeRetrievalResult;
+import com.mio.ai.framework.rag.retrieval.RetrievalConfig;
+import com.mio.ai.framework.rag.retrieval.RetrievalOutcome;
 
 import java.util.Collection;
 import java.util.List;

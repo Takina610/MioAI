@@ -1,6 +1,6 @@
 package com.mio.ai.resource.service.mcp;
 
-import com.mio.ai.resource.model.entity.McpTool;
+import com.mio.ai.resource.model.entity.mcp.McpTool;
 import org.springframework.ai.tool.ToolCallback;
 
 import java.util.List;

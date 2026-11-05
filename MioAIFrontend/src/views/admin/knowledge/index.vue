@@ -109,12 +109,12 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import MioMessage from '@/utils/message'
-import { formatDateTime } from '@/utils/format'
+import MioMessage from '@/utils/ui/message'
+import { formatDateTime } from '@/utils/format/format'
 import { useAdminTable } from '@/composables/admin/useAdminTable'
-import { deleteKnowledgeBase, searchKnowledgeBases, updateKnowledgeBase } from '@/api/adminKnowledge'
+import { deleteKnowledgeBase, searchKnowledgeBases, updateKnowledgeBase } from '@/api/admin/knowledge'
 import type { KnowledgeBase, KnowledgeBaseQueryRequest } from '@/types'
-import RecordDrawer from './RecordDrawer.vue'
+import RecordDrawer from './KnowledgeRecordDrawer.vue'
 
 const keyword = ref('')
 const ownerName = ref('')

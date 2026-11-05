@@ -3,8 +3,8 @@ package com.mio.ai.bot.agent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.mio.ai.bot.service.image.ImageResult;
 import com.mio.ai.bot.service.image.ImageSearchService;
-import com.mio.ai.framework.zagent.tools.ToolContext;
-import com.mio.ai.framework.zagent.tools.ToolEntry;
+import com.mio.ai.framework.zagent.tools.contract.ToolContext;
+import com.mio.ai.framework.zagent.tools.contract.ToolEntry;
 
 import java.util.List;
 

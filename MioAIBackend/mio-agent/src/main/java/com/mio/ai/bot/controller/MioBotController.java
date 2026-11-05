@@ -10,14 +10,14 @@ import com.mio.ai.bot.repository.ChatHistoryRepository;
 import com.mio.ai.bot.service.AgentMessageService;
 import com.mio.ai.bot.service.BotResourceService;
 import com.mio.ai.bot.util.SseStreams;
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.common.constant.UserConstant;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.utils.JacksonUtil;
 import com.mio.ai.common.utils.ResultUtils;
-import com.mio.ai.resource.model.entity.Agent;
-import com.mio.ai.resource.model.entity.Skill;
+import com.mio.ai.resource.model.entity.agent.Agent;
+import com.mio.ai.resource.model.entity.skill.Skill;
 import com.mio.ai.resource.service.log.AgentUsageLogService;
 import com.mio.ai.resource.service.log.ToolCallLogService;
 import com.mio.ai.resource.service.security.AccessGuardService;
@@ -59,7 +59,7 @@ public class MioBotController {
     private static final String SENSITIVE_REPLY = "抱歉，您的问题涉及敏感内容，我无法回答。请换一种方式提问或讨论其他话题。";
 
     @Resource
-    private com.mio.ai.framework.zagent.tools.ToolsetFactory toolsetFactory;
+    private com.mio.ai.framework.zagent.tools.contract.ToolsetFactory toolsetFactory;
 
     @Autowired
     private ChatModel chatModel;
@@ -224,7 +224,7 @@ public class MioBotController {
     private PromptContext resolvePromptContext(long resolvedAgentId, Long userId) {
         if (resolvedAgentId != MioBot.AGENT_ID) {
             Agent agent = accessGuardService.checkAgentUsable(resolvedAgentId, userId);
-            if (Integer.valueOf(com.mio.ai.resource.model.enums.AgentTypeEnum.GROUP.getCode())
+            if (Integer.valueOf(com.mio.ai.resource.model.enums.agent.AgentTypeEnum.GROUP.getCode())
                     .equals(agent.getType())) {
                 List<Agent> memberRows =
                         agentGroupService.listUsableMembers(resolvedAgentId, userId);
@@ -245,7 +245,7 @@ public class MioBotController {
         if (userId == null) {
             return new PromptContext(null, null);
         }
-        com.mio.ai.resource.model.entity.AgentUserConfig override =
+        com.mio.ai.resource.model.entity.agent.AgentUserConfig override =
                 agentUserConfigService.getOverride(userId, MioBot.AGENT_ID);
         return new PromptContext(override != null && override.getSystemPrompt() != null
                 && !override.getSystemPrompt().isBlank() ? override.getSystemPrompt() : null, null);
@@ -842,7 +842,7 @@ public class MioBotController {
         Long userId = redisComponent.getUserIdNullable(httpRequest.getHeader("token"));
         String ownerKey = userId != null ? "u:" + userId : "guest:" + clientIp(httpRequest);
         String id = body.get("id") == null ? null : String.valueOf(body.get("id"));
-        List<com.mio.ai.framework.zagent.tools.QuestionGate.Answer> answers = new ArrayList<>();
+        List<com.mio.ai.framework.zagent.tools.delegation.QuestionGate.Answer> answers = new ArrayList<>();
         Object rawAnswers = body.get("answers");
         if (rawAnswers instanceof List<?> list) {
             for (Object item : list) {
@@ -860,13 +860,13 @@ public class MioBotController {
                         }
                     }
                     String custom = map.get("custom") == null ? null : String.valueOf(map.get("custom"));
-                    answers.add(new com.mio.ai.framework.zagent.tools.QuestionGate.Answer(
+                    answers.add(new com.mio.ai.framework.zagent.tools.delegation.QuestionGate.Answer(
                             index, selections, custom));
                 }
             }
         }
         List<Map<String, Object>> payload =
-                com.mio.ai.framework.zagent.tools.QuestionGate.instance().resolve(chatId, answers, ownerKey);
+                com.mio.ai.framework.zagent.tools.delegation.QuestionGate.instance().resolve(chatId, answers, ownerKey);
         if (payload == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "当前会话没有待回答的问题（可能已超时或已作答）");
         }

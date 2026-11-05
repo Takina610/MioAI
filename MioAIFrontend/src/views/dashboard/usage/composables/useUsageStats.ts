@@ -1,6 +1,6 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import dayjs, { type Dayjs } from 'dayjs'
-import { getUsageStats } from '@/api/usageStats'
+import { getUsageStats } from '@/api/usage'
 import type { UsageStats, MetricValue, TimePoint, NameValue } from '@/types'
 import { formatCompact } from './format'
 

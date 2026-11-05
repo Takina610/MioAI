@@ -1,7 +1,7 @@
 package com.mio.ai.resource.service.log;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.mio.ai.resource.model.entity.UserActivityLog;
+import com.mio.ai.resource.model.entity.log.UserActivityLog;
 
 /**
  * 用户执行日志服务接口：控制台写操作 + 登录/注册等语义动作的完整执行履历

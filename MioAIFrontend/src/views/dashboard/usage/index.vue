@@ -122,17 +122,17 @@
 
 <script setup lang="ts">
 import PageHeader from '../components/PageHeader.vue'
-import UsageMetricCards from './components/UsageMetricCards.vue'
-import UsageTrendChart from './components/UsageTrendChart.vue'
-import UsageDistPie from './components/UsageDistPie.vue'
-import UsageRankList from './components/UsageRankList.vue'
-import TokenSummaryChips from './components/TokenSummaryChips.vue'
-import ContributionGraph from './components/ContributionGraph.vue'
-import TokenTrendChart from './components/TokenTrendChart.vue'
-import ModelUsagePie from './components/ModelUsagePie.vue'
-import UsageProfileCard from './components/UsageProfileCard.vue'
-import UsageAnalyticsSection from './components/UsageAnalyticsSection.vue'
-import UsageDayDetailCard from './components/UsageDayDetailCard.vue'
+import UsageMetricCards from './components/cards/UsageMetricCards.vue'
+import UsageTrendChart from './components/charts/UsageTrendChart.vue'
+import UsageDistPie from './components/charts/UsageDistPie.vue'
+import UsageRankList from './components/lists/UsageRankList.vue'
+import TokenSummaryChips from './components/cards/TokenSummaryChips.vue'
+import ContributionGraph from './components/charts/ContributionGraph.vue'
+import TokenTrendChart from './components/charts/TokenTrendChart.vue'
+import ModelUsagePie from './components/charts/ModelUsagePie.vue'
+import UsageProfileCard from './components/cards/UsageProfileCard.vue'
+import UsageAnalyticsSection from './components/sections/UsageAnalyticsSection.vue'
+import UsageDayDetailCard from './components/cards/UsageDayDetailCard.vue'
 import {
   useUsageStats,
   metricLabelMap,
@@ -141,7 +141,7 @@ import {
 } from './composables/useUsageStats'
 import { useTokenInsights } from './composables/useTokenInsights'
 import { useUsageAnalytics } from './composables/useUsageAnalytics'
-import { getUsageAnalytics, getUsageDayDetail } from '@/api/usageStats'
+import { getUsageAnalytics, getUsageDayDetail } from '@/api/usage'
 
 const {
   activeTab,

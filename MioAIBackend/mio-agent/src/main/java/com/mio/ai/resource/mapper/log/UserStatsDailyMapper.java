@@ -1,7 +1,7 @@
 package com.mio.ai.resource.mapper.log;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.mio.ai.resource.model.entity.UserStatsDaily;
+import com.mio.ai.resource.model.entity.log.UserStatsDaily;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;

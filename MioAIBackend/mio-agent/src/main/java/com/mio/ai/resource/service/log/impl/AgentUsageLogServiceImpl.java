@@ -6,7 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.mio.ai.resource.mapper.log.AgentUsageLogMapper;
 import com.mio.ai.resource.model.dto.log.AgentUsageLogQueryRequest;
-import com.mio.ai.resource.model.entity.AgentUsageLog;
+import com.mio.ai.resource.model.entity.log.AgentUsageLog;
 import com.mio.ai.resource.model.vo.log.AgentUsageLogVO;
 import com.mio.ai.resource.service.log.AgentUsageLogService;
 import lombok.extern.slf4j.Slf4j;

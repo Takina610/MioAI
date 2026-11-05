@@ -1,4 +1,4 @@
-import type { AdminRuntimeQueryRequest, AdminRuntimeType } from '@/api/adminRuntime'
+import type { AdminRuntimeQueryRequest, AdminRuntimeType } from '@/api/admin/runtime'
 import type { ExpandField, LogColumn } from '@/views/admin/components/recordTypes'
 
 export interface RuntimeFilterField {

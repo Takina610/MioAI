@@ -44,3 +44,15 @@ git push origin        # 等价于 git push origin master:main
 - 状态用圆点+文字（处理中加脉冲动画），不用彩色 tag 堆砌。
 - 全站滚动条由 global.scss 的 `*` 选择器统一成自定义细滚动条（暖灰 #d2cfc5）：新滚动容器直接 `overflow: auto` 即可，不要再写 thin-scrollbar mixin 或隐藏滚动条；ChatSessionList 的悬浮浮现样式是唯一例外。
 
+## 目录组织（红线）
+
+按"我要改什么"查目录见 [docs/CODE_MAP.md](./docs/CODE_MAP.md)。
+
+- **一个目录只放一类职责**；单目录文件数控制在 10 个左右，超过说明还有第二层职责没拆出来，按职责再分一层。
+- 前端：只服务单个页面的组件/逻辑放该页面的 `components/`、`composables/`；跨页面复用的才提升到 `src/components`、`src/composables`。无 Vue 依赖的纯逻辑放就近的 `lib/`，配套同名 `.test.ts`。
+- 前端接口按领域分目录（`api/chat`、`api/agent`、`api/admin` …），域内 `index.ts` 是默认入口。测试 mock 的模块路径必须与真实路径一致，否则 mock 不生效、会走真实网络。
+- 后端：先按业务域（agent / knowledge / mcp / skill / log / bot）分包，域内再按 `controller / service / mapper / model` 分层；`model` 下再分 `entity / dto / vo / enums`。
+- 后端包名全小写，不使用 `common.common`、`aop.Aspect` 这类重复或大写的段；目录名必须与 `package` 声明一致。
+- 后端跨包引用一律写显式 `import`。同包默认可见性在分包后不成立：被其他包使用的类与其入口方法需为 `public`（`zagent/tools` 分包时踩过）。
+
+

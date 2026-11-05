@@ -1,7 +1,7 @@
 package com.mio.ai.common.utils;
 
 
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.common.exception.ErrorCode;
 
 /**

@@ -2,9 +2,9 @@ package com.mio.ai.resource.service.knowledge;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.mio.ai.resource.mapper.knowledge.DocumentMapper;
-import com.mio.ai.resource.model.entity.Document;
-import com.mio.ai.resource.model.entity.KnowledgeBase;
-import com.mio.ai.resource.model.enums.DocumentStatusEnum;
+import com.mio.ai.resource.model.entity.knowledge.Document;
+import com.mio.ai.resource.model.entity.knowledge.KnowledgeBase;
+import com.mio.ai.resource.model.enums.knowledge.DocumentStatusEnum;
 import com.mio.ai.common.utils.R2Util;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;

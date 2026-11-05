@@ -6,7 +6,7 @@ package com.mio.ai.common.utils;
  * @description: R2存储上传文件工具
  */
 
-import com.mio.ai.common.common.FileType;
+import com.mio.ai.common.api.FileType;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import org.springframework.beans.factory.annotation.Autowired;

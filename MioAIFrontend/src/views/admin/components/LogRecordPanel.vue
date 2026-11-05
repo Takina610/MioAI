@@ -26,9 +26,9 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch } from 'vue'
-import MioMessage from '@/utils/message'
-import { deleteLog, searchLogs } from '@/api/adminLog'
-import type { AdminLogQueryRequest, AdminLogRow, AdminLogType } from '@/api/adminLog'
+import MioMessage from '@/utils/ui/message'
+import { deleteLog, searchLogs } from '@/api/admin/log'
+import type { AdminLogQueryRequest, AdminLogRow, AdminLogType } from '@/api/admin/log'
 import RecordTable from '@/views/admin/components/RecordTable.vue'
 import type { RecordRow } from '@/views/admin/components/recordTypes'
 import { LOG_TYPE_CONFIGS } from '@/views/admin/logs/config'

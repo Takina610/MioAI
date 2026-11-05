@@ -1,12 +1,12 @@
 package com.mio.ai.resource.controller.log;
 
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.common.utils.ResultUtils;
 import com.mio.ai.resource.model.vo.log.UsageAnalyticsVO;
 import com.mio.ai.resource.model.vo.log.UsageDayDetailVO;
 import com.mio.ai.resource.model.vo.log.UsageStatsVO;
 import com.mio.ai.resource.service.log.UsageStatsService;
-import com.mio.ai.resource.service.log.impl.UsageAnalyticsServiceImpl;
+import com.mio.ai.resource.service.log.analytics.UsageAnalyticsServiceImpl;
 import com.mio.ai.user.utils.RedisComponent;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;

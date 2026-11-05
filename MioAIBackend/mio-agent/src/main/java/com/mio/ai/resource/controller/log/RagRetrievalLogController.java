@@ -1,7 +1,7 @@
 package com.mio.ai.resource.controller.log;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.common.utils.ResultUtils;
 import com.mio.ai.resource.model.dto.log.RagRetrievalLogQueryRequest;
 import com.mio.ai.resource.model.vo.log.RagRetrievalLogVO;

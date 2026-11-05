@@ -1,4 +1,4 @@
-import type { AdminLogQueryRequest, AdminLogType } from '@/api/adminLog'
+import type { AdminLogQueryRequest, AdminLogType } from '@/api/admin/log'
 import type { ExpandField, LogColumn } from '@/views/admin/components/recordTypes'
 
 export interface LogFilterField {

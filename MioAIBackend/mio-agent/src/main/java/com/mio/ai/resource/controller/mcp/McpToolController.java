@@ -1,12 +1,12 @@
 package com.mio.ai.resource.controller.mcp;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.user.utils.RedisComponent;
 import com.mio.ai.common.utils.ResultUtils;
-import com.mio.ai.resource.model.dto.mcptool.McpToolAddRequest;
-import com.mio.ai.resource.model.dto.mcptool.McpToolQueryRequest;
-import com.mio.ai.resource.model.dto.mcptool.McpToolUpdateRequest;
+import com.mio.ai.resource.model.dto.mcp.McpToolAddRequest;
+import com.mio.ai.resource.model.dto.mcp.McpToolQueryRequest;
+import com.mio.ai.resource.model.dto.mcp.McpToolUpdateRequest;
 import com.mio.ai.resource.model.vo.mcp.McpToolVO;
 import com.mio.ai.resource.service.mcp.McpToolService;
 import jakarta.annotation.Resource;

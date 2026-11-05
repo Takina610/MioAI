@@ -41,10 +41,10 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import MioMessage from '@/utils/message'
-import { formatDateTime } from '@/utils/format'
-import { searchConversationsByUsage } from '@/api/adminConversation'
-import type { UsageConversationRow, UsageConversationQuery } from '@/api/adminConversation'
+import MioMessage from '@/utils/ui/message'
+import { formatDateTime } from '@/utils/format/format'
+import { searchConversationsByUsage } from '@/api/admin/conversation'
+import type { UsageConversationRow, UsageConversationQuery } from '@/api/admin/conversation'
 
 const props = defineProps<{
   /** 三选一：知识库 / MCP / 技能 的关联会话 */

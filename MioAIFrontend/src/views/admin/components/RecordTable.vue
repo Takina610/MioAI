@@ -65,7 +65,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ColumnKind, ExpandField, LogColumn, RecordRow } from './recordTypes'
-import { formatDateTime, truncateText } from '@/utils/format'
+import { formatDateTime, truncateText } from '@/utils/format/format'
 
 const props = defineProps<{
   columns: LogColumn[]

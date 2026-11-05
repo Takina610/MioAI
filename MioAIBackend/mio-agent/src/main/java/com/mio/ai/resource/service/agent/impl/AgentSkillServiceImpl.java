@@ -3,7 +3,7 @@ package com.mio.ai.resource.service.agent.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.mio.ai.resource.mapper.agent.AgentSkillMapper;
-import com.mio.ai.resource.model.entity.AgentSkill;
+import com.mio.ai.resource.model.entity.agent.AgentSkill;
 import com.mio.ai.resource.service.agent.AgentSkillService;
 import org.springframework.stereotype.Service;
 

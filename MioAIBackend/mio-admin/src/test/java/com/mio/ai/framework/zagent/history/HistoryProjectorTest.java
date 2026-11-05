@@ -54,13 +54,13 @@ class HistoryProjectorTest {
         Assertions.assertFalse(messages.stream().anyMatch(m -> m instanceof ToolResponseMessage));
     }
 
-    private static com.mio.ai.framework.zagent.tools.ToolMedia media(String mimeType, byte[] bytes) {
+    private static com.mio.ai.framework.zagent.tools.contract.ToolMedia media(String mimeType, byte[] bytes) {
         return media(mimeType, java.util.Base64.getEncoder().encodeToString(bytes));
     }
 
-    private static com.mio.ai.framework.zagent.tools.ToolMedia media(String mimeType, String base64) {
+    private static com.mio.ai.framework.zagent.tools.contract.ToolMedia media(String mimeType, String base64) {
         // 字段顺序：mimeType, base64, originalSize, transformedSize, resized, compressed, ...
-        return new com.mio.ai.framework.zagent.tools.ToolMedia(
+        return new com.mio.ai.framework.zagent.tools.contract.ToolMedia(
                 mimeType, base64, 0, 0, false, false, 0, 0, 0, 0);
     }
 

@@ -3,7 +3,7 @@ package com.mio.ai.resource.service.skill;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.mio.ai.resource.model.dto.skill.SkillQueryRequest;
-import com.mio.ai.resource.model.entity.Skill;
+import com.mio.ai.resource.model.entity.skill.Skill;
 import com.mio.ai.resource.model.vo.skill.SkillVO;
 
 import java.util.List;

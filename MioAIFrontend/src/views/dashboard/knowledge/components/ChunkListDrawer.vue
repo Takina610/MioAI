@@ -30,7 +30,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import { getDocumentChunks, type DocumentChunk } from '@/api/knowledgeBase'
+import { getDocumentChunks, type DocumentChunk } from '@/api/knowledge'
 
 const props = defineProps<{
   visible: boolean

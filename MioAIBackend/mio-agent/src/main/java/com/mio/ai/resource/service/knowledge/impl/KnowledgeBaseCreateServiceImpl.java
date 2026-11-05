@@ -1,25 +1,25 @@
 package com.mio.ai.resource.service.knowledge.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.mio.ai.common.common.FileType;
+import com.mio.ai.common.api.FileType;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.utils.JacksonUtil;
 import com.mio.ai.common.utils.R2Util;
 import com.mio.ai.resource.mapper.knowledge.DocumentMapper;
-import com.mio.ai.resource.model.entity.Document;
-import com.mio.ai.resource.model.entity.KnowledgeBase;
-import com.mio.ai.framework.rag.MarkdownReader;
-import com.mio.ai.framework.rag.PdfReader;
-import com.mio.ai.framework.rag.TikaReader;
-import com.mio.ai.framework.rag.TxtReader;
+import com.mio.ai.resource.model.entity.knowledge.Document;
+import com.mio.ai.resource.model.entity.knowledge.KnowledgeBase;
+import com.mio.ai.framework.rag.reader.MarkdownReader;
+import com.mio.ai.framework.rag.reader.PdfReader;
+import com.mio.ai.framework.rag.reader.TikaReader;
+import com.mio.ai.framework.rag.reader.TxtReader;
 import com.mio.ai.resource.service.knowledge.DocumentCleanupService;
 import com.mio.ai.resource.service.knowledge.KnowledgeBaseCreateService;
 import com.mio.ai.resource.service.knowledge.KnowledgeBaseService;
 import com.mio.ai.resource.service.knowledge.VectorizeTaskState;
 import com.mio.ai.resource.service.knowledge.VectorizeTaskState.VectorizeProgress;
-import com.mio.ai.framework.rag.CustomTokenTextSplitter;
-import com.mio.ai.framework.rag.KeywordEnricher;
+import com.mio.ai.framework.rag.splitter.CustomTokenTextSplitter;
+import com.mio.ai.framework.rag.query.KeywordEnricher;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -111,7 +111,7 @@ public class KnowledgeBaseCreateServiceImpl implements KnowledgeBaseCreateServic
      * 嵌入请求全局节流（与查询嵌入共享 RPM 限额）
      */
     @Autowired
-    private com.mio.ai.framework.rag.EmbeddingThrottle embeddingThrottle;
+    private com.mio.ai.framework.rag.embedding.EmbeddingThrottle embeddingThrottle;
 
     @Autowired
     private DocumentCleanupService documentCleanupService;

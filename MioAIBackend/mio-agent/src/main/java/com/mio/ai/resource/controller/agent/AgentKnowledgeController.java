@@ -1,11 +1,11 @@
 package com.mio.ai.resource.controller.agent;
 
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.user.utils.RedisComponent;
 import com.mio.ai.common.utils.ResultUtils;
-import com.mio.ai.resource.model.dto.agentknowledge.AgentKnowledgeAddRequest;
-import com.mio.ai.resource.model.dto.agentknowledge.AgentKnowledgeUpdateRequest;
-import com.mio.ai.resource.model.entity.AgentKnowledge;
+import com.mio.ai.resource.model.dto.agent.AgentKnowledgeAddRequest;
+import com.mio.ai.resource.model.dto.agent.AgentKnowledgeUpdateRequest;
+import com.mio.ai.resource.model.entity.agent.AgentKnowledge;
 import com.mio.ai.resource.model.vo.knowledge.AgentKnowledgeBindingVO;
 import com.mio.ai.resource.service.agent.AgentKnowledgeService;
 import com.mio.ai.resource.service.security.AccessGuardService;

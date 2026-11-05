@@ -1,6 +1,6 @@
 package com.mio.ai.common.utils;
 
-import com.mio.ai.common.common.FileType;
+import com.mio.ai.common.api.FileType;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;

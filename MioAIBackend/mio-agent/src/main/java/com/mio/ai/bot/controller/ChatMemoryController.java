@@ -2,7 +2,7 @@ package com.mio.ai.bot.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mio.ai.common.aop.annotation.LogInfo;
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.utils.JacksonUtil;
@@ -214,14 +214,14 @@ public class ChatMemoryController {
             return ResultUtils.success(new java.util.ArrayList<>());
         }
         List<ChatConversationDO> chats = chatHistoryRepository.listRecentByUser(userId, Math.min(Math.max(limit, 1), 500));
-        java.util.Map<Long, com.mio.ai.resource.model.entity.Agent> agentById = new java.util.HashMap<>();
+        java.util.Map<Long, com.mio.ai.resource.model.entity.agent.Agent> agentById = new java.util.HashMap<>();
         try {
             java.util.Set<Long> agentIds = chats.stream()
                     .map(ChatConversationDO::getAgentId)
                     .filter(java.util.Objects::nonNull)
                     .collect(java.util.stream.Collectors.toSet());
             if (!agentIds.isEmpty()) {
-                for (com.mio.ai.resource.model.entity.Agent agent : agentService.listByIds(agentIds)) {
+                for (com.mio.ai.resource.model.entity.agent.Agent agent : agentService.listByIds(agentIds)) {
                     agentById.put(agent.getId(), agent);
                 }
             }
@@ -235,7 +235,7 @@ public class ChatMemoryController {
             row.put("title", chat.getTitle());
             row.put("agentId", chat.getAgentId());
             row.put("updateTime", chat.getUpdateTime());
-            com.mio.ai.resource.model.entity.Agent agent = agentById.get(chat.getAgentId());
+            com.mio.ai.resource.model.entity.agent.Agent agent = agentById.get(chat.getAgentId());
             if (agent != null) {
                 row.put("agentName", agent.getName());
                 row.put("agentType", agent.getType());

@@ -102,13 +102,13 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import MioMessage from '@/utils/message'
-import { formatDateTime } from '@/utils/format'
-import { countMcpTools } from '@/utils/mcpTool'
+import MioMessage from '@/utils/ui/message'
+import { formatDateTime } from '@/utils/format/format'
+import { countMcpTools } from '@/utils/domain/mcpTool'
 import { useAdminTable } from '@/composables/admin/useAdminTable'
-import { deleteMcpTool, getMcpToolById, searchMcpTools, updateMcpTool } from '@/api/adminMcp'
+import { deleteMcpTool, getMcpToolById, searchMcpTools, updateMcpTool } from '@/api/admin/mcp'
 import type { McpTool, McpToolQueryRequest } from '@/types/mcpTool'
-import RecordDrawer from './RecordDrawer.vue'
+import RecordDrawer from './McpRecordDrawer.vue'
 
 const keyword = ref('')
 const ownerName = ref('')

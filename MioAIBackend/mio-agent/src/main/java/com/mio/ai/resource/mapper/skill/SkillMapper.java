@@ -1,6 +1,6 @@
 package com.mio.ai.resource.mapper.skill;
 
-import com.mio.ai.resource.model.entity.Skill;
+import com.mio.ai.resource.model.entity.skill.Skill;
 import org.apache.ibatis.annotations.Mapper;
 
 /**

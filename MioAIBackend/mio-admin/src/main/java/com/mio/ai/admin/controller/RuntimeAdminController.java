@@ -4,20 +4,20 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mio.ai.admin.component.AdminNameResolver;
-import com.mio.ai.admin.model.dto.AdminRecordQueryRequest;
+import com.mio.ai.admin.model.dto.record.AdminRecordQueryRequest;
 import com.mio.ai.admin.model.vo.AdminRecordVO;
 import com.mio.ai.common.aop.annotation.AuthCheck;
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.common.constant.UserConstant;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.exception.ThrowUtils;
 import com.mio.ai.common.utils.ResultUtils;
 import com.mio.ai.resource.mapper.task.AgentBackgroundTaskMapper;
-import com.mio.ai.resource.model.entity.AgentBackgroundTask;
-import com.mio.ai.resource.model.entity.AgentGroupMember;
-import com.mio.ai.resource.model.entity.AgentUserConfig;
-import com.mio.ai.resource.model.entity.AgentVersion;
+import com.mio.ai.resource.model.entity.agent.AgentBackgroundTask;
+import com.mio.ai.resource.model.entity.agent.AgentGroupMember;
+import com.mio.ai.resource.model.entity.agent.AgentUserConfig;
+import com.mio.ai.resource.model.entity.agent.AgentVersion;
 import com.mio.ai.resource.service.agent.AgentGroupService;
 import com.mio.ai.resource.service.agent.AgentUserConfigService;
 import com.mio.ai.resource.service.agent.AgentVersionService;
@@ -104,10 +104,10 @@ public class RuntimeAdminController {
     public BaseResponse<Long> addGroupMember(@RequestBody AdminRecordQueryRequest request) {
         ThrowUtils.throwIf(request == null || request.getGroupAgentId() == null || request.getMemberAgentId() == null,
                 ErrorCode.PARAMS_ERROR, "群聊与成员不能为空");
-        com.mio.ai.resource.model.entity.Agent group = agentService.getById(request.getGroupAgentId());
+        com.mio.ai.resource.model.entity.agent.Agent group = agentService.getById(request.getGroupAgentId());
         ThrowUtils.throwIf(group == null || group.getType() == null || group.getType() != 2,
                 ErrorCode.PARAMS_ERROR, "目标不是群聊智能体");
-        com.mio.ai.resource.model.entity.Agent member = agentService.getById(request.getMemberAgentId());
+        com.mio.ai.resource.model.entity.agent.Agent member = agentService.getById(request.getMemberAgentId());
         ThrowUtils.throwIf(member == null || member.getType() == null || member.getType() != 1,
                 ErrorCode.PARAMS_ERROR, "成员必须是普通智能体");
         long exists = agentGroupService.count(new QueryWrapper<AgentGroupMember>()

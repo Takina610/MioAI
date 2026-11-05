@@ -43,7 +43,7 @@ import {
   getAgentMemoryContent,
   deleteAgentMemory,
   type AgentMemoryFile
-} from '@/api/agentMemory'
+} from '@/api/agent/memory'
 
 const props = defineProps<{ agentId: number }>()
 

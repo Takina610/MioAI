@@ -4,7 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mio.ai.framework.skillssh.SkillsShClient;
 import com.mio.ai.resource.mapper.skill.SkillMapper;
-import com.mio.ai.resource.model.entity.Skill;
+import com.mio.ai.resource.model.entity.skill.Skill;
 import com.mio.ai.resource.model.vo.skill.SkillsShSearchVO;
 import com.mio.ai.resource.service.skill.SkillGithubImportService;
 import com.mio.ai.resource.service.skill.SkillRateLimiter;

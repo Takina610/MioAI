@@ -47,7 +47,7 @@ import {
   getAgentKbBindings,
   updateAgentKnowledgeBinding,
   type AgentKnowledgeBinding
-} from '@/api/agentKnowledge'
+} from '@/api/agent/knowledge'
 
 const props = defineProps<{
   agentId: number

@@ -139,16 +139,16 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import UsageMetricCards from '@/views/dashboard/usage/components/UsageMetricCards.vue'
-import UsageTrendChart from '@/views/dashboard/usage/components/UsageTrendChart.vue'
-import UsageDistPie from '@/views/dashboard/usage/components/UsageDistPie.vue'
-import UsageRankList from '@/views/dashboard/usage/components/UsageRankList.vue'
-import TokenSummaryChips from '@/views/dashboard/usage/components/TokenSummaryChips.vue'
-import ContributionGraph from '@/views/dashboard/usage/components/ContributionGraph.vue'
-import TokenTrendChart from '@/views/dashboard/usage/components/TokenTrendChart.vue'
-import ModelUsagePie from '@/views/dashboard/usage/components/ModelUsagePie.vue'
-import UsageAnalyticsSection from '@/views/dashboard/usage/components/UsageAnalyticsSection.vue'
-import UsageDayDetailCard from '@/views/dashboard/usage/components/UsageDayDetailCard.vue'
+import UsageMetricCards from '@/views/dashboard/usage/components/cards/UsageMetricCards.vue'
+import UsageTrendChart from '@/views/dashboard/usage/components/charts/UsageTrendChart.vue'
+import UsageDistPie from '@/views/dashboard/usage/components/charts/UsageDistPie.vue'
+import UsageRankList from '@/views/dashboard/usage/components/lists/UsageRankList.vue'
+import TokenSummaryChips from '@/views/dashboard/usage/components/cards/TokenSummaryChips.vue'
+import ContributionGraph from '@/views/dashboard/usage/components/charts/ContributionGraph.vue'
+import TokenTrendChart from '@/views/dashboard/usage/components/charts/TokenTrendChart.vue'
+import ModelUsagePie from '@/views/dashboard/usage/components/charts/ModelUsagePie.vue'
+import UsageAnalyticsSection from '@/views/dashboard/usage/components/sections/UsageAnalyticsSection.vue'
+import UsageDayDetailCard from '@/views/dashboard/usage/components/cards/UsageDayDetailCard.vue'
 import {
   useUsageStats,
   metricLabelMap,
@@ -163,7 +163,7 @@ import {
   getAdminTokenTrend,
   getAdminUsageAnalytics,
   getAdminUsageDayDetail
-} from '@/api/usageStats'
+} from '@/api/usage'
 
 // 全用户维度筛选：注入 admin 数据源，闭包读取最新筛选值
 const filterUserId = ref<number | undefined>(undefined)

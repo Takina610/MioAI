@@ -3,7 +3,7 @@ package com.mio.ai.resource.service.mcp.impl;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.toolkit.StringUtils;
-import com.mio.ai.resource.model.dto.mcptool.McpValidateRequest;
+import com.mio.ai.resource.model.dto.mcp.McpValidateRequest;
 import com.mio.ai.resource.model.vo.mcp.McpValidateResultVO;
 import com.mio.ai.resource.service.mcp.McpStdioGuard;
 import com.mio.ai.resource.service.mcp.McpValidateService;

@@ -2,7 +2,7 @@ package com.mio.ai.resource.service.log.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.mio.ai.resource.mapper.log.SkillUsageLogMapper;
-import com.mio.ai.resource.model.entity.SkillUsageLog;
+import com.mio.ai.resource.model.entity.log.SkillUsageLog;
 import com.mio.ai.resource.service.log.SkillUsageLogService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

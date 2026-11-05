@@ -1,7 +1,7 @@
 package com.mio.ai.resource.mapper.mcp;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.mio.ai.resource.model.entity.McpTool;
+import com.mio.ai.resource.model.entity.mcp.McpTool;
 import org.apache.ibatis.annotations.Mapper;
 
 /**

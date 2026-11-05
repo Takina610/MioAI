@@ -1,5 +1,5 @@
 import { ref, reactive } from 'vue'
-import { queryDocuments, type Document } from '@/api/knowledgeBase'
+import { queryDocuments, type Document } from '@/api/knowledge'
 
 /** 知识库文档分页加载（详情/编辑页共用） */
 export function useKbDocuments() {

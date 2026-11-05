@@ -15,8 +15,8 @@ import com.mio.ai.bot.mapper.ChatConversationDOMapper;
 import com.mio.ai.bot.model.entity.ChatConversationDO;
 import com.mio.ai.bot.service.ChatCascadeDeleteService;
 import com.mio.ai.framework.zagent.memory.AgentMemory;
-import com.mio.ai.framework.zagent.tools.SandboxFs;
-import com.mio.ai.framework.zagent.tools.ToolsetFactory;
+import com.mio.ai.framework.zagent.tools.fs.SandboxFs;
+import com.mio.ai.framework.zagent.tools.contract.ToolsetFactory;
 import com.mio.ai.resource.mapper.agent.AgentKnowledgeMapper;
 import com.mio.ai.resource.mapper.agent.AgentMcpMapper;
 import com.mio.ai.resource.mapper.agent.AgentMapper;
@@ -26,18 +26,18 @@ import com.mio.ai.resource.mapper.task.AgentBackgroundTaskMapper;
 import com.mio.ai.resource.model.dto.agent.AgentAddRequest;
 import com.mio.ai.resource.model.dto.agent.AgentQueryRequest;
 import com.mio.ai.resource.model.dto.agent.AgentUpdateRequest;
-import com.mio.ai.resource.model.entity.Agent;
-import com.mio.ai.resource.model.entity.AgentBackgroundTask;
-import com.mio.ai.resource.model.entity.AgentKnowledge;
-import com.mio.ai.resource.model.entity.AgentMcp;
-import com.mio.ai.resource.model.entity.AgentSkill;
-import com.mio.ai.resource.model.entity.AgentUserConfig;
-import com.mio.ai.resource.model.entity.KnowledgeBase;
-import com.mio.ai.resource.model.entity.McpTool;
-import com.mio.ai.resource.model.enums.AgentStatusEnum;
-import com.mio.ai.resource.model.enums.AgentTypeEnum;
-import com.mio.ai.resource.model.enums.KnowledgeBaseStatusEnum;
-import com.mio.ai.resource.model.enums.McpToolStatusEnum;
+import com.mio.ai.resource.model.entity.agent.Agent;
+import com.mio.ai.resource.model.entity.agent.AgentBackgroundTask;
+import com.mio.ai.resource.model.entity.agent.AgentKnowledge;
+import com.mio.ai.resource.model.entity.agent.AgentMcp;
+import com.mio.ai.resource.model.entity.agent.AgentSkill;
+import com.mio.ai.resource.model.entity.agent.AgentUserConfig;
+import com.mio.ai.resource.model.entity.knowledge.KnowledgeBase;
+import com.mio.ai.resource.model.entity.mcp.McpTool;
+import com.mio.ai.resource.model.enums.agent.AgentStatusEnum;
+import com.mio.ai.resource.model.enums.agent.AgentTypeEnum;
+import com.mio.ai.resource.model.enums.knowledge.KnowledgeBaseStatusEnum;
+import com.mio.ai.resource.model.enums.mcp.McpToolStatusEnum;
 import com.mio.ai.resource.model.vo.agent.AgentDetailVO;
 import com.mio.ai.resource.model.vo.agent.AgentVO;
 import com.mio.ai.resource.model.vo.agent.AgentVersionVO;
@@ -59,7 +59,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
-import com.mio.ai.resource.model.entity.Skill;
+import com.mio.ai.resource.model.entity.skill.Skill;
 import java.util.Map;
 import java.util.Objects;
 
@@ -397,7 +397,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         }
         AgentVO slot = null;
         if (userId != null) {
-            com.mio.ai.resource.model.entity.AgentUserConfig config =
+            com.mio.ai.resource.model.entity.agent.AgentUserConfig config =
                     agentUserConfigService.getOverride(userId, builtin.getId());
             if (config != null && Integer.valueOf(1).equals(config.getIsPublic())) {
                 slot = convertToVO(builtin);
@@ -577,7 +577,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         agent.setStatus(AgentStatusEnum.PUBLISHED.getCode());
         // 版本快照：发布即留档，agent.version 指向最新版本
         String bindingsJson = bindingsSnapshot(agentId);
-        com.mio.ai.resource.model.entity.AgentVersion snapshot =
+        com.mio.ai.resource.model.entity.agent.AgentVersion snapshot =
                 agentVersionService.createSnapshot(agent, bindingsJson, userId, null);
         agent.setVersion(snapshot.getVersion());
         this.updateById(agent);
@@ -594,7 +594,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
     @Transactional(rollbackFor = Exception.class)
     public String rollbackToVersion(Long agentId, Long versionId, Long userId) {
         Agent agent = checkAgentOwner(agentId, userId);
-        com.mio.ai.resource.model.entity.AgentVersion target = agentVersionService.getById(versionId);
+        com.mio.ai.resource.model.entity.agent.AgentVersion target = agentVersionService.getById(versionId);
         if (target == null || !agentId.equals(target.getAgentId())) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "版本不存在");
         }
@@ -609,7 +609,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         // 资源绑定恢复到版本快照（此后被删除的资源跳过），再以恢复后的状态生成新版本留档
         String bindingsJson = target.getBindingsJson();
         restoreBindings(agentId, bindingsJson, userId);
-        com.mio.ai.resource.model.entity.AgentVersion snapshot =
+        com.mio.ai.resource.model.entity.agent.AgentVersion snapshot =
                 agentVersionService.createSnapshot(agent, bindingsJson, userId, target.getVersion());
         agent.setVersion(snapshot.getVersion());
         this.updateById(agent);
@@ -769,7 +769,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
                 // 回滚不新增权限：只拦「把原本非 STDIO 的工具改成 STDIO」；
                 // 存量的 STDIO 绑定照常恢复，否则回滚会让既有工具静默失效
                 if (configOverride != null && !configOverride.isBlank()) {
-                    com.mio.ai.resource.model.entity.McpTool base = mcpToolMapper.selectById(mcpId);
+                    com.mio.ai.resource.model.entity.mcp.McpTool base = mcpToolMapper.selectById(mcpId);
                     boolean baseIsStdio = base != null && isStdioConfig(base.getConfig());
                     if (!baseIsStdio && isStdioConfig(configOverride)
                             && mcpStdioGuard.denyReason(configOverride, userId) != null) {
@@ -886,7 +886,7 @@ public class AgentServiceImpl extends ServiceImpl<AgentMapper, Agent> implements
         copy.setUsageCount(0);
         copy.setVersion(builtin.getVersion());
         // 用户在内置 MioBot 上保存过的个性化（人设/图标）带入副本，体验连续
-        com.mio.ai.resource.model.entity.AgentUserConfig override =
+        com.mio.ai.resource.model.entity.agent.AgentUserConfig override =
                 agentUserConfigService.getOverride(userId, MioBot.AGENT_ID);
         copy.setSystemPrompt(override != null && override.getSystemPrompt() != null
                 && !override.getSystemPrompt().isBlank() ? override.getSystemPrompt() : builtin.getSystemPrompt());

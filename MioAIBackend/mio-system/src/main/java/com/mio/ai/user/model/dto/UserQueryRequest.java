@@ -1,6 +1,6 @@
 package com.mio.ai.user.model.dto;
 
-import com.mio.ai.common.common.PageRequest;
+import com.mio.ai.common.api.PageRequest;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 

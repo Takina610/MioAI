@@ -34,7 +34,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ToolOutlined } from '@ant-design/icons-vue'
-import { getPublicMcpTools } from '@/api/mcpTool'
+import { getPublicMcpTools } from '@/api/mcp'
 import type { McpTool, PageResponse } from '@/types'
 import PageHeader from '../components/PageHeader.vue'
 

@@ -1,7 +1,7 @@
 package com.mio.ai.resource.service.log;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.mio.ai.resource.model.entity.UserStatsDaily;
+import com.mio.ai.resource.model.entity.log.UserStatsDaily;
 
 import java.util.List;
 

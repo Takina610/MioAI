@@ -1,7 +1,7 @@
 package com.mio.ai.resource.controller.knowledge;
 
 import com.mio.ai.common.aop.annotation.LogInfo;
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.user.utils.RedisComponent;
 import com.mio.ai.common.utils.ResultUtils;
 import com.mio.ai.resource.service.knowledge.KnowledgeBaseCreateService;

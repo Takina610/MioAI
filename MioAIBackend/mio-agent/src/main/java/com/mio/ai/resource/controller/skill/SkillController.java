@@ -2,7 +2,7 @@ package com.mio.ai.resource.controller.skill;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mio.ai.common.aop.annotation.LogInfo;
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.common.utils.ResultUtils;
 import com.mio.ai.resource.model.dto.skill.SkillGithubImportRequest;
 import com.mio.ai.resource.model.dto.skill.SkillGithubPreviewRequest;

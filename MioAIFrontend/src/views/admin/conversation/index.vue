@@ -122,15 +122,15 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import MioMessage from '@/utils/message'
-import { formatDateTime } from '@/utils/format'
+import MioMessage from '@/utils/ui/message'
+import { formatDateTime } from '@/utils/format/format'
 import { useAdminTable } from '@/composables/admin/useAdminTable'
 import {
   deleteConversation,
   searchConversations
-} from '@/api/adminConversation'
-import type { ConversationQueryRequest, ConversationRecord, ConversationRow } from '@/api/adminConversation'
-import MessageDrawer from './MessageDrawer.vue'
+} from '@/api/admin/conversation'
+import type { ConversationQueryRequest, ConversationRecord, ConversationRow } from '@/api/admin/conversation'
+import MessageDrawer from './MessageRecordDrawer.vue'
 
 const route = useRoute()
 const filters = reactive<ConversationQueryRequest>({

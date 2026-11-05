@@ -1,7 +1,7 @@
 package com.mio.ai.resource.aspect;
 
 import com.mio.ai.common.utils.JacksonUtil;
-import com.mio.ai.resource.model.entity.UserActivityLog;
+import com.mio.ai.resource.model.entity.log.UserActivityLog;
 import com.mio.ai.resource.service.log.UserActivityLogService;
 import com.mio.ai.user.utils.RedisComponent;
 import jakarta.annotation.Resource;

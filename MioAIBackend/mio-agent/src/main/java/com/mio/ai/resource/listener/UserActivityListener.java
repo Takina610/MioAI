@@ -1,6 +1,6 @@
 package com.mio.ai.resource.listener;
 
-import com.mio.ai.resource.model.entity.UserActivityLog;
+import com.mio.ai.resource.model.entity.log.UserActivityLog;
 import com.mio.ai.resource.service.log.UserActivityLogService;
 import com.mio.ai.user.event.UserLoginEvent;
 import com.mio.ai.user.event.UserRegisteredEvent;

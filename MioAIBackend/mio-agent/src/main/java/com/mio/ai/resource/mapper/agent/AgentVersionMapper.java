@@ -1,7 +1,7 @@
 package com.mio.ai.resource.mapper.agent;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.mio.ai.resource.model.entity.AgentVersion;
+import com.mio.ai.resource.model.entity.agent.AgentVersion;
 import org.apache.ibatis.annotations.Mapper;
 
 /**

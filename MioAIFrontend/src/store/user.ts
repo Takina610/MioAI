@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { userLogin, userLogout, getLoginUser, userRegister } from '@/api/user'
-import { setLoggingOut, UNAUTHORIZED_EVENT } from '@/utils/request'
+import { setLoggingOut, UNAUTHORIZED_EVENT } from '@/utils/http/request'
 import type { LoginRequest, RegisterRequest, LoginResponse, UserVO } from '@/types'
 
 export const useUserStore = defineStore('user', () => {

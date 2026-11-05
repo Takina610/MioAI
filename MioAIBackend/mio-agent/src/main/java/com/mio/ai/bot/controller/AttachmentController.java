@@ -1,7 +1,7 @@
 package com.mio.ai.bot.controller;
 
 import cn.hutool.core.util.StrUtil;
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.utils.ResultUtils;

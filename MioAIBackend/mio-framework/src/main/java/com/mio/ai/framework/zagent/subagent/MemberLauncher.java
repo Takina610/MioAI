@@ -1,6 +1,6 @@
 package com.mio.ai.framework.zagent.subagent;
 
-import com.mio.ai.framework.zagent.tools.SandboxFs;
+import com.mio.ai.framework.zagent.tools.fs.SandboxFs;
 import org.springframework.ai.tool.ToolCallback;
 
 import java.util.List;

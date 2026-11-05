@@ -1,6 +1,6 @@
 package com.mio.ai.framework.zagent.history;
 
-import com.mio.ai.framework.zagent.tools.ToolMedia;
+import com.mio.ai.framework.zagent.tools.contract.ToolMedia;
 
 import java.util.List;
 

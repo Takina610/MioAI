@@ -2,8 +2,8 @@ package com.mio.ai.resource.service.agent;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.mio.ai.resource.model.dto.agent.AgentGroupCreateRequest;
-import com.mio.ai.resource.model.entity.Agent;
-import com.mio.ai.resource.model.entity.AgentGroupMember;
+import com.mio.ai.resource.model.entity.agent.Agent;
+import com.mio.ai.resource.model.entity.agent.AgentGroupMember;
 import com.mio.ai.resource.model.vo.agent.AgentVO;
 
 import java.util.List;

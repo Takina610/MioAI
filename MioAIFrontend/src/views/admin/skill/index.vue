@@ -104,12 +104,12 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import MioMessage from '@/utils/message'
-import { formatDateTime } from '@/utils/format'
+import MioMessage from '@/utils/ui/message'
+import { formatDateTime } from '@/utils/format/format'
 import { useAdminTable } from '@/composables/admin/useAdminTable'
-import { deleteSkill, searchSkills, updateSkill } from '@/api/adminSkill'
+import { deleteSkill, searchSkills, updateSkill } from '@/api/admin/skill'
 import type { Skill, SkillQueryRequest } from '@/types/skill'
-import RecordDrawer from './RecordDrawer.vue'
+import RecordDrawer from './SkillRecordDrawer.vue'
 
 const keyword = ref('')
 const ownerName = ref('')

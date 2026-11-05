@@ -6,7 +6,7 @@ import com.mio.ai.bot.model.entity.AgentMessageDO;
 import com.mio.ai.bot.service.AgentMessageService;
 import com.mio.ai.bot.service.SkillRuntime;
 import com.mio.ai.bot.util.SseStreams;
-import com.mio.ai.resource.model.entity.Skill;
+import com.mio.ai.resource.model.entity.skill.Skill;
 import com.mio.ai.framework.sandbox.SandboxFileTransfer;
 import com.mio.ai.framework.zagent.AgentEngine;
 import com.mio.ai.framework.zagent.AgentEngineConfig;
@@ -17,11 +17,12 @@ import com.mio.ai.framework.zagent.history.ConversationState;
 import com.mio.ai.framework.zagent.history.TodoItem;
 import com.mio.ai.framework.zagent.hooks.AgentHooks;
 import com.mio.ai.framework.zagent.subagent.Subagents;
-import com.mio.ai.framework.zagent.tools.SandboxFs;
-import com.mio.ai.framework.zagent.tools.ToolRegistry;
-import com.mio.ai.framework.zagent.tools.ToolsetFactory;
-import com.mio.ai.resource.model.entity.AgentUsageLog;
-import com.mio.ai.resource.model.entity.ToolCallLog;
+import com.mio.ai.framework.zagent.tools.fs.SandboxFs;
+import com.mio.ai.framework.zagent.tools.contract.ToolRegistry;
+import com.mio.ai.framework.zagent.tools.contract.ToolsetFactory;
+import com.mio.ai.resource.model.entity.log.AgentUsageLog;
+import com.mio.ai.bot.agent.ui.UiRenderTool;
+import com.mio.ai.resource.model.entity.log.ToolCallLog;
 import com.mio.ai.resource.service.log.AgentUsageLogService;
 import com.mio.ai.resource.service.log.ToolCallLogService;
 import lombok.extern.slf4j.Slf4j;
@@ -774,8 +775,8 @@ public class MioBot {
         private static final int RESULT_LOG_CAP = 2_000;
 
         @Override
-        public void afterToolCall(ToolCall call, com.mio.ai.framework.zagent.tools.ToolRegistry.Executed result,
-                                  com.mio.ai.framework.zagent.tools.ToolContext context) {
+        public void afterToolCall(ToolCall call, com.mio.ai.framework.zagent.tools.contract.ToolRegistry.Executed result,
+                                  com.mio.ai.framework.zagent.tools.contract.ToolContext context) {
             if (toolCallLogService == null) {
                 return;
             }

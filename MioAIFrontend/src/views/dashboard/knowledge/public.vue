@@ -26,7 +26,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getPublicKnowledgeBases } from '@/api/knowledgeBase'
+import { getPublicKnowledgeBases } from '@/api/knowledge'
 import type { KnowledgeBase, PageResponse } from '@/types'
 import PageHeader from '../components/PageHeader.vue'
 import KbCard from './components/KbCard.vue'

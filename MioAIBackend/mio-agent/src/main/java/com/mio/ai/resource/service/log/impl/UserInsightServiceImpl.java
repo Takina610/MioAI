@@ -4,11 +4,11 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mio.ai.bot.mapper.AgentMessageMapper;
 import com.mio.ai.bot.mapper.ChatConversationDOMapper;
 import com.mio.ai.resource.mapper.log.UserStatsDailyMapper;
-import com.mio.ai.resource.model.entity.AgentUsageLog;
-import com.mio.ai.resource.model.entity.SkillUsageLog;
-import com.mio.ai.resource.model.entity.ToolCallLog;
-import com.mio.ai.resource.model.entity.UserStatsDaily;
-import com.mio.ai.resource.model.entity.RagRetrievalLog;
+import com.mio.ai.resource.model.entity.log.AgentUsageLog;
+import com.mio.ai.resource.model.entity.log.SkillUsageLog;
+import com.mio.ai.resource.model.entity.log.ToolCallLog;
+import com.mio.ai.resource.model.entity.log.UserStatsDaily;
+import com.mio.ai.resource.model.entity.log.RagRetrievalLog;
 import com.mio.ai.resource.model.vo.log.ContributionVO;
 import com.mio.ai.resource.model.vo.log.TokenTrendVO;
 import com.mio.ai.resource.model.vo.log.UserProfileVO;
@@ -176,15 +176,15 @@ public class UserInsightServiceImpl implements UserInsightService {
             }
         }
 
-        vo.setAgentCount(agentService.count(new LambdaQueryWrapper<com.mio.ai.resource.model.entity.Agent>()
-                .eq(com.mio.ai.resource.model.entity.Agent::getUserId, userId)));
+        vo.setAgentCount(agentService.count(new LambdaQueryWrapper<com.mio.ai.resource.model.entity.agent.Agent>()
+                .eq(com.mio.ai.resource.model.entity.agent.Agent::getUserId, userId)));
         vo.setKnowledgeCount(knowledgeBaseService.count(
-                new LambdaQueryWrapper<com.mio.ai.resource.model.entity.KnowledgeBase>()
-                        .eq(com.mio.ai.resource.model.entity.KnowledgeBase::getUserId, userId)));
-        vo.setMcpCount(mcpToolService.count(new LambdaQueryWrapper<com.mio.ai.resource.model.entity.McpTool>()
-                .eq(com.mio.ai.resource.model.entity.McpTool::getUserId, userId)));
-        vo.setSkillCount(skillService.count(new LambdaQueryWrapper<com.mio.ai.resource.model.entity.Skill>()
-                .eq(com.mio.ai.resource.model.entity.Skill::getUserId, userId)));
+                new LambdaQueryWrapper<com.mio.ai.resource.model.entity.knowledge.KnowledgeBase>()
+                        .eq(com.mio.ai.resource.model.entity.knowledge.KnowledgeBase::getUserId, userId)));
+        vo.setMcpCount(mcpToolService.count(new LambdaQueryWrapper<com.mio.ai.resource.model.entity.mcp.McpTool>()
+                .eq(com.mio.ai.resource.model.entity.mcp.McpTool::getUserId, userId)));
+        vo.setSkillCount(skillService.count(new LambdaQueryWrapper<com.mio.ai.resource.model.entity.skill.Skill>()
+                .eq(com.mio.ai.resource.model.entity.skill.Skill::getUserId, userId)));
         vo.setToolCallCount(toolCallLogService.count(
                 new LambdaQueryWrapper<ToolCallLog>().eq(ToolCallLog::getUserId, userId)));
         vo.setRetrievalCount(ragRetrievalLogService.count(
@@ -192,8 +192,8 @@ public class UserInsightServiceImpl implements UserInsightService {
         vo.setSkillUseCount(skillUsageLogService.count(
                 new LambdaQueryWrapper<SkillUsageLog>().eq(SkillUsageLog::getUserId, userId)));
         vo.setActivityCount(userActivityLogService.count(
-                new LambdaQueryWrapper<com.mio.ai.resource.model.entity.UserActivityLog>()
-                        .eq(com.mio.ai.resource.model.entity.UserActivityLog::getUserId, userId)));
+                new LambdaQueryWrapper<com.mio.ai.resource.model.entity.log.UserActivityLog>()
+                        .eq(com.mio.ai.resource.model.entity.log.UserActivityLog::getUserId, userId)));
         return vo;
     }
 

@@ -104,10 +104,10 @@
 import { reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { ApiOutlined, DeleteOutlined, EditOutlined, LoadingOutlined, PlusOutlined } from '@ant-design/icons-vue'
-import { testProviderModel } from '@/api/modelSetting'
+import { testProviderModel } from '@/api/model'
 import { addLocalProvider, refreshModelCatalog, updateLocalProvider } from '@/composables/model/useModelCatalog'
-import { formatTokenBadge, isVisionModel } from '@/utils/modelPresets'
-import { PROVIDER_TEMPLATES, PROVIDER_TEMPLATE_GROUPS, type ProviderTemplate } from '@/utils/providerTemplates'
+import { formatTokenBadge, isVisionModel } from '@/utils/model/modelPresets'
+import { PROVIDER_TEMPLATES, PROVIDER_TEMPLATE_GROUPS, type ProviderTemplate } from '@/utils/model/providerTemplates'
 import { API_FORMAT_LABELS, type ApiFormat, type ConnectivityTestResult, type ModelEntry, type ModelProvider } from '@/types'
 import ModelEditModal from './ModelEditModal.vue'
 

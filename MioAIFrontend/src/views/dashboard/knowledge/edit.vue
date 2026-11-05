@@ -182,8 +182,8 @@ import {
   deleteDocument,
   revectorizeDocument,
   type Document
-} from '@/api/knowledgeBase'
-import { formatFileSize } from '@/utils/format'
+} from '@/api/knowledge'
+import { formatFileSize } from '@/utils/format/format'
 import type { KnowledgeBase } from '@/types'
 import { PlusOutlined, ReloadOutlined, AimOutlined } from '@ant-design/icons-vue'
 import KnowledgeBaseModal from './components/KnowledgeBaseModal.vue'

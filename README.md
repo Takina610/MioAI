@@ -159,12 +159,18 @@ Linux 沙箱是可选项：不配置 `mio.ai.sandbox.*` 时，文件读写与终
 
 ## 项目结构
 
+按"我要改什么"查目录见 [docs/CODE_MAP.md](./docs/CODE_MAP.md)。
+
 ```text
 MioAI/
 ├── MioAIBackend/                  Spring Boot 多模块
-│   ├── mio-admin/                 启动入口、application.yml
-│   ├── mio-agent/                 会话 SSE、智能体/知识库/MCP/技能资源、日志
+│   ├── mio-admin/                 启动入口、application.yml、管理后台
+│   ├── mio-agent/                 会话运行时（bot/）与资源域（resource/）
+│   │   ├── bot/{agent,controller,service,repository,mapper,model}/
+│   │   └── resource/{controller,service,mapper,model}/{agent,knowledge,mcp,skill,log}/
 │   ├── mio-framework/             zagent 引擎、RAG、MCP 客户端、SSH 沙箱、记忆
+│   │   ├── zagent/tools/{contract,fs,delegation,web,support}/
+│   │   └── rag/{reader,splitter,embedding,query,retrieval,rerank}/
 │   ├── mio-system/                用户、登录态
 │   ├── mio-common/                统一响应、异常、AOP、工具类
 │   ├── mio_ai.sql                 建库脚本（表结构 + 种子数据）
@@ -172,16 +178,28 @@ MioAI/
 │   └── doc/                       实验记录与问题跟踪
 ├── MioAIFrontend/                 Vue 3 单页应用
 │   ├── src/views/                 页面：首页、对话、控制台、管理后台、分享、调试
+│   │   └── chat/                  对话页（本仓库最复杂的一页）
+│   │       ├── lib/               纯函数工具（附件、引用标记、工具行展示）
+│   │       ├── composables/       stream / session / message / editor / attachment
+│   │       └── components/        layout / input / messages / dialogs / ui
+│   ├── src/api/                   接口，按领域分目录（chat/agent/knowledge/mcp/skill/usage/user/admin）
 │   ├── src/components/            跨页面共享组件（agent/auth/charts/content/icons/ui）
 │   ├── src/composables/           跨页面共享逻辑（admin/charts/chat/layout/model）
 │   ├── src/mobile/                移动端适配层（断点、外壳侧栏、抽屉）
-│   ├── src/api/ src/types/ src/utils/ src/store/ src/router/ src/styles/
+│   ├── src/types/ src/utils/ src/store/ src/router/ src/styles/
 │   └── nginx.conf                 静态托管 + /api 反代 + SSE 超时
 ├── assets/readme/                 README 视觉素材（SVG 源 + 截图）
-├── docs/                          架构与演进文档
+├── docs/                          架构、演进与代码地图
 ├── docker-compose.yml
 └── .env.example
 ```
+
+### 目录组织约定
+
+- 一个目录只放一类职责；文件数超过约 10 个时按二级职责再分一层。
+- 只服务单个页面的组件/逻辑放页面目录内，跨页面复用的才提升到 `src/components`、`src/composables`。
+- 后端先按业务域（agent / knowledge / mcp / skill / log / bot）分包，域内再按 `controller / service / mapper / model` 分层。
+- 无 Vue 依赖的纯逻辑放就近的 `lib/`，与实现同名的 `.test.ts` 放在一起。
 
 ## 接口
 
@@ -220,6 +238,7 @@ MioAI/
 
 ## 文档
 
+- [代码地图](./docs/CODE_MAP.md) —— 按"我要改什么"索引目录
 - [Agent 演进路线图](./docs/agent-evolution-roadmap.md)
 - [RAG 消融实验设计与写作指引](./MioAIBackend/doc/rag-eval-experiment.md)
 - [动态 UI 三期方案](./docs/dynamic-ui-phase3-plan.md)

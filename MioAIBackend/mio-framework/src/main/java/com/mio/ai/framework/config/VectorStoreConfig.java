@@ -58,8 +58,8 @@ public class VectorStoreConfig implements DisposableBean {
      * 防止 Spring Boot 的 JdbcTemplate 自动配置退避影响 MySQL 侧
      */
     @Bean
-    public com.mio.ai.framework.rag.KnowledgeChunkQueryClient knowledgeChunkQueryClient() {
-        return new com.mio.ai.framework.rag.KnowledgeChunkQueryClient(() -> {
+    public com.mio.ai.framework.rag.retrieval.KnowledgeChunkQueryClient knowledgeChunkQueryClient() {
+        return new com.mio.ai.framework.rag.retrieval.KnowledgeChunkQueryClient(() -> {
             org.springframework.jdbc.core.JdbcTemplate template = this.vectorJdbcTemplate;
             if (template == null) {
                 throw new IllegalStateException("向量库数据源尚未初始化");

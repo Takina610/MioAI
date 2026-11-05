@@ -2,7 +2,7 @@ package com.mio.ai.resource.controller.model;
 
 import com.mio.ai.bot.config.OpenCodeModelCatalog;
 import com.mio.ai.bot.service.ModelConnectivityTester;
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.utils.ResultUtils;

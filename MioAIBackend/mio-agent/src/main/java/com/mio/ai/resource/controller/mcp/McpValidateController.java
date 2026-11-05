@@ -1,8 +1,8 @@
 package com.mio.ai.resource.controller.mcp;
 
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.common.utils.ResultUtils;
-import com.mio.ai.resource.model.dto.mcptool.McpValidateRequest;
+import com.mio.ai.resource.model.dto.mcp.McpValidateRequest;
 import com.mio.ai.resource.model.vo.mcp.McpValidateResultVO;
 import com.mio.ai.resource.service.mcp.McpValidateService;
 import com.mio.ai.user.utils.RedisComponent;

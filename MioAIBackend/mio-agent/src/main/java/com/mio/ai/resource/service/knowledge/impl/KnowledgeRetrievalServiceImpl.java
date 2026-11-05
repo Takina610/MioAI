@@ -1,14 +1,14 @@
 package com.mio.ai.resource.service.knowledge.impl;
 
 import com.baomidou.mybatisplus.core.toolkit.StringUtils;
-import com.mio.ai.framework.rag.KnowledgeChunkQueryClient;
-import com.mio.ai.framework.rag.KeywordExtractor;
-import com.mio.ai.resource.model.entity.AgentKnowledge;
-import com.mio.ai.resource.model.entity.KnowledgeBase;
-import com.mio.ai.framework.rag.KnowledgeRetrievalResult;
-import com.mio.ai.framework.rag.RerankClient;
-import com.mio.ai.framework.rag.RetrievalConfig;
-import com.mio.ai.framework.rag.RetrievalOutcome;
+import com.mio.ai.framework.rag.retrieval.KnowledgeChunkQueryClient;
+import com.mio.ai.framework.rag.query.KeywordExtractor;
+import com.mio.ai.resource.model.entity.agent.AgentKnowledge;
+import com.mio.ai.resource.model.entity.knowledge.KnowledgeBase;
+import com.mio.ai.framework.rag.retrieval.KnowledgeRetrievalResult;
+import com.mio.ai.framework.rag.rerank.RerankClient;
+import com.mio.ai.framework.rag.retrieval.RetrievalConfig;
+import com.mio.ai.framework.rag.retrieval.RetrievalOutcome;
 import com.mio.ai.resource.service.agent.AgentKnowledgeService;
 import com.mio.ai.resource.service.knowledge.KnowledgeBaseService;
 import com.mio.ai.resource.service.knowledge.KnowledgeRetrievalService;
@@ -63,7 +63,7 @@ public class KnowledgeRetrievalServiceImpl implements KnowledgeRetrievalService 
     private VectorStore vectorStore;
 
     @Autowired
-    private com.mio.ai.framework.rag.EmbeddingThrottle embeddingThrottle;
+    private com.mio.ai.framework.rag.embedding.EmbeddingThrottle embeddingThrottle;
 
     @Autowired
     private KnowledgeChunkQueryClient chunkQueryClient;

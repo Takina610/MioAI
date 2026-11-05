@@ -1,9 +1,9 @@
 package com.mio.ai.resource.service.agent;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.mio.ai.resource.model.dto.agentknowledge.AgentKnowledgeAddRequest;
-import com.mio.ai.resource.model.dto.agentknowledge.AgentKnowledgeUpdateRequest;
-import com.mio.ai.resource.model.entity.AgentKnowledge;
+import com.mio.ai.resource.model.dto.agent.AgentKnowledgeAddRequest;
+import com.mio.ai.resource.model.dto.agent.AgentKnowledgeUpdateRequest;
+import com.mio.ai.resource.model.entity.agent.AgentKnowledge;
 import com.mio.ai.resource.model.vo.knowledge.AgentKnowledgeBindingVO;
 
 import java.util.List;

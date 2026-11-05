@@ -69,10 +69,10 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import MioMessage from '@/utils/message'
+import MioMessage from '@/utils/ui/message'
 import { useAdminTable } from '@/composables/admin/useAdminTable'
-import { deleteLog, searchLogs } from '@/api/adminLog'
-import type { AdminLogQueryRequest, AdminLogRow, AdminLogType } from '@/api/adminLog'
+import { deleteLog, searchLogs } from '@/api/admin/log'
+import type { AdminLogQueryRequest, AdminLogRow, AdminLogType } from '@/api/admin/log'
 import RecordTable from '@/views/admin/components/RecordTable.vue'
 import type { RecordRow } from '@/views/admin/components/recordTypes'
 import { LOG_TYPE_CONFIGS, LOG_TYPE_ORDER } from './config'

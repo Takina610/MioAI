@@ -1,12 +1,12 @@
 import { ref, type Ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { addAgentKnowledge, removeAgentKnowledgeByKbId } from '@/api/agentKnowledge'
-import { addAgentMcp, removeAgentMcpByMcpId } from '@/api/agentMcp'
-import { addAgentSkill, removeAgentSkillBySkillId } from '@/api/agentSkill'
-import { getPublicKnowledgeBases, queryKnowledgeBases, queryDocuments, type Document } from '@/api/knowledgeBase'
-import { getPublicMcpTools, queryMcpTools } from '@/api/mcpTool'
+import { addAgentKnowledge, removeAgentKnowledgeByKbId } from '@/api/agent/knowledge'
+import { addAgentMcp, removeAgentMcpByMcpId } from '@/api/agent/mcp'
+import { addAgentSkill, removeAgentSkillBySkillId } from '@/api/agent/skill'
+import { getPublicKnowledgeBases, queryKnowledgeBases, queryDocuments, type Document } from '@/api/knowledge'
+import { getPublicMcpTools, queryMcpTools } from '@/api/mcp'
 import { getPlazaSkills, installPlazaSkill, installSkill, querySkills } from '@/api/skill'
-import { parseMcpTools } from '@/utils/mcpTool'
+import { parseMcpTools } from '@/utils/domain/mcpTool'
 import type { AgentDetail, KnowledgeBase, McpTool, Skill } from '@/types'
 
 /** 展开列表的作用域：主列表/抽屉各自缓存一份文档数据 */

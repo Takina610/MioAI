@@ -1,4 +1,4 @@
-package com.mio.ai.common.aop.Aspect;
+package com.mio.ai.common.aop.aspect;
 
 import cn.hutool.http.server.HttpServerRequest;
 import com.mio.ai.common.utils.JacksonUtil;

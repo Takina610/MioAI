@@ -61,10 +61,10 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import MioMessage from '@/utils/message'
+import MioMessage from '@/utils/ui/message'
 import { useAdminTable } from '@/composables/admin/useAdminTable'
-import { deleteRuntime, searchRuntime } from '@/api/adminRuntime'
-import type { AdminRuntimeQueryRequest, AdminRuntimeRow, AdminRuntimeType } from '@/api/adminRuntime'
+import { deleteRuntime, searchRuntime } from '@/api/admin/runtime'
+import type { AdminRuntimeQueryRequest, AdminRuntimeRow, AdminRuntimeType } from '@/api/admin/runtime'
 import RecordTable from '@/views/admin/components/RecordTable.vue'
 import type { RecordRow } from '@/views/admin/components/recordTypes'
 import { RUNTIME_TYPE_CONFIGS, RUNTIME_TYPE_ORDER } from './config'

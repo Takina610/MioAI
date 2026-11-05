@@ -2,10 +2,10 @@ package com.mio.ai.resource.service.mcp;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.mio.ai.resource.model.dto.mcptool.McpToolAddRequest;
-import com.mio.ai.resource.model.dto.mcptool.McpToolQueryRequest;
-import com.mio.ai.resource.model.dto.mcptool.McpToolUpdateRequest;
-import com.mio.ai.resource.model.entity.McpTool;
+import com.mio.ai.resource.model.dto.mcp.McpToolAddRequest;
+import com.mio.ai.resource.model.dto.mcp.McpToolQueryRequest;
+import com.mio.ai.resource.model.dto.mcp.McpToolUpdateRequest;
+import com.mio.ai.resource.model.entity.mcp.McpTool;
 import com.mio.ai.resource.model.vo.mcp.McpToolVO;
 
 /**

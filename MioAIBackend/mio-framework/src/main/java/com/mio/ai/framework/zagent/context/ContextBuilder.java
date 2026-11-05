@@ -1,7 +1,7 @@
 package com.mio.ai.framework.zagent.context;
 
 import com.mio.ai.framework.zagent.memory.AgentMemory;
-import com.mio.ai.framework.zagent.tools.SandboxFs;
+import com.mio.ai.framework.zagent.tools.fs.SandboxFs;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;

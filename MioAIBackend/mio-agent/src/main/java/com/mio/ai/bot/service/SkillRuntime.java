@@ -1,7 +1,7 @@
 package com.mio.ai.bot.service;
 
-import com.mio.ai.framework.zagent.tools.SandboxFs;
-import com.mio.ai.resource.model.entity.Skill;
+import com.mio.ai.framework.zagent.tools.fs.SandboxFs;
+import com.mio.ai.resource.model.entity.skill.Skill;
 import com.mio.ai.common.utils.JacksonUtil;
 import lombok.extern.slf4j.Slf4j;
 

@@ -1,6 +1,6 @@
 package com.mio.ai.resource.service.skill;
 
-import com.mio.ai.resource.model.entity.Skill;
+import com.mio.ai.resource.model.entity.skill.Skill;
 import com.mio.ai.resource.model.vo.skill.GithubSkillPreviewVO;
 import com.mio.ai.resource.model.vo.skill.GithubSkillVO;
 

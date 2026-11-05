@@ -3,7 +3,7 @@ package com.mio.ai.resource.service.log.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.mio.ai.resource.mapper.log.UserStatsDailyMapper;
-import com.mio.ai.resource.model.entity.UserStatsDaily;
+import com.mio.ai.resource.model.entity.log.UserStatsDaily;
 import com.mio.ai.resource.service.log.UserStatsDailyService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

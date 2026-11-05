@@ -131,14 +131,14 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRoute } from 'vue-router'
-import MioMessage from '@/utils/message'
-import { formatDateTime } from '@/utils/format'
+import MioMessage from '@/utils/ui/message'
+import { formatDateTime } from '@/utils/format/format'
 import { useAdminTable } from '@/composables/admin/useAdminTable'
-import { deleteAgent, searchAgents, updateAgent } from '@/api/adminAgent'
+import { deleteAgent, searchAgents, updateAgent } from '@/api/admin/agent'
 import type { Agent, AgentQueryRequest } from '@/types'
 import BotIcon from '@/components/agent/bot-icon/BotIcon.vue'
 import { parseBotIcon, type BotIconConfig } from '@/components/agent/bot-icon/types'
-import RecordDrawer from './RecordDrawer.vue'
+import RecordDrawer from './AgentRecordDrawer.vue'
 
 const route = useRoute()
 const keyword = ref('')

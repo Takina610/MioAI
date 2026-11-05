@@ -1,8 +1,8 @@
 package com.mio.ai.admin.service;
 
 import com.mio.ai.admin.model.vo.AdminOverviewChartsVO;
-import com.mio.ai.resource.model.entity.AgentUsageLog;
-import com.mio.ai.resource.model.entity.UserStatsDaily;
+import com.mio.ai.resource.model.entity.log.AgentUsageLog;
+import com.mio.ai.resource.model.entity.log.UserStatsDaily;
 import com.mio.ai.resource.model.vo.log.TokenTrendVO;
 import com.mio.ai.resource.model.vo.log.UsageStatsVO;
 import com.mio.ai.resource.service.log.AgentDisplayResolver;

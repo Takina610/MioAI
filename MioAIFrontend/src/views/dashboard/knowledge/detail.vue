@@ -53,8 +53,8 @@ import { AimOutlined } from '@ant-design/icons-vue'
 import {
   getKnowledgeBaseById,
   type Document
-} from '@/api/knowledgeBase'
-import { formatFileSize } from '@/utils/format'
+} from '@/api/knowledge'
+import { formatFileSize } from '@/utils/format/format'
 import type { KnowledgeBase } from '@/types'
 import FilePreviewDrawer from './components/FilePreviewDrawer.vue'
 import PageHeader from '../components/PageHeader.vue'

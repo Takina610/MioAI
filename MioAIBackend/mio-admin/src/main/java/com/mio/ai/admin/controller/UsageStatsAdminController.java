@@ -1,14 +1,14 @@
 package com.mio.ai.admin.controller;
 
 import com.mio.ai.common.aop.annotation.AuthCheck;
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.common.constant.UserConstant;
 import com.mio.ai.common.utils.ResultUtils;
 import com.mio.ai.resource.model.vo.log.UsageAnalyticsVO;
 import com.mio.ai.resource.model.vo.log.UsageDayDetailVO;
 import com.mio.ai.resource.model.vo.log.UsageStatsVO;
 import com.mio.ai.resource.service.log.UsageStatsService;
-import com.mio.ai.resource.service.log.impl.UsageAnalyticsServiceImpl;
+import com.mio.ai.resource.service.log.analytics.UsageAnalyticsServiceImpl;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;

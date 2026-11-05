@@ -11,8 +11,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
 import com.mio.ai.common.aop.annotation.AuthCheck;
 import com.mio.ai.common.aop.annotation.LogInfo;
-import com.mio.ai.common.common.BaseResponse;
-import com.mio.ai.common.common.FileType;
+import com.mio.ai.common.api.BaseResponse;
+import com.mio.ai.common.api.FileType;
 import com.mio.ai.common.constant.SystemConstant;
 import com.mio.ai.common.constant.UserConstant;
 import com.mio.ai.common.exception.BusinessException;

@@ -16,13 +16,13 @@ import com.mio.ai.bot.service.AgentMessageService;
 import com.mio.ai.bot.service.ChatCascadeDeleteService;
 import com.mio.ai.bot.service.ChatFileService;
 import com.mio.ai.common.aop.annotation.AuthCheck;
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.common.constant.UserConstant;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.exception.ThrowUtils;
 import com.mio.ai.common.utils.ResultUtils;
-import com.mio.ai.admin.model.dto.AdminRecordQueryRequest;
+import com.mio.ai.admin.model.dto.record.AdminRecordQueryRequest;
 import com.mio.ai.resource.service.log.AgentDisplayResolver;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -106,8 +106,8 @@ public class ConversationAdminController {
             wrapper.in(!ownerIds.isEmpty(), "user_id", ownerIds);
         }
         if (StrUtil.isNotBlank(request.getAgentName())) {
-            List<Long> agentIds = agentService.list(new QueryWrapper<com.mio.ai.resource.model.entity.Agent>()
-                    .like("name", request.getAgentName())).stream().map(com.mio.ai.resource.model.entity.Agent::getId).toList();
+            List<Long> agentIds = agentService.list(new QueryWrapper<com.mio.ai.resource.model.entity.agent.Agent>()
+                    .like("name", request.getAgentName())).stream().map(com.mio.ai.resource.model.entity.agent.Agent::getId).toList();
             wrapper.in(agentIds.isEmpty(), "agent_id", List.of(-1L));
             wrapper.in(!agentIds.isEmpty(), "agent_id", agentIds);
         }
@@ -214,24 +214,24 @@ public class ConversationAdminController {
         QueryWrapper<?> usageWrapper = null;
         Class<?> entityClass = null;
         if (request.getKbId() != null) {
-            QueryWrapper<com.mio.ai.resource.model.entity.RagRetrievalLog> w = new QueryWrapper<>();
+            QueryWrapper<com.mio.ai.resource.model.entity.log.RagRetrievalLog> w = new QueryWrapper<>();
             w.eq("kb_id", request.getKbId());
-            entityClass = com.mio.ai.resource.model.entity.RagRetrievalLog.class;
+            entityClass = com.mio.ai.resource.model.entity.log.RagRetrievalLog.class;
             usageWrapper = w;
         } else if (request.getMcpId() != null) {
-            com.mio.ai.resource.model.entity.McpTool mcpTool = mcpToolService.getById(request.getMcpId());
+            com.mio.ai.resource.model.entity.mcp.McpTool mcpTool = mcpToolService.getById(request.getMcpId());
             ThrowUtils.throwIf(mcpTool == null, ErrorCode.NOT_FOUND_ERROR, "MCP 工具不存在");
             String server = com.mio.ai.resource.service.mcp.impl.McpClientManagerServiceImpl
                     .firstServerKey(mcpTool.getConfig(), mcpTool.getName());
-            QueryWrapper<com.mio.ai.resource.model.entity.ToolCallLog> w = new QueryWrapper<>();
+            QueryWrapper<com.mio.ai.resource.model.entity.log.ToolCallLog> w = new QueryWrapper<>();
             w.likeRight("name", "mcp__"
                     + com.mio.ai.resource.service.mcp.impl.McpClientManagerServiceImpl.sanitizeSegment(server) + "__");
-            entityClass = com.mio.ai.resource.model.entity.ToolCallLog.class;
+            entityClass = com.mio.ai.resource.model.entity.log.ToolCallLog.class;
             usageWrapper = w;
         } else {
-            QueryWrapper<com.mio.ai.resource.model.entity.SkillUsageLog> w = new QueryWrapper<>();
+            QueryWrapper<com.mio.ai.resource.model.entity.log.SkillUsageLog> w = new QueryWrapper<>();
             w.eq("skill_id", request.getSkillId());
-            entityClass = com.mio.ai.resource.model.entity.SkillUsageLog.class;
+            entityClass = com.mio.ai.resource.model.entity.log.SkillUsageLog.class;
             usageWrapper = w;
         }
         usageWrapper.select("conversation_id", "MAX(create_time) AS last_time", "MAX(user_id) AS user_id")
@@ -300,10 +300,10 @@ public class ConversationAdminController {
     /** 按实体类型路由的 selectMaps（聚合查询走原生 wrapper） */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private List<Map<String, Object>> logQueryMaps(Class<?> entityClass, QueryWrapper wrapper) {
-        if (entityClass == com.mio.ai.resource.model.entity.RagRetrievalLog.class) {
+        if (entityClass == com.mio.ai.resource.model.entity.log.RagRetrievalLog.class) {
             return ragRetrievalLogService.listMaps(wrapper);
         }
-        if (entityClass == com.mio.ai.resource.model.entity.ToolCallLog.class) {
+        if (entityClass == com.mio.ai.resource.model.entity.log.ToolCallLog.class) {
             return toolCallLogService.listMaps(wrapper);
         }
         return skillUsageLogService.listMaps(wrapper);

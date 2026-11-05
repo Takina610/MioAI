@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mio.ai.framework.zagent.task.BackgroundTaskStore;
 import com.mio.ai.framework.zagent.task.BackgroundTasks;
 import com.mio.ai.resource.mapper.task.AgentBackgroundTaskMapper;
-import com.mio.ai.resource.model.entity.AgentBackgroundTask;
+import com.mio.ai.resource.model.entity.agent.AgentBackgroundTask;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

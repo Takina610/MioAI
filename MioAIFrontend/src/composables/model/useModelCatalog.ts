@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { getFreeCatalog } from '@/api/modelSetting'
+import { getFreeCatalog } from '@/api/model'
 import type { FreeModel, ModelEntry, ModelProvider, ModelSelection } from '@/types'
 
 /** 本地存储键：自定义供应商与当前选择仅存浏览器本地，不上传任何服务端 */

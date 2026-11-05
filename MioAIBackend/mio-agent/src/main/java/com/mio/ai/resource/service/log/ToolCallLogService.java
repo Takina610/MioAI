@@ -3,7 +3,7 @@ package com.mio.ai.resource.service.log;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.mio.ai.resource.model.dto.log.ToolCallLogQueryRequest;
-import com.mio.ai.resource.model.entity.ToolCallLog;
+import com.mio.ai.resource.model.entity.log.ToolCallLog;
 import com.mio.ai.resource.model.vo.log.ToolCallLogVO;
 
 /**

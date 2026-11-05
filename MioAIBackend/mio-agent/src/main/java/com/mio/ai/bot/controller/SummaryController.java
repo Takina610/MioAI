@@ -6,7 +6,7 @@ import com.mio.ai.bot.mapper.ChatConversationDOMapper;
 import com.mio.ai.bot.model.dto.ChatMessageRequest;
 import com.mio.ai.bot.model.entity.ChatConversationDO;
 import com.mio.ai.bot.util.ChatTitles;
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.common.utils.ResultUtils;
 import cn.hutool.core.util.StrUtil;
 import jakarta.annotation.Resource;

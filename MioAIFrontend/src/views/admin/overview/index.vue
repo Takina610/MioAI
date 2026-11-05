@@ -106,12 +106,12 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import MioMessage from '@/utils/message'
-import { getOverviewCharts, getOverviewStats } from '@/api/adminOverview'
-import type { OverviewCharts, OverviewStats, TrendMetric } from '@/api/adminOverview'
+import MioMessage from '@/utils/ui/message'
+import { getOverviewCharts, getOverviewStats } from '@/api/admin/overview'
+import type { OverviewCharts, OverviewStats, TrendMetric } from '@/api/admin/overview'
 import { formatCompact } from '@/views/dashboard/usage/composables/format'
-import TokenTrendChart from '@/views/dashboard/usage/components/TokenTrendChart.vue'
-import UsageRankList from '@/views/dashboard/usage/components/UsageRankList.vue'
+import TokenTrendChart from '@/views/dashboard/usage/components/charts/TokenTrendChart.vue'
+import UsageRankList from '@/views/dashboard/usage/components/lists/UsageRankList.vue'
 import DailyTrendChart from './components/DailyTrendChart.vue'
 import AgentDistPie from './components/AgentDistPie.vue'
 

@@ -270,7 +270,7 @@ import {
 import AgentCreateModal from '@/components/agent/AgentCreateModal.vue'
 import BotIcon from '@/components/agent/bot-icon/BotIcon.vue'
 import { parseBotIcon } from '@/components/agent/bot-icon/types'
-import { countMcpTools } from '@/utils/mcpTool'
+import { countMcpTools } from '@/utils/domain/mcpTool'
 import PageHeader from '../components/PageHeader.vue'
 import ResourceItem from './components/ResourceItem.vue'
 import ResourceExpandList from './components/ResourceExpandList.vue'

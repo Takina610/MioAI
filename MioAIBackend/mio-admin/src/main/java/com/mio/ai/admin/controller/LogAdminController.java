@@ -5,22 +5,22 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.mio.ai.admin.component.AdminNameResolver;
-import com.mio.ai.admin.model.dto.AdminRecordQueryRequest;
+import com.mio.ai.admin.model.dto.record.AdminRecordQueryRequest;
 import com.mio.ai.admin.model.vo.AdminRecordVO;
 import com.mio.ai.resource.service.log.AgentDisplayResolver;
 import com.mio.ai.common.aop.annotation.AuthCheck;
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.common.constant.UserConstant;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.common.exception.ThrowUtils;
 import com.mio.ai.common.utils.ResultUtils;
-import com.mio.ai.resource.model.entity.AgentUsageLog;
-import com.mio.ai.resource.model.entity.RagRetrievalLog;
-import com.mio.ai.resource.model.entity.SkillUsageLog;
-import com.mio.ai.resource.model.entity.ToolCallLog;
-import com.mio.ai.resource.model.entity.UserActivityLog;
-import com.mio.ai.resource.model.entity.UserStatsDaily;
+import com.mio.ai.resource.model.entity.log.AgentUsageLog;
+import com.mio.ai.resource.model.entity.log.RagRetrievalLog;
+import com.mio.ai.resource.model.entity.log.SkillUsageLog;
+import com.mio.ai.resource.model.entity.log.ToolCallLog;
+import com.mio.ai.resource.model.entity.log.UserActivityLog;
+import com.mio.ai.resource.model.entity.log.UserStatsDaily;
 import com.mio.ai.resource.service.log.AgentUsageLogService;
 import com.mio.ai.resource.service.log.RagRetrievalLogService;
 import com.mio.ai.resource.service.log.SkillUsageLogService;
@@ -143,7 +143,7 @@ public class LogAdminController {
         wrapper.like(StrUtil.isNotBlank(q.getKeyword()), "name", q.getKeyword());
         // 按 MCP 工具关联：解析该工具注册时的调用名前缀 mcp__<server>__
         if (q.getMcpId() != null) {
-            com.mio.ai.resource.model.entity.McpTool mcpTool = mcpToolService.getById(q.getMcpId());
+            com.mio.ai.resource.model.entity.mcp.McpTool mcpTool = mcpToolService.getById(q.getMcpId());
             if (mcpTool != null) {
                 String server = com.mio.ai.resource.service.mcp.impl.McpClientManagerServiceImpl
                         .firstServerKey(mcpTool.getConfig(), mcpTool.getName());

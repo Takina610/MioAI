@@ -60,7 +60,7 @@ import { message } from 'ant-design-vue'
 import { ThunderboltOutlined, GithubOutlined } from '@ant-design/icons-vue'
 import { getPlazaSkills, installPlazaSkill } from '@/api/skill'
 import { useUserStore } from '@/store/user'
-import { formatDate } from '@/utils/format'
+import { formatDate } from '@/utils/format/format'
 import type { Skill } from '@/types/skill'
 import PageHeader from '../components/PageHeader.vue'
 

@@ -7,8 +7,8 @@ import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.framework.mcp.McpClientFactory;
 import com.mio.ai.resource.mapper.agent.AgentMcpMapper;
-import com.mio.ai.resource.model.dto.agentmcp.AgentMcpAddRequest;
-import com.mio.ai.resource.model.entity.AgentMcp;
+import com.mio.ai.resource.model.dto.agent.AgentMcpAddRequest;
+import com.mio.ai.resource.model.entity.agent.AgentMcp;
 import com.mio.ai.resource.service.agent.AgentMcpService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -82,7 +82,7 @@ public class AgentMcpServiceImpl extends ServiceImpl<AgentMcpMapper, AgentMcp> i
         if (mcpStdioGuard == null) {
             return false;
         }
-        com.mio.ai.resource.model.entity.McpTool base = mcpId == null ? null : this.getBaseMcp(mcpId);
+        com.mio.ai.resource.model.entity.mcp.McpTool base = mcpId == null ? null : this.getBaseMcp(mcpId);
         if (base != null && isStdioConfig(base.getConfig())) {
             return false;
         }
@@ -93,7 +93,7 @@ public class AgentMcpServiceImpl extends ServiceImpl<AgentMcpMapper, AgentMcp> i
     }
 
     /** 读取 MCP 原始配置（避免与 McpToolService 循环依赖，直接用 mapper 查询） */
-    private com.mio.ai.resource.model.entity.McpTool getBaseMcp(Long mcpId) {
+    private com.mio.ai.resource.model.entity.mcp.McpTool getBaseMcp(Long mcpId) {
         return mcpToolMapper.selectById(mcpId);
     }
 

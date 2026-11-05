@@ -1,12 +1,12 @@
 package com.mio.ai.resource.controller.knowledge;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.user.utils.RedisComponent;
 import com.mio.ai.common.utils.ResultUtils;
-import com.mio.ai.resource.model.dto.knowledgebase.KnowledgeBaseAddRequest;
-import com.mio.ai.resource.model.dto.knowledgebase.KnowledgeBaseQueryRequest;
-import com.mio.ai.resource.model.dto.knowledgebase.KnowledgeBaseUpdateRequest;
+import com.mio.ai.resource.model.dto.knowledge.KnowledgeBaseAddRequest;
+import com.mio.ai.resource.model.dto.knowledge.KnowledgeBaseQueryRequest;
+import com.mio.ai.resource.model.dto.knowledge.KnowledgeBaseUpdateRequest;
 import com.mio.ai.resource.model.vo.knowledge.KnowledgeBaseVO;
 import com.mio.ai.resource.service.knowledge.KnowledgeBaseService;
 import jakarta.annotation.Resource;

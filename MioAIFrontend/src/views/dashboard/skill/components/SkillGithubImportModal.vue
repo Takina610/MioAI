@@ -68,7 +68,7 @@ import { message } from 'ant-design-vue'
 import { GithubOutlined } from '@ant-design/icons-vue'
 import { previewGithubSkills, importGithubSkills } from '@/api/skill'
 import type { GithubSkillPreview } from '@/types/skill'
-import { formatFileSize } from '@/utils/format'
+import { formatFileSize } from '@/utils/format/format'
 
 defineProps<{
   visible: boolean

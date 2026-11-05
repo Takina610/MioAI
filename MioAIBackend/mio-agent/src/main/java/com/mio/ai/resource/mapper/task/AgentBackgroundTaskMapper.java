@@ -1,7 +1,7 @@
 package com.mio.ai.resource.mapper.task;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.mio.ai.resource.model.entity.AgentBackgroundTask;
+import com.mio.ai.resource.model.entity.agent.AgentBackgroundTask;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Select;
 

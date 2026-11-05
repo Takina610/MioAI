@@ -43,7 +43,7 @@
 
 <script setup lang="ts">
 import { CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons-vue'
-import { formatValidateError } from '@/utils/mcpTool'
+import { formatValidateError } from '@/utils/domain/mcpTool'
 import type { McpValidateResult } from '@/types'
 import McpToolList from './McpToolList.vue'
 

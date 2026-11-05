@@ -1,7 +1,7 @@
 package com.mio.ai.resource.controller.agent;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.common.exception.ErrorCode;
 import com.mio.ai.user.utils.RedisComponent;
@@ -14,7 +14,7 @@ import com.mio.ai.resource.model.vo.agent.AgentDetailVO;
 import com.mio.ai.resource.model.vo.agent.AgentUserConfigVO;
 import com.mio.ai.resource.model.vo.agent.AgentVO;
 import com.mio.ai.resource.model.vo.agent.AgentVersionVO;
-import com.mio.ai.resource.model.entity.Agent;
+import com.mio.ai.resource.model.entity.agent.Agent;
 import com.mio.ai.resource.service.agent.AgentService;
 import com.mio.ai.resource.service.agent.AgentUserConfigService;
 import com.mio.ai.resource.service.security.AccessGuardService;
@@ -214,7 +214,7 @@ public class AgentController {
             @PathVariable Long agentId, HttpServletRequest httpRequest) {
         Long userId = redisComponent.getUserId(httpRequest.getHeader("token"));
         requireBuiltinAgent(agentId);
-        com.mio.ai.resource.model.entity.AgentUserConfig config =
+        com.mio.ai.resource.model.entity.agent.AgentUserConfig config =
                 agentUserConfigService.getOverride(userId, agentId);
         if (config == null) {
             return ResultUtils.success(null);

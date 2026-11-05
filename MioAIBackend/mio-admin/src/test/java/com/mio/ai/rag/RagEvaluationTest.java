@@ -2,7 +2,7 @@ package com.mio.ai.rag;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mio.ai.framework.rag.KnowledgeRetrievalResult;
+import com.mio.ai.framework.rag.retrieval.KnowledgeRetrievalResult;
 import com.mio.ai.resource.service.knowledge.KnowledgeRetrievalService;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;

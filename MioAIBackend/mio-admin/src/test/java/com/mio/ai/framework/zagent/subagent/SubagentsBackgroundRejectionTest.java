@@ -3,7 +3,7 @@ package com.mio.ai.framework.zagent.subagent;
 import com.mio.ai.framework.zagent.AgentEngineConfig;
 import com.mio.ai.framework.zagent.AgentEvents;
 import com.mio.ai.framework.zagent.task.BackgroundTasks;
-import com.mio.ai.framework.zagent.tools.ToolsetFactory;
+import com.mio.ai.framework.zagent.tools.contract.ToolsetFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;

@@ -1,10 +1,10 @@
 package com.mio.ai.resource.controller.agent;
 
-import com.mio.ai.common.common.BaseResponse;
+import com.mio.ai.common.api.BaseResponse;
 import com.mio.ai.user.utils.RedisComponent;
 import com.mio.ai.common.utils.ResultUtils;
-import com.mio.ai.resource.model.dto.agentmcp.AgentMcpAddRequest;
-import com.mio.ai.resource.model.entity.AgentMcp;
+import com.mio.ai.resource.model.dto.agent.AgentMcpAddRequest;
+import com.mio.ai.resource.model.entity.agent.AgentMcp;
 import com.mio.ai.resource.service.agent.AgentMcpService;
 import com.mio.ai.resource.service.security.AccessGuardService;
 import jakarta.annotation.Resource;

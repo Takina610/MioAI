@@ -60,8 +60,8 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { Document } from '@/api/knowledgeBase'
-import { formatFileSize, formatLocaleDateTime } from '@/utils/format'
+import type { Document } from '@/api/knowledge'
+import { formatFileSize, formatLocaleDateTime } from '@/utils/format/format'
 
 const props = withDefaults(defineProps<{
   documents: Document[]

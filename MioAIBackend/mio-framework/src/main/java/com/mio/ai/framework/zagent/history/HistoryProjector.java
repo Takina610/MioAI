@@ -1,7 +1,7 @@
 package com.mio.ai.framework.zagent.history;
 
 import com.mio.ai.framework.zagent.history.ConversationEntry.ToolCallInput;
-import com.mio.ai.framework.zagent.tools.ToolMedia;
+import com.mio.ai.framework.zagent.tools.contract.ToolMedia;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;

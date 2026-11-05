@@ -120,7 +120,7 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { CloseOutlined, PlusOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue'
 import type { ModelEntry } from '@/types'
-import { matchModelPreset } from '@/utils/modelPresets'
+import { matchModelPreset } from '@/utils/model/modelPresets'
 
 const props = defineProps<{
   open: boolean

@@ -69,8 +69,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getMcpToolById } from '@/api/mcpTool'
-import { parseMcpTools } from '@/utils/mcpTool'
+import { getMcpToolById } from '@/api/mcp'
+import { parseMcpTools } from '@/utils/domain/mcpTool'
 import type { McpTool } from '@/types'
 import dayjs from 'dayjs'
 import PageHeader from '../components/PageHeader.vue'

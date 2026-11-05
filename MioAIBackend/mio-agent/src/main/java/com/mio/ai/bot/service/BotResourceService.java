@@ -2,11 +2,11 @@ package com.mio.ai.bot.service;
 
 import com.mio.ai.bot.agent.MioBot;
 import com.mio.ai.common.utils.JacksonUtil;
-import com.mio.ai.framework.rag.KnowledgeRetrievalResult;
-import com.mio.ai.framework.rag.RetrievalOutcome;
-import com.mio.ai.resource.model.entity.KnowledgeBase;
-import com.mio.ai.resource.model.entity.RagRetrievalLog;
-import com.mio.ai.resource.model.entity.Skill;
+import com.mio.ai.framework.rag.retrieval.KnowledgeRetrievalResult;
+import com.mio.ai.framework.rag.retrieval.RetrievalOutcome;
+import com.mio.ai.resource.model.entity.knowledge.KnowledgeBase;
+import com.mio.ai.resource.model.entity.log.RagRetrievalLog;
+import com.mio.ai.resource.model.entity.skill.Skill;
 import com.mio.ai.resource.service.knowledge.KnowledgeBaseService;
 import com.mio.ai.resource.service.knowledge.KnowledgeRetrievalService;
 import com.mio.ai.resource.service.log.RagRetrievalLogService;
@@ -157,7 +157,7 @@ public class BotResourceService {
         long startTime = System.currentTimeMillis();
         RetrievalOutcome outcome;
         try {
-            outcome = knowledgeRetrievalService.retrieveDetailed(readableKbIds, query, com.mio.ai.framework.rag.RetrievalConfig.defaults());
+            outcome = knowledgeRetrievalService.retrieveDetailed(readableKbIds, query, com.mio.ai.framework.rag.retrieval.RetrievalConfig.defaults());
         } catch (Exception e) {
             log.error("引用知识库检索失败, kbIds={}", readableKbIds, e);
             return KnowledgeBuild.empty();

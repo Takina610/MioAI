@@ -3,7 +3,7 @@ package com.mio.ai.bot.agent;
 import com.mio.ai.bot.service.BotResourceService;
 import com.mio.ai.bot.service.SkillRuntime;
 import com.mio.ai.framework.zagent.subagent.MemberLauncher;
-import com.mio.ai.framework.zagent.tools.SandboxFs;
+import com.mio.ai.framework.zagent.tools.fs.SandboxFs;
 import org.springframework.ai.tool.ToolCallback;
 
 import java.util.List;

@@ -250,7 +250,7 @@ import {
   QuestionCircleOutlined,
   LoadingOutlined
 } from '@ant-design/icons-vue'
-import { addKnowledgeBase, updateKnowledgeBase, uploadKnowledgeFiles, cancelKnowledgeCreation, vectorizeKnowledgeFiles, type UploadResult } from '@/api/knowledgeBase'
+import { addKnowledgeBase, updateKnowledgeBase, uploadKnowledgeFiles, cancelKnowledgeCreation, vectorizeKnowledgeFiles, type UploadResult } from '@/api/knowledge'
 
 interface Props {
   visible: boolean

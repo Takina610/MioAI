@@ -31,7 +31,7 @@
 <script setup lang="ts">
 import { AimOutlined, DatabaseOutlined, FileTextOutlined } from '@ant-design/icons-vue'
 import type { KnowledgeBase } from '@/types'
-import { formatDate, formatFileSize } from '@/utils/format'
+import { formatDate, formatFileSize } from '@/utils/format/format'
 
 defineProps<{
   kb: KnowledgeBase

@@ -2,7 +2,7 @@ package com.mio.ai.resource.service.log.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.mio.ai.resource.mapper.log.UserActivityLogMapper;
-import com.mio.ai.resource.model.entity.UserActivityLog;
+import com.mio.ai.resource.model.entity.log.UserActivityLog;
 import com.mio.ai.resource.service.log.UserActivityLogService;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
