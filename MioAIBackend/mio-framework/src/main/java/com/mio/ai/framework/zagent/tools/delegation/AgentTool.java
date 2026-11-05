@@ -21,6 +21,12 @@ public final class AgentTool {
     private final SubagentLauncher launcher;
     private final long delegationTimeoutMs;
     /**
+     * 工具描述覆盖（null = 用内置档案描述）。群聊里可委派的只有成员，
+     * 内置档案（general-purpose/Explore）根本不存在——描述里列它们会诱导模型
+     * 反复尝试不存在的类型，或放弃委派自己硬做。
+     */
+    private final String descriptionOverride;
+    /**
      * 单轮并行委派配额：AgentTool 每次 build() 新建（一次运行一个），
      * 因此信号量天然就是"本轮"范围。模型一轮里发起的委派超过配额时快速失败，
      * 而不是全部压进委派池排队——否则用户会看到"点了没反应"的长时间等待。
@@ -42,7 +48,7 @@ public final class AgentTool {
     private static final long PERMIT_WAIT_MS = 300;
 
     public AgentTool(SubagentLauncher launcher) {
-        this(launcher, 0, 0);
+        this(launcher, 0, 0, null);
     }
 
     /**
@@ -50,9 +56,19 @@ public final class AgentTool {
      * @param maxConcurrent       单轮并行委派上限；&lt;=0 表示不限
      */
     public AgentTool(SubagentLauncher launcher, long delegationTimeoutMs, int maxConcurrent) {
+        this(launcher, delegationTimeoutMs, maxConcurrent, null);
+    }
+
+    /**
+     * @param descriptionOverride 工具描述覆盖（null = 内置档案描述）：群聊传成员名单描述，
+     *                            避免描述里出现根本不存在的内置档案
+     */
+    public AgentTool(SubagentLauncher launcher, long delegationTimeoutMs, int maxConcurrent,
+                     String descriptionOverride) {
         this.launcher = launcher;
         this.delegationTimeoutMs = Math.max(0, delegationTimeoutMs);
         this.delegationQuota = Math.max(0, maxConcurrent);
+        this.descriptionOverride = descriptionOverride;
         this.delegationSlots = maxConcurrent > 0
                 ? new java.util.concurrent.Semaphore(maxConcurrent) : null;
     }
@@ -66,7 +82,9 @@ public final class AgentTool {
                 "run_in_background":{"type":"boolean","description":"Set to true to run this agent in the background."}},
                 "required":["description","prompt"]}""";
         // 并发编排工具：多个委派相互独立，可并行执行（群聊并行委派多个成员不叠加等待）
-        return ToolEntry.ofDelegation("Agent", AGENT_HEADER, schema, delegationTimeoutMs, this::execute);
+        return ToolEntry.ofDelegation("Agent",
+                descriptionOverride != null ? descriptionOverride : AGENT_HEADER,
+                schema, delegationTimeoutMs, this::execute);
     }
 
     public String execute(com.fasterxml.jackson.databind.JsonNode input, ToolContext ctx) {

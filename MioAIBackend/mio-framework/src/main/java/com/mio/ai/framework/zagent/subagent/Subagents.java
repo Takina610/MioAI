@@ -290,6 +290,11 @@ public final class Subagents implements SubagentLauncher {
         if (plan.description() != null && !plan.description().isBlank()) {
             systemPrompt += "\n\n# 角色描述\n" + plan.description().strip();
         }
+        // 成员在本会话的线程上下文：同一成员多次被委派时接续自己此前的发言，
+        // 不必让群主每次把前情复述一遍（Thread 订阅的会话内对位）
+        if (plan.threadContext() != null && !plan.threadContext().isBlank()) {
+            systemPrompt += "\n\n# 你在本会话中的先前发言\n" + plan.threadContext().strip();
+        }
         MemberStreamingEvents events = new MemberStreamingEvents(memberPresenter, agentId);
         Outcome outcome = runEngine(systemPrompt, List.of("*"), plan.mcpTools(),
                 plan.knowledgeContext(), plan.skillsContext(), agentId, prompt, events);

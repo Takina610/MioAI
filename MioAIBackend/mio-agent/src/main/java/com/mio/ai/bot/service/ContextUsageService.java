@@ -74,6 +74,15 @@ public class ContextUsageService {
      */
     public Map<String, Object> estimate(String chatId, Long userId, long agentId, String customSystemPrompt,
                                         long windowOverride) {
+        return estimate(chatId, userId, agentId, customSystemPrompt, windowOverride, false);
+    }
+
+    /**
+     * @param groupChat 群聊智能体：调度层只装配分派与对外交互工具，环境工具不下发——
+     *                  工具占用必须与真实轮次同口径，否则容量指示会虚高
+     */
+    public Map<String, Object> estimate(String chatId, Long userId, long agentId, String customSystemPrompt,
+                                        long windowOverride, boolean groupChat) {
         checkOwnership(chatId, userId);
         long windowTokens = windowOverride > 0 ? windowOverride : contextWindowTokens;
 
@@ -100,8 +109,10 @@ public class ContextUsageService {
         // 工具 schema：内置工具与真实轮次同一注册逻辑（含 Agent/AskUserQuestion）；
         // MCP 工具直接按装配出的 callback 定义估算
         long systemToolsTokens = 0;
+        List<String> allowedTools = groupChat
+                ? com.mio.ai.bot.agent.GroupPrompts.ORCHESTRATOR_TOOLS : null;
         ToolRegistry registry = toolsetFactory.build(chatId, new ConversationState(), List.of(),
-                null, noopLauncher(), noopEvents(), null);
+                allowedTools, noopLauncher(), noopEvents(), null);
         try {
             for (ToolCallback callback : registry.asToolCallbacks()) {
                 systemToolsTokens += estimateDefinition(callback.getToolDefinition());

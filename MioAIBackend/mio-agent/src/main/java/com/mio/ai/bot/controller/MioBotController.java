@@ -265,9 +265,10 @@ public class MioBotController {
         String token = httpRequest.getHeader("token");
         Long userId = StrUtil.isBlank(token) ? null : redisComponent.getUserId(token);
         long resolvedAgentId = agentId != null ? agentId : MioBot.AGENT_ID;
-        String customSystemPrompt = resolvePromptContext(resolvedAgentId, userId).systemPrompt();
+        PromptContext promptContext = resolvePromptContext(resolvedAgentId, userId);
         return ResultUtils.success(contextUsageService.estimate(chatId, userId, resolvedAgentId,
-                customSystemPrompt, resolveContextWindow(source, model, contextWindow)));
+                promptContext.systemPrompt(), resolveContextWindow(source, model, contextWindow),
+                promptContext.coordinator() != null));
     }
 
     /**

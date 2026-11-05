@@ -240,6 +240,7 @@ MioAI/
 
 - [代码地图](./docs/CODE_MAP.md) —— 按"我要改什么"索引目录
 - [Agent 演进路线图](./docs/agent-evolution-roadmap.md)
+- [Super-agent 设计与群聊调度对照](./docs/superagent-group-scheduling.md)
 - [RAG 消融实验设计与写作指引](./MioAIBackend/doc/rag-eval-experiment.md)
 - [动态 UI 三期方案](./docs/dynamic-ui-phase3-plan.md)
 - [MCP 问题跟踪](./MioAIBackend/doc/mcp-issues-2026-10.md)

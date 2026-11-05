@@ -331,6 +331,11 @@ public class MioBot {
             ConversationState state = new ConversationState();
             state.entries().addAll(hydrated.entries());
             state.setTodos(hydrated.todos());
+            // 群聊：成员历次发言并入成员线程，委派时内联——成员不必每轮从零开始。
+            // 必须在 fillGroupMembers 之前（历史在前，本轮产出在后）
+            if (groupCoordinator != null) {
+                groupCoordinator.mergeHistory(hydrated.memberHistory());
+            }
 
             BotAgentEvents events = new BotAgentEvents(state);
             // 技能物化到沙箱 skills/ 目录，并生成注入上下文的技能清单段（无技能/沙箱不可用时为 null）
@@ -372,8 +377,16 @@ public class MioBot {
                         groupCoordinator != null ? new GroupMemberPresenter() : null, memberUsageListener);
                 // 群聊：成员委派以平等消息块呈现，Agent 工具行不进主消息流
                 channel.setSuppressAgentToolRows(groupCoordinator != null);
-                registry = toolsetFactory.build(chatId, state, mcpTools, null, launcher, events, toolHooks,
-                        ownerKey(), config.delegationTimeoutMs(), config.maxConcurrentDelegations());
+                // 群聊调度层（Router）只装配分派与对外交互工具：环境类工具整体不注册，
+                // 执行一律下沉到成员（Worker）——这条边界由工具面保证，不靠提示词约束
+                List<String> allowedTools = groupCoordinator != null
+                        ? GroupPrompts.ORCHESTRATOR_TOOLS : null;
+                // 群聊的 Agent 工具描述必须只列成员：默认描述里的 general-purpose/Explore 在这里不存在
+                String agentToolDesc = groupCoordinator != null
+                        ? GroupPrompts.agentToolDescription(groupCoordinator.members()) : null;
+                registry = toolsetFactory.build(chatId, state, mcpTools, allowedTools, launcher, events, toolHooks,
+                        ownerKey(), config.delegationTimeoutMs(), config.maxConcurrentDelegations(),
+                        agentToolDesc);
                 // 动态 UI 块工具：仅主轮次注册（子代理注册表不含），校验通过的块经通道下发/落库；
                 // 图片块按本会话 image_search 登记簿核对 url（防伪造）并回填来源元数据
                 registry.register(UiRenderTool.entry(channel,
@@ -545,21 +558,39 @@ public class MioBot {
             sb.append("\n\n<system-reminder>\n").append(refs).append("\n</system-reminder>");
         }
         if (!attachments.isEmpty() && fs != null && fileTransfer != null && fileTransfer.available()) {
-            sb.append("\n\n<system-reminder>\n# 用户附件\n用户随本条消息上传了文件（上传已在对话外完成，"
-                    + "文件就在沙箱工作区——不存在任何上传工具，不要尝试上传/下载，直接用文件工具读取）：\n");
-            for (AttachmentItem item : attachments) {
-                sb.append("- `").append(item.path()).append('`');
-                String storedName = item.path().substring(item.path().lastIndexOf('/') + 1);
-                if (item.name() != null && !item.name().isBlank() && !item.name().equals(storedName)) {
-                    sb.append("（原始文件名: ").append(item.name()).append('）');
+            if (groupCoordinator != null) {
+                // 调度层没有文件工具：附件必须交给成员处理，否则模型会尝试调用不存在的 Read 而空转
+                sb.append("\n\n<system-reminder>\n# 用户附件\n用户随本条消息上传了文件（已在沙箱工作区）：\n");
+                for (AttachmentItem item : attachments) {
+                    sb.append("- `").append(item.path()).append('`');
+                    if (item.name() != null && !item.name().isBlank()
+                            && !item.name().equals(item.path().substring(item.path().lastIndexOf('/') + 1))) {
+                        sb.append("（原始文件名: ").append(item.name()).append('）');
+                    }
+                    if (item.size() > 0) {
+                        sb.append("，").append(humanSize(item.size()));
+                    }
+                    sb.append('\n');
                 }
-                if (item.size() > 0) {
-                    sb.append("，").append(humanSize(item.size()));
+                sb.append("你没有文件工具：把上述路径写进委派任务的 prompt，由成员读取处理。\n</system-reminder>");
+            } else {
+                sb.append("\n\n<system-reminder>\n# 用户附件\n用户随本条消息上传了文件（上传已在对话外完成，"
+                        + "文件就在沙箱工作区——不存在任何上传工具，不要尝试上传/下载，直接用文件工具读取）：\n");
+                for (AttachmentItem item : attachments) {
+                    sb.append("- `").append(item.path()).append('`');
+                    String storedName = item.path().substring(item.path().lastIndexOf('/') + 1);
+                    if (item.name() != null && !item.name().isBlank() && !item.name().equals(storedName)) {
+                        sb.append("（原始文件名: ").append(item.name()).append('）');
+                    }
+                    if (item.size() > 0) {
+                        sb.append("，").append(humanSize(item.size()));
+                    }
+                    sb.append('\n');
                 }
-                sb.append('\n');
+                sb.append("如需把处理后的文件交付给用户，写入 outputs/")
+                        .append(SandboxFileTransfer.safeDir(chatId))
+                        .append("/ 目录（已创建）：本轮结束后其中的新文件会自动作为可下载附件展示给用户。\n</system-reminder>");
             }
-            sb.append("如需把处理后的文件交付给用户，写入 outputs/").append(SandboxFileTransfer.safeDir(chatId))
-                    .append("/ 目录（已创建）：本轮结束后其中的新文件会自动作为可下载附件展示给用户。\n</system-reminder>");
         }
         String prompt = sb.toString();
         if (UI_INTENT_PATTERN.matcher(prompt).find() && !PLAIN_TEXT_PATTERN.matcher(prompt).find()) {
@@ -832,21 +863,38 @@ public class MioBot {
     /**
      * 群成员展示回调：成员执行以平等消息呈现——开始/回答流/结束分别落 member 块与事件，
      * 用户在消息流里直接看到各成员的作答（不经子代理工具行）。
+     * <p>成员正文在结束时并入成员线程：同一轮内再次委派同一成员时能接上自己刚说过的话
+     * （跨轮的部分由历史水合的 member 块补上）。
      */
     private final class GroupMemberPresenter implements com.mio.ai.framework.zagent.subagent.MemberPresenter {
+        /** agentId → 成员身份与已产出正文（一轮内可能有多个成员并行） */
+        private final Map<String, MemberTurn> turns = new java.util.concurrent.ConcurrentHashMap<>();
+
+        private record MemberTurn(long memberId, String name, StringBuilder text) {
+        }
+
         @Override
         public void started(String agentId, long memberId, String name, String icon) {
+            turns.put(agentId, new MemberTurn(memberId, name, new StringBuilder()));
             channel.memberStart(agentId, memberId, name, icon);
         }
 
         @Override
         public void delta(String agentId, String delta) {
+            MemberTurn turn = turns.get(agentId);
+            if (turn != null && delta != null) {
+                turn.text().append(delta);
+            }
             channel.memberDelta(agentId, delta);
         }
 
         @Override
         public void finished(String agentId, boolean failed) {
             channel.memberDone(agentId, failed);
+            MemberTurn turn = turns.remove(agentId);
+            if (groupCoordinator != null && turn != null && !failed) {
+                groupCoordinator.recordUtterance(turn.memberId(), turn.name(), turn.text().toString());
+            }
         }
     }
 

@@ -31,6 +31,13 @@ public interface MemberLauncher {
 
     /** 群成员一次委派的运行物料：成员自己的提示词 / MCP 工具 / 知识库命中 / 技能清单 / 展示信息 */
     record MemberPlan(long memberId, String name, String description, String systemPrompt, String icon,
-                      List<ToolCallback> mcpTools, String knowledgeContext, String skillsContext) {
+                      List<ToolCallback> mcpTools, String knowledgeContext, String skillsContext,
+                      String threadContext) {
+
+        public MemberPlan(long memberId, String name, String description, String systemPrompt, String icon,
+                          List<ToolCallback> mcpTools, String knowledgeContext, String skillsContext) {
+            this(memberId, name, description, systemPrompt, icon, mcpTools, knowledgeContext, skillsContext,
+                    null);
+        }
     }
 }
