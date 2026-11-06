@@ -23,6 +23,10 @@ export interface QuestionOption {
   label: string
   description: string
   preview?: string
+  /** 图标选择型选项：形体 id（渲染真实 BotIcon 预览用） */
+  shape?: string
+  /** 图标选择型选项：配色 id */
+  color?: string
 }
 
 /** AskUserQuestion 的单个问题 */
@@ -173,7 +177,7 @@ export type MessageBlock =
       v?: number
       /** targetId 原位替换事件标记（历史加载时忽略；流式期据此跨消息按 id 替换） */
       update?: boolean
-      kind: 'cards' | 'chart' | 'table' | 'tasks' | 'form' | 'actions' | 'status' | 'timeline' | 'quote' | 'metric' | 'choice' | 'accordion' | 'math' | 'image' | 'image_list' | 'image_gallery' | 'figure' | (string & {})
+      kind: 'cards' | 'chart' | 'table' | 'tasks' | 'form' | 'actions' | 'status' | 'timeline' | 'quote' | 'metric' | 'choice' | 'accordion' | 'math' | 'image' | 'image_list' | 'image_gallery' | 'figure' | 'agent_card' | (string & {})
       title?: string
       cards?: UiCardItem[]
       chartType?: 'bar' | 'line' | 'pie' | 'scatter'
@@ -205,6 +209,22 @@ export type MessageBlock =
       caption?: string
       ratio?: 'auto' | '16/9' | '4/3' | '1/1' | '3/4'
       fit?: 'cover' | 'contain'
+      /** kind=agent_card：智能体/群聊 id（跳转路径由后端拼好放在 jumpActions 里） */
+      agentId?: string
+      /** kind=agent_card：名称 */
+      name?: string
+      /** kind=agent_card：一句话描述 */
+      description?: string
+      /** kind=agent_card：图标 JSON（后端由 shape+color 规范化生成） */
+      icon?: string
+      /** kind=agent_card：状态标签，如 草稿 / 已发布 */
+      status?: string
+      /** kind=agent_card：agent（可编辑）| group（仅对话） */
+      target?: 'agent' | 'group'
+      /** kind=agent_card + target=group：群成员（GroupAvatar 堆叠渲染，与左轨群头像一致） */
+      members?: Array<{ id: string; name?: string; icon?: string }>
+      /** kind=agent_card：跳转按钮（path 由后端生成，不接受模型自填 URL） */
+      jumpActions?: Array<{ label: string; path: string }>
     }
 
 /** 会话附件（沙箱工作区内相对路径）：path 形如 uploads/<chatId>/xxx 或 outputs/<chatId>/xxx */

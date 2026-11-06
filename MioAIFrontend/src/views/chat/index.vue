@@ -98,6 +98,7 @@
           @switch-version="handleSwitchVersion"
           @open-subagent="subagentPanelTarget = $event"
           @send-prompt="sendFromUi"
+          @navigate="navigateFromUi"
         />
         <!-- 左下角常驻机器人：眼睛跟随指针，情绪随会话执行情况实时切换。
              群聊不显示（成员/群主头像在消息流内动态呈现） -->
@@ -871,6 +872,15 @@ function handleSend(refs: ChatRefItem[] = []): void {
   noteGuestTurn()
   cleanupPendingAttachments()
   inputMessage.value = ''
+}
+
+/** 动态 UI 站内跳转（agent_card 的按钮）：路径由后端生成，这里只做白名单校验后导航 */
+function navigateFromUi(path: string): void {
+  if (!path.startsWith('/')) return
+  // 对话里刚建的智能体/群聊，左轨尚未重新拉取（loadMyAgents 只在 onMounted 跑）——
+  // 先刷新再跳，否则用户回到对话页看不到新建项，会以为没创建成功
+  loadMyAgents()
+  router.push(path)
 }
 
 /** 动态 UI 交互（actions 按钮/表单提交）：编排好的文本直接作为用户消息发送（不带附件） */

@@ -12,6 +12,7 @@
 |---|---|
 | 启动类、`application.yml` | `mio-admin/src/main/java/com/mio/ai/MioAIApplication.java`、`mio-admin/src/main/resources/` |
 | 对话页接口（SSE、附件、续连、标题） | `mio-agent/.../bot/controller/MioBotController.java` |
+| 对话内建资源（工具注册与开关） | `mio-agent/.../bot/agent/MioBot.java`（`setResourceAdmin`）、`bot/agent/resource/` |
 | 智能体 CRUD、群聊、版本 | `mio-agent/.../resource/controller/agent/` |
 | 知识库、文档、命中测试 | `mio-agent/.../resource/controller/knowledge/` |
 | MCP 工具 CRUD 与在线校验 | `mio-agent/.../resource/controller/mcp/` |
@@ -28,12 +29,14 @@
 com.mio.ai
 ├── bot/                        对话运行时
 │   ├── agent/                  引擎装配与主循环（MioBot、群聊调度、事件通道）
-│   │   └── ui/                 动态 UI 块的产物校验与 render_ui 工具
+│   │   ├── resource/           对话内资源管理工具（resource_list / agent_save / group_create / agent_bind）
+│   │   └── ui/                 动态 UI 块的产物校验与 render_ui 工具（含预览卡片 agent_card）
 │   ├── controller/             HTTP 入口（SSE、附件代理、摘要、限流）
 │   ├── mapper/ entity/ vo/     MyBatis-Plus 数据访问与传输对象
 │   ├── repository/             会话历史读写
 │   ├── service/                附件、上下文用量、模型连通性、技能物化
-│   │   └── image/              图片检索（AniList / Openverse）
+│   │   ├── image/              图片检索（AniList / Openverse）
+│   │   └── resource/           资源管理工具的落地层（鉴权、清洗、名字解析、图标规范化、绑定去重）
 │   └── util/                   SSE 封装、标题生成
 └── resource/                   资源域
     ├── controller/{agent,knowledge,mcp,skill,log}/   按域分包的入口

@@ -150,7 +150,7 @@
           :class="{ active: seg.block.active }"
         >{{ seg.block.label }}</div>
         <ResourceRow v-else-if="seg.kind === 'resource'" :block="seg.block" />
-        <UiBlockRenderer v-else :block="seg.block" :chat-id="chatId" @send="emit('sendPrompt', $event)" />
+        <UiBlockRenderer v-else :block="seg.block" :chat-id="chatId" @send="emit('sendPrompt', $event)" @navigate="emit('navigate', $event)" />
       </template>
     </template>
 
@@ -252,6 +252,8 @@ const emit = defineEmits<{
   (e: 'openSubagent', target: SubagentPanelTarget): void
   /** 动态 UI 交互（actions 按钮/表单提交）：编排好的文本作为用户消息发送 */
   (e: 'sendPrompt', text: string): void
+  /** 动态 UI 站内跳转（agent_card 的按钮）：路径由后端生成 */
+  (e: 'navigate', path: string): void
 }>()
 
 function openSubagent(block: ToolBlock, index: number): void {

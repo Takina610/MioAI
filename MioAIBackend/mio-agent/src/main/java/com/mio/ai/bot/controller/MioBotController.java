@@ -102,6 +102,10 @@ public class MioBotController {
     @Autowired
     private com.mio.ai.bot.service.image.ImageSearchService imageSearchService;
 
+    /** 对话内资源管理（resource_list / agent_save / group_create / agent_bind） */
+    @Autowired
+    private com.mio.ai.bot.service.resource.ResourceAdminService resourceAdminService;
+
     @Autowired
     private com.mio.ai.bot.service.ChatFileService chatFileService;
 
@@ -238,21 +242,29 @@ public class MioBotController {
                                 a.getSystemPrompt(), a.getIcon()))
                         .toList();
                 return new PromptContext(com.mio.ai.bot.agent.GroupPrompts.orchestrator(agent, members),
-                        new com.mio.ai.bot.agent.GroupCoordinator(members, userId, botResourceService));
+                        new com.mio.ai.bot.agent.GroupCoordinator(members, userId, botResourceService), false);
             }
-            return new PromptContext(agent.getSystemPrompt(), null);
+            // 个人 MioBot（type=3）行为同内置：同样是"用户自己的助手"，可装配资源
+            boolean resourceAdmin = Integer.valueOf(
+                    com.mio.ai.resource.model.enums.agent.AgentTypeEnum.MIOBOT.getCode())
+                    .equals(agent.getType());
+            return new PromptContext(agent.getSystemPrompt(), null, resourceAdmin);
         }
         if (userId == null) {
-            return new PromptContext(null, null);
+            return new PromptContext(null, null, false);
         }
         com.mio.ai.resource.model.entity.agent.AgentUserConfig override =
                 agentUserConfigService.getOverride(userId, MioBot.AGENT_ID);
         return new PromptContext(override != null && override.getSystemPrompt() != null
-                && !override.getSystemPrompt().isBlank() ? override.getSystemPrompt() : null, null);
+                && !override.getSystemPrompt().isBlank() ? override.getSystemPrompt() : null, null, true);
     }
 
-    /** 提示词解析结果：群聊时携带协调器（Agent 工具的成员委派装配） */
-    private record PromptContext(String systemPrompt, com.mio.ai.bot.agent.GroupCoordinator coordinator) {
+    /**
+     * 提示词解析结果：群聊时携带协调器（Agent 工具的成员委派装配）；
+     * resourceAdmin 决定本轮是否注册资源管理工具（仅 MioBot/个人 MioBot 的普通对话）。
+     */
+    private record PromptContext(String systemPrompt, com.mio.ai.bot.agent.GroupCoordinator coordinator,
+                                 boolean resourceAdmin) {
     }
 
     @GetMapping("/bot/context-usage")
@@ -481,13 +493,15 @@ public class MioBotController {
                     agentDelegationTimeoutMs, agentMaxConcurrentDelegations);
             MioBot mioBot = new MioBot(chatResolution.model(), toolsetFactory, List.of(mcp.callbacks()), skills,
                     agentUsageLogService, toolCallLogService, userStatsDailyService, skillUsageLogService,
-                    agentMessageService, chatFileService, imageSearchService,
-                    chatId, userId, resolvedAgentId, customSystemPrompt, chatModelName, effort, engineConfig,
-                    fileTransfer, com.mio.ai.bot.model.dto.AttachmentItem.parseList(attachments));
+                      agentMessageService, chatFileService, imageSearchService, resourceAdminService,
+                      chatId, userId, resolvedAgentId, customSystemPrompt, chatModelName, effort, engineConfig,
+                      fileTransfer, com.mio.ai.bot.model.dto.AttachmentItem.parseList(attachments));
             // 群聊智能体：注入成员协调器（Agent 工具按成员名委派时以成员自身资源运行）
             if (promptContext.coordinator() != null) {
                 mioBot.setGroupCoordinator(promptContext.coordinator());
             }
+            // 资源管理工具：MioBot/个人 MioBot 的普通对话且已登录时才注册（游客无资源可管）
+            mioBot.setResourceAdmin(promptContext.resourceAdmin() && userId != null);
             // 编辑重发：新 user 行沿用被编辑轮次的组锚（版本组持久化）
             mioBot.setUserGroupSeq(groupSeq);
             // 问答归属：AskUserQuestion 的待答问题绑定到本归属，他人凭 chatId 无法代答

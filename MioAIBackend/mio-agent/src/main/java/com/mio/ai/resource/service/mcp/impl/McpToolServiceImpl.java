@@ -177,7 +177,9 @@ public class McpToolServiceImpl extends ServiceImpl<McpToolMapper, McpTool> impl
     public Page<McpToolVO> queryMcpTools(McpToolQueryRequest request) {
         Page<McpTool> page = new Page<>(request.getCurrent(), request.getPageSize());
         LambdaQueryWrapper<McpTool> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(request.getStatus() != null, McpTool::getStatus, request.getStatus())
+        wrapper.like(org.springframework.util.StringUtils.hasText(request.getName()),
+                        McpTool::getName, request.getName())
+                .eq(request.getStatus() != null, McpTool::getStatus, request.getStatus())
                 .eq(request.getIsPublic() != null, McpTool::getIsPublic, request.getIsPublic())
                 .eq(request.getUserId() != null, McpTool::getUserId, request.getUserId())
                 .orderByDesc(McpTool::getCreateTime);

@@ -29,6 +29,7 @@
             :group-members="groupMembers"
             @open-subagent="emit('openSubagent', $event)"
             @send-prompt="emit('sendPrompt', $event)"
+            @navigate="emit('navigate', $event)"
           />
           <!-- 流程提示行（如"已从 X 切换至 Y"）：独立于用户/智能体消息，居中弱化展示 -->
           <div v-else-if="msg.role === 'system'" class="system-note">{{ msg.content }}</div>
@@ -156,6 +157,8 @@ const emit = defineEmits<{
   (e: 'openSubagent', target: SubagentPanelTarget): void
   /** 动态 UI 交互（actions 按钮/表单提交）：编排好的文本作为用户消息发送 */
   (e: 'sendPrompt', text: string): void
+  /** 动态 UI 站内跳转（agent_card 的按钮）：路径由后端生成 */
+  (e: 'navigate', path: string): void
 }>()
 
 const messagesRef = ref<HTMLElement | null>(null)

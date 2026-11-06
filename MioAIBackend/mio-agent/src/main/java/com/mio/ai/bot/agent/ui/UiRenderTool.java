@@ -26,11 +26,14 @@ public final class UiRenderTool {
 
     private static final String DESCRIPTION = """
             Render interactive UI blocks (cards, chart, table, tasks, form, actions, status, timeline, quote, \
-            metric, choice, accordion, math, image, image_list, image_gallery, figure) inline in your chat answer \
-            at the position where you emit them. Use it proactively: whenever your answer contains a multi-stage \
-            plan, a comparison of options, numeric data worth visualizing, or real images from image_search, render \
-            it with this tool instead of Markdown headings and tables. To update a block you rendered earlier, pass \
-            its targetId (ids are listed in every render result) — the block updates in place instead of duplicating. \
+            metric, choice, accordion, math, image, image_list, image_gallery, figure, agent_card) inline in your \
+            chat answer at the position where you emit them. Use it proactively: whenever your answer contains a \
+            multi-stage plan, a comparison of options, numeric data worth visualizing, or real images from \
+            image_search, render it with this tool instead of Markdown headings and tables. To update a block you \
+            rendered earlier, pass its targetId (ids are listed in every render result) — the block updates in \
+            place instead of duplicating. \
+            kind=agent_card is special: use it right after agent_save or group_create succeeds so the user sees the \
+            new agent/group with its real icon and can jump into it (开始对话 / 编辑配置). \
             Position note: kind=actions is an exception — it always displays at the very BOTTOM of the message, \
             below all your text, so refer to its buttons as below/bottom (下方的按钮), never above.""";
 
@@ -54,7 +57,7 @@ public final class UiRenderTool {
             "properties":{
             "kind":{
             "type":"string",
-            "enum":["cards","chart","table","tasks","form","actions","status","timeline","quote","metric","choice","accordion","math","image","image_list","image_gallery","figure"],
+            "enum":["cards","chart","table","tasks","form","actions","status","timeline","quote","metric","choice","accordion","math","image","image_list","image_gallery","figure","agent_card"],
             "description":"Block type"
             },
             "targetId":{
@@ -278,6 +281,52 @@ public final class UiRenderTool {
             "type":"string",
             "enum":["cover","contain"],
             "description":"kind=image/figure: object-fit (default cover)"
+            },
+            "id":{
+            "type":"string",
+            "description":"kind=agent_card: the created agent/group id (from agent_save or group_create result)"
+            },
+            "name":{
+            "type":"string",
+            "description":"kind=agent_card: the created agent/group name"
+            },
+            "description":{
+            "type":"string",
+            "description":"kind=agent_card: one-line summary shown under the name"
+            },
+            "shape":{
+            "type":"string",
+            "enum":["blob","squircle","hex","gem","cloud","teardrop","capsule","leaf"],
+            "description":"kind=agent_card: icon body shape (same value you passed to agent_save)"
+            },
+            "color":{
+            "type":"string",
+            "enum":["cyan","blue","violet","green","orange","yellow","red","magenta","brown","gray","black"],
+            "description":"kind=agent_card: icon palette color (same value you passed to agent_save)"
+            },
+            "status":{
+            "type":"string",
+            "description":"kind=agent_card: status label, e.g. 草稿 / 已发布"
+            },
+            "target":{
+            "type":"string",
+            "enum":["agent","group"],
+            "description":"kind=agent_card: agent (editable, gets both 开始对话+编辑配置) or group (chat only)"
+            },
+            "members":{
+            "type":"array",
+            "maxItems":10,
+            "description":"kind=agent_card + target=group: group members. The client renders them as a stacked avatar (member icons), NOT as a single icon.",
+            "items":{
+            "type":"object",
+            "properties":{
+            "id":{"type":"string","description":"member agent id"},
+            "name":{"type":"string","description":"member agent name"},
+            "shape":{"type":"string","description":"member icon shape (optional)"},
+            "color":{"type":"string","description":"member icon palette color (optional)"}
+            },
+            "required":["id"]
+            }
             }
             },
             "required":["kind"]

@@ -16,6 +16,16 @@
           @click="toggleOption(qi, keyOf(opt, oi))"
         >
           <span class="option-check">{{ optionSelected(qi, keyOf(opt, oi)) ? '●' : '○' }}</span>
+          <!-- 图标选择型选项：渲染真实 BotIcon，用户能直接看到颜色和形体 -->
+          <BotIcon
+            v-if="iconOf(opt)"
+            class="option-icon"
+            :shape="iconOf(opt)!.shape"
+            :fill="iconOf(opt)!.fill"
+            :size="28"
+            :live="false"
+            eye-color="#faf9f5"
+          />
           <span v-if="keyOf(opt, oi)" class="option-key">{{ keyOf(opt, oi) }}</span>
           <span class="option-label">{{ opt.label }}</span>
           <span v-if="opt.description" class="option-desc">{{ opt.description }}</span>
@@ -55,6 +65,8 @@ import { CheckCircleOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { answerQuestion } from '@/api/chat'
 import type { MessageBlock, QuestionAnswer, QuestionItem } from '@/types'
+import BotIcon from '@/components/agent/bot-icon/BotIcon.vue'
+import { parseBotIcon, type BotIconConfig } from '@/components/agent/bot-icon/types'
 
 type QuestionBlockType = Extract<MessageBlock, { type: 'question' }>
 
@@ -84,6 +96,15 @@ function draftOf(): { selections: Record<number, string[]>; custom: Record<numbe
 /** 选项作答键：优先模型给的 key，旧数据回退 label */
 function keyOf(opt: QuestionItem['options'][number], index: number): string {
   return opt.key || opt.label || String(index + 1)
+}
+
+/** 图标选择型选项：把 shape+color 转成可渲染的图标配置（缺任一或非法则为 null） */
+function iconOf(opt: QuestionItem['options'][number]): BotIconConfig | null {
+  if (!opt.shape || !opt.color) return null
+  return parseBotIcon(JSON.stringify({
+    shape: opt.shape,
+    fill: { kind: 'palette', id: opt.color }
+  }))
 }
 
 function optionSelected(questionIndex: number, key: string): boolean {
@@ -219,7 +240,7 @@ function answeredText(questionIndex: number): string {
 
 .question-option {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   padding: 6px 10px;
   margin: 4px 0;
@@ -247,6 +268,11 @@ function answeredText(questionIndex: number): string {
   font-size: 11px;
   font-weight: 600;
   line-height: 18px;
+  flex-shrink: 0;
+}
+
+/* 图标选择型选项的真实图标预览（BotIcon 固定尺寸，不随文字缩放） */
+.option-icon {
   flex-shrink: 0;
 }
 

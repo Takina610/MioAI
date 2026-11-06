@@ -39,7 +39,9 @@ public final class AskUserQuestionTool {
                 "key":{"type":"string","description":"Short choice label YOU pick, e.g. A/B/C, 1/2/3, or a compact word. Must be unique within the question; the user may reference it in free-text answers (e.g. 'A, but cheaper')"},
                 "label":{"type":"string","description":"The display text for this option that the user will see after the key. Should be concise (1-5 words) and clearly describe the choice."},
                 "description":{"type":"string","description":"Explanation of what this option means or what will happen if chosen."},
-                "preview":{"type":"string","description":"Optional content rendered as markdown in a monospace box when this option is focused, for comparing concrete artifacts."}},
+                "preview":{"type":"string","description":"Optional monospace text shown under the option once selected — useful for comparing concrete values/code."},
+                "shape":{"type":"string","description":"Optional agent-icon body shape (blob/squircle/hex/gem/cloud/teardrop/capsule/leaf). Only for pick-the-icon questions; the client renders the real icon preview."},
+                "color":{"type":"string","description":"Optional agent-icon palette color (cyan/blue/violet/green/orange/yellow/red/magenta/brown/gray/black). Pair with shape to preview the actual icon."}},
                 "required":["key","label","description"]}}},
                 "required":["question","header","options"]}}},
                 "required":["questions"]}""";
@@ -181,6 +183,16 @@ return ToolEntry.ofMutable("AskUserQuestion", ASK_USER_QUESTION, schema, 0, AskU
                 String preview = Args.str(rawOption, "preview");
                 if (preview != null && !preview.isBlank()) {
                     option.put("preview", preview);
+                }
+                // 图标选择型选项：前端的 QuestionCard 据此渲染真实 BotIcon 预览。
+                // 只透传这两个字段，其它未知键一律丢弃（保持这张卡片的可渲染契约可控）。
+                String shape = Args.str(rawOption, "shape");
+                if (shape != null) {
+                    option.put("shape", shape.length() > 32 ? shape.substring(0, 32) : shape);
+                }
+                String color = Args.str(rawOption, "color");
+                if (color != null) {
+                    option.put("color", color.length() > 32 ? color.substring(0, 32) : color);
                 }
                 options.add(option);
             }

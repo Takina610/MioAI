@@ -7,6 +7,7 @@
       :block="block"
       :chat-id="chatId"
       @send="emit('send', $event)"
+      @navigate="emit('navigate', $event)"
     />
     <!-- 协议降级：未知 kind 或组件渲染异常 → 可折叠原始数据，不整条崩掉 -->
     <details v-else class="ui-block-fallback">
@@ -36,11 +37,16 @@ import UiImage from './media/UiImage.vue'
 import UiImageList from './media/UiImageList.vue'
 import UiImageGallery from './media/UiImageGallery.vue'
 import UiFigure from './media/UiFigure.vue'
+import UiAgentCard from './container/UiAgentCard.vue'
 
 type UiBlock = Extract<MessageBlock, { type: 'ui' }>
 
 const props = defineProps<{ block: UiBlock; chatId?: string }>()
-const emit = defineEmits<{ (e: 'send', text: string): void }>()
+const emit = defineEmits<{
+  (e: 'send', text: string): void
+  /** 站内跳转（agent_card 的按钮）：路径由后端生成，前端只负责导航 */
+  (e: 'navigate', path: string): void
+}>()
 
 /** kind → 组件白名单：协议允许的类型之外一律走降级渲染 */
 const REGISTRY: Record<string, Component> = {
@@ -60,7 +66,8 @@ const REGISTRY: Record<string, Component> = {
   image: UiImage,
   image_list: UiImageList,
   image_gallery: UiImageGallery,
-  figure: UiFigure
+  figure: UiFigure,
+  agent_card: UiAgentCard
 }
 
 const resolved = computed<Component | null>(() => REGISTRY[props.block.kind] ?? null)

@@ -20,7 +20,9 @@ import {
   DownloadOutlined,
   QuestionCircleOutlined,
   ProfileOutlined,
-  StopOutlined
+  StopOutlined,
+  AppstoreOutlined,
+  TeamOutlined
 } from '@ant-design/icons-vue'
 
 export type ToolBlock = Extract<MessageBlock, { type: 'tool' }>
@@ -75,7 +77,12 @@ const TOOL_VERBS: Record<string, [string, string]> = {
   TodoRead: ['读取中', '已读取'],
   managePlan: ['更新中', '任务清单'],
   TaskOutput: ['正在获取任务输出', '已获取任务输出'],
-  TaskStop: ['停止任务', '已停止']
+  TaskStop: ['停止任务', '已停止'],
+  // 对话内资源管理（resource_* 内置工具）
+  resource_list: ['正在查询资源', '已查询资源'],
+  agent_save: ['正在保存智能体', '已保存智能体'],
+  group_create: ['正在创建群聊', '已创建群聊'],
+  agent_bind: ['正在装配资源', '已装配资源']
 }
 
 /** 工具行动词：运行中→进行式（扫光），完成→过去式；Agent 行恒为「子智能体」（zcode GUI 同款） */
@@ -127,6 +134,11 @@ const TOOL_ICONS: Record<string, Component> = markRaw({
   TaskStop: StopOutlined,
   // 子智能体行用机器人图标（zcode 同款语义），不用通用工具扳手
   Agent: RobotOutlined,
+  // 对话内资源管理：列表=应用面板，存智能体=机器人，建群=团队，绑定=链接
+  resource_list: AppstoreOutlined,
+  agent_save: RobotOutlined,
+  group_create: TeamOutlined,
+  agent_bind: LinkOutlined,
   // MCP 工具按注册名前缀整体识别（见 toolIcon），不逐个登记
 })
 
@@ -150,6 +162,15 @@ export function hostOf(url?: string): string {
   } catch {
     return url.replace(/^https?:\/\//, '').slice(0, 40)
   }
+}
+
+/** 资源域的中文名（resource_list / agent_bind 共用） */
+const DOMAIN_LABELS: Record<string, string> = {
+  agent: '智能体',
+  group: '群聊',
+  knowledge: '知识库',
+  mcp: 'MCP',
+  skill: '技能'
 }
 
 /** 工具行元信息：从参数提取人话摘要，不暴露原始 JSON */
@@ -224,6 +245,31 @@ export function toolMeta(block: ToolBlock): string {
     case 'TaskOutput':
     case 'TaskStop':
       return a?.task_id ?? ''
+    case 'resource_list': {
+      const domain = DOMAIN_LABELS[String(a?.domain ?? '')] ?? ''
+      const query = typeof a?.query === 'string' ? a.query.trim() : ''
+      if (!domain) return query ? `“${query}”` : ''
+      return query ? `${domain} · “${query}”` : domain
+    }
+    case 'agent_save': {
+      const name = typeof a?.name === 'string' ? a.name.trim() : ''
+      if (a?.agentId && !name) return `#${a.agentId}`
+      return name ? `“${name}”${a?.agentId ? ` · #${a.agentId}` : ''}` : ''
+    }
+    case 'group_create': {
+      const name = typeof a?.name === 'string' ? a.name.trim() : ''
+      const members = Array.isArray(a?.memberAgentIds) ? a.memberAgentIds.length : 0
+      const parts = [name ? `“${name}”` : '', members ? `${members} 个成员` : ''].filter(Boolean)
+      return parts.join(' · ')
+    }
+    case 'agent_bind': {
+      const domain = DOMAIN_LABELS[String(a?.domain ?? '')] ?? ''
+      const action = a?.action === 'unbind' ? '解绑' : '绑定'
+      const parts = [domain ? `${action}${domain}` : action,
+        a?.agentId ? `智能体 #${a.agentId}` : '',
+        a?.resourceId ? `#${a.resourceId}` : ''].filter(Boolean)
+      return parts.join(' · ')
+    }
     default: {
       // 语义兜底（zcode 风格）：展示参数里最有意义的一个字符串值，绝不裸显 JSON
       const fromParsed = firstMeaningfulString(a)

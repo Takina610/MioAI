@@ -21,6 +21,7 @@ import com.mio.ai.framework.zagent.tools.fs.SandboxFs;
 import com.mio.ai.framework.zagent.tools.contract.ToolRegistry;
 import com.mio.ai.framework.zagent.tools.contract.ToolsetFactory;
 import com.mio.ai.resource.model.entity.log.AgentUsageLog;
+import com.mio.ai.bot.agent.resource.ResourceTools;
 import com.mio.ai.bot.agent.ui.UiRenderTool;
 import com.mio.ai.resource.model.entity.log.ToolCallLog;
 import com.mio.ai.resource.service.log.AgentUsageLogService;
@@ -69,6 +70,7 @@ public class MioBot {
     private final AgentMessageService agentMessageService;
     private final com.mio.ai.bot.service.ChatFileService chatFileService;
     private final com.mio.ai.bot.service.image.ImageSearchService imageSearchService;
+    private final com.mio.ai.bot.service.resource.ResourceAdminService resourceAdminService;
     private final SandboxFileTransfer fileTransfer;
 
     private final String chatId;
@@ -149,6 +151,13 @@ public class MioBot {
     /** 群聊协调器（控制器注入，普通会话为 null）：Agent 工具的 subagent_type 命中成员名时以成员自身配置运行 */
     private volatile GroupCoordinator groupCoordinator;
 
+    /** 资源管理工具开关（控制器注入）：仅 MioBot 主对话且已登录时开启，群聊与游客不注册 */
+    private volatile boolean resourceAdmin;
+
+    public void setResourceAdmin(boolean resourceAdmin) {
+        this.resourceAdmin = resourceAdmin;
+    }
+
     public void setGroupCoordinator(GroupCoordinator groupCoordinator) {
         this.groupCoordinator = groupCoordinator;
     }
@@ -184,6 +193,7 @@ public class MioBot {
                   AgentMessageService agentMessageService,
                   com.mio.ai.bot.service.ChatFileService chatFileService,
                   com.mio.ai.bot.service.image.ImageSearchService imageSearchService,
+                  com.mio.ai.bot.service.resource.ResourceAdminService resourceAdminService,
                   String chatId,
                   Long userId,
                   Long agentId,
@@ -204,6 +214,7 @@ public class MioBot {
         this.agentMessageService = agentMessageService;
         this.chatFileService = chatFileService;
         this.imageSearchService = imageSearchService;
+        this.resourceAdminService = resourceAdminService;
         this.chatId = chatId;
         this.userId = userId;
         this.agentId = agentId != null ? agentId : AGENT_ID;
@@ -393,6 +404,12 @@ public class MioBot {
                         url -> imageSearchService.resolveImage(chatId, url)));
                 // 图片检索工具（图文混排）：模型在实体介绍等场景自主决定是否调用
                 registry.register(ImageSearchTool.entry(imageSearchService));
+                // 资源管理工具（对话内建智能体/群聊/绑定）：仅 MioBot 主轮次。
+                // 群聊 Router 的白名单只作用于 ToolsetFactory.build 内部，这里注册的工具
+                // 不受其过滤，所以必须自己排除群聊（成员走 Subagents 独立注册表，本就不含）
+                if (resourceAdmin && groupCoordinator == null) {
+                    ResourceTools.registerAll(registry, resourceAdminService, userId);
+                }
                 engine.bindTools(registry);
 
                 boolean appendUserEntry = persistUserMessage || state.entries().isEmpty();
