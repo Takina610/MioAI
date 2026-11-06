@@ -38,6 +38,7 @@ import UiImageList from './media/UiImageList.vue'
 import UiImageGallery from './media/UiImageGallery.vue'
 import UiFigure from './media/UiFigure.vue'
 import UiAgentCard from './container/UiAgentCard.vue'
+import UiResourceCard from './container/UiResourceCard.vue'
 
 type UiBlock = Extract<MessageBlock, { type: 'ui' }>
 
@@ -67,7 +68,8 @@ const REGISTRY: Record<string, Component> = {
   image_list: UiImageList,
   image_gallery: UiImageGallery,
   figure: UiFigure,
-  agent_card: UiAgentCard
+  agent_card: UiAgentCard,
+  resource_card: UiResourceCard
 }
 
 const resolved = computed<Component | null>(() => REGISTRY[props.block.kind] ?? null)

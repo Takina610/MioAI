@@ -65,7 +65,8 @@ class ResourceAdminServiceTest {
         mcpService = Mockito.mock(McpToolService.class);
         skillService = Mockito.mock(SkillService.class);
         service = new ResourceAdminService(accessGuard, agentService, groupService,
-                knowledgeBinding, mcpBinding, skillBinding, kbService, mcpService, skillService);
+                knowledgeBinding, mcpBinding, skillBinding, kbService, mcpService, skillService,
+                Mockito.mock(com.mio.ai.resource.service.mcp.McpValidateService.class));
         Mockito.when(knowledgeBinding.getKbIdsByAgentId(AGENT_ID)).thenReturn(List.of());
         Mockito.when(mcpBinding.getMcpIdsByAgentId(AGENT_ID)).thenReturn(List.of());
     }

@@ -102,9 +102,13 @@ public class MioBotController {
     @Autowired
     private com.mio.ai.bot.service.image.ImageSearchService imageSearchService;
 
-    /** 对话内资源管理（resource_list / agent_save / group_create / agent_bind） */
+    /** 对话内资源管理（resource_list / agent_save / group_create / agent_bind / mcp_create / kb_create） */
     @Autowired
     private com.mio.ai.bot.service.resource.ResourceAdminService resourceAdminService;
+
+    /** 对话内知识库摄取（kb_upload：从沙箱读附件 → 上传 → 后台向量化） */
+    @Autowired
+    private com.mio.ai.bot.service.resource.KnowledgeIngestService knowledgeIngestService;
 
     @Autowired
     private com.mio.ai.bot.service.ChatFileService chatFileService;
@@ -494,6 +498,7 @@ public class MioBotController {
             MioBot mioBot = new MioBot(chatResolution.model(), toolsetFactory, List.of(mcp.callbacks()), skills,
                     agentUsageLogService, toolCallLogService, userStatsDailyService, skillUsageLogService,
                       agentMessageService, chatFileService, imageSearchService, resourceAdminService,
+                      knowledgeIngestService,
                       chatId, userId, resolvedAgentId, customSystemPrompt, chatModelName, effort, engineConfig,
                       fileTransfer, com.mio.ai.bot.model.dto.AttachmentItem.parseList(attachments));
             // 群聊智能体：注入成员协调器（Agent 工具按成员名委派时以成员自身资源运行）

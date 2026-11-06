@@ -67,10 +67,11 @@ final class UiBlockValidator {
             case "image_gallery" -> block.put("images", UiImageBlockValidator.validateGallery(raw, imageResolver));
             case "figure" -> block.putAll(UiImageBlockValidator.validateFigure(raw, imageResolver));
             case "agent_card" -> block.putAll(UiAgentCardBlockValidator.validate(raw));
+            case "resource_card" -> block.putAll(UiResourceCardBlockValidator.validate(raw));
             default -> throw new IllegalArgumentException(
                     "unsupported kind '" + kind + "' (supported: cards, chart, table, tasks, form, actions, status, "
                             + "timeline, quote, metric, choice, accordion, math, image, image_list, image_gallery, "
-                            + "figure, agent_card)");
+                            + "figure, agent_card, resource_card)");
         }
         return block;
     }

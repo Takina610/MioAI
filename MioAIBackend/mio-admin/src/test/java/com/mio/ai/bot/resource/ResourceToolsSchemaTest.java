@@ -34,7 +34,8 @@ class ResourceToolsSchemaTest {
     private static ToolRegistry registry(ResourceAdminService service, Long userId) {
         ToolRegistry registry = new ToolRegistry(new ToolContext(
                 "chat-1", new ConversationState(), null, null, null, null));
-        ResourceTools.registerAll(registry, service, userId);
+        // ingestService 传 null：未接知识库摄取时不注册 kb_upload（沙箱关闭的场景）
+        ResourceTools.registerAll(registry, service, null, userId, "chat-1", List.of());
         return registry;
     }
 
@@ -54,8 +55,11 @@ class ResourceToolsSchemaTest {
     }
 
     @Test
-    void registersAllFourTools() {
-        Assertions.assertEquals(Set.of("resource_list", "agent_save", "group_create", "agent_bind"),
+    void registersAllTools() {
+        // 无 ingestService 时 kb_upload 不注册（沙箱关闭/无附件通道的场景）
+        Assertions.assertEquals(
+                Set.of("resource_list", "agent_save", "group_create", "agent_bind",
+                        "mcp_create", "kb_create"),
                 names(registryWith(7L)));
     }
 
@@ -68,7 +72,8 @@ class ResourceToolsSchemaTest {
     @Test
     void everySchemaIsValidJson() {
         ToolRegistry registry = registryWith(7L);
-        for (String tool : List.of("resource_list", "agent_save", "group_create", "agent_bind")) {
+        for (String tool : List.of("resource_list", "agent_save", "group_create", "agent_bind",
+                "mcp_create", "kb_create")) {
             ToolEntry entry = entryNamed(registry, tool);
             Assertions.assertNotNull(entry.inputSchema, tool + " 缺少 inputSchema");
             try {

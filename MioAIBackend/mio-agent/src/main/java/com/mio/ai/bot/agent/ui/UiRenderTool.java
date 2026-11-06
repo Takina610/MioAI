@@ -57,7 +57,7 @@ public final class UiRenderTool {
             "properties":{
             "kind":{
             "type":"string",
-            "enum":["cards","chart","table","tasks","form","actions","status","timeline","quote","metric","choice","accordion","math","image","image_list","image_gallery","figure","agent_card"],
+            "enum":["cards","chart","table","tasks","form","actions","status","timeline","quote","metric","choice","accordion","math","image","image_list","image_gallery","figure","agent_card","resource_card"],
             "description":"Block type"
             },
             "targetId":{
@@ -312,6 +312,15 @@ public final class UiRenderTool {
             "type":"string",
             "enum":["agent","group"],
             "description":"kind=agent_card: agent (editable, gets both 开始对话+编辑配置) or group (chat only)"
+            },
+            "resourceType":{
+            "type":"string",
+            "enum":["mcp","knowledge"],
+            "description":"kind=resource_card: which kind of resource this card previews"
+            },
+            "detail":{
+            "type":"string",
+            "description":"kind=resource_card: short detail line, e.g. \\"12 个工具\\" or \\"0 个文档\\""
             },
             "members":{
             "type":"array",

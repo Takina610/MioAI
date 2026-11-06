@@ -177,7 +177,7 @@ export type MessageBlock =
       v?: number
       /** targetId 原位替换事件标记（历史加载时忽略；流式期据此跨消息按 id 替换） */
       update?: boolean
-      kind: 'cards' | 'chart' | 'table' | 'tasks' | 'form' | 'actions' | 'status' | 'timeline' | 'quote' | 'metric' | 'choice' | 'accordion' | 'math' | 'image' | 'image_list' | 'image_gallery' | 'figure' | 'agent_card' | (string & {})
+      kind: 'cards' | 'chart' | 'table' | 'tasks' | 'form' | 'actions' | 'status' | 'timeline' | 'quote' | 'metric' | 'choice' | 'accordion' | 'math' | 'image' | 'image_list' | 'image_gallery' | 'figure' | 'agent_card' | 'resource_card' | (string & {})
       title?: string
       cards?: UiCardItem[]
       chartType?: 'bar' | 'line' | 'pie' | 'scatter'
@@ -225,6 +225,12 @@ export type MessageBlock =
       members?: Array<{ id: string; name?: string; icon?: string }>
       /** kind=agent_card：跳转按钮（path 由后端生成，不接受模型自填 URL） */
       jumpActions?: Array<{ label: string; path: string }>
+      /** kind=resource_card：MCP / 知识库 id（跳转路径同样在后端生成） */
+      resourceId?: string
+      /** kind=resource_card：资源类型 */
+      resourceType?: 'mcp' | 'knowledge'
+      /** kind=resource_card：一行细节，如「12 个工具」「0 个文档」 */
+      detail?: string
     }
 
 /** 会话附件（沙箱工作区内相对路径）：path 形如 uploads/<chatId>/xxx 或 outputs/<chatId>/xxx */

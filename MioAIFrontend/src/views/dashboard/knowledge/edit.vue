@@ -439,6 +439,13 @@ onBeforeUnmount(() => {
 
 onMounted(() => {
   refresh()
+  // 对话内建库后 resource_card 的「上传文档」直接带 ?upload=1 进来：
+  // 打开就到上传步骤，省掉用户再点一次按钮
+  if (route.query.upload === '1') {
+    uploadModalVisible.value = true
+    // 清掉查询参数，避免刷新/返回时重复弹窗
+    router.replace({ path: route.path, query: {} })
+  }
 })
 </script>
 

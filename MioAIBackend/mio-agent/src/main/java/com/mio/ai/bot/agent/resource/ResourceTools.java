@@ -1,6 +1,8 @@
 package com.mio.ai.bot.agent.resource;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.mio.ai.bot.model.dto.AttachmentItem;
+import com.mio.ai.bot.service.resource.KnowledgeIngestService;
 import com.mio.ai.bot.service.resource.ResourceAdminService;
 import com.mio.ai.common.exception.BusinessException;
 import com.mio.ai.framework.zagent.tools.contract.ToolEntry;
@@ -113,13 +115,65 @@ public final class ResourceTools {
             "enabled":{"type":"integer","enum":[0,1],"description":"1 to enable the binding (default), 0 to keep it disabled"}},
             "required":["action","domain"]}""";
 
+    private static final String MCP_CREATE_DESCRIPTION = """
+            Create an MCP server tool. USE THIS WHENEVER the user wants to connect an MCP server, \
+            e.g. "接个 deepwiki 的 MCP", "把这个 MCP 地址加进来". \
+            Build the config JSON yourself from what the user said (standard mcpServers format). \
+            This tool runs a REAL online check (initialize + listTools, up to ~40s) before saving — \
+            an unreachable server is rejected with the concrete reason instead of being stored broken. \
+            HTTP/SSE servers must resolve to a public address. STDIO (command-based) configs are admin-only. \
+            Example HTTP config: {"mcpServers":{"deepwiki":{"url":"https://mcp.deepwiki.com/mcp"}}} \
+            After creation, call agent_bind to attach it to an agent if the user wants that.""";
+
+    private static final String MCP_CREATE_SCHEMA = """
+            {"type":"object","properties":{
+            "name":{"type":"string","maxLength":100,"description":"Display name for this MCP server"},
+            "description":{"type":"string","maxLength":500,"description":"Short description shown in the dashboard"},
+            "config":{"type":"string","description":"Full mcpServers config JSON. HTTP/SSE: {\\"mcpServers\\":{\\"name\\":{\\"url\\":\\"https://...\\"}}}. STDIO: {\\"mcpServers\\":{\\"name\\":{\\"command\\":\\"npx\\",\\"args\\":[...],\\"env\\":{...}}}} (admin only)"}},
+            "required":["name","config"]}""";
+
+    private static final String KB_CREATE_DESCRIPTION = """
+            Create an empty knowledge base. USE THIS WHENEVER the user wants a knowledge base, \
+            e.g. "建个产品文档库", "做一个客服知识库". \
+            Optionally tune chunkSize (200-2048, default 800) and chunkOverlap (0-500, default 100). \
+            After creating it, if the user attached files in this turn, call kb_upload with the returned id \
+            to ingest them; otherwise render a resource_card so the user can go upload documents.""";
+
+    private static final String KB_CREATE_SCHEMA = """
+            {"type":"object","properties":{
+            "name":{"type":"string","maxLength":100,"description":"Knowledge base name"},
+            "description":{"type":"string","maxLength":2000,"description":"What this knowledge base contains"},
+            "chunkSize":{"type":"integer","minimum":200,"maximum":2048,"description":"Characters per chunk (default 800). Smaller = finer retrieval, more chunks."},
+            "chunkOverlap":{"type":"integer","minimum":0,"maximum":500,"description":"Overlap between chunks (default 100). Keep near 1/8 of chunkSize."},
+            "bindToAgentName":{"type":"string","description":"Optional: also bind this KB to the named agent in one step"}},
+            "required":["name"]}""";
+
+    private static final String KB_UPLOAD_DESCRIPTION = """
+            Ingest the files the user attached in THIS turn into a knowledge base, then vectorize them in the \
+            background. Call this right after kb_create when the user said something like \
+            "把这个文档传进库里" and the turn has attachments. \
+            Files come from the conversation's staged uploads — you do NOT need to pass file paths, \
+            kbId is enough. Supported types: pdf/doc/docx/md/txt, max 50MB each, max 20 files. \
+            Vectorization runs in the background: report that it started and that progress is visible, \
+            do not claim it already finished.""";
+
+    private static final String KB_UPLOAD_SCHEMA = """
+            {"type":"object","properties":{
+            "kbId":{"type":"integer","description":"Target knowledge base id (from kb_create)"}},
+            "required":["kbId"]}""";
+
     private ResourceTools() {
     }
 
     /**
      * 注册全部资源管理工具。调用方负责判定主轮次与登录态——这里不再重复检查。
+     *
+     * @param attachments 本轮对话附件（沙箱暂存路径）：kb_upload 直接从这里取文件，
+     *                    不需要模型传路径；无沙箱或没附件时传空列表
      */
-    public static void registerAll(ToolRegistry registry, ResourceAdminService service, Long userId) {
+    public static void registerAll(ToolRegistry registry, ResourceAdminService service,
+                                   KnowledgeIngestService ingestService, Long userId,
+                                   String chatId, List<AttachmentItem> attachments) {
         if (registry == null || service == null || userId == null) {
             return;
         }
@@ -127,6 +181,81 @@ public final class ResourceTools {
         registry.register(saveEntry(service, userId));
         registry.register(groupEntry(service, userId));
         registry.register(bindEntry(service, userId));
+        registry.register(mcpCreateEntry(service, userId));
+        registry.register(kbCreateEntry(service, userId));
+        if (ingestService != null) {
+            registry.register(kbUploadEntry(ingestService, userId, chatId, attachments));
+        }
+    }
+
+    static ToolEntry mcpCreateEntry(ResourceAdminService service, Long userId) {
+        ToolEntry.StringHandler handler = (input, ctx) -> guarded(() ->
+                service.createMcp(userId, Args.str(input, "name"), Args.str(input, "description"),
+                        Args.str(input, "config")));
+        // 校验最长约 40-50s，超时留足余量
+        return ToolEntry.ofMutable("mcp_create", MCP_CREATE_DESCRIPTION, MCP_CREATE_SCHEMA, 120_000, handler);
+    }
+
+    static ToolEntry kbCreateEntry(ResourceAdminService service, Long userId) {
+        ToolEntry.StringHandler handler = (input, ctx) -> guarded(() -> {
+            String reply = service.createKnowledgeBase(userId, Args.str(input, "name"),
+                    Args.str(input, "description"), Args.intVal(input, "chunkSize"),
+                    Args.intVal(input, "chunkOverlap"));
+            // 可选：一步建库 + 绑定
+            String bindName = Args.str(input, "bindToAgentName");
+            if (bindName != null) {
+                Long agentId = service.resolveAgentIdByName(userId, bindName);
+                if (agentId != null) {
+                    Long kbId = extractFirstId(reply);
+                    if (kbId != null) {
+                        service.bind(userId, true, agentId, "knowledge", kbId, null, 1);
+                        reply += "\n已同时绑定到智能体「" + bindName + "」(#" + agentId + ")。";
+                    }
+                }
+            }
+            return reply;
+        });
+        return ToolEntry.ofMutable("kb_create", KB_CREATE_DESCRIPTION, KB_CREATE_SCHEMA, 60_000, handler);
+    }
+
+    static ToolEntry kbUploadEntry(KnowledgeIngestService ingestService, Long userId,
+                                   String chatId, List<AttachmentItem> attachments) {
+        ToolEntry.StringHandler handler = (input, ctx) -> guarded(() -> {
+            Long kbId = longVal(input, "kbId");
+            if (kbId == null) {
+                throw new ToolUseFailure(11, "必须提供 kbId");
+            }
+            if (attachments == null || attachments.isEmpty()) {
+                throw new ToolUseFailure(12, "本轮没有附件。请让用户先上传文件，"
+                        + "或在对话里点「上传文档」按钮到知识库页上传");
+            }
+            KnowledgeIngestService.IngestResult result =
+                    ingestService.ingest(kbId, userId, chatId, attachments);
+            if (result.accepted() == 0) {
+                throw new ToolUseFailure(13, "没有成功上传任何文件："
+                        + String.join("；", result.rejectedReasons()));
+            }
+            StringBuilder sb = new StringBuilder("已上传 ").append(result.accepted())
+                    .append(" 个文件到知识库 #").append(kbId).append("：")
+                    .append(String.join("、", result.docNames()));
+            if (result.rejected() > 0) {
+                sb.append("\n跳过 ").append(result.rejected()).append(" 个：")
+                        .append(String.join("；", result.rejectedReasons()));
+            }
+            if (result.vectorizeStarted()) {
+                sb.append("\n后台向量化已启动，正在进行中。告诉用户进度可见、不要声称已完成。");
+            } else {
+                sb.append("\n向量化未能启动，请在知识库详情页手动触发。");
+            }
+            return sb.toString();
+        });
+        return ToolEntry.ofMutable("kb_upload", KB_UPLOAD_DESCRIPTION, KB_UPLOAD_SCHEMA, 180_000, handler);
+    }
+
+    /** 从 kb_create 回执里取 "已创建知识库 #123" 的 id */
+    private static Long extractFirstId(String text) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("#(\\d+)").matcher(text == null ? "" : text);
+        return m.find() ? Long.parseLong(m.group(1)) : null;
     }
 
     static ToolEntry listEntry(ResourceAdminService service, Long userId) {

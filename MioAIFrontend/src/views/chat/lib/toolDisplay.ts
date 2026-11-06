@@ -22,7 +22,9 @@ import {
   ProfileOutlined,
   StopOutlined,
   AppstoreOutlined,
-  TeamOutlined
+  TeamOutlined,
+  ApiOutlined,
+  DatabaseOutlined
 } from '@ant-design/icons-vue'
 
 export type ToolBlock = Extract<MessageBlock, { type: 'tool' }>
@@ -82,7 +84,10 @@ const TOOL_VERBS: Record<string, [string, string]> = {
   resource_list: ['正在查询资源', '已查询资源'],
   agent_save: ['正在保存智能体', '已保存智能体'],
   group_create: ['正在创建群聊', '已创建群聊'],
-  agent_bind: ['正在装配资源', '已装配资源']
+  agent_bind: ['正在装配资源', '已装配资源'],
+  mcp_create: ['正在校验 MCP', '已创建 MCP'],
+  kb_create: ['正在创建知识库', '已创建知识库'],
+  kb_upload: ['正在上传文档', '已上传文档']
 }
 
 /** 工具行动词：运行中→进行式（扫光），完成→过去式；Agent 行恒为「子智能体」（zcode GUI 同款） */
@@ -134,11 +139,15 @@ const TOOL_ICONS: Record<string, Component> = markRaw({
   TaskStop: StopOutlined,
   // 子智能体行用机器人图标（zcode 同款语义），不用通用工具扳手
   Agent: RobotOutlined,
-  // 对话内资源管理：列表=应用面板，存智能体=机器人，建群=团队，绑定=链接
+  // 对话内资源管理：列表=应用面板，存智能体=机器人，建群=团队，绑定=链接，
+  // MCP=接口，知识库/上传=数据库
   resource_list: AppstoreOutlined,
   agent_save: RobotOutlined,
   group_create: TeamOutlined,
   agent_bind: LinkOutlined,
+  mcp_create: ApiOutlined,
+  kb_create: DatabaseOutlined,
+  kb_upload: DatabaseOutlined,
   // MCP 工具按注册名前缀整体识别（见 toolIcon），不逐个登记
 })
 
@@ -270,6 +279,18 @@ export function toolMeta(block: ToolBlock): string {
         a?.resourceId ? `#${a.resourceId}` : ''].filter(Boolean)
       return parts.join(' · ')
     }
+    case 'mcp_create': {
+      const name = typeof a?.name === 'string' ? a.name.trim() : ''
+      return name ? `“${name}”` : ''
+    }
+    case 'kb_create': {
+      const name = typeof a?.name === 'string' ? a.name.trim() : ''
+      const bind = typeof a?.bindToAgentName === 'string' ? a.bindToAgentName.trim() : ''
+      const parts = [name ? `“${name}”` : '', bind ? `绑定 ${bind}` : ''].filter(Boolean)
+      return parts.join(' · ')
+    }
+    case 'kb_upload':
+      return a?.kbId ? `知识库 #${a.kbId}` : ''
     default: {
       // 语义兜底（zcode 风格）：展示参数里最有意义的一个字符串值，绝不裸显 JSON
       const fromParsed = firstMeaningfulString(a)

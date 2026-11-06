@@ -71,6 +71,7 @@ public class MioBot {
     private final com.mio.ai.bot.service.ChatFileService chatFileService;
     private final com.mio.ai.bot.service.image.ImageSearchService imageSearchService;
     private final com.mio.ai.bot.service.resource.ResourceAdminService resourceAdminService;
+    private final com.mio.ai.bot.service.resource.KnowledgeIngestService knowledgeIngestService;
     private final SandboxFileTransfer fileTransfer;
 
     private final String chatId;
@@ -194,6 +195,7 @@ public class MioBot {
                   com.mio.ai.bot.service.ChatFileService chatFileService,
                   com.mio.ai.bot.service.image.ImageSearchService imageSearchService,
                   com.mio.ai.bot.service.resource.ResourceAdminService resourceAdminService,
+                  com.mio.ai.bot.service.resource.KnowledgeIngestService knowledgeIngestService,
                   String chatId,
                   Long userId,
                   Long agentId,
@@ -215,6 +217,7 @@ public class MioBot {
         this.chatFileService = chatFileService;
         this.imageSearchService = imageSearchService;
         this.resourceAdminService = resourceAdminService;
+        this.knowledgeIngestService = knowledgeIngestService;
         this.chatId = chatId;
         this.userId = userId;
         this.agentId = agentId != null ? agentId : AGENT_ID;
@@ -408,7 +411,9 @@ public class MioBot {
                 // 群聊 Router 的白名单只作用于 ToolsetFactory.build 内部，这里注册的工具
                 // 不受其过滤，所以必须自己排除群聊（成员走 Subagents 独立注册表，本就不含）
                 if (resourceAdmin && groupCoordinator == null) {
-                    ResourceTools.registerAll(registry, resourceAdminService, userId);
+                    // 附件直接闭包捕获：kb_upload 从本轮附件取沙箱文件，模型不需要传路径
+                    ResourceTools.registerAll(registry, resourceAdminService, knowledgeIngestService,
+                            userId, chatId, attachments);
                 }
                 engine.bindTools(registry);
 

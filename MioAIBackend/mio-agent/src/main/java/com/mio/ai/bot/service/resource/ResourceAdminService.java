@@ -12,8 +12,11 @@ import com.mio.ai.resource.model.dto.agent.AgentKnowledgeAddRequest;
 import com.mio.ai.resource.model.dto.agent.AgentMcpAddRequest;
 import com.mio.ai.resource.model.dto.agent.AgentQueryRequest;
 import com.mio.ai.resource.model.dto.agent.AgentUpdateRequest;
+import com.mio.ai.resource.model.dto.knowledge.KnowledgeBaseAddRequest;
 import com.mio.ai.resource.model.dto.knowledge.KnowledgeBaseQueryRequest;
+import com.mio.ai.resource.model.dto.mcp.McpToolAddRequest;
 import com.mio.ai.resource.model.dto.mcp.McpToolQueryRequest;
+import com.mio.ai.resource.model.dto.mcp.McpValidateRequest;
 import com.mio.ai.resource.model.dto.skill.SkillQueryRequest;
 import com.mio.ai.resource.model.entity.agent.Agent;
 import com.mio.ai.resource.model.entity.agent.AgentSkill;
@@ -22,6 +25,7 @@ import com.mio.ai.resource.model.enums.agent.AgentTypeEnum;
 import com.mio.ai.resource.model.vo.agent.AgentVO;
 import com.mio.ai.resource.model.vo.knowledge.KnowledgeBaseVO;
 import com.mio.ai.resource.model.vo.mcp.McpToolVO;
+import com.mio.ai.resource.model.vo.mcp.McpValidateResultVO;
 import com.mio.ai.resource.model.vo.skill.SkillVO;
 import com.mio.ai.resource.service.agent.AgentGroupService;
 import com.mio.ai.resource.service.agent.AgentKnowledgeService;
@@ -30,6 +34,7 @@ import com.mio.ai.resource.service.agent.AgentService;
 import com.mio.ai.resource.service.agent.AgentSkillService;
 import com.mio.ai.resource.service.knowledge.KnowledgeBaseService;
 import com.mio.ai.resource.service.mcp.McpToolService;
+import com.mio.ai.resource.service.mcp.McpValidateService;
 import com.mio.ai.resource.service.security.AccessGuardService;
 import com.mio.ai.resource.service.skill.SkillService;
 import lombok.extern.slf4j.Slf4j;
@@ -59,6 +64,14 @@ public class ResourceAdminService {
     private static final int MAX_NAME = 100;
     private static final int MAX_DESCRIPTION = 2000;
     private static final int MAX_SYSTEM_PROMPT = 10000;
+    private static final int MAX_MCP_DESCRIPTION = 500;
+
+    /** 知识库分块参数边界（与 KnowledgeBaseServiceImpl.normalizeChunkConfig 同源） */
+    private static final int KB_MIN_CHUNK = 200;
+    private static final int KB_MAX_CHUNK = 2048;
+    private static final int KB_MAX_OVERLAP = 500;
+    private static final int KB_DEFAULT_CHUNK = 800;
+    private static final int KB_DEFAULT_OVERLAP = 100;
 
     /** 绑定知识库时可选覆盖的检索参数（缺省沿用 RetrievalConfig 默认值） */
     public record RetrievalOptions(Integer topK, Double threshold, String method) {
@@ -73,6 +86,7 @@ public class ResourceAdminService {
     private final KnowledgeBaseService knowledgeBaseService;
     private final McpToolService mcpToolService;
     private final SkillService skillService;
+    private final McpValidateService mcpValidateService;
 
     public ResourceAdminService(AccessGuardService accessGuardService,
                                 AgentService agentService,
@@ -82,7 +96,8 @@ public class ResourceAdminService {
                                 AgentSkillService agentSkillService,
                                 KnowledgeBaseService knowledgeBaseService,
                                 McpToolService mcpToolService,
-                                SkillService skillService) {
+                                SkillService skillService,
+                                McpValidateService mcpValidateService) {
         this.accessGuardService = accessGuardService;
         this.agentService = agentService;
         this.agentGroupService = agentGroupService;
@@ -92,6 +107,7 @@ public class ResourceAdminService {
         this.knowledgeBaseService = knowledgeBaseService;
         this.mcpToolService = mcpToolService;
         this.skillService = skillService;
+        this.mcpValidateService = mcpValidateService;
     }
 
     /**
@@ -363,6 +379,110 @@ public class ResourceAdminService {
         request.setName(name);
         request.setPageSize(LIST_LIMIT);
         return skillService.querySkills(request).getRecords();
+    }
+
+    /**
+     * 创建 MCP 工具：先在线校验（真的 initialize + listTools），再落库。
+     * <p>为什么必须先校验：addMcpTool 只做结构校验，一个不通的地址照样能存进去，
+     * 直到对话时才在装配阶段失败——用户看到的是"智能体用不了"而不是"地址填错了"。
+     * 校验顺带拿到工具清单，写进 tool_info 让详情页能展示。
+     * <p>代价：校验最长约 40-50s（10s 握手 + 30s listTools + 失败时的 10s 探测），
+     * 工具超时设 120s 覆盖。
+     */
+    public String createMcp(Long userId, String name, String description, String config) {
+        requireLogin(userId);
+        String cleanName = cleanIfPresent(name, "name", MAX_NAME);
+        if (cleanName == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "创建 MCP 必须提供 name");
+        }
+        if (config == null || config.isBlank()) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "创建 MCP 必须提供 config");
+        }
+        String cleanDesc = cleanIfPresent(description, "description", MAX_MCP_DESCRIPTION);
+
+        McpValidateRequest validateRequest = new McpValidateRequest();
+        validateRequest.setConfig(config);
+        McpValidateResultVO result = mcpValidateService.validateMcpConfig(validateRequest, userId);
+        if (result == null || !Boolean.TRUE.equals(result.getSuccess())) {
+            String reason = result == null ? "校验无响应" : result.getErrorMessage();
+            String type = result == null ? "UNKNOWN" : result.getErrorType();
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,
+                    "MCP 校验失败" + (type == null ? "" : "（" + type + "）") + "：" + reason);
+        }
+
+        McpToolAddRequest request = new McpToolAddRequest();
+        request.setName(cleanName);
+        request.setDescription(cleanDesc);
+        request.setConfig(config);
+        // toolInfo 列 NOT NULL：把校验拿到的真实工具清单写进去（详情页展示用）
+        try {
+            request.setToolInfo(cn.hutool.json.JSONUtil.toJsonStr(result.getTools()));
+        } catch (Exception e) {
+            request.setToolInfo("[]");
+        }
+        Long mcpId = mcpToolService.addMcpTool(request, userId);
+
+        int toolCount = result.getTools() == null ? 0 : result.getTools().size();
+        StringBuilder sb = new StringBuilder("已创建 MCP #").append(mcpId).append("「").append(cleanName)
+                .append("」，连通性校验通过，发现 ").append(toolCount).append(" 个工具。");
+        if (result.getServerInfo() != null && result.getServerInfo().getName() != null) {
+            sb.append("服务端：").append(result.getServerInfo().getName());
+            if (result.getServerInfo().getVersion() != null) {
+                sb.append(" ").append(result.getServerInfo().getVersion());
+            }
+            sb.append("。");
+        }
+        if (result.getWarnings() != null && !result.getWarnings().isEmpty()) {
+            sb.append("注意：").append(String.join("；", result.getWarnings()));
+        }
+        return sb.append("\n现在用 render_ui 渲染预览卡片，kind=\"resource_card\"，参数：\n")
+                .append("  id=").append(mcpId).append(", name=").append(cleanName)
+                .append(", resourceType=mcp, status=已启用")
+                .append(", detail=").append(toolCount).append(" 个工具")
+                .append("\n卡片会带「查看配置」「去装配」两个跳转按钮。")
+                .toString();
+    }
+
+    /**
+     * 创建知识库（可空库，文档后续上传）。
+     * <p>返回 id 供调用方决定是否立即绑定到某个智能体。
+     */
+    public String createKnowledgeBase(Long userId, String name, String description,
+                                      Integer chunkSize, Integer chunkOverlap) {
+        requireLogin(userId);
+        String cleanName = cleanIfPresent(name, "name", MAX_NAME);
+        if (cleanName == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "创建知识库必须提供 name");
+        }
+        // 与 controller 同口径：越界报错而非静默 clamp（否则用户以为设置生效了）
+        if (chunkSize != null && (chunkSize < KB_MIN_CHUNK || chunkSize > KB_MAX_CHUNK)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,
+                    "chunkSize 需在 " + KB_MIN_CHUNK + "~" + KB_MAX_CHUNK + " 之间");
+        }
+        if (chunkOverlap != null) {
+            int size = chunkSize == null ? KB_DEFAULT_CHUNK : chunkSize;
+            int maxOverlap = Math.min(KB_MAX_OVERLAP, size / 2);
+            if (chunkOverlap < 0 || chunkOverlap > maxOverlap) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR,
+                        "chunkOverlap 需在 0~" + maxOverlap + " 之间");
+            }
+        }
+        KnowledgeBaseAddRequest request = new KnowledgeBaseAddRequest();
+        request.setName(cleanName);
+        request.setDescription(cleanIfPresent(description, "description", MAX_DESCRIPTION));
+        request.setChunkSize(chunkSize);
+        request.setChunkOverlap(chunkOverlap);
+        Long kbId = knowledgeBaseService.addKnowledgeBase(request, userId);
+
+        int size = chunkSize == null ? KB_DEFAULT_CHUNK : chunkSize;
+        int overlap = chunkOverlap == null ? KB_DEFAULT_OVERLAP : chunkOverlap;
+        return "已创建知识库 #" + kbId + "「" + cleanName + "」（分块 " + size + " / 重叠 " + overlap
+                + "，当前 0 个文档）。\n"
+                + "现在把用户要上传的文件挂上来：用 kb_upload 工具，参数 kbId=" + kbId
+                + "（文件来自本轮对话附件）。\n"
+                + "如果用户没有提供文件，用 render_ui 渲染 kind=\"resource_card\"，参数：\n"
+                + "  id=" + kbId + ", name=" + cleanName + ", resourceType=knowledge, status=已启用"
+                + ", detail=0 个文档";
     }
 
     /**
